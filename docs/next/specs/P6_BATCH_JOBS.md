@@ -7,7 +7,7 @@
 Free has a Generate queue that lives only in the frontend
 (`generator.js`: `generateQueue = [{path, status}]`, statuses
 `queued|running|done|failed|skipped`). It is lost on restart, cannot pause, and
-has no report. Next's first sellable feature is a batch that survives crashes
+has no report. Next's first big feature is a batch that survives crashes
 and tells the user exactly what happened per clip.
 
 ## Rules

@@ -61,6 +61,6 @@ soft masks without RhythmGrid / with Tf/Tj, and `PreferPython`.
    re-search → soft masks with Tf/Tj → `auto_roi.py` → AI quality opinion.
    Each port needs P4 golden parity.
 4. Training scripts (`train_yolo_model.py`, `bootstrap_yolo_dataset.py`,
-   `export_yolo_onnx.py`) and `requirements-ai-train.txt` belong in Next only.
-   Splitting the embed (Suite/Next-only `//go:embed`) is a cheap first PR after
-   N1 and shrinks the Free build.
+   `export_yolo_onnx.py`) and `requirements-ai-train.txt` belong in the Suite build
+   only. Splitting the embed (Suite-only `//go:embed`) is a cheap early PR and
+   shrinks the normal build.

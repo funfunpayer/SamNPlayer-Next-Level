@@ -1,3 +1,6 @@
+> **Not needed (Owner, 12 Oct 2026):** there is no paid version — one program, free,
+> financed by donations. Kept only as a record; nothing here will be built.
+
 # P7 — Licence pass (entitlement): design and threat model
 
 **Status:** spec, not built · input to STU-04 (gate N7) · 12 Oct 2026

@@ -1,3 +1,7 @@
+# DISABLED in SamNPlayer Next (GitHub only runs *.yml / *.yaml).
+# This repo is public: a tag here would publish Free and Suite binaries for
+# anyone to download. Releases come back with the N1 work and a
+# decided release source — docs/next/specs/N1_RELEASES.md, D13/D14.
 name: Release
 
 # Runs on every tag like "v1.2.3".

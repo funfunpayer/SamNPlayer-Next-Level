@@ -1,4 +1,5 @@
-> **This is SamNPlayer Next** — the next generation of SamNPlayer, imported from
+> **This is SamNPlayer Next** — the next generation of SamNPlayer (one program, free,
+> financed by donations), imported from
 > `funfunpayer/SamNPlayer` `main` (`5d2f625`) with full history. Plan, roadmap and
 > open decisions: [`docs/next/`](docs/next/MASTER_PLAN.md). The text below is the
 > inherited SamNPlayer README and is updated step by step.
