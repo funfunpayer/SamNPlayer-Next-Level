@@ -95,7 +95,7 @@ Externe Bibliotheken nur nach **Lizenz, Dependency-Kosten, Paketgröße, Sicherh
 
 - Community Free erhält später klaren Kernumfang, reduzierte KI, keine dauerhafte Batch-Verarbeitung, weiterhin Donate. Ausgewählte **neue** Funktionen können in Free explizit **7 × 24 Stunden** als Preview freigeschaltet werden; keine Scripts/Dateien laufen ab. Eigene Entwicklung dafür im Free-Repo.
 - Interne **Suite** ist Entwicklung/Tests und nicht automatisch dasselbe wie das kommerzielle Studio.
-- Next Level ist kommerzielles Studio-Produkt. Eigentümer wünscht **verbindlichen Studio-Zugang bei mehr als 40 € Unterstützung**, vor Aktivierung rechtlich als Zahlung mit Gegenleistung/Terms und Steuer/Refund/Payment-Vertrag korrekt behandeln.
+- **NEUE EIGENTÜMERENTSCHEIDUNG (12.10.2026): Next Level ist SamNPlayer 2.0, kostenlos als proprietäre Freeware mit freiwilligen Spenden.** Frühere Pläne für kostenpflichtiges Studio, Kauf-/Lizenzschlüssel, Bezahl-Gates und garantierte €40-Zugangsrechte sind aufgehoben. Spenden gewähren keinen exklusiven Zugang. Vor Veröffentlichung EULA/Website und Kostenhinweise an die tatsächlich kostenlose Version anpassen.
 - Keine sofortigen Produkt-/KI-/Geschwindigkeitsversprechen, bevor gemessen und getestet.
 - **Dieses Repository ist aktuell öffentlich.** Alle Planunterlagen sind zur Veröffentlichung vorgesehen; keine geheimen Schlüssel, privaten Nutzervideos, sensitiven Lernsets oder nicht freigegebene private Git-Historie kopieren.
 
@@ -111,3 +111,11 @@ Externe Bibliotheken nur nach **Lizenz, Dependency-Kosten, Paketgröße, Sicherh
 8. SAM/.samn Multi-Axis-Kompatibilität gegen Free mit Fixtures testen.
 9. Eine frei konfigurierte Device-Mock-Matrix mit Safety Governor testen.
 10. UI-Prototyp aus funktionalen Kern-Events für Auto/Guided/Expert aufbauen; keine funktionslosen Knöpfe.
+
+## Neueste Produktentscheidung — ersetzt frühere Studio-Monetarisierung
+
+- **SamNPlayer 1.x (Community/Free):** stabile, gute und einfache Freeware; Spendenbutton bleibt. Nicht künstlich schlechter machen.
+- **SamNPlayer Next Level 2.0:** neue Hauptgeneration aus vorhandenem SamNPlayer-Code mit gleicher vertrauter Flow-GUI, modular erweitert um native Go/Rust-Optimierung, autonome klassische Analyse und optionale geprüfte KI, vollwertigen Multi-Axis-Editor und erweiterte Batch-Funktionen. Kostenlos, spendenfinanziert, proprietär.
+- Keine Studio-Kaufabwicklung, keine €40-Schwelle und keine Bezahllizenz mehr als Roadmap-Blocker. AI und neue Features werden nicht kostenpflichtig gesperrt. Diese neuere Entscheidung hat Vorrang vor abweichenden älteren Abschnitten in anderen Entwürfen.
+- 7-Tage-Funktionsvorschauen waren für Free vorgeschlagen; vor Bau prüfen, ob und wozu zeitliches Abschalten noch sinnvoll ist, wenn Next Level ebenfalls kostenlos wird. Keinen künstlichen Trialzwang einbauen.
+- Rechtliche Hinweise für freiwillige Spenden, Drittanbieter-Lizenzen und die proprietäre Lizenz bleiben erforderlich.
