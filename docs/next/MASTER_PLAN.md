@@ -12,7 +12,7 @@ Order of work: [`ROADMAP.md`](ROADMAP.md).
 |---|---|---|
 | **SamNPlayer Free** (Community) | Public freeware, EULA, donations. "Free. Reliable. Community-supported." | `funfunpayer/SamNPlayer`, default build |
 | **SamNPlayer Suite** | Internal test edition (AI training, golden-clip benchmark) | `funfunpayer/SamNPlayer`, `-tags suite` |
-| **SamNPlayer Next** | Future commercial product. Suite features move into it. Licence system. | **this repo** (private) |
+| **SamNPlayer Next** | Future commercial product. Suite features move into it. Licence system. | **this repo** (public for now, Owner 12 Oct — see D11) |
 
 "Studio" in the archived documents means **Next**. It does not mean the old
 `-tags studio` build (renamed to Suite in SamNPlayer #513).

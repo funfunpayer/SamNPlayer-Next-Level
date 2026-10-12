@@ -17,6 +17,10 @@ Docs and specs only. No code in this repo yet, no changes to Free.
 | P6 | [Spec: batch job state machine + on-disk checkpoint format (input to STU-01)](specs/P6_BATCH_JOBS.md) | ✅ draft, Owner review |
 | P7 | [Spec: entitlement threat model (offline pass, refund, device change, lost pass)](specs/P7_ENTITLEMENT_THREAT_MODEL.md) | ✅ draft, Owner review |
 
+| P8 | [Spec: `next` edition — build tag, updater, no public binaries](specs/N1_EDITION_NEXT.md) | ✅ draft, Owner review |
+| P9 | [Inventory EDIT-00: Free editor vs Next editor](inventory/EDIT-00_EDITOR.md) | ✅ |
+| P10 | [Inventory ENG-01 part 1: where Free still runs Python](inventory/ENG-01_PYTHON_RUNTIME.md) | ✅ static part; timings at N2 |
+
 ## N0 — Free released
 
 Trigger to start code. Free tag published (FREE-07 in SamNPlayer), Free CI green.
@@ -25,7 +29,7 @@ Trigger to start code. Free tag published (FREE-07 in SamNPlayer), Free CI green
 
 - Run `scripts/import-free-history.sh` (full history, `main` only).
 - CI from Free runs green here; edition `next` added next to `free`/`suite`
-  (build tag, updater asset prefix `SamNPlayer-next-…`, never published to the public site).
+  ([N1 spec](specs/N1_EDITION_NEXT.md)); Free's `release.yml` disabled in this repo.
 - `.samn` / `.funscript` round-trip tests pass.
 - GitHub secret scanning on.
 
