@@ -11,11 +11,13 @@ The central idea: **video + target → autonomous classical first-pass → per-s
 
 ## Product editions
 
-**SamNPlayer Free (Community):** excellent, approachable basic Create/Play/Edit/Training and device safety, donation-supported. Future simplified Free focuses on fewer AI capabilities and no permanent batch. Selected new premium features may get a **seven-day Preview** within the existing Free app (implementation work lives in the original SamNPlayer repository).
+**SamNPlayer Free (Community):** excellent, approachable basic Create/Play/Edit/Training and device safety, donation-supported. Future simplified Free focuses on fewer AI capabilities and no permanent batch. Selected new experimental features may get a **seven-day Preview** within the existing Free app (implementation work lives in the original SamNPlayer repository).
 
 **SamNPlayer Suite:** internal extended build and evaluation tools in the original repository.
 
-**SamNPlayer Next Level / Studio:** future professional standalone software with adaptive native motion engine, full multi-axis editor, AI-assisted improvement and long-running recoverable batch. Commercial access and guaranteed Studio entitlements for qualifying support above €40 will require explicit terms and a validated purchase/payment process before launch.
+**SamNPlayer Next Level (2.0):** the next major software generation, built from the existing SamNPlayer codebase and Flow layout, with adaptive native motion engine, full multi-axis editor, AI-assisted improvement and recoverable batch. **Freeware supported by voluntary donations, not a paid Studio licence.** No paid unlock, paywall, €40 entitlement or mandatory subscription is currently planned.
+
+**Latest owner decision (12 October 2026):** the previously discussed commercial Studio/tier/licence/supporter-pass model is superseded. Next Level is a real **SamNPlayer 2.0**, released when ready under a donation-supported freeware model. Free v1 continues separately. Existing code and the established Flow GUI should be reused, not replaced solely for the sake of a redesign.
 
 ## Development & contribution rules
 
