@@ -10,12 +10,12 @@ Docs and specs only. No code in this repo yet, no changes to Free.
 | ID | Deliverable | Status |
 |---|---|---|
 | P1 | Master plan, roadmap, open decisions, archived #510 docs | ✅ this PR |
-| P2 | Bootstrap script + history audit of Free `main` | ✅ script; audit 12 Oct: 626 commits, 23 MB pack, no key files, no `PRIVATE KEY`, no token patterns, no video/model blobs |
+| P2 | Bootstrap script + history audit of Free `main` | ✅ script; audit 12 Oct: 626 commits, 23 MB pack, no tokens, no video/model blobs. **One key file:** the DEV licence issuer key `license/testdata/issuer.ed25519` (removed 10 Oct, still in history) — never trusted by Next (P7, D10) |
 | P3 | Owner answers `OPEN_DECISIONS.md` D1–D8 | open |
-| P4 | Spec: golden-clip manifest schema + benchmark report format (input to ENG-01) | open |
-| P5 | Spec: `.samn` v2 axis map + companion-file round trip (input to EDIT-01) | open |
-| P6 | Spec: batch job state machine + on-disk checkpoint format (input to STU-01) | open |
-| P7 | Spec: entitlement threat model (offline pass, refund, device change, lost pass) | open |
+| P4 | [Spec: golden-clip manifest schema + benchmark report format (input to ENG-01)](specs/P4_GOLDEN_BENCHMARK.md) | ✅ draft, Owner review |
+| P5 | [Spec: `.samn` v2 axis map + companion-file round trip (input to EDIT-01)](specs/P5_SAMN_V2_AXES.md) | ✅ draft, Owner review |
+| P6 | [Spec: batch job state machine + on-disk checkpoint format (input to STU-01)](specs/P6_BATCH_JOBS.md) | ✅ draft, Owner review |
+| P7 | [Spec: entitlement threat model (offline pass, refund, device change, lost pass)](specs/P7_ENTITLEMENT_THREAT_MODEL.md) | ✅ draft, Owner review |
 
 ## N0 — Free released
 

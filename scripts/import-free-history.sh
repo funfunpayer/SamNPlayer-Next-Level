@@ -27,14 +27,19 @@ if [ "$(git rev-parse --is-shallow-repository)" = true ]; then
 fi
 
 # Quick history audit; stop on anything that looks like a secret or media blob.
+# KNOWN_OK lists reviewed hits: the DEV licence issuer key of the removed
+# licence system (documented "NOT for paid go-live"; never trusted by Next,
+# see docs/next/specs/P7_ENTITLEMENT_THREAT_MODEL.md).
+KNOWN_OK='^license/testdata/issuer\.ed25519(\.pub)?$'
 hits="$(git log FETCH_HEAD --format= --name-only | sort -u |
-	grep -iE '\.(pem|key|p12|pfx|env|mp4|mkv|mov|webm|onnx|pt)$' || true)"
-keys="$(git log FETCH_HEAD -p -G 'PRIVATE KEY-----|ghp_[A-Za-z0-9]{20}|AKIA[0-9A-Z]{16}' --format='%h %s' || true)"
+	grep -iE '\.(pem|key|p12|pfx|env|ed25519|seed|mp4|mkv|mov|webm|onnx|pt)$|(^|/)id_(rsa|ed25519)' |
+	grep -vE "$KNOWN_OK" || true)"
+keys="$(git log FETCH_HEAD -p -G 'PRIVATE KEY-----|ghp_[A-Za-z0-9]{20}|github_pat_|AKIA[0-9A-Z]{16}|sk-[A-Za-z0-9]{32}' --format='%h %s' || true)"
 if [ -n "$hits$keys" ]; then
 	printf 'history audit found candidates — stop and ask the Owner:\n%s\n%s\n' "$hits" "$keys" >&2
 	exit 2
 fi
-echo "audit: $(git rev-list --count FETCH_HEAD) commits, no key files or media blobs"
+echo "audit: $(git rev-list --count FETCH_HEAD) commits; only reviewed hit: DEV licence key (never trusted by Next)"
 
 FREE_SHA="$(git rev-parse FETCH_HEAD)"
 git switch -c "$BRANCH"

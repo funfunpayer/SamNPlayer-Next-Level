@@ -14,3 +14,4 @@ Owner; the recommendation is ours, not decided.
 | D7 | **Free scope-down** (less AI, no batch) | EDITIONS.md: "Free stays free"; scope doc: batch leaves Free later | Only after Next batch ships (N3), with a manifest and migration; announce in release notes |
 | D8 | **Import timing** | Plan: import after Free release. Alternative: import now, merge Free `main` weekly until N2 | Keep plan (after Free release) — fewer merges, no risk to Free |
 | D9 | **Repo was created with a README** | Bootstrap doc wanted an empty repo | No action: the import script merges unrelated histories on a branch, no force push |
+| D10 | **DEV licence key in history** | `license/testdata/issuer.ed25519` (private) is in Free history and will be copied by the import. Were any real invite keys issued with it? | Next never trusts it (P7 guard test). If invites were issued, re-issue them with the new key at launch. Rewriting history is not worth it |

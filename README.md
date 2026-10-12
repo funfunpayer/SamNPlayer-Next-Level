@@ -13,6 +13,7 @@ local AI.
 | [`docs/next/MASTER_PLAN.md`](docs/next/MASTER_PLAN.md) | Scope, rules, architecture — single source of truth |
 | [`docs/next/ROADMAP.md`](docs/next/ROADMAP.md) | Gates P, N0–N7 and work packages |
 | [`docs/next/OPEN_DECISIONS.md`](docs/next/OPEN_DECISIONS.md) | Questions the Owner must answer |
+| [`docs/next/specs/`](docs/next/specs/) | Specs P4–P7: golden benchmark, `.samn` v2 axes, batch jobs, licence pass |
 | [`docs/next/sources/`](docs/next/sources/) | Original plan documents from SamNPlayer PR #510 (archived) |
 | [`scripts/import-free-history.sh`](scripts/import-free-history.sh) | Gate N1: import Free `main` with history |
 
