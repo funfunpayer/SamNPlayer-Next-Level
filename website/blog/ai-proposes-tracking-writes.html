@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI proposes, tracking writes — SamNPlayer</title>
+  <meta name="description" content="SamNPlayer optional local AI suggests ROIs; classical tracking always writes the Funscript." />
+  <link rel="icon" type="image/png" href="../media/logo.png" />
+  <link rel="stylesheet" href="../styles.css" />
+</head>
+<body class="page">
+  <header class="top is-scrolled">
+    <a class="top-brand" href="../index.html" aria-label="SamNPlayer home">
+      <img src="../media/logo.png" alt="" width="36" height="36" />
+      <span class="wordmark"><span class="wm-sam">Sam</span><span class="wm-n">N</span><span class="wm-player">Player</span></span>
+    </a>
+    <nav class="top-nav" aria-label="Primary">
+      <a class="nav-keep" href="./">Notes</a>
+      <a href="../index.html#download" class="nav-cta">Download</a>
+    </nav>
+  </header>
+
+  <header class="page-hero">
+    <p class="crumb"><a href="../index.html">Home</a> · <a href="./">Notes</a></p>
+    <h1>AI proposes, tracking writes</h1>
+    <p class="lede">Optional local ONNX can suggest regions and profiles. It never owns the output file alone.</p>
+  </header>
+
+  <main class="prose">
+    <p>
+      Many tools ship “AI Funscripts” that look fine until you watch them against the film.
+      SamNPlayer draws a hard line: <strong>classical tracking writes</strong>
+      <code>.samn</code> / <code>.funscript</code>. AI is an optional helper on your machine.
+    </p>
+    <h2>What AI may do</h2>
+    <ul>
+      <li>Propose an ROI (or two for Tf/Tj)</li>
+      <li>Suggest a motion profile</li>
+      <li>Offer a second opinion next to Quality Doctor</li>
+    </ul>
+    <h2>What AI must not do</h2>
+    <ul>
+      <li>No second, AI-only path that silently authors the script</li>
+      <li>No model bundled in the binary, no surprise cloud download</li>
+      <li>No auto-commit of an unvalidated region guess</li>
+    </ul>
+    <p>
+      Flow stays: video → optional ONNX suggestion → CSRT / flow / grid_lk → Quality Doctor.
+      You stay in the loop on accept / reject.
+    </p>
+    <p class="cta-row">
+      <a class="btn btn-ghost" href="signal-vs-fidelity.html">Next: Quality Doctor</a>
+      <a class="btn btn-primary" href="../index.html#download">Download</a>
+    </p>
+  </main>
+
+  <footer class="foot">
+    <div class="foot-links"><a href="./">All notes</a></div>
+  </footer>
+  <script src="../script.js" defer></script>
+</body>
+</html>

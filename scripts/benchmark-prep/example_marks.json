@@ -1,0 +1,17 @@
+{
+  "source": "/ABS/PATH/TO/long_source.mp4",
+  "max_width": 1280,
+  "_comment": "Owner marks: in/out times while watching. Videos stay local — do not commit. Default 1280 ≈ 720p landscape (golden-clip CSRT size). Use 960 for lighter files.",
+  "clips": [
+    {
+      "name": "hub_easy_30s",
+      "start": "00:01:10",
+      "end": "00:01:40"
+    },
+    {
+      "name": "cut_camera_move",
+      "start_sec": 185.0,
+      "duration_sec": 45.0
+    }
+  ]
+}

@@ -1,0 +1,117 @@
+{
+ "clip": "multi_person_642s",
+ "video_md5": "88a07aaecff1b7aeacb8f49439644ed3",
+ "author": "claude",
+ "date": "2026-09-28",
+ "note": "Scene type per keyframe, hand-labelled by Claude on the same keyframes as multi_person_642s.json (every 20 s, only where stroke action is visible). Truth for scene_roles.py --truth (rules and VLM clip mode).",
+ "scene_types": [
+  {
+   "t_ms": 30000,
+   "scene_type": "blowjob"
+  },
+  {
+   "t_ms": 50000,
+   "scene_type": "blowjob"
+  },
+  {
+   "t_ms": 70000,
+   "scene_type": "blowjob"
+  },
+  {
+   "t_ms": 90000,
+   "scene_type": "blowjob"
+  },
+  {
+   "t_ms": 110000,
+   "scene_type": "blowjob"
+  },
+  {
+   "t_ms": 130000,
+   "scene_type": "blowjob"
+  },
+  {
+   "t_ms": 150000,
+   "scene_type": "blowjob"
+  },
+  {
+   "t_ms": 190000,
+   "scene_type": "blowjob"
+  },
+  {
+   "t_ms": 210000,
+   "scene_type": "blowjob"
+  },
+  {
+   "t_ms": 230000,
+   "scene_type": "blowjob"
+  },
+  {
+   "t_ms": 250000,
+   "scene_type": "blowjob"
+  },
+  {
+   "t_ms": 270000,
+   "scene_type": "blowjob"
+  },
+  {
+   "t_ms": 290000,
+   "scene_type": "blowjob"
+  },
+  {
+   "t_ms": 310000,
+   "scene_type": "titjob"
+  },
+  {
+   "t_ms": 330000,
+   "scene_type": "titjob"
+  },
+  {
+   "t_ms": 350000,
+   "scene_type": "titjob"
+  },
+  {
+   "t_ms": 370000,
+   "scene_type": "titjob"
+  },
+  {
+   "t_ms": 390000,
+   "scene_type": "blowjob"
+  },
+  {
+   "t_ms": 410000,
+   "scene_type": "blowjob"
+  },
+  {
+   "t_ms": 430000,
+   "scene_type": "titjob"
+  },
+  {
+   "t_ms": 450000,
+   "scene_type": "titjob"
+  },
+  {
+   "t_ms": 470000,
+   "scene_type": "blowjob"
+  },
+  {
+   "t_ms": 490000,
+   "scene_type": "titjob"
+  },
+  {
+   "t_ms": 570000,
+   "scene_type": "blowjob"
+  },
+  {
+   "t_ms": 590000,
+   "scene_type": "blowjob"
+  },
+  {
+   "t_ms": 610000,
+   "scene_type": "handjob"
+  },
+  {
+   "t_ms": 630000,
+   "scene_type": "handjob"
+  }
+ ]
+}

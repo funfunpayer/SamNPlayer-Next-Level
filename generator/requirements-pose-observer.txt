@@ -1,0 +1,10 @@
+# Optional deps for PoseObserver Stage A research spike only.
+# Not installed by Everyday Generate / AI Train deps.
+# No model weights — download Pose Landmarker .task / RTMPose ONNX yourself.
+#
+#   pip install -r generator/requirements-pose-observer.txt
+#
+mediapipe>=0.10.9
+onnxruntime>=1.16.0
+opencv-python-headless>=4.8.0
+numpy>=1.24.0

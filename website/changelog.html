@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Changelog — SamNPlayer</title>
+  <meta name="description" content="Curated SamNPlayer release highlights for buyers — latest portable builds and product changes." />
+  <link rel="icon" type="image/png" href="media/logo.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="page">
+  <header class="top is-scrolled">
+    <a class="top-brand" href="index.html" aria-label="SamNPlayer home">
+      <img src="media/logo.png" alt="" width="36" height="36" />
+      <span class="wordmark"><span class="wm-sam">Sam</span><span class="wm-n">N</span><span class="wm-player">Player</span></span>
+    </a>
+    <nav class="top-nav" aria-label="Primary">
+      <a class="nav-keep" href="guides/">Guides</a>
+      <a href="index.html#download" class="nav-cta">Download</a>
+    </nav>
+  </header>
+
+  <header class="page-hero">
+    <p class="crumb"><a href="index.html">Home</a> · Changelog</p>
+    <h1>Changelog</h1>
+    <p class="lede">Short buyer-facing highlights. Full engineering history stays in the private repo.</p>
+  </header>
+
+  <main class="prose">
+    <h2>0.5.31 — September 2026</h2>
+    <ul>
+      <li><strong>Scene map</strong> — Advanced rhythm heatmap + exclude / source / region marks</li>
+      <li><strong>Target lock</strong> — strict body-point proposal + rhythm seed lock (no thigh takeover)</li>
+      <li><strong>Local learning</strong> — Go profile model from Create labels (suggest-only)</li>
+      <li>Stroke-preview Stage B steers cut-rate and camera compensation</li>
+    </ul>
+    <p class="shot-row">
+      <img src="media/gui-scenemap-marks.png" alt="Scene map heatmap with exclude mark" width="720" />
+    </p>
+
+    <h2>0.5.30 — September 2026</h2>
+    <ul>
+      <li><strong>Rhythm-robust signal</strong> (Advanced opt-in) — stroke from rhythmic cells near the tip box</li>
+      <li>Orientation coin-toss fix on weak tracker correlation</li>
+    </ul>
+
+    <h2>0.5.10 — September 2026</h2>
+    <ul>
+      <li>Multi body-part regions + <strong>Fix ROI2</strong>; Tf/Tj <strong>+ Target</strong> / soft <strong>+ Mask</strong> (min-distance partners)</li>
+      <li>Careful bugfix (session guard, overwrite + <code>.samn</code>, contact intensity 0)</li>
+      <li>Lean GUI motion polish; English operator strings</li>
+    </ul>
+
+    <h2>0.5.9 — September 2026</h2>
+    <ul>
+      <li>Native <code>.samn</code> scripts for Sam Neo&nbsp;2 (multi-axis, contact recipe, O-markers)</li>
+      <li>Portable releases with ffmpeg / ffprobe beside the GUI; Settings → Install video tools</li>
+      <li>English GUI lock; Go audio-tempo check; ROI second-pass warn (never silent rewrite)</li>
+      <li>License import UI ready (enforcement still off until go-live) — retail <strong>€40 / year</strong></li>
+    </ul>
+
+    <h2>Earlier</h2>
+    <p>
+      Playback polish, generator backends, Quality Doctor, golden-clip bench, device diagnostics,
+      and training shipped across the 0.5.x line. Prefer the
+      <a href="https://github.com/funfunpayer/SamNPlayer-site/releases/latest">latest release</a>
+      portable archive.
+    </p>
+
+    <p class="cta-row">
+      <a class="btn btn-primary" href="https://github.com/funfunpayer/SamNPlayer-site/releases/latest">Latest release</a>
+      <a class="btn btn-ghost" href="guides/start.html">Getting started</a>
+    </p>
+  </main>
+
+  <footer class="foot">
+    <div class="foot-links">
+      <a href="blog/">Notes</a>
+      <a href="faq.html">FAQ</a>
+      <a href="index.html">Home</a>
+    </div>
+  </footer>
+  <script src="script.js" defer></script>
+</body>
+</html>

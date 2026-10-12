@@ -1,0 +1,68 @@
+{
+  "actions": [
+    {
+      "at": 0,
+      "pos": 84
+    },
+    {
+      "at": 208,
+      "pos": 84
+    },
+    {
+      "at": 666,
+      "pos": 90
+    },
+    {
+      "at": 1208,
+      "pos": 69
+    },
+    {
+      "at": 1625,
+      "pos": 53
+    },
+    {
+      "at": 2291,
+      "pos": 20
+    },
+    {
+      "at": 2708,
+      "pos": 20
+    },
+    {
+      "at": 3000,
+      "pos": 20
+    },
+    {
+      "at": 3291,
+      "pos": 23
+    }
+  ],
+  "metadata": {
+    "creator": "SamNPlayer generator/native (simpletrack+posttrack, kein Python/OpenCV)",
+    "device_recipe": {
+      "sync": "suction_position",
+      "min_suction": 0.2,
+      "tick_ms": 50,
+      "max_speed": 0.5,
+      "smoothing": 0.22,
+      "contact_vibration": true
+    },
+    "duration": 3291,
+    "estimated_from_script_only": false,
+    "native_pipeline": {
+      "backend": "two_point_ncc",
+      "confidence": 1,
+      "frames": 80,
+      "lost": 0,
+      "range_px": 29.07691986282481,
+      "signal": "posttrack",
+      "tracking": "simpletrack",
+      "valid_frames": 80
+    },
+    "profile": "tj",
+    "quality_kind": "signal_quality",
+    "quality_passed": true,
+    "quality_score": 1,
+    "quality_warnings": null
+  }
+}

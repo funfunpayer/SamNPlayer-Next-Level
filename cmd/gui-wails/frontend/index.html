@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="SamNPlayer — Emotion Generator: create Emotion Scripts, play on Sam Neo 2. Desktop first." />
+  <title>SamNPlayer — Emotion Generator</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div id="app">
+
+    <div class="app-main">
+      <header id="topbar">
+        <div class="topbar-brand-block">
+          <div class="brand-lockup" title="SamNPlayer — Generate · Play · Train">
+            <div class="brand">
+              <img src="/src/assets/images/logo-universal.png" alt="" />
+            </div>
+            <h1 class="brand-wordmark" aria-label="SamNPlayer">
+              <span class="wm-sam">Sam</span><span class="wm-n">N</span><span class="wm-rest">Player</span>
+            </h1>
+          </div>
+          <p class="brand-tagline" id="brand-tagline" aria-label="Generate · Play · Train"><span>Generate</span> <span>Play</span> <span>Train</span></p>
+        </div>
+        <nav id="rail" class="topnav" aria-label="Main">
+          <button class="tab-btn active" data-tab="playback" title="Player — play Emotion Scripts with video">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="8.2"/>
+          <path d="M10.2 8.6v6.8l6-3.4z" fill="currentColor" stroke="none"/>
+            </svg>
+            <span>Player</span><i class="dot"></i>
+          </button>
+          <button class="tab-btn" data-tab="generator" data-ws-shim hidden title="Generator — create Emotion Scripts from video">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="4.5" y="4.5" width="15" height="15" rx="3"/>
+          <path d="M8 9.2h5.5M8 12h8M8 14.8h4"/>
+          <path d="M16.2 8.2l2.6 2.1-2.6 2.1"/>
+            </svg>
+            <span>Generator</span><i class="dot"></i>
+          </button>
+          <button class="tab-btn" data-tab="training" title="Training">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5.5 12a6.5 6.5 0 1 1 13 0"/>
+          <path d="M12 5.5v6.2l3.4 2"/>
+          <path d="M4.8 14.8h3.2M16 14.8h3.2"/>
+            </svg>
+            <span>Training</span><i class="dot"></i>
+          </button>
+          <button class="tab-btn" data-tab="scenemap" data-ws-shim hidden title="Scene Map — rhythm heatmap and marks for the Generator video">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 21s-6.2-5.6-6.2-10.6a6.2 6.2 0 0 1 12.4 0C18.2 15.4 12 21 12 21z"/>
+              <circle cx="12" cy="10.4" r="2.3"/>
+            </svg>
+            <span>Scene Map</span><i class="dot"></i>
+          </button>
+          <button class="tab-btn" data-tab="tools" title="Tools — Device, Log, Settings">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M14.6 5.2a3.6 3.6 0 0 0 4.2 4.9l-8.6 8.6a2 2 0 0 1-2.9-2.9l8.6-8.6"/>
+          <path d="M5 5l3.2 3.2M5 5l1.3-.6.6 1.3"/>
+          <circle cx="17.2" cy="17.2" r="2.4"/>
+            </svg>
+            <span>Tools</span><i class="dot"></i>
+          </button>
+        </nav>
+        <div class="pills">
+          <div id="topbar-device-wrap" class="topbar-device-wrap">
+            <button type="button" id="topbar-device" class="topbar-device is-offline" title="Open Tools → Device" aria-live="polite">
+              <svg class="topbar-device-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="8" y="3.2" width="8" height="17.6" rx="4"/>
+                <path d="M11 7.2h2"/>
+                <circle cx="12" cy="16.4" r="1.1" fill="currentColor" stroke="none"/>
+              </svg>
+              <span id="topbar-device-name">Not connected</span>
+              <i id="topbar-device-led" class="topbar-device-led"></i>
+            </button>
+            <button type="button" id="topbar-device-action" class="topbar-device-action">Connect</button>
+          </div>
+          <button type="button" id="topbar-donate" class="pill donate-pill" hidden
+            data-help="SamNPlayer is free. A donation keeps the project alive and makes new features possible.">♥ Donate</button>
+          <span id="version-label" class="pill"></span>
+          <button type="button" id="topbar-open" class="topbar-icon" title="Open Emotion Script (Player)" aria-label="Open Emotion Script">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.2a1.7 1.7 0 0 1 1.7-1.7h4.1l2 2.1h7.5a1.7 1.7 0 0 1 1.7 1.7v8.2a1.7 1.7 0 0 1-1.7 1.7H5.2a1.7 1.7 0 0 1-1.7-1.7z"/></svg>
+          </button>
+          <button type="button" id="topbar-settings" class="topbar-icon" title="Settings" aria-label="Settings">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.1"/><path d="M12 3.6v2.1M12 18.3v2.1M3.6 12h2.1M18.3 12h2.1M6.2 6.2l1.5 1.5M16.3 16.3l1.5 1.5M17.8 6.2l-1.5 1.5M7.7 16.3l-1.5 1.5"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <div class="stage">
+        <div class="stage-main">
+          <nav id="tools-nav" class="tools-nav" aria-label="Tools" hidden>
+            <button class="tab-btn tools-sub-btn" data-tab="tools-home" title="Tools home">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 4l8 7.5V20H4z"/></svg>
+              <span>Home</span>
+            </button>
+            <button class="tab-btn tools-sub-btn" data-tab="device" title="Device">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="8" y="3.2" width="8" height="17.6" rx="4"/>
+                <path d="M11 7.2h2"/>
+                <circle cx="12" cy="16.4" r="1.1" fill="currentColor" stroke="none"/>
+              </svg>
+              <span>Device</span><i class="dot"></i>
+            </button>
+            <button class="tab-btn tools-sub-btn" data-tab="log" title="Log">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M7.2 4.5h7.2L18 8.1v11.4a1.8 1.8 0 0 1-1.8 1.8H7.2a1.8 1.8 0 0 1-1.8-1.8V6.3a1.8 1.8 0 0 1 1.8-1.8z"/>
+                <path d="M14.2 4.6V8h3.5"/>
+                <path d="M8.5 11.2h7M8.5 14h7M8.5 16.8h4.5"/>
+              </svg>
+              <span>Log</span><i class="dot"></i>
+            </button>
+            <button class="tab-btn tools-sub-btn" data-tab="settings" title="Settings">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="3.1"/>
+                <path d="M12 3.6v2.1M12 18.3v2.1M3.6 12h2.1M18.3 12h2.1M6.2 6.2l1.5 1.5M16.3 16.3l1.5 1.5M17.8 6.2l-1.5 1.5M7.7 16.3l-1.5 1.5"/>
+              </svg>
+              <span>Settings</span><i class="dot"></i>
+            </button>
+            <button class="tab-btn tools-sub-btn" data-suite data-tab="benchmark" title="Golden-Clip-Benchmark">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M7.5 19V10.5M12 19V6.5M16.5 19v-5"/>
+                <path d="M6 19.2h12"/>
+              </svg>
+              <span>Bench</span><i class="dot"></i>
+            </button>
+            <button class="tab-btn tools-sub-btn" data-suite data-tab="roi-training" title="AI training">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="3.8" y="3.8" width="7" height="7" rx="2"/>
+                <rect x="13.2" y="3.8" width="7" height="7" rx="2"/>
+                <rect x="3.8" y="13.2" width="7" height="7" rx="2"/>
+                <path d="M14.2 15.2h5M16.7 12.7v5"/>
+              </svg>
+              <span>AI Train</span><i class="dot"></i>
+            </button>
+          </nav>
+          <nav id="ws-view" class="ws-view" role="tablist" aria-label="Player view" data-pb-region="ws-view">
+            <button type="button" role="tab" class="ws-view-btn is-active" data-ws-view="play" aria-selected="true"
+              title="Play Emotion Scripts with video and device">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.2"/><path d="M10.2 8.6v6.8l6-3.4z" fill="currentColor" stroke="none"/></svg>
+              <span>Play</span></button>
+            <button type="button" role="tab" class="ws-view-btn" data-ws-view="create" aria-selected="false" tabindex="-1"
+              title="Create an Emotion Script from a video (Generator)">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="4.5" width="15" height="15" rx="3"/><path d="M8 9.2h5.5M8 12h8M8 14.8h4"/><path d="M16.2 8.2l2.6 2.1-2.6 2.1"/></svg>
+              <span>Create</span></button>
+            <button type="button" role="tab" class="ws-view-btn" data-ws-view="edit" aria-selected="false" tabindex="-1"
+              title="Edit the loaded script: curve dots, lanes, scene markers">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 19.5h4l10-10a2.8 2.8 0 0 0-4-4l-10 10z"/><path d="M13.5 6.5l4 4"/></svg>
+              <span>Edit</span></button>
+            <span class="ws-view-spacer"></span>
+            <button type="button" class="ws-view-sub" id="ws-scenemap" aria-pressed="false" hidden
+              title="Scene Map — rhythm heatmap and marks for the Create video">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6.2-5.6-6.2-10.6a6.2 6.2 0 0 1 12.4 0C18.2 15.4 12 21 12 21z"/><circle cx="12" cy="10.4" r="2.3"/></svg>
+              <span>Scene Map</span></button>
+          </nav>
+          <section id="tab-playback" class="tab-panel active"></section>
+          <section id="tab-training" class="tab-panel"></section>
+          <section id="tab-generator" class="tab-panel"></section>
+          <section id="tab-benchmark" class="tab-panel" data-suite></section>
+          <section id="tab-roi-training" class="tab-panel" data-suite></section>
+          <section id="tab-tools-home" class="tab-panel"></section>
+          <section id="tab-device" class="tab-panel"></section>
+          <section id="tab-log" class="tab-panel"></section>
+          <section id="tab-settings" class="tab-panel"></section>
+        </div>
+        <aside id="sidebar"></aside>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

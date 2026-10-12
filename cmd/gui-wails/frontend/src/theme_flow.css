@@ -1,0 +1,229 @@
+/* SamNPlayer Flow look (V1.0) — owned by ChatGPT (look), see docs/V1_PLAN.md.
+ *
+ * Rules (Owner, 11 Oct): Claude builds the core and structure; ChatGPT builds the
+ * look. Put all visual polish for the 1.0 mockup HERE, in this one file:
+ * glows, waves, panel surfaces, spacing, typography, icon tints.
+ *
+ * Loaded after style.css, so rules here win at equal specificity.
+ * Style only through the hooks in docs/PLAY_UI_CONTRACT.md:
+ *   [data-pb-region=library|main|inspector-tabs|bottom|bottom-tabs|video|
+ *    transport|timeline|curve|lanes|heatmap], .pb-lib-item, .pb-insp-tab,
+ *   .pb-insp-panel, .pb-chan-row, .pb-card, .pb-bottom-tab, #topbar, #rail,
+ *   and the tokens --accent, --axis-stroke, --axis-vibration, --axis-suction,
+ *   --pb-playhead, --pb-grid.
+ * Never hide or remove controls here; never change ids.
+ */
+
+/* ---- First visual pass (Claude, Owner request 11 Oct) — target: final mockup.
+   ChatGPT refines in this file on its own branch. ------------------------- */
+:root {
+  --flow-card: linear-gradient(180deg, rgba(14, 32, 56, 0.78), rgba(7, 18, 34, 0.78));
+  --flow-card-border: rgba(90, 170, 255, 0.20);
+  --flow-card-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 18px 48px rgba(0, 0, 0, 0.40);
+  --flow-glow-cyan: 0 0 18px rgba(0, 217, 244, 0.45);
+  --flow-glow-orange: 0 0 18px rgba(255, 138, 35, 0.45);
+}
+body {
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1600 1000%22 preserveAspectRatio=%22xMidYMid slice%22%3E%3Cdefs%3E%3ClinearGradient id=%22c%22 x1=%220%22 x2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22%2300d9f4%22 stop-opacity=%220%22/%3E%3Cstop offset=%22.45%22 stop-color=%22%2300b4ff%22 stop-opacity=%22.55%22/%3E%3Cstop offset=%221%22 stop-color=%22%23ff8a23%22 stop-opacity=%22.0%22/%3E%3C/linearGradient%3E%3ClinearGradient id=%22o%22 x1=%220%22 x2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22%23ff5c2a%22 stop-opacity=%22.0%22/%3E%3Cstop offset=%22.5%22 stop-color=%22%23ff8a23%22 stop-opacity=%22.55%22/%3E%3Cstop offset=%221%22 stop-color=%22%2300d9f4%22 stop-opacity=%22.0%22/%3E%3C/linearGradient%3E%3Cfilter id=%22b%22 x=%22-20%25%22 y=%22-50%25%22 width=%22140%25%22 height=%22200%25%22%3E%3CfeGaussianBlur stdDeviation=%226%22/%3E%3C/filter%3E%3Cfilter id=%22g%22 x=%22-20%25%22 y=%22-50%25%22 width=%22140%25%22 height=%22200%25%22%3E%3CfeGaussianBlur stdDeviation=%2222%22/%3E%3C/filter%3E%3C/defs%3E%3Cg fill=%22none%22 stroke-linecap=%22round%22%3E%3Cpath d=%22M900 40 C1100 140 1250 -20 1620 90%22 stroke=%22url%28%23c%29%22 stroke-width=%2260%22 filter=%22url%28%23g%29%22 opacity=%22.5%22/%3E%3Cpath d=%22M880 60 C1100 150 1260 0 1620 100%22 stroke=%22url%28%23c%29%22 stroke-width=%223%22 filter=%22url%28%23b%29%22/%3E%3Cpath d=%22M940 20 C1150 120 1300 40 1620 60%22 stroke=%22url%28%23o%29%22 stroke-width=%222.5%22 filter=%22url%28%23b%29%22 opacity=%22.8%22/%3E%3Cpath d=%22M-40 880 C200 780 330 980 620 940%22 stroke=%22url%28%23o%29%22 stroke-width=%2270%22 filter=%22url%28%23g%29%22 opacity=%22.45%22/%3E%3Cpath d=%22M-40 900 C210 800 340 990 640 950%22 stroke=%22url%28%23o%29%22 stroke-width=%223%22 filter=%22url%28%23b%29%22/%3E%3Cpath d=%22M-40 940 C220 860 360 1010 600 980%22 stroke=%22url%28%23c%29%22 stroke-width=%222.5%22 filter=%22url%28%23b%29%22 opacity=%22.8%22/%3E%3C/g%3E%3C/svg%3E") center / cover no-repeat fixed,
+    radial-gradient(900px 500px at 50% 40%, rgba(0, 120, 255, 0.06), transparent 70%),
+    linear-gradient(180deg, #051226 0%, #030a16 100%);
+}
+#app::before, #app::after { display: none; }
+
+/* Top bar: big brand, icon-over-label tabs, glowing active pill. */
+#topbar { height: 86px; background: transparent; border-bottom: 0; }
+.topbar-brand-block { min-width: 300px; height: 70px; }
+.topbar-brand-block .brand-lockup, .topbar-brand-block .brand { width: 58px; height: 58px; }
+.topbar-brand-block .brand img { border-radius: 16px; box-shadow: var(--flow-glow-cyan); }
+.topbar-brand-block .brand-wordmark { font-size: 34px; left: calc(100% + 14px); top: 34%; letter-spacing: -0.02em; }
+.topbar-brand-block .brand-tagline { left: 74px; top: 50px; font-size: 11px; letter-spacing: 0.34em; color: #b9cde0; }
+#topbar #rail { gap: 14px; }
+#topbar #rail .tab-btn {
+  flex-direction: column; gap: 6px; height: 64px; padding: 0 16px;
+  color: #c8d8ea; background: transparent; border: 1px solid transparent;
+}
+#topbar #rail .tab-btn svg { width: 26px; height: 26px; color: #6fd6ff; }
+#topbar #rail .tab-btn span { font-size: 14.5px; }
+#topbar #rail .tab-btn.active {
+  flex-direction: row; gap: 12px; height: 54px; padding: 0 26px; border-radius: 999px;
+  color: #fff;
+  background: linear-gradient(180deg, rgba(0, 120, 255, 0.40), rgba(0, 70, 160, 0.35));
+  border-color: rgba(0, 217, 244, 0.70);
+  box-shadow: 0 0 22px rgba(0, 217, 244, 0.45), inset 0 0 14px rgba(0, 217, 244, 0.25);
+}
+#topbar #rail .tab-btn.active svg { color: #00d9f4; filter: drop-shadow(0 0 6px rgba(0, 217, 244, 0.8)); }
+#topbar #rail .tab-btn.active span { font-size: 15.5px; font-weight: 600; }
+.topbar-icon svg { width: 24px; height: 24px; stroke: #d6e6f5; }
+
+/* Glass cards. */
+#tab-playback[data-pb-layout="v1"] .pb-library,
+#tab-playback[data-pb-layout="v1"] .pb-tools,
+#tab-playback[data-pb-layout="v1"] .pb-bottom {
+  background: var(--flow-card);
+  border: 1px solid var(--flow-card-border);
+  border-radius: 18px;
+  box-shadow: var(--flow-card-shadow);
+  backdrop-filter: blur(10px);
+}
+#tab-playback[data-pb-layout="v1"] .pb-library { padding: 10px 10px 16px; }
+#tab-playback[data-pb-layout="v1"] .pb-tools { padding: 10px 14px 14px; border-left: 1px solid var(--flow-card-border); }
+#tab-playback[data-pb-layout="v1"] .pb-bottom { padding: 8px 14px 10px; }
+#tab-playback[data-pb-layout="v1"] .pb-head h2 { display: none; }
+#tab-playback[data-pb-layout="v1"] .pb-head { margin-bottom: 10px; }
+
+/* Video card: stage + transport read as one card. */
+#tab-playback[data-pb-layout="v1"] #pb-video-stage {
+  border-radius: 18px 18px 0 0;
+  box-shadow: 0 0 0 1px var(--flow-card-border);
+  background: #02070f;
+}
+#tab-playback[data-pb-layout="v1"] .pb-transport {
+  margin-top: -10px; padding: 14px 18px 12px;
+  background: var(--flow-card);
+  border: 1px solid var(--flow-card-border); border-top: 0;
+  border-radius: 0 0 18px 18px;
+  box-shadow: var(--flow-card-shadow);
+  justify-content: center;
+}
+/* Round glowing Play button. */
+#tab-playback #pb-play {
+  width: 64px; height: 64px; padding: 0; border-radius: 50%;
+  display: inline-grid; place-items: center;
+  background: radial-gradient(circle at 50% 45%, rgba(0, 120, 255, 0.35), rgba(3, 12, 26, 0.95) 70%);
+  border: 3px solid #00c8ff;
+  box-shadow: 0 0 0 2px rgba(255, 138, 35, 0.55), 0 0 26px rgba(0, 200, 255, 0.55), 0 0 40px rgba(255, 138, 35, 0.25);
+}
+#tab-playback #pb-play svg { width: 30px; height: 30px; fill: #00d9f4; filter: drop-shadow(0 0 6px rgba(0, 217, 244, 0.9)); margin-left: 4px; }
+#tab-playback #pb-play span,
+#tab-playback #pb-stop span {
+  position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+}
+#tab-playback #pb-stop {
+  width: 44px; height: 44px; padding: 0; border-radius: 50%;
+  display: inline-grid; place-items: center;
+  background: transparent; border: 1px solid var(--flow-card-border);
+}
+#tab-playback #pb-stop svg { width: 16px; height: 16px; fill: #d6e6f5; }
+#tab-playback #pb-eo-trigger, #tab-playback #pb-next { border-radius: 999px; }
+/* Progress: cyan → orange. */
+#tab-playback .pb-transport .progress-bar { height: 6px; border-radius: 999px; background: rgba(255, 255, 255, 0.10); overflow: visible; }
+#tab-playback .pb-transport .progress-bar-fill {
+  position: relative; border-radius: 999px;
+  background: linear-gradient(90deg, #00b4ff, #00d9f4 55%, #ff8a23);
+  box-shadow: 0 0 10px rgba(0, 217, 244, 0.5);
+}
+#tab-playback .pb-transport .progress-bar-fill::after {
+  content: ""; position: absolute; right: -8px; top: 50%; width: 16px; height: 16px; margin-top: -8px;
+  border-radius: 50%; background: #dff8ff; border: 3px solid #00b4ff; box-shadow: var(--flow-glow-cyan);
+}
+
+/* Tabs (inspector + bottom): glowing filled pill. */
+.pb-insp-tabs, .pb-bottom-tabs { border-bottom: 1px solid rgba(90, 170, 255, 0.14); }
+.pb-insp-tab.is-active, .pb-bottom-tab.is-active {
+  color: #fff;
+  background: linear-gradient(180deg, rgba(0, 120, 255, 0.45), rgba(0, 70, 160, 0.30));
+  border-radius: 12px 12px 0 0;
+  border-bottom: 2px solid #00d9f4;
+  box-shadow: 0 -2px 18px rgba(0, 217, 244, 0.25);
+}
+
+/* Library items: cyan glow on the primary. */
+.pb-lib-item svg { stroke: #9fc4e6; }
+.pb-lib-item.is-primary {
+  background: linear-gradient(90deg, rgba(0, 120, 255, 0.45), rgba(0, 90, 200, 0.18));
+  border-color: rgba(0, 217, 244, 0.75);
+  box-shadow: 0 0 16px rgba(0, 217, 244, 0.35), inset 0 0 10px rgba(0, 217, 244, 0.15);
+}
+.pb-lib-title { color: #e6f1fb; font-size: 14px; }
+.pb-lib-drop { border-color: rgba(90, 170, 255, 0.35); background: rgba(0, 0, 0, 0.12); }
+
+/* Channel rows: glowing dot, thicker bar with knob. */
+
+.pb-chan-dot { width: 20px; height: 20px; box-shadow: 0 0 12px var(--c), inset 0 0 6px rgba(255, 255, 255, 0.5); }
+.pb-chan-bar { height: 6px; overflow: visible; position: relative; }
+.pb-chan-bar b { position: relative; box-shadow: 0 0 8px var(--c); }
+.pb-chan-bar b::after {
+  content: ""; position: absolute; right: -7px; top: 50%; width: 14px; height: 14px; margin-top: -7px;
+  border-radius: 50%; background: #fff; border: 3px solid var(--c);
+}
+.pb-chan-val { color: #e6f1fb; }
+
+/* Cards inside the inspector. */
+.pb-card { background: rgba(4, 14, 28, 0.55); border-color: rgba(90, 170, 255, 0.16); border-radius: 14px; }
+
+/* Fit with the larger transport: keep the whole core view on screen. */
+#tab-playback[data-pb-layout="v1"] .pb-video-stage video,
+#tab-playback[data-pb-layout="v1"] .pb-video-stage.is-playing.has-video video,
+#tab-playback[data-pb-layout="v1"].pb-tools-collapsed .pb-video-stage video {
+  max-height: max(200px, calc(100vh - 770px));
+}
+/* Scene strip on (S4b): give the strip its 50 px so the view still fits. */
+#tab-playback[data-pb-layout="v1"][data-pb-scenes="on"] .pb-video-stage video {
+  max-height: max(180px, calc(100vh - 820px));
+}
+#tab-playback[data-pb-layout="v1"] .pb-transport { padding: 8px 18px; }
+#tab-playback[data-pb-layout="v1"] .pb-heatmap { height: 18px; border-radius: 6px; opacity: 0.9; }
+#tab-playback .pb-transport .progress-bar-fill[style*="width: 0"]::after { display: none; }
+@media (max-height: 860px) {
+  #tab-playback[data-pb-layout="v1"] .pb-curve { height: 90px; }
+  #topbar { height: 74px; }
+}
+
+/* S5 transport look (mockup: loop · speed | prev · PLAY · next | volume · fullscreen). */
+#tab-playback .pb-t-icon { border-color: transparent; color: #d6e6f5; }
+#tab-playback .pb-t-icon:hover { color: #fff; background: rgba(0, 180, 255, 0.10); }
+#tab-playback #pb-prev svg, #tab-playback #pb-next svg { width: 24px; height: 24px; }
+#tab-playback .pb-speed {
+  background: rgba(4, 14, 28, 0.7); border: 1px solid var(--flow-card-border); color: #e6f1fb;
+}
+#tab-playback .pb-volume { accent-color: #00d9f4; }
+#tab-playback .pb-transport { flex-wrap: wrap; row-gap: 8px; }
+#tab-playback .pb-transport .progress-bar { order: -1; flex: 1 1 100%; }
+#tab-playback .pb-transport-right { margin-left: auto; }
+
+/* Channel rows: toggle switch + coloured level slider (mockup Devices). */
+.pb-chan-row { grid-template-columns: 40px 22px minmax(0, 1fr) 44px 38px; }
+.pb-chan-on {
+  appearance: none; -webkit-appearance: none; width: 36px; height: 20px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14); position: relative; cursor: pointer; transition: background .15s;
+}
+.pb-chan-on::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
+  background: #fff; transition: transform .15s;
+}
+.pb-chan-on:checked { background: var(--c, #00d9f4); box-shadow: 0 0 10px var(--c, #00d9f4); }
+.pb-chan-on:checked::after { transform: translateX(16px); }
+@media (prefers-reduced-motion: reduce) { .pb-chan-on, .pb-chan-on::after { transition: none; } }
+.pb-chan-row .pb-chan-bar { height: 4px; }
+.pb-chan-row .pb-chan-bar b::after { display: none; }
+
+/* Video bar (mockup top of the video card). */
+.pb-vb-select { background: rgba(4, 14, 28, 0.75); border: 1px solid var(--flow-card-border); border-radius: 12px; color: #e6f1fb; }
+.pb-vb-select svg:first-child { stroke: #8fd3ff; }
+.pb-vb-icon { background: transparent; border: 0; color: #d6e6f5; }
+.pb-vb-icon:hover { background: rgba(0, 180, 255, 0.10); color: #fff; }
+
+/* S4b scene strip look */
+.pb-scene-strip { background: rgba(var(--accent-rgb, 0, 217, 244), 0.03); }
+.pb-scene-thumb { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06); }
+.pb-scene-mark {
+  background: var(--axis-stroke, #ff8a23);
+  box-shadow: 0 0 8px rgba(255, 138, 35, 0.7);
+}
+.pb-scene-mark:hover, .pb-scene-mark:focus-visible { background: #fff; }
+.pb-scene-add {
+  color: var(--accent, #00d9f4); background: rgba(var(--accent-rgb, 0, 217, 244), 0.08);
+  border: 1px solid rgba(var(--accent-rgb, 0, 217, 244), 0.45);
+}
+
+/* S8a Audio Analysis card look */
+.pb-audio-card-bpm { color: var(--accent, #00d9f4); font-size: 18px; text-shadow: 0 0 10px rgba(var(--accent-rgb, 0, 217, 244), 0.5); }
+.pb-aa-wave { border-radius: 8px; background: rgba(var(--accent-rgb, 0, 217, 244), 0.04); }
+
+/* S6 Library: favorites star + recent-video menu */
+.pb-fav-toggle { background: transparent; border: 1px solid var(--flow-card-border, rgba(0, 217, 244, 0.25)); border-radius: 10px; color: #d6e6f5; }
+.pb-fav-toggle[aria-pressed="true"] { color: #ffb24d; border-color: rgba(255, 138, 35, 0.6); box-shadow: 0 0 10px rgba(255, 138, 35, 0.35); }
+.pb-vb-menu { background: rgba(6, 18, 31, 0.97); border-color: var(--flow-card-border, rgba(0, 217, 244, 0.25)); box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45); }
+.pb-vb-menu-item { color: #d6e6f5; border-radius: 8px; }
+.pb-vb-menu-item:hover, .pb-vb-menu-item:focus-visible { background: rgba(0, 180, 255, 0.12); color: #fff; }

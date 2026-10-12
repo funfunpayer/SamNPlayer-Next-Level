@@ -1,0 +1,5 @@
+opencv-contrib-python>=4.8
+scipy>=1.10
+numpy>=1.24
+# Nicht parallel zu opencv-python / opencv-python-headless installieren —
+# sonst fehlt CSRT (Issues #94/#95). Nur opencv-contrib-python.
