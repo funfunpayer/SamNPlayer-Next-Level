@@ -4,6 +4,8 @@ A gate is passed when its checks are green and recorded in the PR. Each work
 package is its own PR with tests. Plan and rules: [`MASTER_PLAN.md`](MASTER_PLAN.md).
 One program, free, donations (Owner, 12 Oct) — there is no commercial gate.
 
+**Owner-approved detailed features (13 Oct 2026):** [12 capabilities, P0/P1/P2, cross-feature dependencies, acceptance criteria and mapping onto the existing Flow GUI](PRIORITIZED_CAPABILITY_REGISTER.md). **Project Recovery is a P0 prerequisite for reliable Smart Batch.** These are features of the one donation-supported SamNPlayer, not paid Studio entitlements.
+
 ## P — Preparation ✅
 
 | ID | Deliverable | Status |
