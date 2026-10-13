@@ -3,6 +3,9 @@
 **Status:** code imported · 12 Oct 2026 · single source of truth for this repository.
 The five planning documents from SamNPlayer PR #510 are archived unchanged in
 [`sources/`](sources/). Where they disagree with this file, this file wins.
+
+**Owner five-engine blueprint (13 Oct 2026):** [SamN Core, SamN Motion Engine, SamN Intelligence, SamN AI Assist, SamN Device Engine — integrated GUI, dependency policy and test contracts](FIVE_ENGINE_ARCHITECTURE_AND_GUI.md). This is the architectural elaboration of this master plan; it does not revive paid Studio or create a competing roadmap.
+
 Open Owner decisions: [`OPEN_DECISIONS.md`](OPEN_DECISIONS.md).
 Order of work: [`ROADMAP.md`](ROADMAP.md).
 
