@@ -108,8 +108,12 @@ On the same machine fingerprint and manifest:
 
 1. Every clip that was `ok` in B is `ok` in C.
 2. No clip falls below its `expect` floor.
-3. Quality: `mean_r(C) ≥ mean_r(B) − 0.01` and no clip loses more than 0.05 r.
-   Quality Doctor `passed` count does not drop.
+3. Quality: **no regression beyond measured noise.** Noise = the spread of
+   `r` over the 5 measured runs of B per clip. No clip's median `r` may drop by
+   more than that spread, `mean_r(C) ≥ mean_r(B)` within the summed noise, and
+   the Quality Doctor `passed` count does not drop. This matches the inherited
+   self-build rule (`docs/SELF_BUILD.md`: worse in any measured point → reject).
+   Until the first baseline measures the noise, the tolerance is **0**.
 4. Speed claim (only when the PR claims speed): median `wall_ms` or `peak_rss_mb`
    at least 20 % better summed over all clips (`FREE_TO_STUDIO_PRODUCT_PLAN` §4).
    Thresholds are revised once the first baseline exists.

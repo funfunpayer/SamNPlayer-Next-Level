@@ -44,12 +44,13 @@ One folder per batch under the app data dir:
 | File | Content | Written |
 |---|---|---|
 | `batch.json` | Settings: preset, output dir, overwrite, max retries, parallel jobs, created_at | Once, at creation |
-| `journal.jsonl` | Append-only events: `{seq, at, clip, from, to, reason}` | Each transition, fsync |
+| `journal.jsonl` | Append-only events: `{seq, at, clip, from, to, reason, data}` — `data` carries what the new state needs to be rebuilt: `queued` → input path + fingerprint + pipeline version; `done`/`review` → outputs + quality summary; `failed` → error + retry count | Each transition, fsync |
 | `clips/<clip-id>.json` | Input path, input fingerprint (size + mtime + sha256 of first MiB, as Free `sceneMap.video.sha256_head`), pipeline version, outputs, quality summary, error | On each clip state change, atomic rename |
 | `report.json` / `report.csv` | Per-clip result table | On `done`/`cancelled`, rebuilt any time from the journal |
 
-The journal is the source of truth; `clips/*.json` are a cache that can be
-rebuilt from it.
+The journal is the source of truth. Because every event carries its `data`,
+`clips/*.json` are a cache that can be rebuilt from the journal alone; a test
+deletes `clips/` after a run and checks the rebuild is identical.
 
 ## Resume after crash
 

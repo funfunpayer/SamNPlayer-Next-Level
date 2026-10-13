@@ -1,6 +1,9 @@
 # EDIT-00 — What the Free editor does today, and the gap to the Next editor
 
-**Status:** inventory · Free `main` at `52d0529` · 12 Oct 2026
+**Status:** inventory · Free `main` at `52d0529` · 12 Oct 2026 · **snapshot:** device/axis
+work has moved on since (SamNPlayer #526, #527 imported here; #529 open in the
+old repo). Re-check the gap table against the current code before building
+from it.
 Target: `sources/STUDIO_EDITOR_COMPETITIVE_BLUEPRINT_2026-10-12.md` §1.
 
 ## Today (Free)
