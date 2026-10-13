@@ -1,0 +1,13 @@
+# Optionale Abhängigkeit für generator/ai_roi.py (--roi-finder ai).
+#
+# Bewusst NICHT in requirements.txt: der Generator läuft ohne lokale KI
+# vollständig und unverändert weiter (siehe HANDOFF.md, "was nicht gebraucht
+# wird, kommt nicht rein"). Nur wer --roi-finder ai nutzen will, installiert
+# zusätzlich:
+#
+#   pip install -r generator/requirements-ai.txt
+#
+# CPU-Variante genügt für kleine ROI-Erkennungsmodelle (wenige MB); wer eine
+# GPU nutzen will, ersetzt dies durch onnxruntime-gpu oder
+# onnxruntime-directml je nach Plattform.
+onnxruntime>=1.17

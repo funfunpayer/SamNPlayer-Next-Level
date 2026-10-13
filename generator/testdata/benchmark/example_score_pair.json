@@ -1,0 +1,9 @@
+{
+  "name": "clip_ausschnitt_mit_yolo_hub_vs_fungen",
+  "description": "Committed FunGen2 reference vs SamNPlayer hub (Everyday Go path output). Video stays local; compare-only works without it.",
+  "video": "",
+  "reference": "generator/testdata/golden_clips/clip_ausschnitt_native/mit_yolo/clip_ausschnitt.funscript",
+  "candidate": "generator/testdata/golden_clips/clip_ausschnitt_native/mit_yolo/clip_ausschnitt__hub.funscript",
+  "max_lag_ms": 1000,
+  "notes": "Candidate is Everyday hub (__hub), not an AI-written Everyday replacement."
+}

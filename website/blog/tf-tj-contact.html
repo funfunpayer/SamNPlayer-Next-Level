@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tf/Tj + contact vibration — SamNPlayer</title>
+  <meta name="description" content="Two-point Tf/Tj distance scripts and contact-triggered vibration on Sam Neo 2 native .samn files." />
+  <link rel="icon" type="image/png" href="../media/logo.png" />
+  <link rel="stylesheet" href="../styles.css" />
+</head>
+<body class="page">
+  <header class="top is-scrolled">
+    <a class="top-brand" href="../index.html" aria-label="SamNPlayer home">
+      <img src="../media/logo.png" alt="" width="36" height="36" />
+      <span class="wordmark"><span class="wm-sam">Sam</span><span class="wm-n">N</span><span class="wm-player">Player</span></span>
+    </a>
+    <nav class="top-nav" aria-label="Primary">
+      <a class="nav-keep" href="./">Notes</a>
+      <a href="../index.html#download" class="nav-cta">Download</a>
+    </nav>
+  </header>
+
+  <header class="page-hero">
+    <p class="crumb"><a href="../index.html">Home</a> · <a href="./">Notes</a></p>
+    <h1>Tf/Tj + contact vibration</h1>
+    <p class="lede">Two ROIs measure distance; contact can drive vibe on Neo 2 without inventing motion.</p>
+  </header>
+
+  <main class="prose">
+    <p>
+      Sam Neo&nbsp;2 is not a single-axis toy. Native <code>.samn</code> carries general motion plus
+      vibration and suction curves, recipes, and strength presets.
+    </p>
+    <h2>Tf/Tj distance</h2>
+    <p>
+      Mark two regions (or accept a two-ROI suggestion). The generator tracks distance over time
+      for suction-style scripts that follow the scene instead of a single blob.
+    </p>
+    <h2>Contact vibration (opt-in)</h2>
+    <p>
+      When enabled, vibe intensity follows contact in the measured span — stored on the recipe
+      so Play can re-derive axes. It is a deliberate recipe, not a silent post-process mystery.
+    </p>
+    <p>
+      Subjective “feel” on real hardware is still an owner test item; use Device diagnostics
+      and Mock first, then a short Neo&nbsp;2 session.
+    </p>
+    <p class="cta-row">
+      <a class="btn btn-ghost" href="../guides/neo2-ble.html">Neo 2 + Bluetooth</a>
+      <a class="btn btn-ghost" href="vs-fungen.html">vs FunGen</a>
+    </p>
+  </main>
+
+  <footer class="foot">
+    <div class="foot-links"><a href="./">All notes</a></div>
+  </footer>
+  <script src="../script.js" defer></script>
+</body>
+</html>

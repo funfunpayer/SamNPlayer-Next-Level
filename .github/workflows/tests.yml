@@ -1,0 +1,308 @@
+name: Tests
+
+# Läuft bei JEDEM Push und jedem Pull Request - nicht erst beim Release.
+#
+# Das ist der Unterschied, der Teamarbeit erst möglich macht: bisher liefen
+# die Tests nur bei einem Versions-Tag. Ein Fehler wäre also erst beim
+# Ausliefern aufgefallen, und dann in fremdem Code, dessen Zusammenhang man
+# längst vergessen hat.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    name: Go
+    runs-on: ubuntu-latest
+    # Normal run: a few minutes. A hung step (e.g. a stalled apt mirror)
+    # fails here instead of blocking for GitHub's 6 h default.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # Default build is WITHOUT `-tags opencv`: a fresh clone must compile
+      # with CGO_ENABLED=1 even when libopencv-dev is missing. Native CSRT
+      # (generator/trackcv + native_track_opencv.go) is opt-in via the
+      # opencv build tag — see the go-opencv job below.
+
+      # ffmpeg: videox_test.go skips with t.Skip("ffmpeg not available") when
+      # missing — so the Go job stayed green in CI while the same test
+      # reliably caught FrameReader.Close bugs locally. Without ffmpeg the
+      # whole video path is untested in CI.
+      - name: Install ffmpeg
+        run: |
+          scripts/ci/apt-install.sh ffmpeg
+          command -v ffmpeg
+          ffmpeg -version | head -1
+
+      # cmd/gui-wails bindet frontend/dist per go:embed ein. Das Verzeichnis
+      # ist ein Bauartefakt und liegt zu Recht nicht im Repository - ohne
+      # diesen Schritt scheitert aber schon "go build" auf einem frischen
+      # Checkout mit "pattern all:frontend/dist: no matching files found".
+      #
+      # Genau daran ist der erste Testklon dieses Projekts gescheitert.
+      - name: Build frontend
+        working-directory: cmd/gui-wails/frontend
+        run: |
+          npm install
+          npm run build
+
+      - name: Check formatting
+        run: |
+          # gofmt meldet nichts, wenn alles passt - deshalb die Ausgabe
+          # auswerten statt auf den Rückgabewert zu vertrauen.
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt-clean (gofmt -w <file>):"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      # Der Race-Detector ist hier wichtiger als anderswo: Wiedergabe,
+      # Keepalive und Geräteansteuerung laufen nebenläufig, und ein
+      # Datenwettlauf zeigt sich sonst als sporadisches Ruckeln, das
+      # niemand reproduzieren kann.
+      - name: Tests with race detector
+        run: go test -race ./...
+
+      # Edition switch (Owner 11 Oct): releases are the Free build; the
+      # suite build (-tags suite) adds AI training / learning tools.
+      - name: Tests, suite edition
+        run: go test -race -tags suite ./edition/ ./cmd/gui-wails/
+
+      # Regression: cgo on, no OpenCV headers — must still build (stub path).
+      - name: Build without OpenCV (CGO on)
+        run: |
+          go build ./generator/ ./cmd/cli/
+          go test ./generator/ -run 'NativePipeline|NativeTracking' -count=1
+          go test ./generator/trackcv/ -count=1
+
+  go-opencv:
+    name: Go (OpenCV)
+    runs-on: ubuntu-latest
+    # Normal run: a few minutes. A hung step (e.g. a stalled apt mirror)
+    # fails here instead of blocking for GitHub's 6 h default.
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install OpenCV + ffmpeg
+        run: |
+          # libopencv-dev: native CSRT (-tags opencv).
+          # ffmpeg: videox tests must actually run (see go job comment).
+          scripts/ci/apt-install.sh libopencv-dev pkg-config ffmpeg
+          command -v ffmpeg
+          ffmpeg -version | head -1
+
+      - name: Build frontend
+        working-directory: cmd/gui-wails/frontend
+        run: |
+          npm install
+          npm run build
+
+      - name: go vet (-tags opencv)
+        run: go vet -tags opencv ./...
+
+      - name: Tests with race detector (-tags opencv)
+        run: go test -tags opencv -race ./...
+
+  python:
+    name: Python (Generator)
+    runs-on: ubuntu-latest
+    # Normal run: a few minutes. A hung step (e.g. a stalled apt mirror)
+    # fails here instead of blocking for GitHub's 6 h default.
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Dependencies
+        run: pip install opencv-contrib-python scipy numpy
+
+      # Die schnellen Tests zuerst: sie decken die Signalverarbeitung ab und
+      # sind in Sekunden durch. Die Videotests laufen danach, weil sie
+      # Minuten brauchen - so sieht man den häufigsten Fehler früher.
+      - name: Fast tests
+        working-directory: generator
+        run: |
+          for t in backends_test.py quality_doctor_test.py device_profile_test.py \
+                   fusion_test.py report_test.py quality_model_test.py \
+                   bootstrap_yolo_dataset_test.py audio_check_test.py \
+                   golden_clip_benchmark_test.py pose_observer_test.py \
+                   vlm_probe_test.py vlm_score_test.py \
+                   contact_points_test.py contact_detector_test.py \
+                   ai_setup_test.py scene_roles_test.py; do
+            echo "== $t"
+            python3 "$t"
+          done
+
+      - name: Video-based tests
+        working-directory: generator
+        run: |
+          for t in flow_backend_test.py grid_lk_backend_test.py grid_lk_two_point_test.py \
+                   track_cache_test.py two_point_test.py camera_compensation_test.py \
+                   motion_signature_test.py appearance_memory_test.py per_scene_roi_test.py \
+                   roi2_dispatch_warnings_test.py auto_roi_two_point_test.py \
+                   auto_roi_region_bounds_test.py auto_roi_candidates_test.py; do
+            echo "== $t"
+            python3 "$t"
+          done
+
+      - name: Benchmark clip prep
+        run: python3 scripts/benchmark-prep/cut_clip_test.py
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    # Normal run: a few minutes. A hung step (e.g. a stalled apt mirror)
+    # fails here instead of blocking for GitHub's 6 h default.
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Playwright
+        run: |
+          pip install playwright
+          playwright install --with-deps chromium
+
+      # Die Frontend-Tests erzeugen ihre Attrappen aus der generierten
+      # App.js. Ohne diesen Schritt fehlen dort neue Go-Methoden, und die
+      # Tests scheitern mit "does not provide an export named ..." - ein
+      # irreführender Fehler, der nichts mit dem Prüfgegenstand zu tun hat.
+      - name: Generate Wails bindings
+        run: |
+          # ffmpeg gehört inhaltlich nicht zu den Wails-Bindings, hängt hier
+          # nur am ohnehin schon laufenden apt-get update/install - wird von
+          # curve_editor_video_sync_test.py gebraucht, das sich sein
+          # Test-Video selbst erzeugt statt eine Binärdatei mitzuführen.
+          scripts/ci/apt-install.sh libgtk-3-dev libwebkit2gtk-4.1-dev ffmpeg
+          go install "github.com/wailsapp/wails/v2/cmd/wails@$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v2)"
+          cd cmd/gui-wails
+          $(go env GOPATH)/bin/wails build -tags webkit2_41 -skipbindings=false || true
+
+      - name: Tests
+        run: |
+          for t in cmd/gui-wails/frontend/test/*_test.py; do
+            echo "== $t"
+            python3 "$t"
+          done
+
+  # G0.1: Go CSRT on Windows via MSYS2 MinGW OpenCV (docs/WINDOWS_OPENCV.md).
+  windows-opencv:
+    name: Go (OpenCV Windows)
+    runs-on: windows-latest
+    # Normal run: a few minutes. A hung step (e.g. a stalled apt mirror)
+    # fails here instead of blocking for GitHub's 6 h default.
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          # OpenCV is installed in the next step: pacman may skip it during
+          # setup-msys2 when fc-libs providers conflict (gcc-libgfortran still
+          # pins renamed gcc-libs after MSYS2 moved to cc-libs).
+          install: >-
+            mingw-w64-x86_64-go
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-pkgconf
+            mingw-w64-x86_64-libgfortran
+
+      - name: Install OpenCV (MSYS2)
+        run: |
+          set -euo pipefail
+          # Prefer libgfortran as fc-libs provider so openblas/opencv resolve
+          # without the broken gcc-libgfortran → gcc-libs=… pin.
+          pacman -S --noconfirm --needed mingw-w64-x86_64-libgfortran
+          if ! pacman -S --noconfirm --needed mingw-w64-x86_64-opencv; then
+            echo "opencv install failed; retry after full sync"
+            pacman -Syuu --noconfirm
+            pacman -S --noconfirm --needed mingw-w64-x86_64-libgfortran mingw-w64-x86_64-opencv
+          fi
+          pacman -Q mingw-w64-x86_64-opencv
+
+      - name: OpenCV pkg-config (MSYS2 = opencv5)
+        run: |
+          set -euo pipefail
+          export PKG_CONFIG_PATH="/mingw64/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+          which go gcc g++ pkg-config
+          pkg-config --modversion opencv5
+          pkg-config --cflags --libs opencv5
+          test -f /mingw64/include/opencv5/opencv2/tracking.hpp
+          ls /mingw64/bin/libopencv_tracking*.dll
+          ls /mingw64/bin/libopencv_core*.dll
+
+      - name: Build frontend dist (embed)
+        shell: bash
+        run: |
+          cd cmd/gui-wails/frontend
+          npm install
+          npm run build
+
+      - name: go test -tags opencv (CSRT focus)
+        run: |
+          set -euo pipefail
+          export CGO_ENABLED=1
+          export PATH="/mingw64/bin:$PATH"
+          export PKG_CONFIG_PATH="/mingw64/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+          export CC=gcc
+          export CXX=g++
+          go version
+          pkg-config --modversion opencv5
+          go test -tags opencv ./generator/trackcv/ -count=1
+          go test -tags opencv ./generator/ -count=1 \
+            -run 'Native|AutoNative|NativeTracking|GenerateWithContextCancel'
+          go build -tags opencv -o SamNPlayer-cli-windows-amd64.exe ./cmd/cli
+          ls -la SamNPlayer-cli-windows-amd64.exe
+          bash scripts/collect-mingw-opencv-dlls.sh SamNPlayer-cli-windows-amd64.exe /tmp/opencv-dlls
+          ls /tmp/opencv-dlls/libopencv_tracking*.dll
+
+      - name: Wails GUI build smoke (OpenCV tags)
+        run: |
+          set -euo pipefail
+          export CGO_ENABLED=1
+          export PATH="/mingw64/bin:$PATH"
+          # Node from actions/setup-node (Windows path) for any leftover npm calls.
+          export PATH="/c/Program Files/nodejs:$PATH"
+          export PKG_CONFIG_PATH="/mingw64/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+          export CC=gcc CXX=g++
+          go install "github.com/wailsapp/wails/v2/cmd/wails@$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v2)"
+          cd cmd/gui-wails
+          # Frontend already built in the previous step (embed dist).
+          "$(go env GOPATH)/bin/wails" build -trimpath -tags opencv -s
+          test -f build/bin/SamNPlayer.exe
+          ls -la build/bin/SamNPlayer.exe
+          bash ../../scripts/collect-mingw-opencv-dlls.sh build/bin/SamNPlayer.exe /tmp/gui-dlls
+          ls /tmp/gui-dlls/libopencv_tracking*.dll

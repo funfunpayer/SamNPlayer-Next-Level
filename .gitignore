@@ -1,0 +1,42 @@
+# Wails-/Frontend-Abhängigkeiten und Build-Artefakte
+cmd/gui-wails/frontend/node_modules/
+cmd/gui-wails/frontend/dist/
+cmd/gui-wails/build/bin/
+
+# Fertige Binaries. Bewusst NICHT eingecheckt: sie sind mehrere MB groß,
+# ändern sich bei jedem Build komplett und werden vom Release-Workflow
+# ohnehin automatisch gebaut und an den GitHub-Release gehängt.
+dist/
+*.exe
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Lokale Testartefakte
+*.funscript
+!**/testdata/**/*.funscript
+!cmd/gui-wails/frontend/test/fixtures/*.funscript
+*.mp4
+!**/testdata/**/*.mp4
+.artifacts/
+
+# Agent-/Preview-Demos (nicht Teil der App)
+cmd/gui-wails/frontend/ui-preview.html
+cmd/gui-wails/frontend/test/_demo_harness.html
+cmd/gui-wails/frontend/test/_player_preview.html
+demo_server.py
+
+# Editor/OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Local Wails binary from `go build` (repo root only)
+/gui-wails
+tmp/
+/cmd/gui-wails/gui-wails
+/cmd/gui-wails/frontend/test/_*_harness.html

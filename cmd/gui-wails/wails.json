@@ -1,0 +1,20 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "SamNPlayer",
+  "outputfilename": "SamNPlayer",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "funfunplayer",
+    "email": ""
+  },
+  "info": {
+    "companyName": "funfunplayer",
+    "productName": "SamNPlayer",
+    "productVersion": "0.5.8",
+    "copyright": "Copyright (c) 2026 funfunplayer",
+    "comments": "Emotion Generator — create and play Emotion Scripts (.samn); Funscript import/export for other apps"
+  }
+}

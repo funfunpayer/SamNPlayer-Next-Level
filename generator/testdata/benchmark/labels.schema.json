@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://samnplayer.local/schemas/benchmark_pair_label.json",
+  "title": "Benchmark pair label (KI training/eval)",
+  "type": "object",
+  "required": ["kind", "label", "passed", "score"],
+  "properties": {
+    "timestamp": { "type": "string", "description": "RFC3339 when written (CLI)" },
+    "kind": { "const": "benchmark_pair_label" },
+    "label": { "enum": ["good", "review", "bad"] },
+    "passed": { "type": "boolean", "description": "true only when label=good" },
+    "video": { "type": "string", "description": "Optional local video path (metadata)" },
+    "reference": { "type": "string", "description": "FunGen / reference .funscript" },
+    "candidate": { "type": "string", "description": "Everyday (or hybrid-assisted) candidate .funscript" },
+    "score": {
+      "type": "object",
+      "description": "Full funscript.PairScore (Motion Fidelity + Quality Doctor)",
+      "required": ["kind", "label", "passed", "fidelity", "quality"]
+    }
+  },
+  "additionalProperties": true
+}

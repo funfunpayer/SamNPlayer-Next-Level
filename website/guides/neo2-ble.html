@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sam Neo 2 + Bluetooth — SamNPlayer</title>
+  <meta name="description" content="Connect SVAKOM Sam Neo 2 to SamNPlayer over BLE or Intiface. Recommended Windows 11 dongles." />
+  <link rel="icon" type="image/png" href="../media/logo.png" />
+  <link rel="stylesheet" href="../styles.css" />
+</head>
+<body class="page">
+  <header class="top is-scrolled">
+    <a class="top-brand" href="../index.html" aria-label="SamNPlayer home">
+      <img src="../media/logo.png" alt="" width="36" height="36" />
+      <span class="wordmark"><span class="wm-sam">Sam</span><span class="wm-n">N</span><span class="wm-player">Player</span></span>
+    </a>
+    <nav class="top-nav" aria-label="Primary">
+      <a class="nav-keep" href="./">Guides</a>
+      <a href="../index.html#download" class="nav-cta">Download</a>
+    </nav>
+  </header>
+
+  <header class="page-hero">
+    <p class="crumb"><a href="../index.html">Home</a> · <a href="./">Guides</a> · Neo 2</p>
+    <h1>Sam Neo 2 + Bluetooth</h1>
+    <p class="lede">First-class device support: BLE, Intiface/Buttplug, and Mock for dry runs.</p>
+  </header>
+
+  <main class="prose">
+    <h2>Hardware tip (Windows 11)</h2>
+    <p>
+      Intiface recommends an <strong>external USB dongle with an antenna</strong>, not bare onboard radios.
+      Common picks: <strong>TP-Link UB500</strong> or <strong>Asus USB-BT500</strong>.
+      See also
+      <a href="https://intiface.com/docs/intiface-central/hardware/bluetooth/">Intiface Bluetooth hardware guidance</a>.
+    </p>
+
+    <h2>Connect in SamNPlayer</h2>
+    <ol>
+      <li>Power the Neo&nbsp;2 / Neo&nbsp;2 Pro and put it in pairing / connect mode per SVAKOM docs.</li>
+      <li>In the app, use the top-bar device control or the <strong>Device</strong> tab.</li>
+      <li>Choose <strong>BLE</strong> direct, <strong>Intiface</strong> if you already run Central, or <strong>Mock</strong> to test UI without hardware.</li>
+      <li>Run a short play session and watch vibration / suction meters — they should move with the script.</li>
+    </ol>
+
+    <h2>Why Neo 2 is special here</h2>
+    <p>
+      Native <code>.samn</code> scripts carry general + vibration + suction axes, contact-vibration recipes,
+      and strength presets. Community <code>.funscript</code> remains import/export.
+      Tf/Tj generation can drive contact-triggered vibe — see
+      <a href="../blog/tf-tj-contact.html">Tf/Tj + contact vibration</a>.
+    </p>
+
+    <h2>If connect fails</h2>
+    <ul>
+      <li>Move closer; USB 3 ports and metal desks often hurt BLE.</li>
+      <li>Close other apps that hold the radio (vendor apps, other Buttplug clients).</li>
+      <li>Try Intiface Central as a bridge, then connect SamNPlayer to Intiface.</li>
+      <li>Use <strong>Mock</strong> to confirm playback and meters before blaming the radio.</li>
+    </ul>
+
+    <p class="cta-row">
+      <a class="btn btn-primary" href="start.html">Getting started</a>
+      <a class="btn btn-ghost" href="../faq.html">FAQ</a>
+    </p>
+  </main>
+
+  <footer class="foot">
+    <div class="foot-links">
+      <a href="./">All guides</a>
+      <a href="../index.html">Home</a>
+    </div>
+  </footer>
+  <script src="../script.js" defer></script>
+</body>
+</html>

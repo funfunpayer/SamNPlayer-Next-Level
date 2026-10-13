@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Portable zip on a clean PC — SamNPlayer</title>
+  <meta name="description" content="SamNPlayer portable releases ship ffmpeg next to the GUI so Generate works without a system install." />
+  <link rel="icon" type="image/png" href="../media/logo.png" />
+  <link rel="stylesheet" href="../styles.css" />
+</head>
+<body class="page">
+  <header class="top is-scrolled">
+    <a class="top-brand" href="../index.html" aria-label="SamNPlayer home">
+      <img src="../media/logo.png" alt="" width="36" height="36" />
+      <span class="wordmark"><span class="wm-sam">Sam</span><span class="wm-n">N</span><span class="wm-player">Player</span></span>
+    </a>
+    <nav class="top-nav" aria-label="Primary">
+      <a class="nav-keep" href="./">Notes</a>
+      <a href="../index.html#download" class="nav-cta">Download</a>
+    </nav>
+  </header>
+
+  <header class="page-hero">
+    <p class="crumb"><a href="../index.html">Home</a> · <a href="./">Notes</a></p>
+    <h1>Portable zip on a clean PC</h1>
+    <p class="lede">No “install ffmpeg yourself” surprise. Prefer the portable archive.</p>
+  </header>
+
+  <main class="prose">
+    <p>
+      Generate, audio-tempo check, frame previews, and “Make playable” need ffmpeg.
+      We do not reimplement a full codec stack in the app — we ship a known-good binary
+      <strong>next to the GUI</strong> in portable releases.
+    </p>
+    <h2>How resolution works</h2>
+    <ol>
+      <li>Env overrides, if you set them</li>
+      <li>ffmpeg beside the SamNPlayer binary (portable)</li>
+      <li>User tools dir via <strong>Settings → Install video tools</strong> (opt-in)</li>
+      <li>System PATH, if present</li>
+    </ol>
+    <p>
+      Single-file GUI builds are for in-app updates only. On a machine without ffmpeg,
+      use the portable zip/tar or the Settings installer once.
+    </p>
+    <p class="cta-row">
+      <a class="btn btn-primary" href="https://github.com/funfunpayer/SamNPlayer-site/releases/latest">Portable release</a>
+      <a class="btn btn-ghost" href="../guides/start.html">Getting started</a>
+    </p>
+  </main>
+
+  <footer class="foot">
+    <div class="foot-links"><a href="./">All notes</a></div>
+  </footer>
+  <script src="../script.js" defer></script>
+</body>
+</html>

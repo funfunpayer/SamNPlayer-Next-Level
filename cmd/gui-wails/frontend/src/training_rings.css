@@ -1,0 +1,145 @@
+/* SamNPlayer C2 — training output rings; purely presentational, no fake readings. */
+.flow-tr {
+  --flow-tr-surface: rgba(8, 23, 41, .82);
+  width: 100%;
+  color: #dbeef8;
+  font: inherit;
+  background: linear-gradient(145deg, rgba(14, 38, 59, .92), var(--flow-tr-surface));
+  border: 1px solid rgba(49, 164, 199, .25);
+  border-radius: 20px;
+  box-shadow: inset 0 1px rgba(255, 255, 255, .06), 0 12px 36px rgba(0, 0, 0, .16);
+  padding: clamp(12px, 2vw, 24px);
+  box-sizing: border-box;
+}
+.flow-tr__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+  letter-spacing: .12em;
+  font-size: 12px;
+  color: #8dddea;
+}
+.flow-tr__phase {
+  letter-spacing: .02em;
+  color: #ffb15b;
+  font-size: 13px;
+}
+.flow-tr__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: clamp(10px, 1.5vw, 18px);
+}
+.flow-tr__channel {
+  --flow-tr-level: 0;
+  --flow-tr-accent: #1bd4ed;
+  min-width: 0;
+  padding: 14px 12px 12px;
+  border-radius: 17px;
+  border: 1px solid rgba(117, 194, 214, .18);
+  background: radial-gradient(ellipse at 50% 35%, rgba(20, 69, 89, .34), transparent 72%),
+              linear-gradient(155deg, rgba(11, 30, 50, .95), rgba(4, 15, 29, .8));
+}
+.flow-tr__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.flow-tr__name { color: #c9e5f2; font-size: 13px; font-weight: 650; }
+.flow-tr__value { color: var(--flow-tr-accent); font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.flow-tr__visual {
+  position: relative;
+  display: grid;
+  place-items: center;
+  margin: 4px auto 0;
+  width: min(100%, 192px);
+  aspect-ratio: 1;
+}
+.flow-tr__ring { display: block; width: 100%; height: 100%; overflow: visible; }
+.flow-tr__track, .flow-tr__halo, .flow-tr__arc, .flow-tr__inner { fill: none; }
+.flow-tr__track { stroke: rgba(130, 191, 214, .12); stroke-width: 9; }
+.flow-tr__halo { stroke: var(--flow-tr-accent); stroke-width: 17; opacity: calc(.04 + var(--flow-tr-level) * .22); filter: blur(11px); }
+.flow-tr__arc {
+  stroke: var(--flow-tr-accent);
+  stroke-width: 7;
+  stroke-linecap: round;
+  transition: stroke-dashoffset .23s ease-out;
+  filter: drop-shadow(0 0 5px var(--flow-tr-accent));
+}
+.flow-tr__inner { stroke: rgba(180, 226, 243, .12); stroke-width: 1; stroke-dasharray: 3 8; }
+.flow-tr__center {
+  position: absolute;
+  font-size: clamp(23px, 3vw, 36px);
+  line-height: 1;
+  font-weight: 750;
+  color: #effcff;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 18px rgba(13, 210, 241, .2);
+}
+.flow-tr__meter {
+  height: 29px;
+  display: flex;
+  align-items: end;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 8px;
+}
+.flow-tr__meter-bar {
+  flex: 0 1 9px;
+  min-width: 2px;
+  height: 3px;
+  border-radius: 4px;
+  background: var(--flow-tr-accent);
+  opacity: .18;
+  transition: height .22s ease-out, opacity .22s ease-out;
+}
+.flow-tr__meter-note {
+  display: block;
+  margin-top: 6px;
+  color: #8ca6b9;
+  font-size: 10px;
+  text-align: center;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.flow-tr__empty { margin: 20px 0; color: #b4c7d8; }
+.flow-tr--animate:not(.flow-tr--paused) .flow-tr__channel[data-active="true"] .flow-tr__halo {
+  animation: flow-tr-halo-breathe 3.2s ease-in-out infinite;
+}
+@keyframes flow-tr-halo-breathe {
+  0%, 100% { opacity: calc(.04 + var(--flow-tr-level) * .15); }
+  50% { opacity: calc(.08 + var(--flow-tr-level) * .3); }
+}
+@media (max-width: 520px) {
+  .flow-tr { padding: 12px; }
+  .flow-tr__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .flow-tr__channel { padding: 10px 7px; }
+  .flow-tr__meter { gap: 3px; }
+  .flow-tr__center { font-size: 23px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .flow-tr *, .flow-tr *::before, .flow-tr *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* True output history, only populated by successive real update() calls. */
+.flow-tr__spark {
+  display: block;
+  width: min(100%, 154px);
+  height: 28px;
+  margin: 7px auto 0;
+  overflow: visible;
+}
+.flow-tr__spark-line {
+  stroke: var(--flow-tr-accent);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: .72;
+  filter: drop-shadow(0 0 3px var(--flow-tr-accent));
+}

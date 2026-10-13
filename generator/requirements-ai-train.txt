@@ -1,0 +1,21 @@
+# Optionale Abhängigkeiten NUR zum eigenen Trainieren/Exportieren eines
+# ROI-Erkennungsmodells (generator/bootstrap_yolo_dataset.py,
+# generator/export_yolo_onnx.py) - siehe docs/AI_ADAPTER.md.
+#
+# Getrennt von requirements-ai.txt: das ist die deutlich schwerere
+# Werkzeugkette fürs TRAINIEREN (ultralytics zieht u.a. PyTorch nach sich,
+# mehrere hundert MB), nicht fürs bloße AUSFÜHREN eines fertigen Modells in
+# ai_roi.py - wer nur ein bereits trainiertes .onnx-Modell nutzen will,
+# braucht weiterhin nur requirements-ai.txt (onnxruntime).
+#
+#   pip install -r generator/requirements-ai-train.txt
+#
+# Training-Gerät: train_yolo_model.py wählt mit --device auto der Reihe nach
+# CUDA → MPS → DirectML → CPU. CUDA braucht ein CUDA-fähiges PyTorch
+# (ultralytics-Default auf NVIDIA). DirectML unter Windows (AMD/Intel ohne
+# NVIDIA-Zwang): zusätzlich `pip install torch-directml` - bewusst nicht hier
+# gelistet, weil Linux/macOS es nicht brauchen und der Paketname
+# Windows-spezifisch ist. CPU funktioniert immer, ist für echte Datensätze
+# aber sehr langsam.
+onnx>=1.15
+ultralytics>=8.3

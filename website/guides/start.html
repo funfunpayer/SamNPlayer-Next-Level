@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Getting started — SamNPlayer</title>
+  <meta name="description" content="Install SamNPlayer from the portable archive and run your first Play and Generate session." />
+  <link rel="icon" type="image/png" href="../media/logo.png" />
+  <link rel="stylesheet" href="../styles.css" />
+</head>
+<body class="page">
+  <header class="top is-scrolled">
+    <a class="top-brand" href="../index.html" aria-label="SamNPlayer home">
+      <img src="../media/logo.png" alt="" width="36" height="36" />
+      <span class="wordmark"><span class="wm-sam">Sam</span><span class="wm-n">N</span><span class="wm-player">Player</span></span>
+    </a>
+    <nav class="top-nav" aria-label="Primary">
+      <a class="nav-keep" href="./">Guides</a>
+      <a href="../index.html#download" class="nav-cta">Download</a>
+    </nav>
+  </header>
+
+  <header class="page-hero">
+    <p class="crumb"><a href="../index.html">Home</a> · <a href="./">Guides</a> · Start</p>
+    <h1>Getting started</h1>
+    <p class="lede">Prefer the portable archive so ffmpeg ships next to the app. No system install required.</p>
+  </header>
+
+  <main class="prose">
+    <h2>1. Download portable</h2>
+    <p>
+      Grab the latest <strong>Windows</strong> or <strong>Linux</strong> portable build from
+      <a href="https://github.com/funfunpayer/SamNPlayer-site/releases/latest">GitHub Releases</a>
+      (<code>SamNPlayer-portable-*-amd64</code>). Verify with <code>checksums.txt</code> in the same release.
+    </p>
+    <p>macOS is not shipping yet — code is ready; a Mac builder and notarization are still missing.</p>
+
+    <h2>2. Unzip and run</h2>
+    <ul>
+      <li><strong>Windows:</strong> extract the zip, run the GUI next to <code>ffmpeg</code> / <code>ffprobe</code>.</li>
+      <li><strong>Linux:</strong> extract the tar.gz; WebKitGTK is required for the GUI shell.</li>
+    </ul>
+    <p>
+      Single-file GUI builds exist for in-app updates, but they do not bundle ffmpeg.
+      If tools are missing, use <strong>Settings → Install video tools</strong> (opt-in download).
+    </p>
+
+    <h2>3. First Play</h2>
+    <ol>
+      <li>Open the <strong>Play</strong> tab (home).</li>
+      <li>Load a <code>.funscript</code> or <code>.samn</code> — video is optional (script-alone works).</li>
+      <li>Connect a device, Intiface, or Mock from the top bar / Device tab.</li>
+      <li>Watch the live vibration and suction meters on the rail.</li>
+    </ol>
+
+    <h2>4. First Generate</h2>
+    <ol>
+      <li>Open <strong>Generate</strong>, pick a local video.</li>
+      <li>Mark ROI(s) or use classical auto-region — AI ROI is optional and local only.</li>
+      <li>Run a backend (CSRT / flow / grid_lk). Cancel must recover cleanly if you stop mid-run.</li>
+      <li>Read <strong>Quality Doctor</strong> on the rail before you trust the curve.</li>
+    </ol>
+
+    <h2>5. License (when you buy)</h2>
+    <p>
+      SamNPlayer is free — no licence key. Accept the EULA on first start; see <a href="license.html">Free licence &amp; donations</a>.
+    </p>
+
+    <p class="cta-row">
+      <a class="btn btn-primary" href="https://github.com/funfunpayer/SamNPlayer-site/releases/latest">Latest release</a>
+      <a class="btn btn-ghost" href="neo2-ble.html">Neo 2 + Bluetooth</a>
+    </p>
+  </main>
+
+  <footer class="foot">
+    <div class="foot-links">
+      <a href="./">All guides</a>
+      <a href="../faq.html">FAQ</a>
+      <a href="license.html#donate">♥ Donate</a>
+    </div>
+  </footer>
+  <script src="../script.js" defer></script>
+</body>
+</html>

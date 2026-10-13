@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Honest scope vs FunGen — SamNPlayer</title>
+  <meta name="description" content="SamNPlayer is player + device + generate + train. It is not a FunGen clone and does not claim feature parity." />
+  <link rel="icon" type="image/png" href="../media/logo.png" />
+  <link rel="stylesheet" href="../styles.css" />
+</head>
+<body class="page">
+  <header class="top is-scrolled">
+    <a class="top-brand" href="../index.html" aria-label="SamNPlayer home">
+      <img src="../media/logo.png" alt="" width="36" height="36" />
+      <span class="wordmark"><span class="wm-sam">Sam</span><span class="wm-n">N</span><span class="wm-player">Player</span></span>
+    </a>
+    <nav class="top-nav" aria-label="Primary">
+      <a class="nav-keep" href="./">Notes</a>
+      <a href="../index.html#download" class="nav-cta">Download</a>
+    </nav>
+  </header>
+
+  <header class="page-hero">
+    <p class="crumb"><a href="../index.html">Home</a> · <a href="./">Notes</a></p>
+    <h1>Honest scope vs FunGen</h1>
+    <p class="lede">Different jobs. Overlap on generation — not a clone claim.</p>
+  </header>
+
+  <main class="prose">
+    <h2>What SamNPlayer adds</h2>
+    <ul>
+      <li>Sam Neo&nbsp;2 device runtime (BLE / Intiface / Mock) with diagnostics</li>
+      <li>Playback with sync, curve editor, O-markers, playlist</li>
+      <li>Training tab + Quality / Script Doctor</li>
+      <li>~13&nbsp;MB native GUI — no Electron shell</li>
+    </ul>
+    <h2>Where FunGen-class tools may still be stronger</h2>
+    <ul>
+      <li>Broader project / batch workflows</li>
+      <li>Some multi-backend tracking paths we still measure before porting</li>
+      <li>Tracker quality on Windows without OpenCV-linked CSRT</li>
+    </ul>
+    <p>
+      We compare on golden clips with numbers — we do not market “FunGen but prettier.”
+      If a technique does not beat the current path on a fixed bench, it does not ship.
+    </p>
+    <p class="cta-row">
+      <a class="btn btn-primary" href="../index.html">Why SamNPlayer</a>
+      <a class="btn btn-ghost" href="../index.html#license">Free · donate</a>
+    </p>
+  </main>
+
+  <footer class="foot">
+    <div class="foot-links"><a href="./">All notes</a></div>
+  </footer>
+  <script src="../script.js" defer></script>
+</body>
+</html>

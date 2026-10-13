@@ -1,0 +1,13 @@
+{
+  "clips": [
+    {
+      "name": "example_hub_clip",
+      "video": "/ABS/PATH/TO/YOUR/clip.mp4",
+      "roi": [100, 80, 120, 160],
+      "profile": "standard",
+      "backend": "csrt",
+      "reference_funscript": "/ABS/PATH/TO/fungen_reference.funscript"
+    }
+  ],
+  "_comment": "Everyday CSRT (backend csrt) is the basis. Point video + reference at local files; do not commit personal video. See docs/GOLDEN_CLIPS.md and generator/testdata/benchmark/README.md."
+}
