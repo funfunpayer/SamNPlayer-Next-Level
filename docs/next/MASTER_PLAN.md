@@ -9,6 +9,8 @@ The five planning documents from SamNPlayer PR #510 are archived unchanged in
 Open Owner decisions: [`OPEN_DECISIONS.md`](OPEN_DECISIONS.md).
 Order of work: [`ROADMAP.md`](ROADMAP.md).
 
+**Owner-approved detailed features (13 Oct 2026):** [12 capabilities, P0/P1/P2, cross-feature dependencies, acceptance criteria and mapping onto the existing Flow GUI](PRIORITIZED_CAPABILITY_REGISTER.md). **Project Recovery is a P0 prerequisite for reliable Smart Batch.** These are features of the one donation-supported SamNPlayer, not paid Studio entitlements.
+
 ## 1. One program, free, financed by donations (Owner, 12 Oct 2026)
 
 **There is only one SamNPlayer.** It is free freeware with an EULA and is
