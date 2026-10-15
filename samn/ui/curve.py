@@ -55,7 +55,7 @@ class CurveWidget(QWidget):
 
     def paintEvent(self, _event) -> None:  # noqa: N802 (Qt name)
         p = QPainter(self)
-        p.fillRect(self.rect(), QColor("#16181d"))
+        p.fillRect(self.rect(), QColor("#13151c"))
         w, h = self.width(), self.height()
         cols = self.columns(w)
         if not cols:
@@ -63,7 +63,7 @@ class CurveWidget(QWidget):
             p.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "No script loaded")
             return
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        p.setPen(QPen(QColor("#4fb3ff"), 1.5))
+        p.setPen(QPen(QColor("#b896e8"), 1.5))
         y = lambda pos: (h - 4) - pos * (h - 8) / 100.0  # noqa: E731
         if len(cols) == len(self._actions):
             # Fewer points than pixels: the real line through every point.
@@ -73,5 +73,5 @@ class CurveWidget(QWidget):
                 p.drawLine(QPointF(x, y(lo)), QPointF(x, y(hi)))
         if self._playhead_ms is not None:
             x = self.x_for(self._playhead_ms, w)
-            p.setPen(QPen(QColor("#ff6b6b"), 2))
+            p.setPen(QPen(QColor("#5ad4c4"), 2))
             p.drawLine(QPointF(x, 0), QPointF(x, h))
