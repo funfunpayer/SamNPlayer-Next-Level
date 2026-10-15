@@ -53,11 +53,15 @@
 - **Test gotcha:** pytest-qt's Qt log capture crashes when Qt's FFmpeg
   thread logs, so `--no-qt-log` is set in `pyproject.toml`.
 
+- **P1 Player, part 2:** script variants, the "no script" card (Choose /
+  Add folder; Create stays disabled until P3), drag and drop, chapters and
+  bookmarks on the curve with a chapter jump, the dark theme,
+  `formats.marks`, and `formats.samn_file` (byte-identical with Go).
+
 ## Next
 
-1. **P1 Player, part 2** (Claude): script variants in the Play page, the
-   "no script" card (Create / Choose / Add folder), markers and chapters,
-   `.samn`, soft seek, recent files, drag and drop.
+1. **P1 rest** (Claude): open `.samn` in the Play page, soft seek, recent
+   files; then the cleanup in `samn_file.py` (see `MODULES.md`).
 2. **C++ ports** (Grok, `grok/*`): tracking and the camera estimate from
    `trackcv/cv.cpp`, for P3.
 

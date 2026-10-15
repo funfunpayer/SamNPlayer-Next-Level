@@ -9,7 +9,7 @@ PR** and only through that module's API. New agents start here and in
 |---|---|---|---|---|
 | `native/` | C++ (pybind11) | Fast paths: funscript parse/write, stroke filter, beat bar, beat strokes; later tracking and the frame pipeline | Grok (ports), reviewed by Claude | P0 ✅, P3 tracking open |
 | `samn/native.py` | Python | Loads the C++ modules (a missing module is an error) | Claude | P0 ✅ |
-| `samn/formats/` | Python | `.funscript` (now), mapper (script → suction/vibration, heatmap), `.samn`, OFS | Claude | P0 load ✅, mapper ✅ (9 Go tests, identical values), `.samn` open |
+| `samn/formats/` | Python | `.funscript` (now), mapper (script → suction/vibration, heatmap), `.samn`, OFS | Claude | P0 load ✅, mapper ✅ (9 Go tests, identical values), marks ✅ (bookmarks, chapters), `.samn` ✅ (byte-identical with Go). **Cleanup:** `samn_file.py` has its own chapter/bookmark loaders (use `marks.py`) and attaches methods to `Document` after the class |
 | `samn/settings.py` | Python | Settings JSON, atomic writes, same keys as 0.7 | Claude | P1 ✅ |
 | `samn/library/` | Python | Script search, folders, variants | Claude | P1 logic ✅ |
 | `samn/ui/` | Python + Qt | Main window; Play page (QtMultimedia video, curve with playhead, heatmap, offset, loop, shortcuts) | Claude | P0 ✅, P1 Play page ✅ |
