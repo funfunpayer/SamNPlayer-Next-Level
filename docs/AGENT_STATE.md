@@ -4,7 +4,7 @@
 [`MODULES.md`](MODULES.md). Update it in **every PR**, finished or not.
 **Push often:** the repo is always the current state.
 
-**Last update:** 15 Oct 2026, Claude, branch `claude/samn2-p0`.
+**Last update:** 15 Oct 2026, Claude, branch `claude/samn2-p1`.
 
 ## Rules
 
@@ -42,11 +42,26 @@
   folders, tolerant names and variants. All its Go tests are ported, plus
   tests for the depth and file limits.
 
+- **P1 Player, part 1** (`claude/samn2-p1`):
+  - the Play page: a video or a script opens the other;
+  - QtMultimedia video, curve with a playhead, heatmap;
+  - offset saved per script, loop, shortcuts (Space, ←/→, Shift for 1 s,
+    +/−);
+  - `samn.formats.mapper`, ported 1:1; a sample of 11 frames matches Go
+    exactly;
+  - `samn.settings`.
+- **Test gotcha:** pytest-qt's Qt log capture crashes when Qt's FFmpeg
+  thread logs, so `--no-qt-log` is set in `pyproject.toml`.
+
+- **P1 Player, part 2:** script variants, the "no script" card (Choose /
+  Add folder; Create stays disabled until P3), drag and drop, chapters and
+  bookmarks on the curve with a chapter jump, the dark theme,
+  `formats.marks`, and `formats.samn_file` (byte-identical with Go).
+
 ## Next
 
-1. **P1 Player** (Claude): video first, script search and variants,
-   QtMultimedia video synced with the curve, heatmap, markers, offset,
-   loop, shortcuts.
+1. **P1 rest** (Claude): open `.samn` in the Play page, soft seek, recent
+   files; then the cleanup in `samn_file.py` (see `MODULES.md`).
 2. **C++ ports** (Grok, `grok/*`): tracking and the camera estimate from
    `trackcv/cv.cpp`, for P3.
 
