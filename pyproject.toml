@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "samnplayer"
 version = "2.0.0.dev0"
@@ -10,6 +14,10 @@ test = ["pytest>=8", "pytest-qt>=4.4"]
 
 [project.scripts]
 samnplayer = "samn.__main__:main"
+
+[tool.setuptools.packages.find]
+# Only the Python package; native/ is built with CMake, tests/ is not shipped.
+include = ["samn*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
