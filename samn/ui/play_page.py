@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..formats import funscript
+from ..formats import funscript, marks
 from ..formats.mapper import default_map_options, to_intensity_curve
 from ..library.script_finder import (
     VIDEO_EXTS,
@@ -108,6 +108,10 @@ class PlayPage(QWidget):
         self.variant.setToolTip("This video has several scripts — choose one")
         self.variant.hide()
         self._variants: list[ScriptVariant] = []
+        self.chapter = QComboBox()
+        self.chapter.setToolTip("Jump to a chapter")
+        self.chapter.hide()
+        self._chapters: list[marks.Chapter] = []
         self.noscript = QFrame()
         self.noscript.setFrameShape(QFrame.Shape.StyledPanel)
         self.noscript_create = QPushButton("Create script")
@@ -130,6 +134,7 @@ class PlayPage(QWidget):
             top.addWidget(wdg)
         top.addWidget(self.info, 1)
         top.addWidget(self.variant)
+        top.addWidget(self.chapter)
         top.addWidget(QLabel("Offset"))
         top.addWidget(self.offset)
         loops = QHBoxLayout()
@@ -156,6 +161,7 @@ class PlayPage(QWidget):
         self.loop_end.clicked.connect(lambda: self._set_loop(end=self.player.position()))
         self.loop_clear.clicked.connect(self._clear_loop)
         self.variant.activated.connect(self._variant_chosen)
+        self.chapter.activated.connect(self._chapter_chosen)
         self.noscript_choose.clicked.connect(self._choose_for_video)
         self.noscript_folder.clicked.connect(self._add_folder)
         self.setAcceptDrops(True)
@@ -282,6 +288,7 @@ class PlayPage(QWidget):
         self.session.open_script(str(s.path), s.actions, video=video)
         self.curve.set_actions(s.actions)
         self.heat.set_points(heatmap(s.actions, 200))
+        self._load_marks(str(s.path))
         self.offset.blockSignals(True)
         self.offset.setValue(self.session.offset_ms)
         self.offset.blockSignals(False)
@@ -291,6 +298,23 @@ class PlayPage(QWidget):
         vid = f" + {Path(self.session.video_path).name}" if self.session.video_path else " (no video)"
         self.info.setText(f"{s.path.name}{vid}: {len(s.actions)} points, {secs:.0f} s{note}")
         return True
+
+    def _load_marks(self, path: str) -> None:
+        try:
+            bms, chs = marks.load_bookmarks(path), marks.load_chapters(path)
+        except marks.MarksError:
+            bms, chs = [], []  # broken metadata must not block playing
+        self._chapters = chs
+        self.curve.set_marks([b.time_ms for b in bms], [(c.start_ms, c.end_ms) for c in chs])
+        self.chapter.clear()
+        for c in chs:
+            self.chapter.addItem(c.name or f"Chapter at {c.start_ms // 1000} s")
+        self.chapter.setVisible(bool(chs))
+
+    def _chapter_chosen(self, idx: int) -> None:
+        if 0 <= idx < len(self._chapters):
+            # Script time → video time: the offset moves the script later.
+            self.player.setPosition(self._chapters[idx].start_ms + self.session.offset_ms)
 
     def _set_video(self, video: str) -> None:
         if video:

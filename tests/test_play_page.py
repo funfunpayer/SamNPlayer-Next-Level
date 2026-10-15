@@ -125,3 +125,32 @@ def test_drop_video_and_script_together(page_factory, tmp_path):
     assert page.script.path.name == "other name.funscript"
     assert page.session.video_path == str(vid)
     assert not page.open_dropped(["/x/readme.txt"])
+
+
+def test_chapters_and_bookmarks(page_factory, tmp_path, monkeypatch):
+    s = tmp_path / "Clip.funscript"
+    s.write_text(json.dumps({
+        "actions": [{"at": i * 250, "pos": 0 if i % 2 else 100} for i in range(41)],
+        "metadata": {"bookmarks": [{"name": "b", "time": 2.5}],
+                     "chapters": [{"name": "Intro", "startTime": "0:00", "endTime": "0:04"},
+                                  {"name": "Main", "startTime": 4000, "endTime": 10000}]},
+    }))
+    page = page_factory(Settings(tmp_path / "s.json"))
+    page.open_path(s)
+    assert page.curve._bookmarks == [2500]
+    assert page.curve._chapters == [(0, 4000), (4000, 10000)]
+    assert page.chapter.isVisibleTo(page) and page.chapter.itemText(1) == "Main"
+    seeks = []
+    monkeypatch.setattr(page.player, "setPosition", seeks.append)
+    page.offset.setValue(200)
+    page.chapter.activated.emit(1)
+    assert seeks[-1] == 4200
+
+
+def test_broken_marks_do_not_block_playing(page_factory, tmp_path):
+    s = tmp_path / "Clip.funscript"
+    s.write_text(json.dumps({"actions": [{"at": 0, "pos": 0}, {"at": 1000, "pos": 100}],
+                             "metadata": {"chapters": "nonsense"}}))
+    page = page_factory(Settings(tmp_path / "s.json"))
+    assert page.open_path(s)
+    assert not page.chapter.isVisibleTo(page)
