@@ -35,7 +35,13 @@ def test_find_script_for_video(tmp_path: Path) -> None:
     assert m.found and Path(m.script_path).name == "clip one.funscript"
 
     touch(tmp_path / "Clip One.funscript")
-    assert Path(find_script_for_video(str(video), None).script_path).name == "Clip One.funscript"
+    found = Path(find_script_for_video(str(video), None).script_path).name
+    if (tmp_path / "CLIP ONE.FUNSCRIPT").exists():
+        # Case-insensitive file system (Windows, macOS): "Clip One.funscript"
+        # is the same file as "clip one.funscript", which keeps its name.
+        assert found == "clip one.funscript"
+    else:
+        assert found == "Clip One.funscript"
 
     touch(tmp_path / "Clip One.samn")
     assert Path(find_script_for_video(str(video), None).script_path).name == "Clip One.samn"
