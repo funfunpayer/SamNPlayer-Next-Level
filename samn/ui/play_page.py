@@ -15,7 +15,9 @@ from PySide6.QtGui import QColor, QKeySequence, QPainter, QShortcut
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtMultimediaWidgets import QVideoWidget
 from PySide6.QtWidgets import (
+    QComboBox,
     QFileDialog,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QMessageBox,
@@ -28,7 +30,12 @@ from PySide6.QtWidgets import (
 
 from ..formats import funscript
 from ..formats.mapper import default_map_options, to_intensity_curve
-from ..library.script_finder import VIDEO_EXTS, find_script_for_video, split_folders
+from ..library.script_finder import (
+    VIDEO_EXTS,
+    ScriptVariant,
+    find_script_for_video,
+    split_folders,
+)
 from ..player.session import LoopRange, Session
 from ..settings import Settings
 from .curve import CurveWidget
@@ -97,6 +104,23 @@ class PlayPage(QWidget):
         self.loop_start = QPushButton("Loop from here")
         self.loop_end = QPushButton("Loop to here")
         self.loop_clear = QPushButton("No loop")
+        self.variant = QComboBox()
+        self.variant.setToolTip("This video has several scripts — choose one")
+        self.variant.hide()
+        self._variants: list[ScriptVariant] = []
+        self.noscript = QFrame()
+        self.noscript.setFrameShape(QFrame.Shape.StyledPanel)
+        self.noscript_create = QPushButton("Create script")
+        self.noscript_create.setEnabled(False)
+        self.noscript_create.setToolTip("The Generator comes in SamNPlayer 2 phase P3")
+        self.noscript_choose = QPushButton("Choose script…")
+        self.noscript_folder = QPushButton("Add a script folder…")
+        nl = QHBoxLayout(self.noscript)
+        nl.addWidget(QLabel("No script for this video yet."))
+        for wdg in (self.noscript_create, self.noscript_choose, self.noscript_folder):
+            nl.addWidget(wdg)
+        nl.addStretch(1)
+        self.noscript.hide()
         self.slider = QSlider(Qt.Orientation.Horizontal)
         self.curve = CurveWidget()
         self.heat = HeatmapStrip()
@@ -105,6 +129,7 @@ class PlayPage(QWidget):
         for wdg in (self.open_button, self.play_button):
             top.addWidget(wdg)
         top.addWidget(self.info, 1)
+        top.addWidget(self.variant)
         top.addWidget(QLabel("Offset"))
         top.addWidget(self.offset)
         loops = QHBoxLayout()
@@ -113,6 +138,7 @@ class PlayPage(QWidget):
         loops.addStretch(1)
         lay = QVBoxLayout(self)
         lay.addLayout(top)
+        lay.addWidget(self.noscript)
         lay.addWidget(self.video, 3)
         lay.addWidget(self.slider)
         lay.addWidget(self.heat)
@@ -129,6 +155,10 @@ class PlayPage(QWidget):
         self.loop_start.clicked.connect(lambda: self._set_loop(start=self.player.position()))
         self.loop_end.clicked.connect(lambda: self._set_loop(end=self.player.position()))
         self.loop_clear.clicked.connect(self._clear_loop)
+        self.variant.activated.connect(self._variant_chosen)
+        self.noscript_choose.clicked.connect(self._choose_for_video)
+        self.noscript_folder.clicked.connect(self._add_folder)
+        self.setAcceptDrops(True)
 
         for key, fn in (
             ("Space", self.toggle_play),
@@ -161,13 +191,83 @@ class PlayPage(QWidget):
         folders = split_folders(self.settings.get(SCRIPT_FOLDERS_KEY, "") or "")
         match = find_script_for_video(video, folders)
         if match.found and match.script_path:
-            return self.open_script(match.script_path, video=video)
+            ok = self.open_script(match.script_path, video=video)
+            self._show_variants(match.variants, match.script_path)
+            return ok
         self._set_video(video)
         self.script = None
+        self.session.video_path = video
         self.curve.set_actions([])
         self.heat.set_points([])
+        self._show_variants([], "")
+        self.noscript.show()
         self.info.setText(f"{Path(video).name}: no script found for this video.")
         return True
+
+    def open_pair(self, video: str, script: str) -> bool:
+        """A script with a given video (dropped together or chosen)."""
+        return self.open_script(script, video=video)
+
+    def _show_variants(self, variants: list[ScriptVariant], current: str) -> None:
+        self._variants = list(variants)
+        self.variant.clear()
+        if len(variants) < 2:
+            self.variant.hide()
+            return
+        for v in variants:
+            name = v.label.capitalize() if v.label else "Main script"
+            if not v.beside:
+                name += " (script folder)"
+            self.variant.addItem(name)
+        idx = next((i for i, v in enumerate(variants) if v.path == current), 0)
+        self.variant.setCurrentIndex(idx)
+        self.variant.show()
+
+    def _variant_chosen(self, idx: int) -> None:
+        if 0 <= idx < len(self._variants):
+            self.open_script(self._variants[idx].path, video=self.session.video_path)
+
+    def _choose_for_video(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(self, "Choose script", "", "Funscript (*.funscript)")
+        if path and self.session.video_path:
+            self.open_pair(self.session.video_path, path)
+
+    def _add_folder(self) -> None:
+        d = QFileDialog.getExistingDirectory(self, "Add a script folder")
+        if d:
+            self.add_script_folder(d)
+
+    def add_script_folder(self, folder: str) -> None:
+        """Add a folder to the search and look for the open video's script there."""
+        folders = split_folders(self.settings.get(SCRIPT_FOLDERS_KEY, "") or "")
+        if folder not in folders:
+            folders.append(folder)
+            self.settings.set(SCRIPT_FOLDERS_KEY, "\n".join(folders))
+        if self.script is None and self.session.video_path:
+            video = self.session.video_path
+            match = find_script_for_video(video, folders)
+            if match.found and match.script_path:
+                self.open_video(video)
+            else:
+                self.info.setText(f"{Path(video).name}: no script in that folder either.")
+
+    # ---- drag and drop -------------------------------------------------
+    def dragEnterEvent(self, e) -> None:  # noqa: N802
+        if e.mimeData().hasUrls():
+            e.acceptProposedAction()
+
+    def dropEvent(self, e) -> None:  # noqa: N802
+        paths = [u.toLocalFile() for u in e.mimeData().urls() if u.isLocalFile()]
+        self.open_dropped(paths)
+
+    def open_dropped(self, paths: list[str]) -> bool:
+        videos = [p for p in paths if os.path.splitext(p)[1].lower() in VIDEO_EXTS]
+        scripts = [p for p in paths if p.lower().endswith(".funscript")]
+        if videos and scripts:
+            return self.open_pair(videos[0], scripts[0])
+        if videos or scripts:
+            return self.open_path((videos or scripts)[0])
+        return False
 
     def open_script(self, path: str, video: str | None = None) -> bool:
         try:
@@ -176,6 +276,9 @@ class PlayPage(QWidget):
             QMessageBox.warning(self, "Open script", f"Could not open {Path(path).name}:\n{e}")
             return False
         self.script = s
+        self.noscript.hide()
+        if video is None:
+            self._show_variants([], "")
         self.session.open_script(str(s.path), s.actions, video=video)
         self.curve.set_actions(s.actions)
         self.heat.set_points(heatmap(s.actions, 200))

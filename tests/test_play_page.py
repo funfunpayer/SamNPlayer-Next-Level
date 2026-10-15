@@ -80,3 +80,48 @@ def test_heatmap_matches_mapper_buckets():
     assert pts and all(0.0 <= v <= 1.0 for _, v in pts)
     assert pts[0][0] == 0 and pts[1][0] - pts[0][0] == 500  # 10 s / 20 buckets
     assert heatmap([(0, 0)], 20) == []
+
+
+def test_variants_switch_and_keep_video(page_factory, tmp_path):
+    vid = tmp_path / "Clip.mp4"
+    vid.write_bytes(b"")
+    _script(tmp_path / "Clip.funscript")
+    _script(tmp_path / "Clip (Soft).funscript", n=11)
+    page = page_factory(Settings(tmp_path / "s.json"))
+    page.open_path(vid)
+    assert page.variant.isVisibleTo(page) and page.variant.count() == 2
+    names = [page.variant.itemText(i) for i in range(2)]
+    assert "Main script" in names and "Soft" in names
+    page.variant.activated.emit(names.index("Soft"))
+    assert page.script.path.name == "Clip (Soft).funscript"
+    assert page.session.video_path == str(vid)
+
+
+def test_noscript_card_and_add_folder(page_factory, tmp_path):
+    vid = tmp_path / "videos" / "Lonely.mp4"
+    vid.parent.mkdir()
+    vid.write_bytes(b"")
+    page = page_factory(Settings(tmp_path / "s.json"))
+    page.open_path(vid)
+    assert page.noscript.isVisibleTo(page)
+    assert not page.noscript_create.isEnabled()  # Generator not built yet: says so
+    lib = tmp_path / "lib"
+    lib.mkdir()
+    page.add_script_folder(str(lib))
+    assert "no script in that folder" in page.info.text()
+    _script(lib / "lonely.funscript")
+    page.add_script_folder(str(lib))
+    assert page.script is not None and page.script.path.name == "lonely.funscript"
+    assert not page.noscript.isVisibleTo(page)
+    assert page.settings.get("library.script_folders") == str(lib)
+
+
+def test_drop_video_and_script_together(page_factory, tmp_path):
+    vid = tmp_path / "a.mp4"
+    vid.write_bytes(b"")
+    s = _script(tmp_path / "other name.funscript")
+    page = page_factory(Settings(tmp_path / "s.json"))
+    assert page.open_dropped([str(s), str(vid)])
+    assert page.script.path.name == "other name.funscript"
+    assert page.session.video_path == str(vid)
+    assert not page.open_dropped(["/x/readme.txt"])
