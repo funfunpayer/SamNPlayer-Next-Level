@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+import shiboken6
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QColor, QKeySequence, QPainter, QShortcut
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
@@ -328,6 +329,8 @@ class PlayPage(QWidget):
         """Stop and drop the media before the page goes away. Qt's decoder
         thread may still be opening the file; destroying the player under it
         crashes (seen with a broken file), so the source is cleared first."""
+        if not shiboken6.isValid(self.player):
+            return  # Qt already deleted it with the page
         self.player.stop()
         self.player.setSource(QUrl())
 

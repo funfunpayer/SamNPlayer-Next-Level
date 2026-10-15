@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 from samn.settings import Settings
 from samn.ui.play_page import heatmap
@@ -15,7 +16,7 @@ def test_script_finds_video_beside(page_factory, tmp_path):
     page = page_factory(Settings(tmp_path / "s.json"))
     assert page.open_path(s)
     assert page.session.video_path == str(tmp_path / "Clip.mp4")
-    assert page.player.source().toLocalFile() == str(tmp_path / "Clip.mp4")
+    assert Path(page.player.source().toLocalFile()) == tmp_path / "Clip.mp4"
     assert "Clip.mp4" in page.info.text() and "41 points" in page.info.text()
 
 

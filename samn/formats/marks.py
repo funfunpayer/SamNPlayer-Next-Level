@@ -255,7 +255,8 @@ def _write_atomic(path: str | os.PathLike[str], data: bytes, mode: int = 0o644) 
     fd, tmp = tempfile.mkstemp(dir=p.parent, prefix=f".{p.name}.tmp-")
     try:
         with os.fdopen(fd, "wb") as f:
-            os.fchmod(f.fileno(), mode)
+            if hasattr(os, "fchmod"):  # POSIX only; Windows has no file modes to set
+                os.fchmod(f.fileno(), mode)
             f.write(data)
             f.flush()
             os.fsync(f.fileno())
