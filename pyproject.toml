@@ -13,3 +13,7 @@ samnplayer = "samn.__main__:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# pytest-qt captures Qt log messages through a Python handler; Qt's FFmpeg
+# decoder thread logs without holding the GIL and crashes it. Keep Qt logs
+# on stderr instead.
+addopts = "--no-qt-log"

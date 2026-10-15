@@ -15,11 +15,26 @@ class CurveWidget(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._actions: list[tuple[int, int]] = []
+        self._playhead_ms: int | None = None
         self.setMinimumHeight(120)
 
     def set_actions(self, actions: list[tuple[int, int]]) -> None:
         self._actions = list(actions)
+        self._playhead_ms = None
         self.update()
+
+    def set_playhead(self, ms: int | None) -> None:
+        if ms != self._playhead_ms:
+            self._playhead_ms = ms
+            self.update()
+
+    def x_for(self, ms: int, width: int) -> int | None:
+        """Pixel column of script time ms (same scale as columns())."""
+        if not self._actions or width <= 0:
+            return None
+        t0, t1 = self._actions[0][0], self._actions[-1][0]
+        span = max(1, t1 - t0)
+        return max(0, min(width - 1, (ms - t0) * (width - 1) // span))
 
     def columns(self, width: int) -> list[tuple[int, int, int]]:
         """(x, min pos, max pos) per pixel column that holds points."""
@@ -56,3 +71,7 @@ class CurveWidget(QWidget):
         else:
             for x, lo, hi in cols:
                 p.drawLine(QPointF(x, y(lo)), QPointF(x, y(hi)))
+        if self._playhead_ms is not None:
+            x = self.x_for(self._playhead_ms, w)
+            p.setPen(QPen(QColor("#ff6b6b"), 2))
+            p.drawLine(QPointF(x, 0), QPointF(x, h))

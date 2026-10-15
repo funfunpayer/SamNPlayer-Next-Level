@@ -2,61 +2,21 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from PySide6.QtWidgets import (
     QButtonGroup,
-    QFileDialog,
     QHBoxLayout,
     QLabel,
     QMainWindow,
-    QMessageBox,
     QPushButton,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
 
-from ..formats import funscript
-from .curve import CurveWidget
+from ..settings import Settings
+from .play_page import PlayPage
 
 MODES = ("Play", "Edit", "Generate")
-
-
-class PlayPage(QWidget):
-    def __init__(self) -> None:
-        super().__init__()
-        self.open_button = QPushButton("Open…")
-        self.info = QLabel("Open a funscript to see its curve.")
-        self.curve = CurveWidget()
-        top = QHBoxLayout()
-        top.addWidget(self.open_button)
-        top.addWidget(self.info, 1)
-        lay = QVBoxLayout(self)
-        lay.addLayout(top)
-        lay.addWidget(self.curve, 1)
-        self.open_button.clicked.connect(self.pick)
-        self.script: funscript.Funscript | None = None
-
-    def pick(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Open script", "", "Funscript (*.funscript);;All files (*)"
-        )
-        if path:
-            self.open_path(path)
-
-    def open_path(self, path: str | Path) -> bool:
-        try:
-            s = funscript.load(path)
-        except Exception as e:  # shown to the user, not swallowed
-            QMessageBox.warning(self, "Open script", f"Could not open {Path(path).name}:\n{e}")
-            return False
-        self.script = s
-        self.curve.set_actions(s.actions)
-        secs = s.duration_ms / 1000
-        note = f", {s.dropped} broken points skipped" if s.dropped else ""
-        self.info.setText(f"{s.path.name}: {len(s.actions)} points, {secs:.0f} s{note}")
-        return True
 
 
 class NotYetPage(QLabel):
@@ -69,11 +29,11 @@ class NotYetPage(QLabel):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self) -> None:
+    def __init__(self, settings: Settings | None = None) -> None:
         super().__init__()
         self.setWindowTitle("SamNPlayer 2")
         self.resize(1100, 700)
-        self.play = PlayPage()
+        self.play = PlayPage(settings)
         self.pages = QStackedWidget()
         self.pages.addWidget(self.play)
         self.pages.addWidget(NotYetPage("Edit", "P4"))
@@ -95,6 +55,10 @@ class MainWindow(QMainWindow):
         lay.addLayout(bar)
         lay.addWidget(self.pages, 1)
         self.setCentralWidget(root)
+
+    def closeEvent(self, e) -> None:  # noqa: N802
+        self.play.release_media()
+        super().closeEvent(e)
 
     @property
     def mode(self) -> str:
