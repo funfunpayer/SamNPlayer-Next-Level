@@ -1,0 +1,15 @@
+[project]
+name = "samnplayer"
+version = "2.0.0.dev0"
+description = "SamNPlayer: funscript player, editor and generator (Python + C++, Qt interface)"
+requires-python = ">=3.11"
+dependencies = ["PySide6>=6.7"]
+
+[project.optional-dependencies]
+test = ["pytest>=8", "pytest-qt>=4.4"]
+
+[project.scripts]
+samnplayer = "samn.__main__:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

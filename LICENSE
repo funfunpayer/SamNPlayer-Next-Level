@@ -1,0 +1,38 @@
+Copyright (c) 2026 funfunpayer
+
+All rights reserved.
+
+SamNPlayer is proprietary software. The source code, documentation in this
+repository, and related materials are confidential and may not be copied,
+modified, merged, published, distributed, sublicensed, sold, or otherwise
+made available to third parties without prior written permission from the
+copyright holder.
+
+## End-user binaries
+
+Official release binaries published by the copyright holder (for example on
+https://github.com/funfunpayer/SamNPlayer-site) are **freeware**: they may be
+downloaded and used free of charge for private, non-commercial purposes under
+the End User License Agreement shipped with them (`legal/EULA.md`, `EULA.txt`
+in the download packages). No licence key is required. Redistribution of
+those binaries and distribution of modified versions are not permitted
+without prior written permission. Third-party components keep their own
+licences (`legal/THIRD_PARTY_NOTICES.md`).
+
+## No warranty
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+## Historical notice
+
+Earlier public revisions of this project were distributed under the MIT
+License. This proprietary notice applies to current and future closed builds
+and to this repository once it is private. It does not revoke rights that
+may already have attached to copies obtained under MIT while that license
+was in force.
