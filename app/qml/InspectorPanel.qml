@@ -9,6 +9,7 @@ GlassCard {
     property bool collapsed: false
     property alias tab: tabs.current
     signal seekRequested(real videoMs)
+    signal addToListRequested()
     width: collapsed ? 44 : 320
     Behavior on width { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
     clip: true
@@ -136,6 +137,57 @@ GlassCard {
                         FlowButton { text: qsTr("Bake offset"); enabled: false }
                     }
                     Note { text: qsTr("Positive: the script comes later. Saved per script. Baking it into the script's times (all channels, bookmarks and chapters in one safe step) comes with the Editor (P4).") }
+                }
+                // Play list (0.7 pb-playlist): shown with 2+ scripts.
+                Card {
+                    title: qsTr("Playlist")
+                    Flow {
+                        width: parent.width; spacing: 8
+                        FlowButton {
+                            text: qsTr("Add to list"); icon: "plus"; enabled: root.ctrl.hasScript
+                            HoverHandler { id: addHover }
+                            ToolTipText { shown: addHover.hovered; text: qsTr("Add another Emotion Script to the list") }
+                            onClicked: root.addToListRequested()
+                        }
+                        FlowButton { text: qsTr("Auto-advance"); checked: root.ctrl.playlistAuto; onClicked: root.ctrl.playlistAuto = !root.ctrl.playlistAuto }
+                        FlowButton { text: qsTr("Shuffle"); icon: "shuffle"; checked: root.ctrl.playlistShuffle; onClicked: root.ctrl.playlistShuffle = !root.ctrl.playlistShuffle }
+                        FlowButton { text: qsTr("Repeat playlist"); icon: "repeat"; checked: root.ctrl.playlistRepeat; onClicked: root.ctrl.playlistRepeat = !root.ctrl.playlistRepeat }
+                    }
+                    Note { visible: !root.ctrl.playlistVisible; text: qsTr("Drop several scripts or add one to play them in a row.") }
+                    Column {
+                        visible: root.ctrl.playlistVisible
+                        width: parent.width; spacing: 4
+                        Repeater {
+                            model: root.ctrl.playlist
+                            delegate: Rectangle {
+                                required property var modelData
+                                required property int index
+                                width: parent.width; height: 32; radius: 8
+                                color: modelData.active ? Qt.rgba(0, 120 / 255, 1, 0.22) : (rowArea.containsMouse ? Qt.rgba(1, 1, 1, 0.05) : "transparent")
+                                border.width: modelData.active ? 1 : 0; border.color: Theme.cyan
+                                Text {
+                                    x: 10; anchors.verticalCenter: parent.verticalCenter
+                                    text: index + 1; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                                }
+                                Text {
+                                    x: 32; width: parent.width - 32 - 30; anchors.verticalCenter: parent.verticalCenter
+                                    text: modelData.name; elide: Text.ElideRight
+                                    color: modelData.active ? "white" : Theme.text; font.family: Theme.fontSoft; font.pixelSize: 13
+                                }
+                                MouseArea {
+                                    id: rowArea
+                                    anchors.fill: parent; anchors.rightMargin: 30
+                                    hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                    onClicked: root.ctrl.pickPlaylist(index)
+                                }
+                                IconButton {
+                                    anchors.right: parent.right; anchors.rightMargin: 2; anchors.verticalCenter: parent.verticalCenter
+                                    width: 26; height: 26; icon: "close"; tip: qsTr("Remove")
+                                    onClicked: root.ctrl.removeFromPlaylist(index)
+                                }
+                            }
+                        }
+                    }
                 }
             }
             // View: what the timeline shows.
