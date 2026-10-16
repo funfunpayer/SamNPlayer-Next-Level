@@ -55,7 +55,7 @@ Item {
             Rectangle {
                 width: 40; height: 40; radius: 20
                 color: "#05223f"; border.color: Theme.cyan; border.width: 1.5
-                Text { anchors.centerIn: parent; text: "▶"; color: Theme.cyan; font.pixelSize: 16 }
+                Icon { anchors.centerIn: parent; name: "player"; color: Theme.cyan; width: 18; height: 18 }
             }
             Column {
                 anchors.verticalCenter: parent.verticalCenter
@@ -66,7 +66,8 @@ Item {
         Text {
             anchors.right: parent.right; anchors.rightMargin: 20
             anchors.verticalCenter: parent.verticalCenter
-            text: "⌄"; color: Theme.text; font.pixelSize: 18
+            text: ""; color: Theme.text; font.pixelSize: 18
+            Icon { anchors.centerIn: parent; name: "chevronDown"; color: Theme.text; width: 18; height: 18 }
         }
         MouseArea {
             id: hover

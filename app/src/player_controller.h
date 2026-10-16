@@ -69,6 +69,8 @@ class PlayerController : public QObject {
     Q_PROPERTY(int vibrationNow READ vibrationNow NOTIFY playheadMsChanged)
     // Audio Level lane under the curve (0.7: on by default, remembered).
     Q_PROPERTY(bool audioLane READ audioLane WRITE setAudioLane NOTIFY viewOptionsChanged)
+    // 0-100 position gauge on the video (0.7: on by default, remembered).
+    Q_PROPERTY(bool posOverlay READ posOverlay WRITE setPosOverlay NOTIFY viewOptionsChanged)
     Q_PROPERTY(int suctionNow READ suctionNow NOTIFY playheadMsChanged)
     // Sleep timer: stops playing after this many minutes of play (0 = off).
     Q_PROPERTY(int sleepMinutes READ sleepMinutes WRITE setSleepMinutes NOTIFY sleepChanged)
@@ -192,6 +194,8 @@ public:
     int vibrationNow() const;
     bool audioLane() const;
     void setAudioLane(bool on);
+    bool posOverlay() const;
+    void setPosOverlay(bool on);
     int suctionNow() const;
     int sleepMinutes() const { return sleepMinutes_; }
     void setSleepMinutes(int minutes);

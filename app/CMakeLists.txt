@@ -39,6 +39,8 @@ qt_add_qml_module(samn_app
     qml/MarkList.qml
     qml/LaneName.qml
     qml/Icon.qml
+    qml/FlowStage.qml
+    qml/PositionGauge.qml
     qml/LibraryPanel.qml
     qml/InspectorPanel.qml
     qml/ToolTipText.qml
@@ -51,6 +53,8 @@ qt_add_qml_module(samn_app
     qml/assets/stage-ribbons.svg
     qml/assets/ambient-grid.svg
     qml/assets/logo.png
+    qml/assets/flow-ribbons.svg
+    qml/assets/flow-mark.svg
     qml/fonts/Sora.ttf
     qml/fonts/Figtree.ttf
 )

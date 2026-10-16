@@ -145,9 +145,16 @@ GlassCard {
                 width: parent.width; spacing: 10
                 Card {
                     title: qsTr("Timeline")
-                    FlowButton {
-                        text: qsTr("Audio level lane"); checked: root.ctrl.audioLane
-                        onClicked: root.ctrl.audioLane = !root.ctrl.audioLane
+                    Row {
+                        spacing: 8
+                        FlowButton {
+                            text: qsTr("Audio level lane"); checked: root.ctrl.audioLane
+                            onClicked: root.ctrl.audioLane = !root.ctrl.audioLane
+                        }
+                        FlowButton {
+                            text: qsTr("0–100 on video"); checked: root.ctrl.posOverlay
+                            onClicked: root.ctrl.posOverlay = !root.ctrl.posOverlay
+                        }
                     }
                     Note { text: qsTr("Heatmap: click = seek, drag = mark. Wheel on the curve zooms.") }
                 }
