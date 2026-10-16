@@ -108,4 +108,11 @@ struct ChapterRange {
 };
 std::vector<ChapterRange> ChapterRanges(std::vector<Chapter> chapters, int64_t total_ms);
 
+// Add a scene marker = a chapter start at `at_ms` (0.7 addSceneMarkerAt):
+// "Scene <n>" (n = chapters + 1) running to the next chapter's start (0 =
+// open end when none); a chapter spanning the point is cut there. Returns
+// nothing when a chapter already starts within kSceneMarkerMinGapMs.
+constexpr int64_t kSceneMarkerMinGapMs = 250;
+std::optional<std::vector<Chapter>> AddSceneMarker(const std::vector<Chapter>& chapters, int64_t at_ms);
+
 }  // namespace samn

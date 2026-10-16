@@ -235,3 +235,22 @@ TEST_CASE("ChapterRanges: sorted, open ends run on, names filled") {
     const auto z = samn::ChapterRanges({{"X", 5000, 0}}, 2000);
     CHECK(z[0].end_ms == 5000);
 }
+
+// 0.7 playback.js addSceneMarkerAt
+TEST_CASE("AddSceneMarker cuts the spanning chapter and runs to the next") {
+    const std::vector<samn::Chapter> in{{"A", 0, 10000}, {"B", 20000, 0}};
+    const auto r = samn::AddSceneMarker(in, 4000);
+    REQUIRE(r);
+    REQUIRE(r->size() == 3);
+    CHECK((*r)[0].end_ms == 4000);  // A cut at the marker
+    CHECK((*r)[1].name == "Scene 3");
+    CHECK((*r)[1].start_ms == 4000);
+    CHECK((*r)[1].end_ms == 20000);  // to the next start
+    CHECK((*r)[2].end_ms == 0);      // B untouched
+    const auto last = samn::AddSceneMarker(in, 25000);  // inside open-ended B
+    REQUIRE(last);
+    CHECK((*last)[1].end_ms == 25000);
+    CHECK((*last)[2].end_ms == 0);  // nothing after: open end
+    CHECK_FALSE(samn::AddSceneMarker(in, 20100));  // within 250 ms of B
+    CHECK(samn::AddSceneMarker({}, -5)->front().start_ms == 0);
+}

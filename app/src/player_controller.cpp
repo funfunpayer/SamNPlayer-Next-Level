@@ -326,6 +326,19 @@ bool PlayerController::addChapterFromSelection(const QString& name) {
     return commitMarks(marks_.chapters, std::move(next), samn::SaveScriptChapters);
 }
 
+bool PlayerController::addSceneMarker(qint64 videoMs) {
+    if (scriptPath_.isEmpty()) {
+        setError(tr("Load a script first."));
+        return false;
+    }
+    auto next = samn::AddSceneMarker(marks_.chapters, samn::script_time(videoMs, offsetMs_));
+    if (!next) {
+        setError(tr("A scene marker is already here."));
+        return false;
+    }
+    return commitMarks(marks_.chapters, std::move(*next), samn::SaveScriptChapters);
+}
+
 bool PlayerController::renameChapter(int index, const QString& name) {
     if (index < 0 || index >= int(marks_.chapters.size())) return false;
     auto next = marks_.chapters;
