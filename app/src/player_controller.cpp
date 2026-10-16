@@ -186,6 +186,7 @@ bool PlayerController::openScript(const QString& pathIn, const QString& videoIn)
     setVideo(video);
     setView(samn::FullView(timelineMs()));
     setVideoPositionMs(0);
+    emit scriptOpened(scriptPath_);
     return true;
 }
 
@@ -262,6 +263,7 @@ bool PlayerController::commitMarks(std::vector<T>& list, std::vector<T> next, Sa
     }
     list = std::move(next);
     emit marksChanged();
+    emit scriptEdited(scriptPath_);
     pushMarks();
     return true;
 }
@@ -461,6 +463,7 @@ void PlayerController::setVideo(const QString& path) {
     videoPath_ = path;
     videoDurationMs_ = 0;  // the player reports the new one
     emit videoChanged();
+    if (!path.isEmpty()) emit videoLinked(path);
     emit scriptChanged();  // noScriptForVideo depends on the video too
 }
 
@@ -573,6 +576,21 @@ qint64 PlayerController::finishHeatmapDrag(double startMs, double endMs) {
 qint64 PlayerController::jumpTenthVideoMs(int n) const {
     const int64_t total = timelineMs();
     return std::max<qint64>(0, qint64(total * std::clamp(n, 0, 10) / 10) + offsetMs_);
+}
+
+int PlayerController::strokeNow() const {
+    if (playheadMs_ < 0) return 0;
+    return int(std::lround(samn::PositionAt(stroke_, playheadMs_).value_or(0)));
+}
+
+bool PlayerController::audioLane() const {
+    return const_cast<PlayerController*>(this)->uiValue(QStringLiteral("player.audioLane"), true).toBool();
+}
+
+void PlayerController::setAudioLane(bool on) {
+    if (on == audioLane()) return;
+    setUiValue(QStringLiteral("player.audioLane"), on);
+    emit viewOptionsChanged();
 }
 
 int PlayerController::vibrationNow() const {

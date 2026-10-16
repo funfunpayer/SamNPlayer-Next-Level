@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 16 Oct 2026, Claude, branch `claude/samn2-p1-marks`.
+**Last update:** 16 Oct 2026, Claude, branch `claude/samn2-library`.
 
 ## Rules
 
@@ -42,10 +42,11 @@
 
 - **P1 marks** (`claude/samn2-p1-marks`): bottom tabs (Timeline · Chapters · Bookmarks · Scene Map · Audio Analysis); add / rename / remove bookmarks, chapters (from the marked range) and O-markers, saved like 0.7 in `.funscript` and `.samn` (`SaveOMarkers` same bytes as Go); O-marker bands and beat grid on curve and heatmap; video bar (link video, bookmark, full-resolution snapshot); Audio Analysis with the whole video's sound. `PARITY.md` ticks started.
 
+- **Library and Inspector** (`claude/samn2-library`): the 0.7 v1 three-column Player. Library: Local Files, Recent, Favorites (★), Scripts imported / generated / edited, Analysis shortcuts, drop zone; kept in the settings. Inspector: Devices (live channels), Audio (BPM), Playback (offset), View (audio lane, O-markers). Transport and zoom row in 0.7 order. Settings are now safe with several objects on one file.
+
 ## Next (P1, in order)
 
 1. `docs/PARITY.md`: the full 0.7 inventory (every function, file:line), the checklist for "exact copy". A first attempt stopped at a usage limit; redo it.
-2. Library panel (left) and Inspector (right), as in 0.7.
 3. BPM grid, O-marker bands, feel segment bands, speed highlights, scene strip, chapter bands; O-markers, bookmarks and chapters panels (add from selection).
 4. Audio Analysis card and audio segments, auto sync (audio), playback speed, `.samn` export, recent files, soft seek.
 5. Core cleanups from `MODULES.md`: names, Unicode case folding, one Python module.

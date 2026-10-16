@@ -8,6 +8,7 @@ GlassCard {
     required property PlayerController ctrl
     property bool collapsed: false
     property alias tab: tabs.current
+    signal seekRequested(real videoMs)
     width: collapsed ? 44 : 320
     Behavior on width { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
     clip: true
@@ -149,6 +150,40 @@ GlassCard {
                         onClicked: root.ctrl.audioLane = !root.ctrl.audioLane
                     }
                     Note { text: qsTr("Heatmap: click = seek, drag = mark. Wheel on the curve zooms.") }
+                }
+                // O-markers (0.7 View): from the marked range on the heatmap.
+                Card {
+                    title: qsTr("O-markers")
+                    FlowCombo {
+                        id: oKind
+                        width: parent.width
+                        model: [qsTr("Primary (peak)"), qsTr("Secondary (earlier, softer)")]
+                    }
+                    Row {
+                        visible: oKind.currentIndex === 1
+                        spacing: 10
+                        Text { anchors.verticalCenter: parent.verticalCenter; text: qsTr("Intensity"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13 }
+                        FlowSlider {
+                            anchors.verticalCenter: parent.verticalCenter; width: 130
+                            from: 0; to: 1; value: root.ctrl.oMarkerIntensity
+                            onMoved: (v) => root.ctrl.oMarkerIntensity = Math.round(v * 20) / 20
+                        }
+                        Text { anchors.verticalCenter: parent.verticalCenter; text: Math.round(root.ctrl.oMarkerIntensity * 100) + "%"; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
+                    }
+                    FlowButton {
+                        text: qsTr("Apply as O-marker"); enabled: root.ctrl.hasMarker
+                        onClicked: root.ctrl.addOMarkerFromSelection(oKind.currentIndex === 1 ? "secondary" : "primary")
+                    }
+                    Note { visible: !root.ctrl.hasMarker; text: qsTr("Mark a range on the heatmap first.") }
+                    MarkList {
+                        width: parent.width
+                        height: Math.min(200, Math.max(30, count * 38))
+                        model: root.ctrl.oMarkers
+                        canRename: false
+                        emptyText: qsTr("No O-markers yet.")
+                        onSeek: (i) => root.seekRequested(root.ctrl.oMarkers[i].startMs + root.ctrl.offsetMs)
+                        onRemove: (i) => root.ctrl.removeOMarker(i)
+                    }
                 }
                 Card {
                     title: qsTr("Curve editing")

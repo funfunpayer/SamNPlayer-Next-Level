@@ -23,6 +23,7 @@ Functions use PascalCase and struct fields use snake_case.
 | `beatbar.h`, `beat_strokes.h` | Cock Hero beat bar → beats → strokes | Go `generator/beatbar.go` | ✅ parity |
 | `curve_geometry.h` | Curve as 0.7 draws it: Catmull-Rom (control points clamped to 0-100), tempo wave, density switch, zoom window. Binary search instead of 0.7's full scans. | 0.7 `playback.js` (smoothCurvePath, drawSpeedWave, zoomByFactor) | ✅ tempo wave equals 0.7 (node reference) |
 | `fileio.h` | `WriteFileAtomic`: temp file, flush, rename. The one writer for marks, `.samn`, settings and the range marker. | Go `writeFileAtomic` | ✅ |
+| `library.h` | Library lists (recent 8, favorites 50, scripts 50), settings keys `library.*` | 0.7 `player_layout.js` | ✅ |
 | `audio_envelope.h` | Loudness envelope 0..1 per 50 ms (Audio Level lane, vibration from sound). No ffmpeg: the app decodes. | Go `generator/audio_vibration.go` | ✅ Go tests ported |
 
 **Open cleanups:**
@@ -36,6 +37,8 @@ Functions use PascalCase and struct fields use snake_case.
 | `src/player_controller.*` | Player logic for QML: video first (folders, variants), `.samn`, lanes, heatmap, chapters, bookmarks, offset, loop, zoom window, errors. |
 | `src/curve_item.*` | One curve lane in the 0.7 look (soft line, glow, fill, dots, live dot, tempo wave). The static layer is cached; playing only moves the playhead. |
 | `src/heatmap_item.*` | The heatmap bar (0.7 colours, 300 buckets) on the zoom window, with the marked range and the playhead. |
+| `src/library_controller.*` | The Library column: recent scripts and videos, favorites, imported / generated / edited. |
+| `qml/LibraryPanel.qml`, `qml/InspectorPanel.qml` | Player columns as 0.7 v1: Library (left), Inspector with Devices · Audio · Playback · View (right). |
 | `src/ruler_item.*` | The time ruler above the curve (0.7 steps and labels). |
 | `src/audio_level.*` | `AudioLevelDecoder` (Qt Multimedia, cached per file) and the Audio Level lane. |
 | `qml/FlowButton.qml`, `IconButton.qml`, `FlowSlider.qml`, `OffsetField.qml`, `FlowCombo.qml` | Styled controls; no default Qt Quick Controls look. |
