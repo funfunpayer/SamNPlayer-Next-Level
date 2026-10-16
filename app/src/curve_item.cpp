@@ -1,28 +1,38 @@
 #include "curve_item.h"
 
+#include <QFont>
+#include <QQuickWindow>
 #include <QLinearGradient>
 #include <QPainter>
 #include <QPainterPath>
 #include <algorithm>
-#include <map>
+#include <cmath>
 
 namespace samn::ui {
 
 CurveItem::CurveItem(QQuickItem* parent) : QQuickPaintedItem(parent) {
     setAntialiasing(true);
-    connect(this, &CurveItem::styleChanged, this, [this] { update(); });
+    connect(this, &CurveItem::styleChanged, this, [this] { updateMode(); invalidate(); });
+    connect(this, &QQuickItem::widthChanged, this, [this] { updateMode(); invalidate(); });
+    connect(this, &QQuickItem::heightChanged, this, &CurveItem::invalidate);
+}
+
+void CurveItem::invalidate() {
+    layerValid_ = false;
+    update();
 }
 
 void CurveItem::setActions(std::vector<samn::Action> actions) {
     actions_ = std::move(actions);
     emit actionsChanged();
-    update();
+    updateMode();
+    invalidate();
 }
 
 void CurveItem::setMarks(std::vector<int64_t> bookmarks, std::vector<std::pair<int64_t, int64_t>> chapters) {
     bookmarks_ = std::move(bookmarks);
     chapters_ = std::move(chapters);
-    update();
+    invalidate();
 }
 
 void CurveItem::setPlayheadMs(qint64 ms) {
@@ -32,70 +42,240 @@ void CurveItem::setPlayheadMs(qint64 ms) {
     update();
 }
 
-std::vector<CurveItem::Column> CurveItem::columns(int width) const {
-    std::vector<Column> out;
-    if (actions_.empty() || width <= 0) return out;
-    const int64_t t0 = actions_.front().at, span = std::max<int64_t>(1, actions_.back().at - t0);
-    std::map<int, std::pair<int, int>> cols;
-    for (const auto& a : actions_) {
-        const int x = static_cast<int>(std::min<int64_t>(width - 1, (a.at - t0) * (width - 1) / span));
-        auto [it, inserted] = cols.try_emplace(x, a.pos, a.pos);
-        if (!inserted) {
-            it->second.first = std::min(it->second.first, a.pos);
-            it->second.second = std::max(it->second.second, a.pos);
+void CurveItem::setViewStartMs(double ms) {
+    if (ms == viewStart_) return;
+    viewStart_ = ms;
+    emit viewChanged();
+    updateMode();
+    invalidate();
+}
+
+void CurveItem::setViewEndMs(double ms) {
+    if (ms == viewEnd_) return;
+    viewEnd_ = ms;
+    emit viewChanged();
+    updateMode();
+    invalidate();
+}
+
+std::pair<double, double> CurveItem::timeWindow() const {
+    if (viewEnd_ > viewStart_) return {viewStart_, viewEnd_};
+    if (actions_.empty()) return {0, 1};
+    const double t0 = double(actions_.front().at), t1 = double(actions_.back().at);
+    return {t0, std::max(t0 + 1, t1)};
+}
+
+double CurveItem::xOf(double ms, double w) const {
+    const auto [t0, t1] = timeWindow();
+    return (ms - t0) / (t1 - t0) * w;
+}
+
+double CurveItem::yOf(double pos, double h) const {
+    const double pad = label_.isEmpty() ? kPad : 3;
+    return pad + (1 - pos / 100.0) * (h - pad * 2);
+}
+
+CurveItem::Mode CurveItem::modeFor(double widthPx) const {
+    if (actions_.size() < 2 || widthPx <= 0) return Mode::Empty;
+    const auto [t0, t1] = timeWindow();
+    const size_t visible = samn::CountInWindow(actions_, int64_t(std::floor(t0)), int64_t(std::ceil(t1)));
+    if (!samn::IsDense(visible, widthPx, editMode_ ? samn::kEditMinGapPx : samn::kDotMinGapPx)) return Mode::Smooth;
+    return lane_ == QLatin1String("stroke") ? Mode::Tempo : Mode::Fine;
+}
+
+QString CurveItem::modeName() const {
+    switch (mode_) {
+    case Mode::Smooth: return QStringLiteral("smooth");
+    case Mode::Fine: return QStringLiteral("fine");
+    case Mode::Tempo: return QStringLiteral("tempo");
+    default: return QStringLiteral("empty");
+    }
+}
+
+void CurveItem::updateMode() {
+    const Mode m = modeFor(width());
+    if (m == mode_) return;
+    mode_ = m;
+    emit modeChanged();
+}
+
+namespace {
+
+// QPainter has no shadow blur: a glow is a few wide, faint strokes under the
+// line, falling off like 0.7's canvas shadowBlur.
+void StrokeWithGlow(QPainter* p, const QPainterPath& path, const QColor& color, qreal width, qreal glow) {
+    if (glow > 0) {
+        const qreal steps[] = {1.0, 0.6, 0.3};
+        const int alphas[] = {18, 34, 60};
+        for (int i = 0; i < 3; ++i) {
+            QColor c = color;
+            c.setAlpha(alphas[i]);
+            p->setPen(QPen(c, width + glow * steps[i], Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+            p->drawPath(path);
         }
     }
-    out.reserve(cols.size());
-    for (const auto& [x, lohi] : cols) out.push_back({x, lohi.first, lohi.second});
-    return out;
+    p->setPen(QPen(color, width, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    p->drawPath(path);
 }
 
-std::optional<int> CurveItem::xFor(int64_t ms, int width) const {
-    if (actions_.empty() || width <= 0) return std::nullopt;
-    const int64_t t0 = actions_.front().at, span = std::max<int64_t>(1, actions_.back().at - t0);
-    return static_cast<int>(std::clamp<int64_t>((ms - t0) * (width - 1) / span, 0, width - 1));
+void FillToBase(QPainter* p, QPainterPath path, const QColor& color, qreal alpha, qreal top, qreal baseY) {
+    const QPointF last = path.currentPosition();
+    path.lineTo(last.x(), baseY);
+    path.lineTo(path.elementAt(0).x, baseY);
+    path.closeSubpath();
+    QLinearGradient g(0, top, 0, baseY);
+    QColor c = color;
+    c.setAlphaF(alpha);
+    g.setColorAt(0, c);
+    c.setAlpha(0);
+    g.setColorAt(1, c);
+    p->fillPath(path, g);
 }
+
+}  // namespace
 
 void CurveItem::paint(QPainter* p) {
-    const int w = static_cast<int>(width()), h = static_cast<int>(height());
-    const auto cols = columns(w);
-    if (cols.empty()) return;
+    const double w = width(), h = height();
+    if (w <= 0 || h <= 0) return;
+    const Mode mode = modeFor(w);
+    const qreal dpr = QQuickItem::window() ? QQuickItem::window()->effectiveDevicePixelRatio() : 1.0;
+    const QSize px(int(std::ceil(w * dpr)), int(std::ceil(h * dpr)));
+    if (!layerValid_ || layer_.size() != px || layer_.devicePixelRatio() != dpr) {
+        layer_ = QImage(px, QImage::Format_ARGB32_Premultiplied);
+        layer_.setDevicePixelRatio(dpr);
+        layer_.fill(Qt::transparent);
+        QPainter lp(&layer_);
+        lp.setRenderHint(QPainter::Antialiasing);
+        paintLayer(&lp, w, h, mode);
+        layerValid_ = true;
+        ++layerRenders_;
+    }
+    p->drawImage(QPointF(0, 0), layer_);
+
+    if (showPlayhead_ && playhead_ > 0) {
+        p->setRenderHint(QPainter::Antialiasing);
+        const double x = std::round(xOf(double(playhead_), w)) + 0.5;
+        p->setPen(QPen(playheadColor_, 1.5));
+        p->drawLine(QPointF(x, 0), QPointF(x, h));
+        // The tempo view shows speed, not position: no position dot on it.
+        if (mode != Mode::Tempo && mode != Mode::Empty) {
+            if (const auto pos = samn::PositionAt(actions_, playhead_)) {
+                p->setBrush(lineColor_);
+                p->setPen(QPen(QColor(255, 255, 255), 1.25));
+                p->drawEllipse(QPointF(x, yOf(*pos, h)), 5, 5);
+            }
+        }
+    }
+}
+
+void CurveItem::paintLayer(QPainter* p, double w, double h, Mode mode) {
+    auto X = [&](double ms) { return xOf(ms, w); };
+    auto Y = [&](double pos) { return yOf(pos, h); };
+
+    if (showGrid_) {
+        p->setPen(QPen(QColor(255, 255, 255, 26), 1));
+        for (int pos : {0, 50, 100}) {
+            const double y = std::round(Y(pos)) + 0.5;
+            p->drawLine(QPointF(0, y), QPointF(w, y));
+        }
+    }
     for (size_t i = 0; i < chapters_.size(); ++i) {
         const auto [a, b] = chapters_[i];
-        const int xa = *xFor(a, w), xb = *xFor(std::max(a, b), w);
         QColor band = i % 2 == 0 ? QColor(0x00, 0xd9, 0xf4) : QColor(0xb8, 0x96, 0xe8);
         band.setAlpha(26);
-        p->fillRect(xa, 0, std::max(2, xb - xa), h, band);
+        const double xa = X(double(a)), xb = X(double(std::max(a, b)));
+        p->fillRect(QRectF(xa, 0, std::max(2.0, xb - xa), h), band);
     }
     p->setPen(QPen(QColor(0xe0, 0xa8, 0x6a), 1, Qt::DashLine));
     for (int64_t t : bookmarks_) {
-        const int x = *xFor(t, w);
-        p->drawLine(x, 0, x, h);
+        const double x = X(double(t));
+        if (x >= 0 && x <= w) p->drawLine(QPointF(x, 0), QPointF(x, h));
     }
-    auto y = [h](int pos) { return (h - 4) - pos * (h - 8) / 100.0; };
-    p->setRenderHint(QPainter::Antialiasing);
-    // Soft glow under the line, then the line (Flow look: orange stroke lane).
-    QPainterPath path;
-    if (cols.size() == actions_.size()) {
-        path.moveTo(cols.front().x, y(cols.front().lo));
-        for (const auto& c : cols) path.lineTo(c.x, y(c.lo));
-    } else {
-        for (const auto& c : cols) {
-            path.moveTo(c.x, y(c.lo));
-            path.lineTo(c.x, y(c.hi));
+
+    const double baseY = Y(0), top = Y(100);
+    const auto [t0, t1] = timeWindow();
+    if (mode == Mode::Tempo) {
+        const auto wave = samn::SpeedWave(actions_, t0, t1, w, samn::SpeedBinPx(
+            samn::CountInWindow(actions_, int64_t(std::floor(t0)), int64_t(std::ceil(t1))), w));
+        if (wave.size() >= 2) {
+            // Calm path through the bins: quadratic curves via the midpoints.
+            QPainterPath path(QPointF(wave[0].at, Y(wave[0].pos)));
+            for (size_t i = 1; i + 1 < wave.size(); ++i) {
+                const QPointF c(wave[i].at, Y(wave[i].pos));
+                const QPointF m((wave[i].at + wave[i + 1].at) / 2, (Y(wave[i].pos) + Y(wave[i + 1].pos)) / 2);
+                path.quadTo(c, m);
+            }
+            path.lineTo(wave.back().at, Y(wave.back().pos));
+            FillToBase(p, path, lineColor_, 0.22, top, baseY);
+            StrokeWithGlow(p, path, lineColor_, std::max<qreal>(1.6, lineWidth_), std::max<qreal>(8, glow_));
+            QFont f(QStringLiteral("Figtree"));
+            f.setPixelSize(10);
+            f.setWeight(QFont::DemiBold);
+            p->setFont(f);
+            QColor c = lineColor_;
+            c.setAlphaF(0.85);
+            p->setPen(c);
+            p->drawText(QPointF(8, top + 4 + 10), tr("TEMPO · zoom in for strokes"));
+        }
+    } else if (mode != Mode::Empty) {
+        const auto [first, last] = samn::VisibleRange(actions_, int64_t(std::floor(t0)), int64_t(std::ceil(t1)));
+        auto smoothPath = [&, first = first, last = last] {
+            QPainterPath path(QPointF(X(double(actions_[first].at)), Y(actions_[first].pos)));
+            for (const auto& s : samn::CatmullRomBezier(actions_, first, last))
+                path.cubicTo(QPointF(X(s.c1.at), Y(s.c1.pos)), QPointF(X(s.c2.at), Y(s.c2.pos)),
+                             QPointF(X(s.p2.at), Y(s.p2.pos)));
+            return path;
+        };
+        if (mode == Mode::Smooth) {
+            const QPainterPath path = smoothPath();
+            if (fill_ > 0) FillToBase(p, path, lineColor_, fill_, top, baseY);
+            StrokeWithGlow(p, path, lineColor_, lineWidth_, glow_);
+            // Keyframe dots: they are readable here.
+            const size_t n = last - first + 1;
+            const size_t step = n > size_t(kMaxDots) ? (n + kMaxDots - 1) / kMaxDots : 1;
+            p->setPen(Qt::NoPen);
+            p->setBrush(editMode_ ? QColor(255, 255, 255) : QColor(255, 255, 255, 217));
+            const qreal r = editMode_ ? 3.5 : 2.2;
+            for (size_t i = first; i <= last; i += step)
+                p->drawEllipse(QPointF(X(double(actions_[i].at)), Y(actions_[i].pos)), r, r);
+        } else if (last - first > size_t(w) * 3) {
+            // Far more points than pixels: each 1 px column draws the span of
+            // its points. Looks the same as the fine line, costs O(width).
+            QPainterPath cols;
+            double colX = -1, lo = 0, hi = 0;
+            auto flush = [&] {
+                if (colX < 0) return;
+                cols.moveTo(colX + 0.5, Y(lo));
+                cols.lineTo(colX + 0.5, Y(hi) - (hi == lo ? 0.5 : 0));
+            };
+            for (size_t i = first; i <= last; ++i) {
+                const double cx = std::floor(X(double(actions_[i].at)));
+                const double v = actions_[i].pos;
+                if (cx != colX) {
+                    flush();
+                    colX = cx;
+                    lo = hi = v;
+                } else {
+                    lo = std::min(lo, v);
+                    hi = std::max(hi, v);
+                }
+            }
+            flush();
+            StrokeWithGlow(p, cols, lineColor_, 1.0, 0);
+        } else {
+            StrokeWithGlow(p, smoothPath(), lineColor_, 1.0, 0);
         }
     }
-    QColor glow = lineColor_;
-    glow.setAlpha(60);
-    p->setPen(QPen(glow, 5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-    p->drawPath(path);
-    p->setPen(QPen(lineColor_, 1.6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-    p->drawPath(path);
-    if (playhead_ >= 0) {
-        const int x = *xFor(playhead_, w);
-        p->setPen(QPen(playheadColor_, 1.5));
-        p->drawLine(x, 0, x, h);
+
+    if (!label_.isEmpty()) {
+        QFont f(QStringLiteral("Figtree"));
+        f.setPixelSize(10);
+        f.setWeight(QFont::DemiBold);
+        p->setFont(f);
+        p->setPen(lineColor_);
+        p->drawText(QPointF(6, 3 + 10), label_);
     }
+
 }
 
 }  // namespace samn::ui

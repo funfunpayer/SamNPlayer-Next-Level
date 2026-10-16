@@ -21,8 +21,18 @@ namespace fs = std::filesystem;
 namespace {
 
 std::string env(const char* name) {
+#ifdef _WIN32
+    // _dupenv_s: the safe CRT variant (getenv is deprecated on MSVC).
+    char* buf = nullptr;
+    size_t len = 0;
+    if (_dupenv_s(&buf, &len, name) != 0 || buf == nullptr) return {};
+    std::string v(buf);
+    std::free(buf);
+    return v;
+#else
     const char* v = std::getenv(name);
     return v ? std::string(v) : std::string();
+#endif
 }
 
 fs::path home_dir() {
