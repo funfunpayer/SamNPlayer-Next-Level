@@ -25,6 +25,11 @@ void HeatmapItem::setPlayheadMs(qint64 ms) {
     update();
 }
 
+void HeatmapItem::setBands(std::vector<CurveItem::Band> bands) {
+    bands_ = std::move(bands);
+    update();
+}
+
 QColor HeatmapItem::colorFor(float v) {
     v = std::clamp(v, 0.0f, 1.0f);
     return QColor::fromHslF((220.0f - v * 220.0f) / 360.0f, 0.75f, 0.35f + v * 0.20f);
@@ -52,6 +57,11 @@ void HeatmapItem::paint(QPainter* p) {
     const double x0 = xOf(double(start_)), x1 = xOf(double(end_));
     p->setClipRect(boundingRect());
     p->drawImage(QRectF(x0, 0, std::max(1.0, x1 - x0), height()), strip_);
+    for (const auto& b : bands_) {
+        const double a = xOf(double(b.start_ms)), e = xOf(double(b.end_ms));
+        const QColor c = b.primary ? QColor(255, 60, 60, 89) : QColor(255, 160, 40, int((0.18 + b.intensity * 0.15) * 255));
+        p->fillRect(QRectF(a, 0, std::max(1.0, e - a), height()), c);
+    }
     if (markerEnd_ > markerStart_) {
         const double a = xOf(markerStart_), b = xOf(markerEnd_);
         p->setPen(QPen(Qt::white, 2));

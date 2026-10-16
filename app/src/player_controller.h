@@ -14,6 +14,7 @@
 #include "samn/curve_geometry.h"
 #include "samn/funscript.h"
 #include "samn/marks.h"
+#include "samn/samn_file.h"
 #include "samn/playback.h"
 #include "samn/settings.h"
 
@@ -43,7 +44,16 @@ class PlayerController : public QObject {
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
     Q_PROPERTY(QVariantList variants READ variants NOTIFY variantsChanged)
     Q_PROPERTY(int variantIndex READ variantIndex NOTIFY variantsChanged)
-    Q_PROPERTY(QVariantList chapters READ chapters NOTIFY scriptChanged)
+    // Marks of the script ({name, startMs, endMs, label}, {name, timeMs,
+    // label}, {kind, startMs, endMs, intensity, label}); edits save at once.
+    Q_PROPERTY(QVariantList chapters READ chapters NOTIFY marksChanged)
+    Q_PROPERTY(QVariantList bookmarks READ bookmarks NOTIFY marksChanged)
+    Q_PROPERTY(QVariantList oMarkers READ oMarkers NOTIFY marksChanged)
+    // Intensity for a new secondary O-marker (0.7 playback.omarker_intensity).
+    Q_PROPERTY(double oMarkerIntensity READ oMarkerIntensity WRITE setOMarkerIntensity NOTIFY marksChanged)
+    // Beat grid on the curve: BPM 20-240 (0 = none yet) and on/off.
+    Q_PROPERTY(double bpm READ bpm WRITE setBpm NOTIFY bpmChanged)
+    Q_PROPERTY(bool bpmGrid READ bpmGrid WRITE setBpmGrid NOTIFY bpmChanged)
     Q_PROPERTY(QStringList scriptFolders READ scriptFolders NOTIFY scriptFoldersChanged)
     // The marked range (0.7: drag on the heatmap), in script time; saved
     // beside the script. Loop, zoom selection and the range tools use it.
@@ -104,6 +114,30 @@ public:
     Q_INVOKABLE void setPlaying(bool playing);
     // Tooltip text for the heatmap at a script time: "12.3s · 45%".
     Q_INVOKABLE QString heatTooltip(double ms) const;
+    // Bookmarks: at the playhead (video time); name default "Bookmark", 80 chars.
+    Q_INVOKABLE bool addBookmark(const QString& name, qint64 videoMs);
+    Q_INVOKABLE bool renameBookmark(int index, const QString& name);
+    Q_INVOKABLE bool removeBookmark(int index);
+    Q_INVOKABLE qint64 bookmarkVideoMs(int index) const;
+    // Chapters: from the marked range; name default "Chapter".
+    Q_INVOKABLE bool addChapterFromSelection(const QString& name);
+    Q_INVOKABLE bool renameChapter(int index, const QString& name);
+    Q_INVOKABLE bool removeChapter(int index);
+    // O-markers: from the marked range; "primary" (intensity 1) or
+    // "secondary" (oMarkerIntensity).
+    Q_INVOKABLE bool addOMarkerFromSelection(const QString& kind);
+    Q_INVOKABLE bool removeOMarker(int index);
+    // Link a video to the open script (0.7 "Select a video file…").
+    Q_INVOKABLE bool attachVideo(const QString& pathOrUrl);
+    // Snapshot of the current frame at full video resolution (0.7 saves a
+    // PNG named "<video>_MM-SS.png"). videoSink is the VideoOutput's sink.
+    Q_INVOKABLE QString snapshotName(qint64 videoMs) const;
+    Q_INVOKABLE QString snapshotFolder() const;
+    Q_INVOKABLE bool saveSnapshot(QObject* videoSink, const QString& pathOrUrl);
+    // Small remembered UI choices (selected tab …), kept in the settings
+    // under "ui.<key>".
+    Q_INVOKABLE QVariant uiValue(const QString& key, const QVariant& fallback);
+    Q_INVOKABLE void setUiValue(const QString& key, const QVariant& value);
     // Video time of a chapter's start (script time + offset).
     Q_INVOKABLE qint64 chapterVideoMs(int index) const;
     Q_INVOKABLE void attachCurve(samn::ui::CurveItem* curve);
@@ -132,7 +166,17 @@ public:
     QString lastError() const { return lastError_; }
     QVariantList variants() const { return variants_; }
     int variantIndex() const { return variantIndex_; }
-    QVariantList chapters() const { return chapters_; }
+    QVariantList chapters() const;
+    QVariantList bookmarks() const;
+    QVariantList oMarkers() const;
+    double oMarkerIntensity() const { return oMarkerIntensity_; }
+    void setOMarkerIntensity(double v);
+    double bpm() const { return bpm_; }
+    void setBpm(double v);
+    bool bpmGrid() const { return bpmGrid_; }
+    void setBpmGrid(bool on);
+    // Beat period for the grid in ms, 0 when off.
+    double beatPeriodMs() const;
     QStringList scriptFolders() const;
     bool hasMarker() const { return marker_.Valid(); }
     double markerStartMs() const { return double(marker_.start_ms); }
@@ -168,6 +212,8 @@ signals:
     void loopChanged();
     void viewChanged();
     void markerChanged();
+    void marksChanged();
+    void bpmChanged();
     void sleepChanged();
     // The sleep timer ran out: the player stops.
     void sleepReached();
@@ -179,14 +225,17 @@ private:
     void clearScript();
     void pushToViews();
     void loadMarks(const QString& path);
+    // Saves one list; on failure the old list comes back and lastError says why.
+    template <typename T, typename Save>
+    bool commitMarks(std::vector<T>& list, std::vector<T> next, Save save);
+    void pushMarks();
     samn::Settings& settings();
 
     std::unique_ptr<samn::Settings> settings_;
     std::vector<samn::Action> stroke_, vibration_, suction_;
-    std::vector<int64_t> bookmarks_;
-    std::vector<std::pair<int64_t, int64_t>> chapterRanges_;
+    samn::ScriptMarks marks_;
     std::vector<float> heat_;
-    QVariantList variants_, chapters_;
+    QVariantList variants_;
     int variantIndex_ = -1;
     QString scriptPath_, videoPath_, lastError_;
     int offsetMs_ = 0;
@@ -195,6 +244,8 @@ private:
     samn::ViewWindow view_;
     qint64 videoMs_ = 0, playheadMs_ = -1;
     samn::RangeMarker marker_;
+    double oMarkerIntensity_ = 0.5, bpm_ = 0;
+    bool bpmGrid_ = false;
     std::optional<int64_t> pendingStart_;  // A pressed, B not yet
     bool loopEnabled_ = false;
     int sleepMinutes_ = 0;

@@ -15,6 +15,7 @@ CurveItem::CurveItem(QQuickItem* parent) : QQuickPaintedItem(parent) {
     connect(this, &CurveItem::styleChanged, this, [this] { updateMode(); invalidate(); });
     connect(this, &QQuickItem::widthChanged, this, [this] { updateMode(); invalidate(); });
     connect(this, &QQuickItem::heightChanged, this, &CurveItem::invalidate);
+    connect(this, &CurveItem::markerChanged, this, &CurveItem::invalidate);
 }
 
 void CurveItem::invalidate() {
@@ -32,6 +33,12 @@ void CurveItem::setActions(std::vector<samn::Action> actions) {
 void CurveItem::setMarks(std::vector<int64_t> bookmarks, std::vector<std::pair<int64_t, int64_t>> chapters) {
     bookmarks_ = std::move(bookmarks);
     chapters_ = std::move(chapters);
+    invalidate();
+}
+
+void CurveItem::setOverlays(std::vector<Band> bands, double beatPeriodMs) {
+    bands_ = std::move(bands);
+    beatPeriod_ = beatPeriodMs;
     invalidate();
 }
 
@@ -198,6 +205,30 @@ void CurveItem::paintLayer(QPainter* p, double w, double h, Mode mode) {
         band.setAlpha(26);
         const double xa = X(double(a)), xb = X(double(std::max(a, b)));
         p->fillRect(QRectF(xa, 0, std::max(2.0, xb - xa), h), band);
+    }
+    // Beat grid (0.7 drawBpmGrid): every 4th line is a bar line.
+    const auto [g0, g1] = timeWindow();
+    if (beatPeriod_ > 0) {
+        long long n = static_cast<long long>(std::floor(g0 / beatPeriod_));
+        int drawn = 0;
+        for (double t = double(n) * beatPeriod_; t <= g1 && drawn < 240; t = double(++n) * beatPeriod_) {
+            if (t < g0) continue;
+            const bool bar = n % 4 == 0;
+            const double x = std::round(X(t)) + 0.5;
+            p->setPen(QPen(QColor(184, 150, 232, bar ? 97 : 41), bar ? 1.25 : 1.0));
+            p->drawLine(QPointF(x, 0), QPointF(x, h));
+            ++drawn;
+        }
+    }
+    for (const auto& b : bands_) {
+        if (double(b.end_ms) < g0 || double(b.start_ms) > g1) continue;
+        const double x0 = X(double(b.start_ms)), x1 = X(double(b.end_ms));
+        const QColor c = b.primary ? QColor(255, 60, 60, 89) : QColor(255, 160, 40, int((0.18 + b.intensity * 0.15) * 255));
+        p->fillRect(QRectF(x0, 0, std::max(1.0, x1 - x0), h), c);
+    }
+    if (markerEnd_ > markerStart_) {
+        const double x0 = X(markerStart_), x1 = X(markerEnd_);
+        p->fillRect(QRectF(x0, 0, x1 - x0, h), QColor(0, 200, 255, 31));
     }
     p->setPen(QPen(QColor(0xe0, 0xa8, 0x6a), 1, Qt::DashLine));
     for (int64_t t : bookmarks_) {

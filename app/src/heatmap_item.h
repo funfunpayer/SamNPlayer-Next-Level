@@ -5,6 +5,8 @@
 #include <QtQml/qqmlregistration.h>
 #include <vector>
 
+#include "curve_item.h"
+
 namespace samn::ui {
 
 // The heatmap bar (0.7): one value 0-1 per time bucket, coloured
@@ -29,6 +31,7 @@ public:
     bool empty() const { return values_.empty(); }
     const std::vector<float>& values() const { return values_; }
     static QColor colorFor(float v);
+    void setBands(std::vector<CurveItem::Band> bands);
     void paint(QPainter* p) override;
 
 signals:
@@ -43,6 +46,7 @@ private:
     qint64 start_ = 0, end_ = 0, playhead_ = -1;
     double viewStart_ = 0, viewEnd_ = -1, markerStart_ = 0, markerEnd_ = 0;
     QImage strip_;
+    std::vector<CurveItem::Band> bands_;
 };
 
 }  // namespace samn::ui
