@@ -13,6 +13,8 @@ qt_add_qml_module(samn_app
   SOURCES
     src/theme.h
     src/curve_item.h src/curve_item.cpp
+    src/heatmap_item.h src/heatmap_item.cpp
+    src/audio_level.h src/audio_level.cpp
     src/player_controller.h src/player_controller.cpp
   QML_FILES
     qml/Main.qml
@@ -22,6 +24,11 @@ qt_add_qml_module(samn_app
     qml/PlayButton.qml
     qml/PlayerPage.qml
     qml/NotYetPage.qml
+    qml/FlowButton.qml
+    qml/IconButton.qml
+    qml/FlowSlider.qml
+    qml/OffsetField.qml
+    qml/FlowCombo.qml
   RESOURCES
     qml/assets/bg-top.svg
     qml/assets/bg-bottom.svg
