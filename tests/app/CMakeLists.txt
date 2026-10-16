@@ -1,7 +1,7 @@
 find_package(Qt6 REQUIRED COMPONENTS Test)
 set(CMAKE_AUTOMOC ON)
 # One Qt Test executable per controller (QTEST_MAIN each).
-foreach(t player_controller library_controller icon_provider device_transports device_controller)
+foreach(t player_controller library_controller icon_provider device_transports device_controller playback_output)
   add_executable(${t}_test ${t}_test.cpp)
   target_link_libraries(${t}_test PRIVATE samn_app Qt6::Test)
   # fake_servers.h reuses the Buttplug message shapes of the core tests.
@@ -9,3 +9,10 @@ foreach(t player_controller library_controller icon_provider device_transports d
   add_test(NAME ${t}_test COMMAND ${t}_test)
   set_tests_properties(${t}_test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 endforeach()
+
+# The Inspector's QML, loaded the way the app loads it (static module plugin).
+add_executable(inspector_qml_test inspector_qml_test.cpp)
+target_link_libraries(inspector_qml_test PRIVATE samn_app samn_appplugin Qt6::Test)
+target_include_directories(inspector_qml_test PRIVATE ${CMAKE_SOURCE_DIR}/tests/core)
+add_test(NAME inspector_qml_test COMMAND inspector_qml_test)
+set_tests_properties(inspector_qml_test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

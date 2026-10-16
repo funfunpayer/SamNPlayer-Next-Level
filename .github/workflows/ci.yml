@@ -67,13 +67,16 @@ jobs:
         shell: bash
         run: |
           set +e  # keep going after a failing function
-          for t in device_transports device_controller; do
+          for t in device_transports device_controller playback_output inspector_qml; do
             exe=$(find build -name "${t}_test" -o -name "${t}_test.exe" | head -1)
             [ -n "$exe" ] || continue
             for f in $("$exe" -functions | sed 's/()//'); do
               "$exe" "$f" -silent > /dev/null 2>&1; rc=$?
               echo "$t::$f exit $rc"
-              [ $rc -eq 0 ] || "$exe" "$f" -v1 2>&1 | tail -40
+              if [ $rc -ne 0 ]; then
+                "$exe" "$f" -v1 -o "fail-$t-$f.txt,txt" > /dev/null 2>&1
+                tail -60 "fail-$t-$f.txt"
+              fi
             done
           done
 
