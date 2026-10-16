@@ -17,6 +17,7 @@ Functions use PascalCase and struct fields use snake_case.
 | `marks.h` | Bookmarks and chapters, OFS times | Go `funscript/bookmarks.go` | ✅ files byte-identical |
 | `script_finder.h` | Script for a video: beside it, folders, tolerant names, variants | Go `app_open_media.go` | ✅ |
 | `settings.h` | Settings JSON with 0.7 keys, atomic writes | — | ✅ |
+| `text.h` | `FoldCase`: UTF-8 lower case without ICU (Latin, Greek, Cyrillic, full-width) | Go `strings.ToLower` | ✅ |
 | `playback.h` | Offset, script time, loop, video beside a script, session | Go `app_playback.go` | ✅ |
 | `stroke_filter.h` | Live stroker filter (PCHIP/MAKIMA, speed limit, idle fill) | Go `funscript/stroke_filter.go` | ✅ parity |
 | `beatbar.h`, `beat_strokes.h` | Cock Hero beat bar → beats → strokes | Go `generator/beatbar.go` | ✅ parity |
@@ -25,7 +26,6 @@ Functions use PascalCase and struct fields use snake_case.
 
 **Open cleanups:**
 - `script_finder`/`settings`/`playback` use snake_case function names; rename them to PascalCase.
-- Case folding is ASCII only: "Übung" does not match "übung". Go and Python fold Unicode. Fix this before P1 ends.
 - The four Python modules each register `samn::Action`, so importing two of them in one process fails. Merge them into one `samn_native` module.
 
 ## app/ (Qt 6): `samn_app` + `samnplayer`
