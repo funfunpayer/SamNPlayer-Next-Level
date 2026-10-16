@@ -34,7 +34,7 @@ jobs:
         uses: jurplel/install-qt-action@v4
         with:
           version: "6.7.3"
-          modules: "qtmultimedia"
+          modules: "qtmultimedia qtserialport qtwebsockets qtconnectivity"
           cache: true
 
       - name: System libraries (Linux)
