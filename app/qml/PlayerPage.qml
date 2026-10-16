@@ -47,6 +47,19 @@ Item {
         nameFilters: [qsTr("Script (*.funscript *.samn)"), qsTr("All files (*)")]
         onAccepted: ctrl.openScript(selectedFile.toString(), ctrl.videoUrl.toString())
     }
+    FileDialog {
+        id: videoDialog
+        title: qsTr("Select a video file")
+        nameFilters: [qsTr("Video (*.mp4 *.mkv *.webm *.mov *.avi *.m4v)"), qsTr("All files (*)")]
+        onAccepted: ctrl.attachVideo(selectedFile.toString())
+    }
+    FileDialog {
+        id: snapshotDialog
+        title: qsTr("Save the frame as PNG")
+        fileMode: FileDialog.SaveFile
+        nameFilters: [qsTr("PNG image (*.png)")]
+        onAccepted: ctrl.saveSnapshot(videoOut.videoSink, selectedFile.toString())
+    }
     FolderDialog {
         id: folderDialog
         title: qsTr("Add a script folder")
@@ -72,7 +85,8 @@ Item {
         width: parent.width; height: 40
         Text {
             anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
-            anchors.right: variantBox.visible ? variantBox.left : openBtn.left; anchors.rightMargin: 12
+            anchors.right: variantBox.visible ? variantBox.left : videoBar.visible ? videoBar.left : openBtn.left
+            anchors.rightMargin: 12
             text: ctrl.hasScript ? ctrl.scriptName + (ctrl.videoName !== "" ? "  ·  " + ctrl.videoName : "")
                                  : ctrl.videoName !== "" ? ctrl.videoName : qsTr("Open a video or a script")
             color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 14
@@ -80,13 +94,37 @@ Item {
         }
         FlowCombo {
             id: variantBox
-            anchors.right: openBtn.left; anchors.rightMargin: 10; anchors.verticalCenter: parent.verticalCenter
+            anchors.right: videoBar.visible ? videoBar.left : openBtn.left; anchors.rightMargin: 10
+            anchors.verticalCenter: parent.verticalCenter
             width: 240
             visible: ctrl.variants.length > 1
             model: ctrl.variants
             textRole: "label"
             currentIndex: ctrl.variantIndex
             onActivated: (i) => ctrl.chooseVariant(i)
+        }
+        // Video bar (0.7 v1): link a video, bookmark, snapshot.
+        Row {
+            id: videoBar
+            anchors.right: openBtn.left; anchors.rightMargin: 10; anchors.verticalCenter: parent.verticalCenter
+            spacing: 8
+            visible: ctrl.hasScript
+            FlowButton {
+                text: ctrl.videoName !== "" ? "🎞  " + ctrl.videoName : qsTr("Select a video file…")
+                onClicked: videoDialog.open()
+            }
+            IconButton {
+                width: 36; height: 36; glyph: "🔖"; tip: qsTr("Add a bookmark at the current time")
+                onClicked: ctrl.addBookmark("", media.position)
+            }
+            IconButton {
+                width: 36; height: 36; glyph: "📷"; tip: qsTr("Save the current video frame as PNG")
+                visible: ctrl.videoName !== ""
+                onClicked: {
+                    snapshotDialog.currentFile = ctrl.snapshotFolder() + "/" + ctrl.snapshotName(media.position)
+                    snapshotDialog.open()
+                }
+            }
         }
         FlowButton {
             id: openBtn
@@ -294,27 +332,24 @@ Item {
         anchors.top: videoCard.bottom; anchors.topMargin: 12
         anchors.bottom: parent.bottom
         width: parent.width
-        Row {
-            x: 16; y: 10; spacing: 10
-            Rectangle {
-                width: 86; height: 28; radius: 14; color: "transparent"; border.color: Theme.orange
-                Text { anchors.centerIn: parent; text: qsTr("Stroke"); color: "white"; font.family: Theme.fontSoft; font.pixelSize: 13 }
-            }
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: ctrl.hasScript ? qsTr("%1 points").arg(ctrl.pointCount) : ""
-                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
-            }
+        // Bottom tabs (0.7 v1): Timeline · Chapters · Bookmarks · Scene Map · Audio Analysis.
+        FlowTabs {
+            id: bottomTabs
+            x: 16; y: 9
+            model: [qsTr("Timeline"), qsTr("Chapters"), qsTr("Bookmarks"), qsTr("Scene Map"), qsTr("Audio Analysis")]
+            current: ctrl.uiValue("player.bottomTab", 0)
+            onPicked: (i) => { current = i; ctrl.setUiValue("player.bottomTab", i) }
         }
         Row {
+            id: offsetRow
             anchors.right: parent.right; anchors.rightMargin: 16; y: 8; spacing: 8
             Text { anchors.verticalCenter: parent.verticalCenter; text: qsTr("Offset"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13 }
             OffsetField { value: ctrl.offsetMs; onChanged: (v) => ctrl.offsetMs = v }
         }
         // Zoom (0.7): wheel on the curve, buttons around the playhead.
         Row {
-            anchors.horizontalCenter: parent.horizontalCenter; y: 8; spacing: 6
-            visible: ctrl.hasScript
+            anchors.right: offsetRow.left; anchors.rightMargin: 18; y: 8; spacing: 6
+            visible: ctrl.hasScript && bottomTabs.current === 0
             IconButton { width: 32; height: 32; glyph: "−"; tip: qsTr("Zoom out"); onClicked: ctrl.zoomBy(1 / 1.6) }
             Text {
                 width: 110; anchors.verticalCenter: parent.verticalCenter; horizontalAlignment: Text.AlignHCenter
@@ -326,6 +361,7 @@ Item {
         }
         Column {
             id: lanes
+            visible: bottomTabs.current === 0
             x: 16; y: 46
             width: parent.width - 32; height: parent.height - 58
             readonly property int laneH: 34
@@ -344,6 +380,7 @@ Item {
                 width: parent.width
                 height: Math.max(60, parent.height - lanes.extraLanes * lanes.laneH - lanes.fixedH)
                 lane: "stroke"; lineColor: Theme.orange; showGrid: true
+                markerStartMs: ctrl.markerStartMs; markerEndMs: ctrl.markerEndMs
                 viewStartMs: ctrl.viewStartMs; viewEndMs: ctrl.viewEndMs
                 Component.onCompleted: ctrl.attachCurve(curve)
                 WheelHandler {
@@ -449,6 +486,154 @@ Item {
                     text: qsTr("Clear selection"); enabled: ctrl.hasMarker
                     onClicked: ctrl.clearMarker()
                 }
+                // O-marker from the marked range (0.7 "Apply as O-marker").
+                FlowCombo {
+                    id: oKind
+                    anchors.verticalCenter: parent.verticalCenter; width: 190; implicitHeight: 28
+                    model: [qsTr("Primary (peak)"), qsTr("Secondary (earlier, softer)")]
+                }
+                FlowSlider {
+                    anchors.verticalCenter: parent.verticalCenter; width: 90
+                    visible: oKind.currentIndex === 1
+                    from: 0; to: 1; value: ctrl.oMarkerIntensity
+                    onMoved: (v) => ctrl.oMarkerIntensity = Math.round(v * 20) / 20
+                }
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: oKind.currentIndex === 1
+                    text: Math.round(ctrl.oMarkerIntensity * 100) + "%"
+                    color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                }
+                FlowButton {
+                    anchors.verticalCenter: parent.verticalCenter; implicitHeight: 28
+                    text: qsTr("Apply as O-marker"); enabled: ctrl.hasMarker
+                    onClicked: ctrl.addOMarkerFromSelection(oKind.currentIndex === 1 ? "secondary" : "primary")
+                }
+            }
+        }
+        // Chapters (0.7 bottom tab): add from the marked range, seek, rename, remove.
+        Item {
+            visible: bottomTabs.current === 1
+            x: 16; y: 46; width: parent.width - 32; height: parent.height - 58
+            Row {
+                id: chapterAdd
+                spacing: 8
+                FlowTextField { id: chapterName; width: 220; placeholder: qsTr("Chapter name"); onAccepted: addChapter.clicked() }
+                FlowButton {
+                    id: addChapter
+                    text: qsTr("Add from selection"); enabled: ctrl.hasMarker
+                    onClicked: if (ctrl.addChapterFromSelection(chapterName.text)) chapterName.text = ""
+                }
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: ctrl.markerLabel
+                    color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                }
+            }
+            MarkList {
+                anchors.top: chapterAdd.bottom; anchors.topMargin: 10
+                width: parent.width; height: parent.height - chapterAdd.height - 10
+                model: ctrl.chapters
+                emptyText: qsTr("No chapters yet. Mark a range on the heatmap, then add it.")
+                onSeek: (i) => page.seekTo(ctrl.chapterVideoMs(i))
+                onRename: (i, name) => ctrl.renameChapter(i, name)
+                onRemove: (i) => ctrl.removeChapter(i)
+            }
+        }
+        // Bookmarks (0.7 bottom tab) and, until the Inspector comes, the O-markers.
+        Item {
+            visible: bottomTabs.current === 2
+            x: 16; y: 46; width: parent.width - 32; height: parent.height - 58
+            Row {
+                id: bookmarkAdd
+                spacing: 8
+                FlowTextField { id: bookmarkName; width: 220; placeholder: qsTr("Bookmark"); onAccepted: addBookmark.clicked() }
+                FlowButton {
+                    id: addBookmark
+                    text: qsTr("Add at playhead"); enabled: ctrl.hasScript
+                    onClicked: if (ctrl.addBookmark(bookmarkName.text, media.position)) bookmarkName.text = ""
+                }
+            }
+            MarkList {
+                anchors.top: bookmarkAdd.bottom; anchors.topMargin: 10
+                width: parent.width / 2 - 8; height: parent.height - bookmarkAdd.height - 10
+                model: ctrl.bookmarks
+                emptyText: qsTr("No bookmarks yet.")
+                onSeek: (i) => page.seekTo(ctrl.bookmarkVideoMs(i))
+                onRename: (i, name) => ctrl.renameBookmark(i, name)
+                onRemove: (i) => ctrl.removeBookmark(i)
+            }
+            Text {
+                id: oTitle
+                x: parent.width / 2 + 8; y: 6
+                text: qsTr("O-markers")
+                color: Theme.textDim; font.family: Theme.font; font.pixelSize: 13
+            }
+            MarkList {
+                x: parent.width / 2 + 8
+                anchors.top: bookmarkAdd.bottom; anchors.topMargin: 10
+                width: parent.width / 2 - 8; height: parent.height - bookmarkAdd.height - 10
+                model: ctrl.oMarkers
+                canRename: false
+                emptyText: qsTr("No O-markers. Mark a range, then Apply as O-marker (Timeline).")
+                onSeek: (i) => page.seekTo(ctrl.oMarkers[i].startMs + ctrl.offsetMs)
+                onRemove: (i) => ctrl.removeOMarker(i)
+            }
+        }
+        // Scene Map comes as its own mode (P4); said plainly, no fake view.
+        Item {
+            visible: bottomTabs.current === 3
+            x: 16; y: 46; width: parent.width - 32; height: parent.height - 58
+            Text {
+                anchors.centerIn: parent
+                text: qsTr("Scene Map (scenes, thumbnails, rhythm) comes with the Scene Map mode in P4.")
+                color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 13
+            }
+        }
+        // Audio Analysis (0.7): the whole video's sound with the beat grid; click seeks.
+        Item {
+            visible: bottomTabs.current === 4
+            x: 16; y: 46; width: parent.width - 32; height: parent.height - 58
+            Row {
+                id: bpmRow
+                spacing: 10
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: ctrl.bpm > 0 ? qsTr("%1 BPM").arg(ctrl.bpm) : qsTr("— BPM")
+                    color: Theme.text; font.family: Theme.font; font.pixelSize: 14
+                }
+                FlowTextField {
+                    width: 90; placeholder: qsTr("BPM")
+                    onAccepted: ctrl.bpm = parseFloat(text) || 0
+                }
+                FlowButton {
+                    text: qsTr("BPM grid"); checked: ctrl.bpmGrid
+                    onClicked: ctrl.bpmGrid = !ctrl.bpmGrid
+                }
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: qsTr("Beat detection from the sound comes with the audio tempo port (P3).")
+                    color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
+                }
+            }
+            AudioLevelItem {
+                id: wholeAudio
+                anchors.top: bpmRow.bottom; anchors.topMargin: 10
+                width: parent.width; height: 72
+                source: ctrl.videoUrl
+                viewStartMs: 0; viewEndMs: media.duration > 0 ? media.duration : -1
+                playheadMs: media.position
+                label: ""
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: (m) => page.seekTo(Math.round(m.x / width * media.duration))
+                }
+            }
+            Text {
+                anchors.centerIn: wholeAudio
+                visible: wholeAudio.empty
+                text: wholeAudio.loading ? qsTr("Reading the sound…") : qsTr("Link a video to see its sound.")
+                color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 13
             }
         }
     }

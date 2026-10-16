@@ -1387,6 +1387,76 @@ FunscriptView LoadFunscript(const fs::path& path) {
     return ParseFunscript(data);
 }
 
+ScriptMarks LoadScriptMarks(const fs::path& path) {
+    ScriptMarks m;
+    if (IsSamnPath(path.string())) {
+        Document d = LoadDocument(path);
+        m.bookmarks = std::move(d.bookmarks);
+        m.chapters = std::move(d.chapters);
+        m.o_markers = std::move(d.o_markers);
+        return m;
+    }
+    m.bookmarks = LoadBookmarks(path);
+    m.chapters = LoadChapters(path);
+    m.o_markers = LoadOMarkers(path);
+    return m;
+}
+
+void SaveScriptBookmarks(const fs::path& path, const std::vector<Bookmark>& bookmarks) {
+    if (!IsSamnPath(path.string())) return SaveBookmarks(path, bookmarks);
+    Document d = LoadDocument(path);
+    d.bookmarks = bookmarks;
+    SaveDocument(path, d);
+}
+
+void SaveScriptChapters(const fs::path& path, const std::vector<Chapter>& chapters) {
+    if (!IsSamnPath(path.string())) return SaveChapters(path, chapters);
+    Document d = LoadDocument(path);
+    d.chapters = chapters;
+    SaveDocument(path, d);
+}
+
+void SaveScriptOMarkers(const fs::path& path, const std::vector<OMarker>& markers) {
+    if (!IsSamnPath(path.string())) return SaveOMarkers(path, markers);
+    for (size_t i = 0; i < markers.size(); ++i) {
+        try {
+            markers[i].Validate();
+        } catch (const SamnError& e) {
+            throw SamnError("oMarkers[" + std::to_string(i) + "]: " + e.what());
+        }
+    }
+    Document d = LoadDocument(path);
+    d.o_markers = markers;
+    SaveDocument(path, d);
+}
+
+void SaveOMarkers(const fs::path& path, const std::vector<OMarker>& markers) {
+    for (size_t i = 0; i < markers.size(); ++i) {
+        try {
+            markers[i].Validate();
+        } catch (const SamnError& e) {
+            throw SamnError("funscript: O-Marker " + std::to_string(i) + ": " + e.what());
+        }
+    }
+    std::vector<OMarker> sorted = markers;
+    std::stable_sort(sorted.begin(), sorted.end(),
+                     [](const OMarker& a, const OMarker& b) { return a.start_ms < b.start_ms; });
+    std::string encoded;
+    if (sorted.empty()) {
+        encoded = "null";
+    } else {
+        encoded = "[";
+        for (size_t i = 0; i < sorted.size(); ++i) {
+            if (i) encoded += ',';
+            encoded += "{\"startMs\":" + std::to_string(sorted[i].start_ms) + ",\"endMs\":" +
+                       std::to_string(sorted[i].end_ms) + ",\"kind\":" + GoString(sorted[i].kind) +
+                       ",\"intensity\":" + GoFloat(sorted[i].intensity) + "}";
+        }
+        encoded += "]";
+    }
+    PatchMetadataKey(path, "oMarkers", encoded, /*indented=*/true);
+}
+
 std::vector<OMarker> LoadOMarkers(const fs::path& path) {
     std::string data;
     if (!ReadAll(path, data))

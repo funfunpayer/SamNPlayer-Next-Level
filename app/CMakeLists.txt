@@ -31,6 +31,9 @@ qt_add_qml_module(samn_app
     qml/FlowSlider.qml
     qml/OffsetField.qml
     qml/FlowCombo.qml
+    qml/FlowTabs.qml
+    qml/FlowTextField.qml
+    qml/MarkList.qml
     qml/LibraryPanel.qml
     qml/InspectorPanel.qml
     qml/ToolTipText.qml

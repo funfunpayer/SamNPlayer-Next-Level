@@ -43,12 +43,23 @@ class CurveItem : public QQuickPaintedItem {
     Q_PROPERTY(QString mode READ modeName NOTIFY modeChanged)
 public:
     enum class Mode { Empty, Smooth, Fine, Tempo };
+    // An O-marker band (0.7 drawOMarkerBands).
+    struct Band {
+        int64_t start_ms = 0, end_ms = 0;
+        bool primary = true;
+        double intensity = 1;
+    };
     static constexpr int kPad = 6;          // 0.7 CURVE_PAD
     static constexpr int kMaxDots = 600;    // 0.7 DOT_MAX_DRAW
 
     explicit CurveItem(QQuickItem* parent = nullptr);
     void setActions(std::vector<samn::Action> actions);
     void setMarks(std::vector<int64_t> bookmarks, std::vector<std::pair<int64_t, int64_t>> chapters);
+    // O-marker bands and the beat grid (period in ms, 0 = off).
+    void setOverlays(std::vector<Band> bands, double beatPeriodMs);
+    // The marked range (0.7: translucent cyan over the curve).
+    Q_PROPERTY(double markerStartMs MEMBER markerStart_ NOTIFY markerChanged)
+    Q_PROPERTY(double markerEndMs MEMBER markerEnd_ NOTIFY markerChanged)
     qint64 playheadMs() const { return playhead_; }
     void setPlayheadMs(qint64 ms);  // < 0 = none
     // Time window in ms (QML numbers are doubles).
@@ -76,6 +87,7 @@ signals:
     void actionsChanged();
     void styleChanged();
     void modeChanged();
+    void markerChanged();
 
 private:
     std::pair<double, double> timeWindow() const;
@@ -88,6 +100,8 @@ private:
     std::vector<samn::Action> actions_;
     std::vector<int64_t> bookmarks_;
     std::vector<std::pair<int64_t, int64_t>> chapters_;
+    std::vector<Band> bands_;
+    double beatPeriod_ = 0, markerStart_ = 0, markerEnd_ = 0;
     qint64 playhead_ = -1;
     double viewStart_ = 0, viewEnd_ = -1;
     QColor lineColor_{0xff, 0x8a, 0x23};

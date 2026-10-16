@@ -59,8 +59,13 @@ int64_t FlexTimeMs(const nlohmann::json& value);
 std::map<std::string, std::string> ReadMetadataMap(const std::filesystem::path& path);
 
 // Set metadata[key] (encoded is JSON text), keep all other keys, write atomically.
+// indented: write like Go's json.MarshalIndent(doc, "", "  ") (0.7 SaveOMarkers)
+// instead of compact json.Marshal (bookmarks, chapters).
 void PatchMetadataKey(const std::filesystem::path& path, const std::string& key,
-                      const std::string& encoded);
+                      const std::string& encoded, bool indented = false);
+
+// Go json.Indent(dst, compact, "", "  ") for compact JSON text.
+std::string GoIndent(const std::string& compact);
 
 std::vector<Bookmark> LoadBookmarks(const std::filesystem::path& path);
 std::vector<Chapter> LoadChapters(const std::filesystem::path& path);

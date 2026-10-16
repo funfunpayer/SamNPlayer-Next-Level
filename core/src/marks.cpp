@@ -435,13 +435,69 @@ int64_t FlexTimeMs(const json& value) {
 
 RawMap ReadMetadataMap(const std::filesystem::path& path) { return MetadataOf(ReadDoc(path)); }
 
-void PatchMetadataKey(const std::filesystem::path& path, const std::string& key, const std::string& encoded) {
+std::string GoIndent(const std::string& in) {
+    std::string out;
+    out.reserve(in.size() * 2);
+    int depth = 0;
+    bool in_str = false, esc = false, need_indent = false;
+    auto newline = [&](int d) {
+        out += '\n';
+        out.append(static_cast<size_t>(std::max(0, d)) * 2, ' ');
+    };
+    for (char c : in) {
+        if (in_str) {
+            out += c;
+            if (esc) esc = false;
+            else if (c == '\\') esc = true;
+            else if (c == '"') in_str = false;
+            continue;
+        }
+        if (c == ' ' || c == '\t' || c == '\n' || c == '\r') continue;
+        if (need_indent && c != ']' && c != '}') {
+            need_indent = false;
+            newline(depth);
+        }
+        switch (c) {
+            case '"':
+                out += c;
+                in_str = true;
+                break;
+            case '{':
+            case '[':
+                out += c;
+                ++depth;
+                need_indent = true;
+                break;
+            case ',':
+                out += c;
+                newline(depth);
+                break;
+            case ':':
+                out += ": ";
+                break;
+            case '}':
+            case ']':
+                if (need_indent) need_indent = false;  // empty: stays {} / []
+                else newline(depth - 1);
+                --depth;
+                out += c;
+                break;
+            default:
+                out += c;
+        }
+    }
+    return out;
+}
+
+void PatchMetadataKey(const std::filesystem::path& path, const std::string& key, const std::string& encoded,
+                      bool indented) {
     Doc doc = ReadDoc(path);
     if (doc.is_null) throw MarksError("funscript: ungültiges JSON: kein Objekt");
     RawMap meta = MetadataOf(doc);
     meta[key] = encoded;
     doc.fields["metadata"] = MarshalObject(meta);
-    const std::string out = MarshalObject(doc.fields);
+    const std::string compact = MarshalObject(doc.fields);
+    const std::string out = indented ? GoIndent(compact) : compact;
     try {
         WriteFileAtomic(path, out);
     } catch (const std::exception& exc) {
