@@ -1,4 +1,5 @@
 #include "samn/settings.h"
+#include "samn/fileio.h"
 
 #include <chrono>
 #include <cstdlib>
@@ -52,17 +53,6 @@ bool replace_file(const fs::path& from, const fs::path& to) {
     fs::rename(from, to, ec);
     return !ec;
 #endif
-}
-
-std::string unique_suffix() {
-    static std::mt19937_64 rng{std::random_device{}() ^
-                               static_cast<uint64_t>(
-                                   std::chrono::steady_clock::now().time_since_epoch().count())};
-    static std::mutex m;
-    std::lock_guard<std::mutex> lk(m);
-    std::ostringstream os;
-    os << std::hex << rng();
-    return os.str();
 }
 
 }  // namespace
@@ -127,20 +117,9 @@ void Settings::set_many(const std::map<std::string, nlohmann::json>& values) {
     if (dir.empty()) dir = ".";
     std::error_code ec;
     fs::create_directories(dir, ec);
-    fs::path tmp = dir / (".settings-" + unique_suffix() + ".tmp");
-    bool ok = false;
-    {
-        std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
-        if (out) {
-            out << data_.dump(2, ' ', true);
-            out.flush();
-            ok = static_cast<bool>(out);
-        }
-    }
-    if (ok) ok = replace_file(tmp, path_);
-    if (!ok) {
-        std::error_code ec2;
-        fs::remove(tmp, ec2);
+    try {
+        WriteFileAtomic(path_, data_.dump(2, ' ', true));
+    } catch (const std::exception&) {
         throw std::runtime_error("cannot write settings file: " + path_.string());
     }
 }

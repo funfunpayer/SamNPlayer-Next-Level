@@ -5,7 +5,9 @@
 
 namespace samn::ui {
 
-HeatmapItem::HeatmapItem(QQuickItem* parent) : QQuickPaintedItem(parent) {}
+HeatmapItem::HeatmapItem(QQuickItem* parent) : QQuickPaintedItem(parent) {
+    connect(this, &HeatmapItem::viewChanged, this, [this] { update(); });
+}
 
 void HeatmapItem::setValues(std::vector<float> values, qint64 startMs, qint64 endMs) {
     values_ = std::move(values);
@@ -24,14 +26,8 @@ void HeatmapItem::setPlayheadMs(qint64 ms) {
 }
 
 QColor HeatmapItem::colorFor(float v) {
-    // Flow look: calm blue → cyan → orange for intense parts.
     v = std::clamp(v, 0.0f, 1.0f);
-    const QColor a(0x0b, 0x3a, 0x78), b(0x00, 0xd9, 0xf4), c(0xff, 0x8a, 0x23);
-    auto mix = [](const QColor& x, const QColor& y, float t) {
-        return QColor::fromRgbF(x.redF() + (y.redF() - x.redF()) * t, x.greenF() + (y.greenF() - x.greenF()) * t,
-                                x.blueF() + (y.blueF() - x.blueF()) * t);
-    };
-    return v < 0.5f ? mix(a, b, v * 2) : mix(b, c, (v - 0.5f) * 2);
+    return QColor::fromHslF((220.0f - v * 220.0f) / 360.0f, 0.75f, 0.35f + v * 0.20f);
 }
 
 void HeatmapItem::rebuildStrip() {
@@ -43,12 +39,27 @@ void HeatmapItem::rebuildStrip() {
     for (size_t i = 0; i < values_.size(); ++i) strip_.setPixelColor(static_cast<int>(i), 0, colorFor(values_[i]));
 }
 
+double HeatmapItem::xOf(double ms) const {
+    const double t0 = viewEnd_ > viewStart_ ? viewStart_ : double(start_);
+    const double t1 = viewEnd_ > viewStart_ ? viewEnd_ : double(end_);
+    return (ms - t0) / std::max(1.0, t1 - t0) * width();
+}
+
 void HeatmapItem::paint(QPainter* p) {
-    if (strip_.isNull()) return;
-    p->setRenderHint(QPainter::SmoothPixmapTransform);
-    p->drawImage(boundingRect(), strip_);
-    if (playhead_ >= 0 && end_ > start_) {
-        const double x = (double(playhead_ - start_) / double(end_ - start_)) * width();
+    if (strip_.isNull() || end_ <= start_) return;
+    // The buckets cover [start, end]; place that span on the view and let
+    // the clip cut what is outside.
+    const double x0 = xOf(double(start_)), x1 = xOf(double(end_));
+    p->setClipRect(boundingRect());
+    p->drawImage(QRectF(x0, 0, std::max(1.0, x1 - x0), height()), strip_);
+    if (markerEnd_ > markerStart_) {
+        const double a = xOf(markerStart_), b = xOf(markerEnd_);
+        p->setPen(QPen(Qt::white, 2));
+        p->setBrush(Qt::NoBrush);
+        p->drawRect(QRectF(a, 1, std::max(1.0, b - a), height() - 2));
+    }
+    if (playhead_ >= 0) {
+        const double x = xOf(double(playhead_));
         p->setPen(QPen(Qt::white, 2));
         p->drawLine(QPointF(x, 0), QPointF(x, height()));
     }

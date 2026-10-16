@@ -70,4 +70,22 @@ void SaveBookmarks(const std::filesystem::path& path, const std::vector<Bookmark
 // Replace metadata.chapters (sorted by start); endTime omitted when 0, empty -> null.
 void SaveChapters(const std::filesystem::path& path, const std::vector<Chapter>& chapters);
 
+// The marked range of a script (0.7 heatmap drag): loop, zoom selection,
+// O-marker and chapter from selection. Player state, not script data, so it
+// lives beside the script in "<script>.marker.json" ({"startMs":…,"endMs":…},
+// as 0.7 writes it).
+struct RangeMarker {
+    int64_t start_ms = 0;
+    int64_t end_ms = 0;
+    bool Valid() const { return end_ms > start_ms; }
+    bool operator==(const RangeMarker& o) const { return start_ms == o.start_ms && end_ms == o.end_ms; }
+};
+
+std::filesystem::path MarkerPath(const std::filesystem::path& script);
+// None when there is no file or it is unreadable / empty (a broken file
+// must not block playing).
+std::optional<RangeMarker> LoadMarker(const std::filesystem::path& script);
+// An invalid range (end <= start) removes the file, as in 0.7.
+void SaveMarker(const std::filesystem::path& script, RangeMarker marker);
+
 }  // namespace samn

@@ -158,19 +158,67 @@ private slots:
         QCOMPARE(c2.offsetMs(), 0);
     }
 
-    void loop() {
+    void loopOverMarkedRange() {
         QTemporaryDir d;
         writeFile(d.filePath("A.funscript"), zigzag());
+        {
+            PlayerController c;
+            QVERIFY(c.openScript(d.filePath("A.funscript")));
+            QVERIFY(!c.hasMarker());
+            QCOMPARE(c.markerLabel(), QString("(no selection)"));
+            QCOMPARE(c.loopJumpFor(5000), qint64(-1));
+            // A / B at the playhead mark the range; the loop only runs when on.
+            c.setLoopStart(1000);
+            c.setLoopEnd(3000);
+            QVERIFY(c.hasMarker());
+            QCOMPARE(c.markerLabel(), QString("Marked: 1.0s - 3.0s"));
+            QVERIFY(!c.loopActive());
+            QCOMPARE(c.loopJumpFor(3000), qint64(-1));
+            c.setLoopEnabled(true);
+            QVERIFY(c.loopActive());
+            QCOMPARE(c.loopJumpFor(2999), qint64(-1));
+            QCOMPARE(c.loopJumpFor(3000), qint64(1000));
+            // The range is script time: an offset moves the jump in video time.
+            c.setOffsetMs(500);
+            QCOMPARE(c.loopJumpFor(3499), qint64(-1));
+            QCOMPARE(c.loopJumpFor(3500), qint64(1500));
+            c.setOffsetMs(0);
+            // Saved beside the script as 0.7 does.
+            QVERIFY(QFile::exists(d.filePath("A.funscript.marker.json")));
+        }
+        {
+            PlayerController c;
+            QVERIFY(c.openScript(d.filePath("A.funscript")));
+            QCOMPARE(c.markerStartMs(), 1000.0);
+            QCOMPARE(c.markerEndMs(), 3000.0);
+            // A heatmap click (< 150 ms) seeks, a drag marks.
+            QCOMPARE(c.finishHeatmapDrag(4000, 4100), qint64(4000));
+            QCOMPARE(c.markerEndMs(), 3000.0);
+            QCOMPARE(c.finishHeatmapDrag(6000, 4000), qint64(-1));
+            QCOMPARE(c.markerStartMs(), 4000.0);
+            QCOMPARE(c.markerEndMs(), 6000.0);
+            c.zoomToSelection();
+            QCOMPARE(c.viewStartMs(), 3800.0);
+            QCOMPARE(c.viewEndMs(), 6200.0);
+            c.clearMarker();
+            QVERIFY(!c.hasMarker());
+            QVERIFY(!QFile::exists(d.filePath("A.funscript.marker.json")));
+            // Keys 1-9: n x 10 % of the timeline.
+            QCOMPARE(c.jumpTenthVideoMs(5), qint64(c.scriptDurationMs() / 2));
+        }
+    }
+
+    void sleepTimer() {
         PlayerController c;
-        QVERIFY(c.openScript(d.filePath("A.funscript")));
-        QCOMPARE(c.loopJumpFor(5000), qint64(-1));
-        c.setLoopStart(1000);
-        c.setLoopEnd(3000);
-        QVERIFY(c.loopActive());
-        QCOMPARE(c.loopJumpFor(2999), qint64(-1));
-        QCOMPARE(c.loopJumpFor(3000), qint64(1000));
-        c.clearLoop();
-        QCOMPARE(c.loopJumpFor(3500), qint64(-1));
+        QSignalSpy reached(&c, &PlayerController::sleepReached);
+        c.setSleepMinutes(0);
+        c.setPlaying(true);
+        QTest::qWait(1200);
+        QCOMPARE(reached.count(), 0);  // off
+        c.setPlaying(false);
+        QCOMPARE(c.sleepMinutes(), 0);
+        c.setSleepMinutes(15);
+        QCOMPARE(c.sleepMinutes(), 15);
     }
 
     void chaptersBookmarksHeatmapLanes() {

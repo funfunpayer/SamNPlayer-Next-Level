@@ -113,3 +113,23 @@ TEST_CASE("view window: zoom to a range with a margin") {
     CHECK(samn::ZoomToRange(100, 600, 60000) == samn::ViewWindow{0, 800});
     CHECK(samn::ZoomToRange(5, 5, 60000) == samn::FullView(60000));
 }
+
+TEST_CASE("timeline: ruler steps and labels as 0.7") {
+    // 60 s on 800 px: 1 s = 13 px, 5 s = 67 px, 10 s = 133 px -> 10 s.
+    CHECK(samn::RulerStepMs(60000, 800) == 10000);
+    CHECK(samn::RulerStepMs(10000, 800) == 1000);
+    CHECK(samn::RulerStepMs(3.6e6, 800) == 600000);
+    CHECK(samn::RulerStepMs(1e9, 800) == 3600000);
+    CHECK(samn::FormatRulerTime(0) == "00:00");
+    CHECK(samn::FormatRulerTime(65400) == "01:05");
+    CHECK(samn::FormatRulerTime(3725000) == "1:02:05");
+}
+
+TEST_CASE("timeline: tooltip time, with 0.7's tenths overflow fixed") {
+    CHECK(samn::FormatTooltipTime(0) == "0.0s");
+    CHECK(samn::FormatTooltipTime(12340) == "12.3s");
+    CHECK(samn::FormatTooltipTime(59960) == "1:00.0");
+    CHECK(samn::FormatTooltipTime(61960) == "1:02.0");  // 0.7: "1:01.10"
+    CHECK(samn::FormatTooltipTime(754300) == "12:34.3");
+    CHECK(samn::FormatTooltipTime(-5) == "0.0s");
+}

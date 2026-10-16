@@ -1,5 +1,6 @@
 #include <system_error>
 #include "samn/marks.h"
+#include "samn/fileio.h"
 
 #include <algorithm>
 #include <cerrno>
@@ -14,15 +15,6 @@
 #include <regex>
 #include <sstream>
 
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <windows.h>
-#else
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#endif
 
 namespace samn {
 
@@ -315,64 +307,6 @@ RawMap MetadataOf(const Doc& doc) {
     return SplitObject(it->second);
 }
 
-// Go writeFileAtomic: temp file in the same dir, fsync, replace.
-void WriteAtomic(const std::filesystem::path& path, const std::string& data) {
-    namespace fs = std::filesystem;
-    fs::path dir = path.parent_path();
-    if (dir.empty()) dir = ".";
-    const std::string prefix = "." + path.filename().string() + ".tmp-";
-#ifdef _WIN32
-    static unsigned counter = 0;
-    fs::path tmp = dir / (prefix + std::to_string(GetCurrentProcessId()) + "-" + std::to_string(++counter));
-    try {
-        {
-            std::ofstream o(tmp, std::ios::binary | std::ios::trunc);
-            o.write(data.data(), static_cast<std::streamsize>(data.size()));
-            o.flush();
-            if (!o) throw std::runtime_error("write failed");
-        }
-        if (!MoveFileExW(tmp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
-            throw std::runtime_error("MoveFileExW failed");
-    } catch (...) {
-        std::error_code ec;
-        fs::remove(tmp, ec);
-        throw;
-    }
-#else
-    std::string tmpl = (dir / (prefix + "XXXXXX")).string();
-    std::vector<char> buf(tmpl.begin(), tmpl.end());
-    buf.push_back('\0');
-    int fd = ::mkstemp(buf.data());
-    if (fd < 0) throw std::runtime_error(std::strerror(errno));
-    std::string tmp(buf.data());
-    auto fail = [&](const char* what) {
-        std::string msg = std::string(what) + ": " + std::strerror(errno);
-        if (fd >= 0) ::close(fd);
-        ::unlink(tmp.c_str());
-        throw std::runtime_error(msg);
-    };
-    if (::fchmod(fd, 0644) != 0) fail("fchmod");
-    size_t off = 0;
-    while (off < data.size()) {
-        ssize_t w = ::write(fd, data.data() + off, data.size() - off);
-        if (w < 0) {
-            if (errno == EINTR) continue;
-            fail("write");
-        }
-        off += static_cast<size_t>(w);
-    }
-    if (::fsync(fd) != 0) fail("fsync");
-    int cl = ::close(fd);
-    fd = -1;
-    if (cl != 0) fail("close");
-    std::error_code ec;
-    fs::rename(tmp, path, ec);
-    if (ec) {
-        ::unlink(tmp.c_str());
-        throw std::runtime_error(ec.message());
-    }
-#endif
-}
 
 // ---------------------------------------------------------------- wire decoding
 
@@ -509,7 +443,7 @@ void PatchMetadataKey(const std::filesystem::path& path, const std::string& key,
     doc.fields["metadata"] = MarshalObject(meta);
     const std::string out = MarshalObject(doc.fields);
     try {
-        WriteAtomic(path, out);
+        WriteFileAtomic(path, out);
     } catch (const std::exception& exc) {
         throw MarksError(std::string("funscript: Datei konnte nicht geschrieben werden: ") + exc.what());
     }
@@ -577,6 +511,38 @@ void SaveChapters(const std::filesystem::path& path, const std::vector<Chapter>&
         encoded += "]";
     }
     PatchMetadataKey(path, "chapters", encoded);
+}
+
+std::filesystem::path MarkerPath(const std::filesystem::path& script) {
+    std::filesystem::path p = script;
+    p += ".marker.json";
+    return p;
+}
+
+std::optional<RangeMarker> LoadMarker(const std::filesystem::path& script) {
+    std::ifstream in(MarkerPath(script), std::ios::binary);
+    if (!in) return std::nullopt;
+    try {
+        const json j = json::parse(in);
+        RangeMarker m{j.value("startMs", int64_t{0}), j.value("endMs", int64_t{0})};
+        if (!m.Valid()) return std::nullopt;
+        return m;
+    } catch (const json::exception&) {
+        return std::nullopt;
+    }
+}
+
+void SaveMarker(const std::filesystem::path& script, RangeMarker marker) {
+    const auto path = MarkerPath(script);
+    if (!marker.Valid()) {
+        std::error_code ec;
+        std::filesystem::remove(path, ec);
+        if (ec) throw std::runtime_error("cannot remove " + path.string() + ": " + ec.message());
+        return;
+    }
+    // Same bytes as Go's json.Marshal(Marker{...}).
+    WriteFileAtomic(path, "{\"startMs\":" + std::to_string(marker.start_ms) + ",\"endMs\":" +
+                              std::to_string(marker.end_ms) + "}");
 }
 
 }  // namespace samn

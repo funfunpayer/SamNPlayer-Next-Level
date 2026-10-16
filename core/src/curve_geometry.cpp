@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <map>
 
@@ -160,4 +161,36 @@ ViewWindow ZoomToRange(int64_t startMs, int64_t endMs, int64_t totalMs) {
     return ClampView({std::max<int64_t>(0, startMs - pad), std::min(totalMs, endMs + pad)}, totalMs);
 }
 
+int64_t RulerStepMs(double spanMs, double widthPx, double minPx) {
+    static const int64_t kSteps[] = {1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600};
+    for (int64_t s : kSteps) {
+        const double ms = static_cast<double>(s * 1000);
+        if (spanMs > 0 && ms / spanMs * widthPx >= minPx) return s * 1000;
+    }
+    return 3600 * 1000;
+}
+
+std::string FormatRulerTime(int64_t ms) {
+    const int64_t s = std::llround(static_cast<double>(std::max<int64_t>(0, ms)) / 1000.0);
+    const int64_t h = s / 3600, m = (s % 3600) / 60, sec = s % 60;
+    char buf[32];
+    if (h > 0) std::snprintf(buf, sizeof buf, "%lld:%02lld:%02lld", (long long)h, (long long)m, (long long)sec);
+    else std::snprintf(buf, sizeof buf, "%02lld:%02lld", (long long)m, (long long)sec);
+    return buf;
+}
+
+std::string FormatTooltipTime(int64_t ms) {
+    const int64_t tenths = std::llround(static_cast<double>(std::max<int64_t>(0, ms)) / 100.0);
+    char buf[32];
+    if (tenths < 600) {
+        std::snprintf(buf, sizeof buf, "%lld.%llds", (long long)(tenths / 10), (long long)(tenths % 10));
+    } else {
+        const int64_t secs = tenths / 10;
+        std::snprintf(buf, sizeof buf, "%lld:%02lld.%lld", (long long)(secs / 60), (long long)(secs % 60),
+                      (long long)(tenths % 10));
+    }
+    return buf;
+}
+
 }  // namespace samn
+

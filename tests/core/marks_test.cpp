@@ -1,6 +1,8 @@
 #include <doctest/doctest.h>
 
 #include <atomic>
+#include <cstdlib>
+#include <iterator>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -191,4 +193,23 @@ TEST_CASE("marks: errors") {
     WriteText(p, R"({"metadata":null})");
     CHECK(samn::LoadBookmarks(p).empty());
     CHECK(samn::LoadChapters(p).empty());
+}
+
+TEST_CASE("range marker: 0.7 sidecar file") {
+    const auto dir = std::filesystem::temp_directory_path() / ("samn_marker_" + std::to_string(std::rand()));
+    std::filesystem::create_directories(dir);
+    const auto script = dir / "clip.funscript";
+    CHECK_FALSE(samn::LoadMarker(script).has_value());
+    samn::SaveMarker(script, {1500, 4200});
+    std::ifstream in(dir / "clip.funscript.marker.json", std::ios::binary);
+    std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    CHECK(text == R"({"startMs":1500,"endMs":4200})");  // same bytes as Go
+    CHECK(samn::LoadMarker(script) == samn::RangeMarker{1500, 4200});
+    // An empty range removes it.
+    samn::SaveMarker(script, {10, 10});
+    CHECK_FALSE(std::filesystem::exists(dir / "clip.funscript.marker.json"));
+    // A broken file is ignored.
+    std::ofstream(dir / "clip.funscript.marker.json") << "{broken";
+    CHECK_FALSE(samn::LoadMarker(script).has_value());
+    std::filesystem::remove_all(dir);
 }

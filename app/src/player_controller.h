@@ -1,6 +1,8 @@
 #pragma once
 
+#include <QElapsedTimer>
 #include <QObject>
+#include <QTimer>
 #include <QPointer>
 #include <QUrl>
 #include <QVariantList>
@@ -11,6 +13,7 @@
 
 #include "samn/curve_geometry.h"
 #include "samn/funscript.h"
+#include "samn/marks.h"
 #include "samn/playback.h"
 #include "samn/settings.h"
 
@@ -42,7 +45,20 @@ class PlayerController : public QObject {
     Q_PROPERTY(int variantIndex READ variantIndex NOTIFY variantsChanged)
     Q_PROPERTY(QVariantList chapters READ chapters NOTIFY scriptChanged)
     Q_PROPERTY(QStringList scriptFolders READ scriptFolders NOTIFY scriptFoldersChanged)
+    // The marked range (0.7: drag on the heatmap), in script time; saved
+    // beside the script. Loop, zoom selection and the range tools use it.
+    Q_PROPERTY(bool hasMarker READ hasMarker NOTIFY markerChanged)
+    Q_PROPERTY(double markerStartMs READ markerStartMs NOTIFY markerChanged)
+    Q_PROPERTY(double markerEndMs READ markerEndMs NOTIFY markerChanged)
+    Q_PROPERTY(QString markerLabel READ markerLabel NOTIFY markerChanged)
+    // 0.7 "Loop selection": repeats the marked range while on.
+    Q_PROPERTY(bool loopEnabled READ loopEnabled WRITE setLoopEnabled NOTIFY loopChanged)
     Q_PROPERTY(bool loopActive READ loopActive NOTIFY loopChanged)
+    // Live channel values at the playhead, 0-100 (0.7 "Vibration n / Suction n").
+    Q_PROPERTY(int vibrationNow READ vibrationNow NOTIFY playheadMsChanged)
+    Q_PROPERTY(int suctionNow READ suctionNow NOTIFY playheadMsChanged)
+    // Sleep timer: stops playing after this many minutes of play (0 = off).
+    Q_PROPERTY(int sleepMinutes READ sleepMinutes WRITE setSleepMinutes NOTIFY sleepChanged)
     // False: the lane is the device preview from the stroke (mapper), not
     // a channel the script carries.
     Q_PROPERTY(bool vibrationFromScript READ vibrationFromScript NOTIFY scriptChanged)
@@ -54,7 +70,7 @@ class PlayerController : public QObject {
     Q_PROPERTY(QString zoomLabel READ zoomLabel NOTIFY viewChanged)
 public:
     static constexpr int kOffsetLimitMs = 10000;
-    static constexpr int kHeatmapBuckets = 240;
+    static constexpr int kHeatmapBuckets = 300;  // 0.7 HEATMAP_BUCKETS
     static constexpr const char* kScriptFoldersKey = "library.script_folders";
 
     explicit PlayerController(QObject* parent = nullptr);
@@ -67,12 +83,27 @@ public:
     Q_INVOKABLE bool chooseVariant(int index);
     Q_INVOKABLE void addScriptFolder(const QString& pathOrUrl);
     Q_INVOKABLE void setVideoPositionMs(qint64 videoMs);
-    // Where the player should seek to: the loop start once the loop end is
-    // reached, else -1.
+    // Where the player should seek to (video time): the marked range's start
+    // once its end is reached while the loop is on, else -1.
     Q_INVOKABLE qint64 loopJumpFor(qint64 videoMs) const;
+    // A / B at the playhead (video time) set the marked range's ends.
     Q_INVOKABLE void setLoopStart(qint64 videoMs);
     Q_INVOKABLE void setLoopEnd(qint64 videoMs);
-    Q_INVOKABLE void clearLoop();
+    // Marked range in script time; an empty range clears it.
+    Q_INVOKABLE void setMarker(double startMs, double endMs);
+    Q_INVOKABLE void clearMarker();
+    Q_INVOKABLE void zoomToSelection();
+    // Script time at a fraction (0-1) of the timeline's width.
+    Q_INVOKABLE double msAtFraction(double fraction) const;
+    // A heatmap drag ended: a range longer than 150 ms is marked (returns
+    // -1); a shorter one is a click and returns the video time to seek to.
+    Q_INVOKABLE qint64 finishHeatmapDrag(double startMs, double endMs);
+    // Video time of n x 10 % of the timeline (keys 1-9).
+    Q_INVOKABLE qint64 jumpTenthVideoMs(int n) const;
+    // The player reports play / pause for the sleep timer.
+    Q_INVOKABLE void setPlaying(bool playing);
+    // Tooltip text for the heatmap at a script time: "12.3s · 45%".
+    Q_INVOKABLE QString heatTooltip(double ms) const;
     // Video time of a chapter's start (script time + offset).
     Q_INVOKABLE qint64 chapterVideoMs(int index) const;
     Q_INVOKABLE void attachCurve(samn::ui::CurveItem* curve);
@@ -103,7 +134,17 @@ public:
     int variantIndex() const { return variantIndex_; }
     QVariantList chapters() const { return chapters_; }
     QStringList scriptFolders() const;
-    bool loopActive() const { return loop_.has_value(); }
+    bool hasMarker() const { return marker_.Valid(); }
+    double markerStartMs() const { return double(marker_.start_ms); }
+    double markerEndMs() const { return double(marker_.end_ms); }
+    QString markerLabel() const;
+    bool loopEnabled() const { return loopEnabled_; }
+    void setLoopEnabled(bool on);
+    bool loopActive() const { return loopEnabled_ && marker_.Valid(); }
+    int vibrationNow() const;
+    int suctionNow() const;
+    int sleepMinutes() const { return sleepMinutes_; }
+    void setSleepMinutes(int minutes);
     bool vibrationFromScript() const { return vibrationFromScript_; }
     bool suctionFromScript() const { return suctionFromScript_; }
     double viewStartMs() const { return double(view_.start_ms); }
@@ -126,6 +167,10 @@ signals:
     void scriptFoldersChanged();
     void loopChanged();
     void viewChanged();
+    void markerChanged();
+    void sleepChanged();
+    // The sleep timer ran out: the player stops.
+    void sleepReached();
 
 private:
     void setVideo(const QString& path);
@@ -149,7 +194,13 @@ private:
     qint64 videoDurationMs_ = 0;
     samn::ViewWindow view_;
     qint64 videoMs_ = 0, playheadMs_ = -1;
-    std::optional<samn::LoopRange> loop_;
+    samn::RangeMarker marker_;
+    std::optional<int64_t> pendingStart_;  // A pressed, B not yet
+    bool loopEnabled_ = false;
+    int sleepMinutes_ = 0;
+    qint64 playedMs_ = 0;
+    QElapsedTimer playClock_;
+    QTimer sleepTimer_;
     std::vector<QPointer<CurveItem>> curves_;
     QPointer<HeatmapItem> heatmap_;
 };
