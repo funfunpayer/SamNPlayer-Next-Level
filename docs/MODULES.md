@@ -33,6 +33,7 @@ Functions use PascalCase and struct fields use snake_case.
 | `project.h` | Project sidecar `<name>.snp.json` (offset, seek, loop marker, bookmarks, chapters): `ProjectPathFor`, `SaveProject`, `LoadProject` | Go `funscript/project.go` | ✅ file byte-identical with Go |
 | `range_edit.h` | Editor range tools: `SnapMs`, `DeleteRange`, `CapSpeedRange`, `ScaleRangePos`, `ScaleRangePosFade` (errors as `RangeEditError`) | Go `funscript/project.go` | ✅ Go tests ported |
 | `heatmap_image.h` | Heatmap as an RGBA buffer (buckets, colours, chapter ticks); the app encodes the PNG | Go `funscript/heatmap_png.go` | ✅ pixels identical with Go |
+| `playlist.h` | Play list: replace, add, remove, pick, Next, Auto-advance, Shuffle (current first), Repeat (reshuffled cycle) | 0.7 `playback.js` playlist | ✅ tests |
 
 **Open cleanups:**
 - `script_finder`/`settings`/`playback` use snake_case function names; rename them to PascalCase.
