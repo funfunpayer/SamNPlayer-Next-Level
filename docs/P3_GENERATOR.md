@@ -58,7 +58,7 @@ Each item is measured on the golden clips before it becomes a default. The Owner
 | P3.8 | Comparison controller (the Owner's "Vergleich Controller"): runs 0.7 and SamNPlayer 2 on the same clips and reports score, peaks, timing differences | A report per clip in `docs/benchmarks/` (numbers only, no media) |
 | P3.9 | Better detection items 3–6, each behind a switch until the benchmark shows it beats 0.7 | Benchmark |
 
-The Editor itself (dot editing, range tools, Undo, multi-axis, E1–E10) is P4. P3.3 already opens the Generator's result in it, so the Editor is built once and shared by the Player's Edit view and the Generator's Review step.
+The Generator and the Editor are one mode (Owner 16 Oct, D-137): the same page creates a script and edits it, and a script opened for editing lands there with editing on. The full Editor (dot editing, range tools, Undo, multi-axis, E1–E10) is P4 and is built into that page; P3.3 already edits the Generator's result there.
 
 ## Rules carried over
 

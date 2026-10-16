@@ -21,7 +21,7 @@ Item {
         if (w) w.visibility = fullStage ? Window.FullScreen : Window.Windowed
     }
     property bool muted: false
-    // The mode deck uses 1-5 while it is open.
+    // The mode deck uses its number keys while it is open.
     property bool deckOpen: false
 
     PlayerController {
@@ -184,7 +184,7 @@ Item {
             FlowButton {
                 id: openBtn
                 anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
-                primary: true; icon: "folder"; text: qsTr("Open…")
+                primary: !page.empty; icon: "folder"; text: qsTr("Open…")
                 onClicked: page.openFile()
             }
         }
@@ -206,45 +206,29 @@ Item {
             }
         }
 
-        // Empty state (0.7 pb-empty).
+        // Empty state (Owner 15 Oct, 0.8 #550): one real round Play button,
+        // "Open…" under it, centred. No wordmark or stage art.
         Column {
             id: emptyState
             visible: page.empty
             anchors.centerIn: parent
-            width: Math.min(parent.width - 40, 560)
-            spacing: 10
-            FlowStage {
+            spacing: 18
+            PlayButton {
+                objectName: "emptyPlay"
                 anchors.horizontalCenter: parent.horizontalCenter
-                width: Math.min(420, parent.width * 0.8); height: width * 9 / 16
-                state_: "idle"
-            }
-            Row {
-                anchors.horizontalCenter: parent.horizontalCenter
-                Text { text: "Sam"; color: Theme.orange; font.family: Theme.font; font.pixelSize: 34; font.weight: Font.DemiBold }
-                Text { text: "N"; color: Theme.cyan; font.family: Theme.font; font.pixelSize: 34; font.weight: Font.DemiBold }
-                Text { text: "Player"; color: Theme.orange; font.family: Theme.font; font.pixelSize: 34; font.weight: Font.DemiBold }
-            }
-            Text {
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: qsTr("PLAY"); color: Theme.cyan
-                font.family: Theme.fontSoft; font.pixelSize: 12; font.letterSpacing: 3
-            }
-            Text {
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: qsTr("Ready when you are"); color: Theme.text
-                font.family: Theme.font; font.pixelSize: 24
-            }
-            Text {
-                width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap
-                text: qsTr("Open a video or a script — or drop one here. A video finds its script by itself; without one, SamNPlayer creates it. Other apps’ files are welcome too.")
-                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 14
-            }
-            Item { width: 1; height: 6 }
-            FlowButton {
-                anchors.horizontalCenter: parent.horizontalCenter
-                primary: true; icon: "folder"; text: qsTr("Open…")
-                implicitHeight: 46; implicitWidth: 180
+                width: 168; height: 168
                 onClicked: page.openFile()
+            }
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: qsTr("Open…"); color: emptyOpen.containsMouse ? "white" : Theme.text
+                font.family: Theme.font; font.pixelSize: 20; font.weight: Font.DemiBold
+                MouseArea {
+                    id: emptyOpen
+                    anchors.fill: parent; anchors.margins: -8
+                    hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                    onClicked: page.openFile()
+                }
             }
         }
         // Video card: stage + transport.

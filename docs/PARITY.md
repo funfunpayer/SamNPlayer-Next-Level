@@ -151,12 +151,12 @@ Source of truth: `cmd/gui-wails/main.go`, `frontend/index.html`, `frontend/src/m
 - [ ] `pb:loaded` window event clears the pending "no script" state (open_media.js:274)
 - [ ] Drop/`openPair(video, script)` and `openPath` exposed to main.js (open_media.js:276)
 
-## 3. Player and Editor (Player, Editor and Scene Map share `#tab-playback`; Editor = Player "edit" view)
+## 3. Player and Editor (Player, Editor and Scene Map share `#tab-playback`; Editor = Player "edit" view; in SamNPlayer 2 the Editor lives in the Generator mode, D-137)
 
 ### 3.1 Player layout and chrome (`playback.js` template 31-609, `player_layout.js`)
 
 - [ ] Header — "Player" title + script path label ("No Emotion Script selected"), primary "Open…" button (tooltip "Open a video or a script (Ctrl+O)"), "Add to list" button (visible only when a script is loaded) (playback.js:32-41)
-- [x] Empty state "Ready when you are" — animated Flow stage host + wordmark, kicker "Play", hint text, big "Open…" button; hidden when a script is loaded (playback.js:43-56, 787-793) → SamN2: PlayerPage empty state + FlowStage.qml (animated as flow_fx.js)
+- [x] Empty state (superseded in 0.8 by #550, Owner 15 Oct): one large round Play button with **Open…** under it, centred; no wordmark, kicker, hint or stage art; same click opens a video or a script; hidden when a script or video is loaded (0.8 playback.js `#pb-empty`, `.flow-play`) → SamN2: PlayerPage empty state with PlayButton (D-138). The 0.7 Flow stage stays for "Feel without film" only.
 - [ ] State flag `data-pb-state` = empty | loaded; `pb-empty` vs `pb-loaded` toggled (playback.js:787-793)
 - [ ] Video stage — native `<video controls playsinline>`, trajectory canvas overlay, 0-100 position gauge overlay, chrome buttons (Fullscreen "(double-click)", "Video…" choose another, "Make playable" shown only when needed), video warning box, keys hint line "Space play/pause · ←/→ seek · ,/. fine · +/- offset · E Extended-O · Esc leave fullscreen" (playback.js:60-79)
 - [x] 0-100 position gauge on video — vertical track with fill + knob + numeric value ("—" when unknown), scale 100/50/0, follows playhead / live device pos; toggle "0–100 on video" (default on, localStorage `samn.pbPosOverlay` '1'/'0'); row only shown when a curve exists (playback.js:63-72,749-785) → SamN2: PositionGauge.qml, PlayerController::posOverlay
@@ -809,3 +809,19 @@ Note: `BootstrapRoiTrainingSampleEx` / `BootstrapRoiTrainingRegions` have multi-
 - [ ] `ApplyPatch() error` — ApplyPatch downloads the latest applicable patch (same safety as ApplyUpdate) and restarts. (cmd/gui-wails/app_update.go:107)
 - [ ] `CurrentVersion() string` — current version (cmd/gui-wails/app_update.go:135)
 - [ ] `SuggestBenchmarkPairBesideVideo(videoPath string) (BenchmarkPairSuggestion, error)` — SuggestBenchmarkPairBesideVideo looks next to a clip (and one level of subdirs like mit_yolo/) for related .funscript files and picks a Ref + Candidate pair using golden naming. (cmd/gui-wails/benchmark_pair_suggest.go:32)
+
+## 9. After 0.7.0: what landed in the old repo since (checked 16 Oct 2026)
+
+Source: `funfunpayer/SamNPlayer` `main` up to #553, plus open branches. Everything here comes along.
+
+- [x] Script folders, tolerant names, variants (#546) → SamN2: `core/include/samn/script_finder.h` (UI items in §2.7)
+- [x] Stroker motion filter: smooth PCHIP / rounder MAKIMA, speed limit, fill pauses, home on pause (#547) → SamN2: `core/include/samn/stroke_filter.h` (UI and live output with P2, §8.3)
+- [ ] Stroke filter fixes (#549): all four prefs saved in one write; pausing during the soft-start ramp stops and homes the stroker; input sorted and deduped (dedupe ✅ in `stroke_filter.cpp`; the pause/home rule with the P2 stroker output)
+- [x] Cock Hero / Fap Hero beat bar → one stroke per beat (#552) → SamN2: `beatbar.h`, `beat_strokes.h` (UI "From the beat bar" in §2.7)
+- [ ] MEDIA-01 (#553): an MP4 whose codec cannot be read is "unknown", never assumed h264, so "Make playable" is offered (P1 open-media / P3 video layer)
+- [ ] D14 (#553): Suite files are never published with a public release (release workflow, when SamNPlayer 2 gets one)
+- [x] Empty Player = round Play button + Open… (#550) → SamN2: PlayerPage (D-138)
+- [ ] Silk look (#550): slow drifting silk layers behind the Training stage and the Player video area, stronger glow on rings and lanes, a soft breathing pulse on the Mode pill; all off with reduced motion
+- [ ] Training rings closer to the mockup: glow gauges, silk between rings, centre name / % / wave (#550, P4 Training)
+- [ ] Training categories, level programs, body cues, session recap (branch `cursor/training-levels-recap-8d66`, not merged in the old repo yet; P4 Training)
+- [x] Generator with editor (0.7 #540, `gen_editor.js`) → SamN2: one mode, the Generator is the Editor (D-137)

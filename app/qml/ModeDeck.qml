@@ -1,7 +1,8 @@
 import QtQuick
 import SamN
 
-// "Choose a mode": five cards, keys 1-5, Esc closes. Fades and scales in.
+// "Choose a mode": one card per mode, keys 1-4, Esc closes. Fades and scales in.
+// Generator and Editor are one mode (Owner 16 Oct, D-137).
 Item {
     id: root
     property int current: 0
@@ -9,8 +10,7 @@ Item {
     signal chosen(int index)
     readonly property var modes: [
         { name: qsTr("Player"), text: qsTr("Play scripts with video\nand your device"), color: Theme.cyan, icon: "player" },
-        { name: qsTr("Editor"), text: qsTr("Edit points, axes and\ncurves"), color: "#a07cf0", icon: "edit" },
-        { name: qsTr("Generator"), text: qsTr("Create a script from a\nvideo"), color: Theme.orange, icon: "create" },
+        { name: qsTr("Generator"), text: qsTr("Create a script from a\nvideo and edit it"), color: Theme.orange, icon: "create" },
         { name: qsTr("Training"), text: qsTr("Guided sessions with\nlive curves"), color: Theme.blue, icon: "training" },
         { name: qsTr("Scene Map"), text: qsTr("Scenes, chapters and\nrhythm"), color: "#2fd6a8", icon: "scenemap" }
     ]
@@ -38,7 +38,7 @@ Item {
         }
         Text {
             anchors.right: parent.right; anchors.rightMargin: 22; y: 18
-            text: "1–5 · ESC"; color: Theme.textMuted; font.pixelSize: 11
+            text: "1–" + root.modes.length + " · ESC"; color: Theme.textMuted; font.pixelSize: 11
         }
         Row {
             x: 18; y: 48
@@ -48,7 +48,7 @@ Item {
                 delegate: Rectangle {
                     required property var modelData
                     required property int index
-                    width: (deck.width - 36 - 4 * 12) / 5; height: 178; radius: 16
+                    width: (deck.width - 36 - (root.modes.length - 1) * 12) / root.modes.length; height: 178; radius: 16
                     color: index === root.current ? Qt.rgba(0, 120 / 255, 1, 0.18) : Qt.rgba(1, 1, 1, cardArea.containsMouse ? 0.05 : 0.02)
                     border.width: index === root.current ? 1.5 : 1
                     border.color: index === root.current ? Theme.cyan : Theme.cardBorder

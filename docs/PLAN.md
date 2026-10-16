@@ -40,8 +40,8 @@ Releases are built with Qt 6.7 or later and its FFmpeg multimedia backend. Devel
 | **P0** | Repo, CI on Linux and Windows, core library | ✅ |
 | **P1 Player** | Video first; script search, variants and folders; video and curve sync; heatmap; chapters and bookmarks; offset; loop; shortcuts; `.samn`; Flow look with mode deck and animated Play button | **In progress.** Core ✅ (all P1 logic ported to C++, 50 test cases). QML shell ✅: top bar, mode deck, Player page with video, transport, curve and offset. Next: library and inspector panels, heatmap and lanes, variants and chapters in the UI, styled controls, the no-script card. |
 | **P2 Devices** | Sam Neo 2 over BLE (Qt Bluetooth), mock device, sync loop, stroker filter, audio vibration, training mode, device profiles | open, then the **Owner hardware test** |
-| **P3 Generator** | Everything of 0.7's Generator in C++ with the Editor built in, and better detection: plan in [`P3_GENERATOR.md`](P3_GENERATOR.md) (steps P3.0–P3.9, D-133 to D-136) | open |
-| **P4 Editor and the rest** | Full editor (E1–E10), Training, Scene Map, library, settings, AI helpers, OFS import, plugins, updater | open |
+| **P3 Generator** | Everything of 0.7's Generator in C++; the Generator **is** the Editor (one mode, D-137), and better detection: plan in [`P3_GENERATOR.md`](P3_GENERATOR.md) (steps P3.0–P3.9, D-133 to D-136) | open |
+| **P4 Editor and the rest** | Full editor (E1–E10) inside the Generator mode, Training, Scene Map, library, settings, AI helpers, OFS import, plugins, updater | open |
 | **P5 Release** | Installers for Windows and Linux, the updater switch, the release workflow; then the old Go app is archived | open |
 | **Last** | A bug hunt across all modes (the Owner's request), before the first release | open |
 
