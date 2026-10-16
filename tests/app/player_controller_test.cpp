@@ -337,6 +337,16 @@ private slots:
         QCOMPARE(bands[0].toMap().value("endMs").toLongLong(), 4000LL);
         QCOMPARE(bands[1].toMap().value("index").toInt(), 1);
         QVERIFY(bands[1].toMap().value("tip").toString().startsWith(QStringLiteral("Main · 0:04–0:10")));
+        // Scene marker at video 6.2 s = script 6.0 s: cuts "Main" (4-10 s).
+        QVERIFY(c.addSceneMarker(6200));
+        QCOMPARE(c.chapters().size(), 3);
+        QCOMPARE(c.chapters()[1].toMap().value("endMs").toLongLong(), 6000LL);
+        QCOMPARE(c.chapters()[2].toMap().value("name").toString(), QStringLiteral("Scene 3"));
+        QVERIFY(!c.addSceneMarker(6300));  // within 250 ms
+        QCOMPARE(c.lastError(), QStringLiteral("A scene marker is already here."));
+        PlayerController again;  // saved into the script
+        QVERIFY(again.openScript(d.filePath("C.funscript")));
+        QCOMPARE(again.chapters().size(), 3);
         QVERIFY(!stroke.empty() && !vib.empty() && !suc.empty() && !heat.empty());
         for (float v : heat.values()) QVERIFY(v >= 0.0f && v <= 1.0f);
     }

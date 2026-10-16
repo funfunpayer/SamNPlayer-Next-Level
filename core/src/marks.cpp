@@ -618,4 +618,19 @@ std::vector<ChapterRange> ChapterRanges(std::vector<Chapter> chapters, int64_t t
     return out;
 }
 
+std::optional<std::vector<Chapter>> AddSceneMarker(const std::vector<Chapter>& chapters, int64_t at_ms) {
+    const int64_t t = std::max<int64_t>(0, at_ms);
+    int64_t next_start = 0;
+    for (const auto& c : chapters) {
+        if (std::llabs(c.start_ms - t) < kSceneMarkerMinGapMs) return std::nullopt;
+        if (c.start_ms > t && (next_start == 0 || c.start_ms < next_start)) next_start = c.start_ms;
+    }
+    std::vector<Chapter> next = chapters;
+    for (auto& c : next)
+        if (c.start_ms < t && (c.end_ms == 0 || c.end_ms > t)) c.end_ms = t;
+    next.push_back({"Scene " + std::to_string(chapters.size() + 1), t, next_start});
+    std::stable_sort(next.begin(), next.end(), [](const Chapter& a, const Chapter& b) { return a.start_ms < b.start_ms; });
+    return next;
+}
+
 }  // namespace samn

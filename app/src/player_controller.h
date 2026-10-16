@@ -134,6 +134,9 @@ public:
     Q_INVOKABLE qint64 bookmarkVideoMs(int index) const;
     // Chapters: from the marked range; name default "Chapter".
     Q_INVOKABLE bool addChapterFromSelection(const QString& name);
+    // Scene marker at a video time (0.7 addSceneMarkerAt): a chapter start
+    // "Scene <n>"; the chapter around it is cut there.
+    Q_INVOKABLE bool addSceneMarker(qint64 videoMs);
     Q_INVOKABLE bool renameChapter(int index, const QString& name);
     Q_INVOKABLE bool removeChapter(int index);
     // O-markers: from the marked range; "primary" (intensity 1) or

@@ -521,11 +521,12 @@ Item {
                 Item {
                     id: chapterStrip
                     width: parent.width; height: 30
-                    visible: ctrl.hasScript && ctrl.chapterBands.length > 0
+                    visible: ctrl.hasScript
                     clip: true
                     readonly property var colors: [Qt.rgba(47 / 255, 128 / 255, 237 / 255, 0.45), Qt.rgba(242 / 255, 140 / 255, 40 / 255, 0.45),
                                                    Qt.rgba(155 / 255, 81 / 255, 224 / 255, 0.45), Qt.rgba(39 / 255, 174 / 255, 160 / 255, 0.45),
                                                    Qt.rgba(86 / 255, 140 / 255, 220 / 255, 0.38)]
+                    readonly property var solid: ["#2f80ed", "#f28c28", "#9b51e0", "#27aea0", "#568cdc"]
                     readonly property real span: Math.max(1, ctrl.viewEndMs - ctrl.viewStartMs)
                     Repeater {
                         model: ctrl.chapterBands
@@ -541,7 +542,7 @@ Item {
                             color: chapterStrip.colors[modelData.index % 5]
                             border.width: 1; border.color: current ? "white" : "transparent"
                             Text {
-                                anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 4
+                                anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 4
                                 verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
                                 text: modelData.name; color: parent.current ? "white" : "#e9f4ff"
                                 font.family: Theme.fontSoft; font.pixelSize: 12
@@ -553,6 +554,37 @@ Item {
                                 onExited: chartTip.visible = false
                                 onClicked: page.seekTo(modelData.startMs + ctrl.offsetMs)
                             }
+                            // Scene marker (0.7 pb-scene-mark): a diamond at the chapter start.
+                            Rectangle {
+                                visible: modelData.startMs >= ctrl.viewStartMs
+                                x: -5; anchors.verticalCenter: parent.verticalCenter
+                                width: 10; height: 10; rotation: 45
+                                color: chapterStrip.solid[modelData.index % 5]
+                                border.width: 1; border.color: "white"
+                            }
+                        }
+                    }
+                    Text {
+                        anchors.left: parent.left; anchors.leftMargin: 8; anchors.verticalCenter: parent.verticalCenter
+                        visible: ctrl.chapterBands.length === 0
+                        text: qsTr("No chapters yet — + adds a scene marker at the playhead.")
+                        color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
+                    }
+                    // "+" (0.7 pb-scene-add): a scene marker at the playhead.
+                    Rectangle {
+                        id: sceneAdd
+                        anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                        width: 26; height: 26; radius: 13
+                        color: addArea.containsMouse ? Qt.rgba(0, 217 / 255, 244 / 255, 0.3) : "#0a2340"
+                        border.width: 1; border.color: Theme.cyan
+                        Icon { anchors.centerIn: parent; name: "plus"; color: Theme.cyan; width: 14; height: 14 }
+                        MouseArea {
+                            id: addArea
+                            anchors.fill: parent; hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onPositionChanged: (m) => page.showTip(sceneAdd, m.x, m.y, qsTr("Add a scene marker at the playhead (starts a chapter)"))
+                            onExited: chartTip.visible = false
+                            onClicked: ctrl.addSceneMarker(ctrl.playheadMs + ctrl.offsetMs)
                         }
                     }
                 }
