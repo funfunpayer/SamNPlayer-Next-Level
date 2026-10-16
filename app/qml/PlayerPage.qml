@@ -282,6 +282,10 @@ Item {
                 radius: Theme.radius
                 color: "#02070f"
                 clip: true
+                // Silk drifts behind the video (0.8 #550); the video covers
+                // it where it plays, the bands show in the letterbox and
+                // when there is no video.
+                SilkLayer { running: stage.visible && Qt.application.state === Qt.ApplicationActive }
                 VideoOutput {
                     id: videoOut
                     anchors.fill: parent
