@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Window
 import QtQuick.Dialogs
 import QtMultimedia
 import SamN
@@ -11,6 +12,14 @@ Item {
     property alias controller: ctrl
 
     property real speed: 1.0
+    // Nothing open yet: the Flow stage welcomes (0.7 "Ready when you are").
+    readonly property bool empty: !ctrl.hasScript && ctrl.videoName === ""
+    // Video fullscreen (0.7: button, double-click, Esc leaves).
+    property bool fullStage: false
+    onFullStageChanged: {
+        const w = page.Window.window
+        if (w) w.visibility = fullStage ? Window.FullScreen : Window.Windowed
+    }
     property bool muted: false
     // The mode deck uses 1-5 while it is open.
     property bool deckOpen: false
@@ -89,6 +98,7 @@ Item {
     }
     LibraryPanel {
         id: libraryPanel
+        visible: !page.fullStage
         anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom
         library: library
         currentPath: ctrl.scriptPath
@@ -101,6 +111,7 @@ Item {
     }
     InspectorPanel {
         id: inspector
+        visible: !page.fullStage
         anchors.right: parent.right; anchors.top: parent.top; anchors.bottom: parent.bottom
         ctrl: ctrl
         collapsed: ctrl.uiValue("player.inspectorCollapsed", false)
@@ -109,13 +120,14 @@ Item {
     }
     Item {
         id: center
-        anchors.left: libraryPanel.right; anchors.leftMargin: 14
-        anchors.right: inspector.left; anchors.rightMargin: 14
+        anchors.left: page.fullStage ? parent.left : libraryPanel.right; anchors.leftMargin: page.fullStage ? 0 : 14
+        anchors.right: page.fullStage ? parent.right : inspector.left; anchors.rightMargin: page.fullStage ? 0 : 14
         anchors.top: parent.top; anchors.bottom: parent.bottom
 
         // Header: what is open, the script variant, Open.
         Item {
             id: header
+            visible: !page.fullStage
             width: parent.width; height: 40
             Text {
                 anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
@@ -140,7 +152,7 @@ Item {
             // Video bar (0.7 v1): link a video, bookmark, snapshot.
             Row {
                 id: videoBar
-                anchors.right: openBtn.left; anchors.rightMargin: 10; anchors.verticalCenter: parent.verticalCenter
+                anchors.right: fsBtn.visible ? fsBtn.left : openBtn.left; anchors.rightMargin: 10; anchors.verticalCenter: parent.verticalCenter
                 spacing: 8
                 visible: ctrl.hasScript
                 FlowButton {
@@ -160,6 +172,14 @@ Item {
                         snapshotDialog.open()
                     }
                 }
+            }
+            IconButton {
+                id: fsBtn
+                anchors.right: openBtn.left; anchors.rightMargin: 8; anchors.verticalCenter: parent.verticalCenter
+                width: 36; height: 36; icon: page.fullStage ? "minimize" : "fullscreen"
+                tip: qsTr("Fullscreen (double-click the video)")
+                visible: ctrl.videoName !== ""
+                onClicked: page.fullStage = !page.fullStage
             }
             FlowButton {
                 id: openBtn
@@ -186,12 +206,54 @@ Item {
             }
         }
 
+        // Empty state (0.7 pb-empty).
+        Column {
+            id: emptyState
+            visible: page.empty
+            anchors.centerIn: parent
+            width: Math.min(parent.width - 40, 560)
+            spacing: 10
+            FlowStage {
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: Math.min(420, parent.width * 0.8); height: width * 9 / 16
+                state_: "idle"
+            }
+            Row {
+                anchors.horizontalCenter: parent.horizontalCenter
+                Text { text: "Sam"; color: Theme.orange; font.family: Theme.font; font.pixelSize: 34; font.weight: Font.DemiBold }
+                Text { text: "N"; color: Theme.cyan; font.family: Theme.font; font.pixelSize: 34; font.weight: Font.DemiBold }
+                Text { text: "Player"; color: Theme.orange; font.family: Theme.font; font.pixelSize: 34; font.weight: Font.DemiBold }
+            }
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: qsTr("PLAY"); color: Theme.cyan
+                font.family: Theme.fontSoft; font.pixelSize: 12; font.letterSpacing: 3
+            }
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: qsTr("Ready when you are"); color: Theme.text
+                font.family: Theme.font; font.pixelSize: 24
+            }
+            Text {
+                width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap
+                text: qsTr("Open a video or a script — or drop one here. A video finds its script by itself; without one, SamNPlayer creates it. Other apps’ files are welcome too.")
+                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 14
+            }
+            Item { width: 1; height: 6 }
+            FlowButton {
+                anchors.horizontalCenter: parent.horizontalCenter
+                primary: true; icon: "folder"; text: qsTr("Open…")
+                implicitHeight: 46; implicitWidth: 180
+                onClicked: page.openFile()
+            }
+        }
         // Video card: stage + transport.
         GlassCard {
             id: videoCard
-            anchors.top: errorBar.bottom; anchors.topMargin: 10
+            visible: !page.empty
+            anchors.top: page.fullStage ? parent.top : errorBar.bottom; anchors.topMargin: page.fullStage ? 0 : 10
             width: parent.width
-            height: Math.max(300, (parent.height - header.height) * 0.58)
+            height: page.fullStage ? parent.height : Math.max(300, (parent.height - header.height) * 0.58)
             Rectangle {
                 id: stage
                 anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
@@ -204,6 +266,16 @@ Item {
                     id: videoOut
                     anchors.fill: parent
                     visible: ctrl.videoName !== ""
+                }
+                MouseArea {
+                    anchors.fill: parent
+                    enabled: ctrl.videoName !== ""
+                    onDoubleClicked: page.fullStage = !page.fullStage
+                }
+                PositionGauge {
+                    anchors.right: parent.right; anchors.rightMargin: 14; anchors.verticalCenter: parent.verticalCenter
+                    visible: ctrl.hasScript && ctrl.posOverlay
+                    value: ctrl.playheadMs >= 0 ? ctrl.strokeNow : -1
                 }
                 Column {
                     anchors.centerIn: parent
@@ -353,6 +425,7 @@ Item {
         // Timeline card: the curve, the channel lanes and the audio level.
         GlassCard {
             id: timeline
+            visible: !page.empty && !page.fullStage
             anchors.top: videoCard.bottom; anchors.topMargin: 12
             anchors.bottom: parent.bottom
             width: parent.width
@@ -673,4 +746,5 @@ Item {
         }
     }
     Shortcut { sequence: StandardKey.Open; onActivated: page.openFile() }
+    Shortcut { sequence: "Esc"; enabled: page.fullStage; onActivated: page.fullStage = false }
 }

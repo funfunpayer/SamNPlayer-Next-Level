@@ -593,6 +593,16 @@ void PlayerController::setAudioLane(bool on) {
     emit viewOptionsChanged();
 }
 
+bool PlayerController::posOverlay() const {
+    return const_cast<PlayerController*>(this)->uiValue(QStringLiteral("player.posOverlay"), true).toBool();
+}
+
+void PlayerController::setPosOverlay(bool on) {
+    if (on == posOverlay()) return;
+    setUiValue(QStringLiteral("player.posOverlay"), on);
+    emit viewOptionsChanged();
+}
+
 int PlayerController::vibrationNow() const {
     if (playheadMs_ < 0) return 0;
     return int(std::lround(samn::PositionAt(vibration_, playheadMs_).value_or(0)));
