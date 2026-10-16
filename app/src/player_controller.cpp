@@ -10,6 +10,7 @@
 #include <filesystem>
 
 #include "curve_item.h"
+#include "device_controller.h"
 #include "heatmap_item.h"
 #include "samn/mapper.h"
 #include "samn/marks.h"
@@ -38,7 +39,8 @@ std::vector<samn::Action> laneFrom(const std::vector<samn::Frame>& frames, bool 
 
 }  // namespace
 
-PlayerController::PlayerController(QObject* parent) : QObject(parent) {
+PlayerController::PlayerController(QObject* parent) : QObject(parent), output_(&settings()) {
+    connect(&output_, &PlaybackOutput::emergencyStopped, this, &PlayerController::emergencyStopped);
     sleepTimer_.setInterval(1000);
     connect(&sleepTimer_, &QTimer::timeout, this, [this] {
         if (sleepMinutes_ <= 0 || !playClock_.isValid()) return;
@@ -51,6 +53,31 @@ PlayerController::PlayerController(QObject* parent) : QObject(parent) {
     });
 }
 PlayerController::~PlayerController() = default;
+
+void PlayerController::setDevice(DeviceController* device) {
+    if (device == device_) return;
+    if (device_) disconnect(device_, nullptr, this, nullptr);
+    device_ = device;
+    output_.setDevice(device);
+    if (device_) connect(device_, &DeviceController::statusChanged, this, &PlayerController::lanesChanged);
+    emit deviceChanged();
+    emit lanesChanged();
+}
+
+// D-132: with a connected device the lanes follow what it can use; without
+// one they show what the script carries.
+bool PlayerController::showStrokeLane() const {
+    if (stroke_.empty()) return false;
+    return device_ && device_->connected() ? device_->capLinear() : true;
+}
+bool PlayerController::showVibrationLane() const {
+    if (stroke_.empty()) return false;
+    return device_ && device_->connected() ? device_->capVibration() : vibrationFromScript_;
+}
+bool PlayerController::showSuctionLane() const {
+    if (stroke_.empty()) return false;
+    return device_ && device_->connected() ? device_->capSuction() : suctionFromScript_;
+}
 
 samn::Settings& PlayerController::settings() {
     if (!settings_) settings_ = std::make_unique<samn::Settings>();
@@ -153,6 +180,8 @@ bool PlayerController::openScript(const QString& pathIn, const QString& videoIn)
     suctionFromScript_ = !doc.suction.empty();
     vibration_ = vibrationFromScript_ ? std::move(doc.vibration) : laneFrom(laneFrames, false);
     suction_ = suctionFromScript_ ? std::move(doc.suction) : laneFrom(laneFrames, true);
+    output_.setScript(stroke_, vibration_, suction_);
+    emit lanesChanged();
     auto opts = samn::DefaultMapOptions();
     const int64_t dur = stroke_.back().at;
     opts.tick_ms = std::max<int64_t>(10, dur / kHeatmapBuckets);
@@ -502,6 +531,8 @@ void PlayerController::clearScript() {
     stroke_.clear();
     vibration_.clear();
     suction_.clear();
+    output_.setScript({}, {}, {}, {});
+    emit lanesChanged();
     heat_.clear();
     marks_ = {};
     emit marksChanged();
@@ -558,6 +589,7 @@ void PlayerController::setVideoPositionMs(qint64 videoMs) {
     for (const auto& c : curves_)
         if (c) c->setPlayheadMs(playheadMs_);
     if (heatmap_) heatmap_->setPlayheadMs(playheadMs_);
+    if (ph >= 0) output_.update(ph);
 }
 
 qint64 PlayerController::loopJumpFor(qint64 videoMs) const {
@@ -689,6 +721,7 @@ void PlayerController::setSleepMinutes(int minutes) {
 }
 
 void PlayerController::setPlaying(bool playing) {
+    output_.setPlaying(playing);
     if (playing) {
         if (!playClock_.isValid()) playClock_.start();
         if (!sleepTimer_.isActive()) sleepTimer_.start();

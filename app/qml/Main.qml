@@ -35,6 +35,10 @@ ApplicationWindow {
         asynchronous: true
     }
 
+    // The one connection to the toy / stroker, shared by every mode (0.7: one
+    // device connection for the whole app).
+    DeviceController { id: deviceCtl }
+
     TopBar {
         id: top
         width: parent.width
@@ -49,7 +53,7 @@ ApplicationWindow {
         anchors.left: parent.left; anchors.right: parent.right
         anchors.margins: 20; anchors.topMargin: 6
         currentIndex: win.mode
-        PlayerPage { id: player; deckOpen: deck.open }
+        PlayerPage { id: player; deckOpen: deck.open; device: deviceCtl }
         // Generator and Editor are one mode: the Generator is the Editor (D-137).
         NotYetPage { mode: qsTr("Generator"); phase: "P3" }
         NotYetPage { mode: qsTr("Training"); phase: "P4" }

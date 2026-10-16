@@ -24,10 +24,17 @@ Item {
     // The mode deck uses its number keys while it is open.
     property bool deckOpen: false
 
+    // The device connection of the app (Main.qml); the Player drives it.
+    required property DeviceController device
+
     PlayerController {
         id: ctrl
+        device: page.device
         onSleepReached: media.pause()
+        // The Emergency stop pauses the video too (the device is already stopped).
+        onEmergencyStopped: media.pause()
     }
+    Binding { target: ctrl.output; property: "speed"; value: page.speed }
 
     MediaPlayer {
         id: media
@@ -114,6 +121,7 @@ Item {
         visible: !page.fullStage
         anchors.right: parent.right; anchors.top: parent.top; anchors.bottom: parent.bottom
         ctrl: ctrl
+        device: page.device
         collapsed: ctrl.uiValue("player.inspectorCollapsed", false)
         onCollapsedChanged: ctrl.setUiValue("player.inspectorCollapsed", collapsed)
         onSeekRequested: (ms) => page.seekTo(ms)
@@ -433,9 +441,9 @@ Item {
                 visible: lanes.visible
                 x: 16; y: 46; width: 108
                 Item { width: 1; height: ruler.height; visible: ruler.visible }
-                LaneName { name: qsTr("Stroke"); dot: Theme.orange; height: curve.height; visible: ctrl.hasScript }
-                LaneName { name: qsTr("Vibration"); dot: Theme.laneVibration; height: vibLane.height; visible: vibLane.visible }
-                LaneName { name: qsTr("Suction"); dot: Theme.laneSuction; height: sucLane.height; visible: sucLane.visible }
+                LaneName { name: qsTr("Stroke"); dot: Theme.orange; height: curve.height; visible: ctrl.showStrokeLane }
+                LaneName { name: qsTr("Vibration"); dot: Theme.laneVibration; height: vibLane.height; visible: ctrl.showVibrationLane }
+                LaneName { name: qsTr("Suction"); dot: Theme.laneSuction; height: sucLane.height; visible: ctrl.showSuctionLane }
                 LaneName { name: qsTr("Audio Level"); dot: "#93aec4"; height: audioLane.height; visible: audioLane.visible }
                 LaneName { name: qsTr("Chapters"); dot: "#2f80ed"; height: chapterStrip.height; visible: chapterStrip.visible }
                 Item { width: 1; height: 4; visible: heatBar.visible }
@@ -446,8 +454,12 @@ Item {
                 visible: bottomTabs.current === 0
                 x: 16 + 112; y: 46
                 width: parent.width - 32 - 112; height: parent.height - 58
-                readonly property int laneH: 34
-                readonly property int extraLanes: (vibLane.visible ? 1 : 0) + (sucLane.visible ? 1 : 0) + (audioLane.visible ? 1 : 0)
+                // D-132: lanes the device cannot use are hidden; without the stroke
+                // lane the device's lanes share its height.
+                readonly property int audioH: 34
+                readonly property int laneH: curve.visible ? 34
+                    : Math.max(34, Math.min(140, (height - fixedH - (audioLane.visible ? audioH : 0)) / Math.max(1, (vibLane.visible ? 1 : 0) + (sucLane.visible ? 1 : 0))))
+                readonly property int extraLanes: (vibLane.visible ? 1 : 0) + (sucLane.visible ? 1 : 0)
                 readonly property int fixedH: ruler.height + (heatBar.visible ? heatBar.height + 4 : 0) + markRow.height
                                               + (chapterStrip.visible ? chapterStrip.height : 0)
                 RulerItem {
@@ -461,7 +473,8 @@ Item {
                 CurveItem {
                     id: curve
                     width: parent.width
-                    height: Math.max(60, parent.height - lanes.extraLanes * lanes.laneH - lanes.fixedH)
+                    visible: ctrl.showStrokeLane || !ctrl.hasScript
+                    height: Math.max(60, parent.height - lanes.extraLanes * lanes.laneH - (audioLane.visible ? lanes.audioH : 0) - lanes.fixedH)
                     lane: "stroke"; lineColor: Theme.orange; showGrid: true
                     markerStartMs: ctrl.markerStartMs; markerEndMs: ctrl.markerEndMs
                     viewStartMs: ctrl.viewStartMs; viewEndMs: ctrl.viewEndMs
@@ -488,26 +501,34 @@ Item {
                 CurveItem {
                     id: vibLane
                     width: parent.width; height: lanes.laneH
-                    visible: ctrl.hasScript && ctrl.vibrationFromScript  // 0.7: only channels the script carries
+                    visible: ctrl.showVibrationLane  // D-132: the script's channels, or the device's
                     lane: "vibration"; lineColor: Theme.laneVibration
                     lineWidth: 1.15; glow: 4; fill: 0.2
                     viewStartMs: ctrl.viewStartMs; viewEndMs: ctrl.viewEndMs
                     Component.onCompleted: ctrl.attachCurve(vibLane)
+                    WheelHandler {
+                        acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                        onWheel: (e) => ctrl.zoomAt(e.angleDelta.y > 0 ? 1.25 : 1 / 1.25, point.position.x / parent.width)
+                    }
                     Rectangle { width: parent.width; height: 1; color: Qt.rgba(1, 1, 1, 0.08) }
                 }
                 CurveItem {
                     id: sucLane
                     width: parent.width; height: lanes.laneH
-                    visible: ctrl.hasScript && ctrl.suctionFromScript
+                    visible: ctrl.showSuctionLane
                     lane: "suction"; lineColor: Theme.laneSuction
                     lineWidth: 1.15; glow: 4; fill: 0.2
                     viewStartMs: ctrl.viewStartMs; viewEndMs: ctrl.viewEndMs
                     Component.onCompleted: ctrl.attachCurve(sucLane)
+                    WheelHandler {
+                        acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                        onWheel: (e) => ctrl.zoomAt(e.angleDelta.y > 0 ? 1.25 : 1 / 1.25, point.position.x / parent.width)
+                    }
                     Rectangle { width: parent.width; height: 1; color: Qt.rgba(1, 1, 1, 0.08) }
                 }
                 AudioLevelItem {
                     id: audioLane
-                    width: parent.width; height: lanes.laneH
+                    width: parent.width; height: lanes.audioH
                     visible: !empty && ctrl.audioLane
                     source: ctrl.videoUrl
                     viewStartMs: ctrl.viewStartMs; viewEndMs: ctrl.viewEndMs

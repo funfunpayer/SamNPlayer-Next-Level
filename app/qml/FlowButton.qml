@@ -8,6 +8,8 @@ Rectangle {
     // Optional Flow icon before the text.
     property string icon
     property bool primary: false
+    // A red call for stopping things (Emergency stop, All off).
+    property bool danger: false
     property bool checked: false
     property bool enabledLook: enabled
     signal clicked()
@@ -15,11 +17,12 @@ Rectangle {
     implicitHeight: 36
     radius: height / 2
     opacity: enabled ? 1 : 0.45
-    color: primary ? (area.containsMouse ? "#25d6ff" : Theme.cyan)
+    color: danger ? (area.containsMouse ? Qt.rgba(1, 0.42, 0.48, 0.42) : Qt.rgba(1, 0.42, 0.48, 0.26))
+         : primary ? (area.containsMouse ? "#25d6ff" : Theme.cyan)
                    : checked ? Qt.rgba(0, 120 / 255, 1, 0.35)
                    : area.containsMouse ? Qt.rgba(1, 1, 1, 0.08) : Qt.rgba(1, 1, 1, 0.03)
     border.width: 1
-    border.color: primary ? "transparent" : checked ? Theme.cyan : Theme.cardBorder
+    border.color: danger ? Theme.danger : primary ? "transparent" : checked ? Theme.cyan : Theme.cardBorder
     Behavior on color { ColorAnimation { duration: Theme.animFast } }
     scale: area.pressed ? 0.97 : 1
     Behavior on scale { NumberAnimation { duration: Theme.animFast } }
