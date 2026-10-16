@@ -136,7 +136,9 @@ private slots:
     void webSocketErrorsGiveTheRightHint() {
         {  // refused
             const std::string url = QString("ws://127.0.0.1:%1").arg(ClosedPort()).toStdString();
-            WebSocketTransport t(url, 2000);
+            // Windows retries a refused connect for about 2 s before it reports it;
+            // the error ends the wait early, so a generous limit costs nothing.
+            WebSocketTransport t(url, 10000);
             const Status s = t.Connect();
             QVERIFY(!s);
             QVERIFY2(Has(s.message, "refused"), s.message.c_str());
@@ -144,7 +146,7 @@ private slots:
         }
         {  // unknown host
             const std::string url = "ws://no-such-host.invalid:12345";
-            WebSocketTransport t(url, 4000);
+            WebSocketTransport t(url, 10000);  // DNS can be slow on CI runners
             const Status s = t.Connect();
             QVERIFY(!s);
             QVERIFY2(Has(s.message, "no such host"), s.message.c_str());
