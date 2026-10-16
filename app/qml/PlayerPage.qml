@@ -83,6 +83,17 @@ Item {
         nameFilters: [qsTr("Script (*.funscript *.samn)"), qsTr("All files (*)")]
         onAccepted: { for (const f of selectedFiles) ctrl.addToPlaylist(f.toString()) }
     }
+    FileDialog {
+        id: projectDialog
+        title: qsTr("Choose project (.snp.json)")
+        nameFilters: [qsTr("Emotion project (*.snp.json)"), qsTr("JSON (*.json)")]
+        onAccepted: {
+            const path = selectedFile.toString()
+            const seek = ctrl.loadProject(path)
+            inspector.projectStatus = seek >= 0 ? qsTr("Project: %1").arg(ctrl.localPath(path)) : ctrl.lastError
+            if (seek > 0) page.seekTo(seek)
+        }
+    }
     FolderDialog {
         id: folderDialog
         title: qsTr("Add a script folder")
@@ -132,6 +143,8 @@ Item {
         onCollapsedChanged: ctrl.setUiValue("player.inspectorCollapsed", collapsed)
         onSeekRequested: (ms) => page.seekTo(ms)
         onAddToListRequested: addListDialog.open()
+        videoPositionMs: media.position
+        onProjectLoadRequested: projectDialog.open()
     }
     Item {
         id: center
