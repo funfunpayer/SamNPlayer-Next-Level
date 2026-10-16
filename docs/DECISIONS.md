@@ -239,8 +239,12 @@ A date of "—" means the source gives none.
 | D-120 (names in commits) | No model identifiers in code, docs or commit messages. The co-author trailer that the Claude Code platform adds to commits stays; it is the tool's attribution, not product content. |
 | D-074, D-106 (numbers) | Facts, not decisions: test levels are L0–L7 per `ROADMAP_2026-10.md`; the old Go test code is about 23 000 lines (Go only) and 38 000 lines including frontend and Python tests. |
 
-**Still open, the Owner decides** (asked on 16 Oct):
-1. D-008: Suite-only features in SamNPlayer 2, or everything for everyone?
-2. D-009 / D-011: Is SamNPlayer 2 the one free SamNPlayer (replacing 0.7), and does its source stay private with binaries published in `SamNPlayer-site`?
-3. D-057: AI never writes the curve, or opt-in local AI drafts (checked by the classical verifier) as in 0.7's AI script writer?
-4. C#: the role, if any (`PLAN.md` § Languages).
+**Answered by the Owner on 16 Oct:**
+
+| ID | Decision |
+|---|---|
+| D-127 (resolves D-008) | **One version with everything.** No Suite or edition split in SamNPlayer 2: every feature is for everyone. |
+| D-128 (resolves D-009, D-011) | **SamNPlayer 2 is the one free SamNPlayer and replaces 0.7.** The source stays private and the binaries are published. Everything 0.7 has, plus everything still open from the old roadmap, ends up here. |
+| D-129 (resolves D-057) | **AI may write curve drafts.** They are opt-in, and the classical verifier checks them, as with 0.7's AI script writer. |
+| D-130 | **Every device is supported as well as possible**: a direct connection where we can build one (Sam Neo 2 over BLE, TCode serial and BLE for OSR2/SR6, and the others in the old `DEVICE_SUPPORT.md`), and the **Buttplug interface** (Intiface, JSON over WebSocket, implemented in our C++ core) for all the rest. Each device gets the curves that are correct for it, per axis, and multi-axis scripts are mixed onto it as in 0.7. Device data (profiles, axes, ranges, protocols) is built together with the player, not afterwards. |
+| D-131 | **C#: none for now.** The Owner listed detection, Player, Editor and the core GUI; all of these are C++ (QML for the interface) per D-102, and Buttplug needs no C# client. C# comes in only if a concrete part is clearly better in it. To be confirmed with the Owner. |

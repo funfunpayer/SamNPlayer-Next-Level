@@ -1,3 +1,4 @@
+#include <system_error>
 #include "samn/marks.h"
 
 #include <algorithm>
@@ -280,7 +281,7 @@ Doc ReadDoc(const std::filesystem::path& path) {
     if (!f || std::filesystem::is_directory(path, ec)) {
         int e = errno;
         throw MarksError("funscript: Datei konnte nicht gelesen werden: " +
-                         std::string(e ? std::strerror(e) : "kein Zugriff") + ": " + path.string());
+                         (e ? std::generic_category().message(e) : std::string("kein Zugriff")) + ": " + path.string());
     }
     std::string data((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
     if (f.bad()) throw MarksError("funscript: Datei konnte nicht gelesen werden: " + path.string());
