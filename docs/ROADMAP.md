@@ -14,6 +14,8 @@ PySide6 and has to be updated.
 
 ## (a) Feature inventory of SamNPlayer 0.7
 
+The overview below is by mode. The complete, checkable list (every function with file:line) is [`PARITY.md`](PARITY.md).
+
 Sources: `CHANGELOG.md` (0.5.10 to 0.7.0 and "Unreleased"), `docs/USER_HANDBOOK.md`,
 `docs/DEVICE_SUPPORT.md`. Marks: ✅ already in this repo (per `AGENT_STATE.md`/`MODULES.md`),
 `Suite` = Suite-only in 0.7 (edition question open, D-007).

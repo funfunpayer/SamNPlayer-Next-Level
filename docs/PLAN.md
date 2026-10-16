@@ -2,7 +2,7 @@
 
 **Goal (Owner, 15–16 Oct 2026):** SamNPlayer 2 is the C++ version of SamNPlayer. It has every function of SamNPlayer 0.7 and the same animated Flow look. It should be a better program, not a copy. Go is gone at the end.
 
-The decisions behind this, and the old ones carried over, are in [`DECISIONS.md`](DECISIONS.md). The feature inventory, open items and lessons are in [`ROADMAP.md`](ROADMAP.md). We never restart a decision from zero.
+The decisions behind this, and the old ones carried over, are in [`DECISIONS.md`](DECISIONS.md). The feature inventory, open items and lessons are in [`ROADMAP.md`](ROADMAP.md); the full checklist of every 0.7 function (661 items, file:line) is [`PARITY.md`](PARITY.md). We never restart a decision from zero.
 
 ## Principles
 
