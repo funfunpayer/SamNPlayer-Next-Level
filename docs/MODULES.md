@@ -1,24 +1,49 @@
 # Modules
 
-Each module is a folder with a README covering its API, dependencies, Go
-reference and status, plus its own tests. Agents work on **one module per
-PR** and only through that module's API. New agents start here and in
-`AGENT_STATE.md`.
+Agents work on **one module per PR** and only through that module's API.
+New agents start with [`AGENT_STATE.md`](AGENT_STATE.md) and this file.
 
-| Module | Language | What | Owner | Phase / status |
-|---|---|---|---|---|
-| `native/` | C++ (pybind11) | Fast paths: funscript parse/write, stroke filter, beat bar, beat strokes; later tracking and the frame pipeline | Grok (ports), reviewed by Claude | P0 ✅, P3 tracking open |
-| `samn/native.py` | Python | Loads the C++ modules (a missing module is an error) | Claude | P0 ✅ |
-| `samn/formats/` | Python | `.funscript` (now), mapper (script → suction/vibration, heatmap), `.samn`, OFS | Claude | P0 load ✅, mapper ✅ (9 Go tests, identical values), marks ✅ (bookmarks, chapters), `.samn` ✅ (byte-identical with Go). **Cleanup:** `samn_file.py` has its own chapter/bookmark loaders (use `marks.py`) and attaches methods to `Document` after the class |
-| `samn/settings.py` | Python | Settings JSON, atomic writes, same keys as 0.7 | Claude | P1 ✅ |
-| `samn/library/` | Python | Script search, folders, variants | Claude | P1 logic ✅ |
-| `samn/ui/` | Python + Qt | Main window; Play page (QtMultimedia video, curve with playhead, heatmap, offset, loop, shortcuts) | Claude | P0 ✅, P1 Play page ✅ |
-| `samn/player/` | Python | Offset, loop, script time, video beside a script | Claude | P1 ✅ (device sync in P2) |
-| `samn/devices/` | Python (+ C# open) | Sam Neo 2 over BLE, mock device, stroker filter | open | P2 |
-| `samn/generator/` | Python + C++ | Tracking, post-processing, Quality Doctor, beat bar | open | P3 |
-| `samn/editor/` | Python | Editing operations (undo, select, transform) | open | P4 |
+## core/ (C++17, no Qt): `samn_core`
 
-**Rules between modules:**
-- `ui` may call every module; no other module imports `ui`.
-- Only `samn/native.py` imports C++ modules.
-- A module's tests must not need another module's internals.
+New `core/src/*.cpp` and `tests/core/*_test.cpp` files are built
+automatically by CMake globs, so a new module needs no CMake change.
+Functions use PascalCase and struct fields use snake_case.
+
+| Header (`core/include/samn/`) | What | Reference | Tests |
+|---|---|---|---|
+| `funscript.h` | Parse/Write, ShiftActions, `samn::Action` (the only definition) | Go `funscript/funscript.go` | ✅ |
+| `samn_file.h` | `.samn` document, conversion and export | Go `samn/`, `convert.go` | ✅ byte-identical with Go |
+| `mapper.h` | Script → suction/vibration frames (heatmap, device) | Go `funscript/mapper.go` | ✅ values identical |
+| `marks.h` | Bookmarks and chapters, OFS times | Go `funscript/bookmarks.go` | ✅ files byte-identical |
+| `script_finder.h` | Script for a video: beside it, folders, tolerant names, variants | Go `app_open_media.go` | ✅ |
+| `settings.h` | Settings JSON with 0.7 keys, atomic writes | — | ✅ |
+| `playback.h` | Offset, script time, loop, video beside a script, session | Go `app_playback.go` | ✅ |
+| `stroke_filter.h` | Live stroker filter (PCHIP/MAKIMA, speed limit, idle fill) | Go `funscript/stroke_filter.go` | ✅ parity |
+| `beatbar.h`, `beat_strokes.h` | Cock Hero beat bar → beats → strokes | Go `generator/beatbar.go` | ✅ parity |
+
+**Open cleanups:**
+- `script_finder`/`settings`/`playback` use snake_case function names; rename them to PascalCase.
+- Case folding is ASCII only: "Übung" does not match "übung". Go and Python fold Unicode. Fix this before P1 ends.
+- The four Python modules each register `samn::Action`, so importing two of them in one process fails. Merge them into one `samn_native` module.
+
+## app/ (Qt 6): `samn_app` + `samnplayer`
+
+| File | What |
+|---|---|
+| `src/theme.h` | All colours and sizes of the Flow look (QML singleton `Theme`). |
+| `src/player_controller.*` | Player logic for QML: open, offset, playhead, errors. |
+| `src/curve_item.*` | The script curve as a painted item, with level of detail. |
+| `qml/Main.qml` | Window, background ribbons, top bar, pages, mode deck, keys. |
+| `qml/TopBar.qml`, `ModeDeck.qml`, `PlayButton.qml`, `GlassCard.qml` | Flow components with animations. |
+| `qml/PlayerPage.qml` | Player: video, transport, timeline. |
+| `qml/NotYetPage.qml` | What modes not yet built show. |
+
+**Rules:**
+- QML only shows things and calls controller methods; there is no logic in QML.
+- Only `app/` uses Qt; `core/` never does.
+- Every QML file starts with `import SamN` (Qt 6.4 needs it).
+- Test hook: `SAMN_SCREENSHOT=file.png` saves the window and quits. CI uses it as a smoke test, and screenshots use test patterns only.
+
+## core/python/: Python bindings
+
+`beatbar_native`, `stroke_filter_native`, `beat_strokes_native` and `funscript_native`, with parity tests in `core/python/tests/`. In CI, `SAMN_NATIVE_REQUIRED=1` makes a missing module fail.

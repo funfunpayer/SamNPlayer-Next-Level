@@ -1,73 +1,47 @@
 # Agent state
 
-**Read this first** (new session, new agent, after a context loss), then
-[`MODULES.md`](MODULES.md). Update it in **every PR**, finished or not.
-**Push often:** the repo is always the current state.
+**Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 15 Oct 2026, Claude, branch `claude/samn2-p1`.
+**Last update:** 16 Oct 2026, Claude, branch `claude/samn2-cpp`.
 
 ## Rules
 
-- **Owner:** talk in German; the code, the interface and the docs are in
-  English.
+- **Owner:** talk in German; the code, the interface and the docs are in English.
 - **Branches:**
-  - Claude works on `claude/*`, Grok on `grok/*`. Never push to another
-    agent's branch.
+  - Claude works on `claude/*`, Grok on `grok/*`. Never push to another agent's branch.
   - Nothing reaches `main` without a PR.
-  - Never force-push.
   - Merge only on green CI.
-- **Before every push:** run `git diff --stat` and check it. Never write a
-  file from a shell substitution that may be empty, and never regenerate a
-  workflow from scratch. On 15 Oct, files in the old repo ended up holding
-  the literal text `$(cat /tmp/...)`, and one ended with
-  "[truncated ...]".
+  - Never force-push.
+- **Before every push:** run `git diff --stat` and check it. Never write a file from a shell substitution that may be empty, and never regenerate a workflow from scratch (see `ROADMAP.md` § Lessons).
+- **Decisions:** look in `DECISIONS.md` first. Never restart a decided question; record new decisions there.
 - **Never:**
-  - adult media in the repo or in screenshots; screenshots use test
-    patterns only;
-  - model names in commits, PRs or files;
+  - adult media in the repo or in screenshots; test patterns only;
+  - model identifiers in code, docs or commit messages;
   - copied GPL, BSL or EULA code;
   - placeholders that pretend to work;
-  - tests that "SKIP" with exit 0 in CI (set `SAMN_NATIVE_REQUIRED=1`).
+  - tests that "SKIP" with exit 0 in CI.
 - **Releases:** the Owner pushes tags.
 
 ## Done
 
-- **P0 foundation** (`claude/samn2-p0`):
-  - `native/` moved over from the old repo with its parity tests;
-  - the Qt window with Play / Edit / Generate;
-  - Play opens a funscript and draws its curve;
-  - CI for Linux and Windows;
-  - a module map (`MODULES.md`).
-- **P1 start:** `samn/library/script_finder.py`, the script search with
-  folders, tolerant names and variants. All its Go tests are ported, plus
-  tests for the depth and file limits.
+- **P0** (#6): the foundation and CI.
+- **P1 Python player** (#7): the reference port, now removed. Its tests live on as the C++ tests.
+- **C++ pivot** (`claude/samn2-cpp`, Owner 16 Oct: C++ first, QML, every 0.7 function, the 0.7 look, a better program):
+  - **Core:** all P1 logic is in `samn_core` (funscript, `.samn`, mapper, marks, script finder, settings, playback, stroke filter, beat bar), with 50 doctest cases. `.samn` and the marks files are byte-identical with Go.
+  - **QML shell:** the Flow look with the logo, light ribbons, mode pill and animated mode deck (keys 1–5, Esc, M), and the Player page with video, gradient progress, the animated Play ring, the curve (glow, level of detail, playhead) and the offset.
+  - **CI:** Qt 6.7 on Linux and Windows, ctest, parity tests, and an app smoke test (start, load, render, quit).
+  - **Docs:** `DECISIONS.md` (126 decisions, with the conflicts resolved), `ROADMAP.md` (0.7 feature inventory → phases, lessons) and `PLAN.md`.
 
-- **P1 Player, part 1** (`claude/samn2-p1`):
-  - the Play page: a video or a script opens the other;
-  - QtMultimedia video, curve with a playhead, heatmap;
-  - offset saved per script, loop, shortcuts (Space, ←/→, Shift for 1 s,
-    +/−);
-  - `samn.formats.mapper`, ported 1:1; a sample of 11 frames matches Go
-    exactly;
-  - `samn.settings`.
-- **Test gotcha:** pytest-qt's Qt log capture crashes when Qt's FFmpeg
-  thread logs, so `--no-qt-log` is set in `pyproject.toml`.
+## Next (P1, in order)
 
-- **P1 Player, part 2:** script variants, the "no script" card (Choose /
-  Add folder; Create stays disabled until P3), drag and drop, chapters and
-  bookmarks on the curve with a chapter jump, the dark theme,
-  `formats.marks`, and `formats.samn_file` (byte-identical with Go).
-
-## Next
-
-1. **P1 rest** (Claude): open `.samn` in the Play page, soft seek, recent
-   files; then the cleanup in `samn_file.py` (see `MODULES.md`).
-2. **C++ ports** (Grok, `grok/*`): tracking and the camera estimate from
-   `trackcv/cv.cpp`, for P3.
+1. Library panel (left) and Inspector (right), as in 0.7.
+2. Timeline lanes (stroke, vibration, suction), the heatmap from `mapper.h`, chapters and bookmarks from `marks.h`.
+3. Video first in the UI: `script_finder.h` with folders and variants, and the no-script card.
+4. Styled controls (no default Qt Quick Controls look), `.samn` open, soft seek, recent files.
+5. Core cleanups from `MODULES.md`: names, Unicode case folding, one Python module.
 
 ## Waiting on the Owner
 
-- The role of **C#** (`docs/PLAN.md` § Languages).
-- **Goal (Owner):** Go is gone at the end; optimise wherever possible.
-- Golden clips for the generator measurement. They stay out of the repo.
+- The four open questions in `DECISIONS.md` § Resolutions: Suite-only features; SamNPlayer 2 as the one free app plus repo visibility; AI drafts of the curve; the role of C#.
+- Golden clips for the generator (P3). They stay out of the repo.
 - The v0.7.0 tag in the old repo.
