@@ -1,5 +1,6 @@
 #include "player_controller.h"
 
+#include <QDateTime>
 #include <QDir>
 #include <QFileInfo>
 #include <QImage>
@@ -10,6 +11,8 @@
 #include <filesystem>
 
 #include "curve_item.h"
+#include "samn/heatmap_image.h"
+#include "samn/project.h"
 #include "heatmap_item.h"
 #include "samn/mapper.h"
 #include "samn/marks.h"
@@ -784,6 +787,73 @@ void PlayerController::pushMarks() {
         c->setSpeedLimit(stroke && speedHL_ ? speedHLThresh_ : 0.0);
     }
     if (heatmap_) heatmap_->setBands(bands);
+}
+
+QString PlayerController::exportHeatmapPng() {
+    if (scriptPath_.isEmpty() || stroke_.empty()) {
+        setError(tr("Heatmap: no script loaded"));
+        return {};
+    }
+    samn::HeatmapImageOptions o;
+    o.width = 960;
+    o.height = 56;
+    o.chapters = marks_.chapters;
+    try {
+        const samn::HeatmapImage img = samn::RenderHeatmapImage(stroke_, o);
+        QImage out(img.rgba.data(), img.width, img.height, img.width * 4, QImage::Format_RGBA8888);
+        const QFileInfo fi(scriptPath_);
+        const QString path = fi.dir().filePath(fi.completeBaseName() + QStringLiteral(".heatmap.png"));
+        if (!out.save(path, "PNG")) {
+            setError(tr("Heatmap: could not write %1").arg(path));
+            return {};
+        }
+        return path;
+    } catch (const std::exception& e) {
+        setError(tr("Heatmap: %1").arg(q(e.what())));
+        return {};
+    }
+}
+
+QString PlayerController::saveProject(qint64 videoMs) {
+    samn::Project p;
+    p.video_path = u8(videoPath_);
+    p.script_path = u8(scriptPath_);
+    const QString media = !videoPath_.isEmpty() ? videoPath_ : scriptPath_;
+    if (media.isEmpty()) {
+        setError(tr("Project: no video/script for project"));
+        return {};
+    }
+    p.offset_ms = offsetMs_;
+    p.seek_ms = std::max<qint64>(0, videoMs);
+    if (marker_.Valid()) p.loop_marker = marker_;
+    p.last_opened_ms = QDateTime::currentMSecsSinceEpoch();
+    const auto path = samn::ProjectPathFor(std::filesystem::u8path(u8(media)));
+    try {
+        samn::SaveProject(path, p);
+    } catch (const std::exception& e) {
+        setError(tr("Project: %1").arg(q(e.what())));
+        return {};
+    }
+    return q(path.u8string());
+}
+
+qint64 PlayerController::loadProject(const QString& pathOrUrl) {
+    samn::Project p;
+    try {
+        p = samn::LoadProject(std::filesystem::u8path(u8(toLocalPath(pathOrUrl))));
+    } catch (const std::exception& e) {
+        setError(tr("Load project: %1").arg(q(e.what())));
+        return -1;
+    }
+    if (p.script_path.empty()) {
+        setError(tr("Project has no script path"));
+        return -1;
+    }
+    if (!openScript(q(p.script_path), q(p.video_path))) return -1;
+    if (!p.video_path.empty() && videoPath_ != q(p.video_path)) attachVideo(q(p.video_path));
+    setOffsetMs(int(p.offset_ms));
+    if (p.loop_marker && p.loop_marker->Valid()) setMarker(double(p.loop_marker->start_ms), double(p.loop_marker->end_ms));
+    return std::max<qint64>(0, p.seek_ms);
 }
 
 QString PlayerController::scriptName() const { return QFileInfo(scriptPath_).fileName(); }

@@ -69,6 +69,17 @@ Item {
         nameFilters: [qsTr("PNG image (*.png)")]
         onAccepted: ctrl.saveSnapshot(videoOut.videoSink, selectedFile.toString())
     }
+    FileDialog {
+        id: projectDialog
+        title: qsTr("Choose project (.snp.json)")
+        nameFilters: [qsTr("Emotion project (*.snp.json)"), qsTr("JSON (*.json)")]
+        onAccepted: {
+            const path = selectedFile.toString()
+            const seek = ctrl.loadProject(path)
+            inspector.projectStatus = seek >= 0 ? qsTr("Project: %1").arg(ctrl.localPath(path)) : ctrl.lastError
+            if (seek > 0) page.seekTo(seek)
+        }
+    }
     FolderDialog {
         id: folderDialog
         title: qsTr("Add a script folder")
@@ -117,6 +128,8 @@ Item {
         collapsed: ctrl.uiValue("player.inspectorCollapsed", false)
         onCollapsedChanged: ctrl.setUiValue("player.inspectorCollapsed", collapsed)
         onSeekRequested: (ms) => page.seekTo(ms)
+        videoPositionMs: media.position
+        onProjectLoadRequested: projectDialog.open()
     }
     Item {
         id: center
