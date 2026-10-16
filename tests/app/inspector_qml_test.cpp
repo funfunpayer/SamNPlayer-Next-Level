@@ -25,7 +25,11 @@ namespace {
 QStringList g_messages;
 QtMessageHandler g_previous = nullptr;
 void capture(QtMsgType type, const QMessageLogContext& ctx, const QString& msg) {
-    if (type == QtWarningMsg || type == QtCriticalMsg || type == QtFatalMsg) g_messages << msg;
+    // Only QML problems count: platform messages (fonts, offscreen, Windows
+    // runner) are not the Inspector's and differ between machines.
+    const bool fromQml = msg.contains(QLatin1String(".qml")) || msg.contains(QLatin1String("qrc:")) ||
+                         (ctx.category && QLatin1String(ctx.category).startsWith(QLatin1String("qt.qml")));
+    if ((type == QtWarningMsg || type == QtCriticalMsg || type == QtFatalMsg) && fromQml) g_messages << msg;
     if (g_previous) g_previous(type, ctx, msg);
 }
 }  // namespace

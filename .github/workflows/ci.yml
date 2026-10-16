@@ -73,7 +73,10 @@ jobs:
             for f in $("$exe" -functions | sed 's/()//'); do
               "$exe" "$f" -silent > /dev/null 2>&1; rc=$?
               echo "$t::$f exit $rc"
-              [ $rc -eq 0 ] || "$exe" "$f" -v1 2>&1 | tail -40
+              if [ $rc -ne 0 ]; then
+                "$exe" "$f" -v1 -o "fail-$t-$f.txt,txt" > /dev/null 2>&1
+                tail -60 "fail-$t-$f.txt"
+              fi
             done
           done
 
