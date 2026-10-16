@@ -1,0 +1,31 @@
+/* SamNPlayer Flow theme proposal — NOT imported by app until Claude reviews #477. */
+:root {
+  --flow-bg: #06121f;
+  --flow-surface: #0a1b2b;
+  --flow-surface-raised: #10263a;
+  --flow-text: #e9f7ff;
+  --flow-text-muted: #9db8ca;
+  --flow-cyan: #00d9f4;
+  --flow-cyan-hover: #65efff;
+  --flow-orange: #ff8a23;
+  --flow-orange-hot: #ff5c2a;
+  --flow-axis-stroke: #ff8a23;
+  --flow-axis-suction: #00bfe9;
+  --flow-axis-thrust: #ad66f2;
+  --flow-axis-rotation: #16cdbd;
+  --flow-axis-audio: #93aec4;
+  --flow-border-subtle: rgb(104 180 212 / 12%);
+  --flow-focus-ring: 0 0 0 3px rgb(0 217 244 / 38%);
+  --flow-radius-sm: 8px;
+  --flow-radius-md: 14px;
+  --flow-radius-lg: 22px;
+  --flow-space-1: 4px;
+  --flow-space-2: 8px;
+  --flow-space-3: 12px;
+  --flow-space-4: 16px;
+  --flow-space-6: 24px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .flow-transition { transition: none !important; animation: none !important; }
+}
+/* Proposed usage only: no global selectors, no overrides to existing styles. */
