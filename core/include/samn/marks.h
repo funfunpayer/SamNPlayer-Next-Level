@@ -64,6 +64,10 @@ std::map<std::string, std::string> ReadMetadataMap(const std::filesystem::path& 
 void PatchMetadataKey(const std::filesystem::path& path, const std::string& key,
                       const std::string& encoded, bool indented = false);
 
+// Go json.Marshal of a string: quoted, invalid UTF-8 replaced by U+FFFD,
+// <, >, & and U+2028/2029 escaped, other non-ASCII kept as is.
+std::string GoJsonString(const std::string& raw);
+
 // Go json.Indent(dst, compact, "", "  ") for compact JSON text.
 std::string GoIndent(const std::string& compact);
 
