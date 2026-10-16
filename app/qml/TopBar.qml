@@ -5,7 +5,7 @@ import SamN
 Item {
     id: root
     property string modeName: "Player"
-    property url modeIcon
+    property string modeIcon: "player"
     signal modeDeckRequested()
     height: 86
 
@@ -36,7 +36,19 @@ Item {
         }
     }
 
-    // Mode pill: glowing, opens the deck (or press 1-5 / M).
+    // Soft breathing glow around the Mode pill (0.8 #550).
+    Rectangle {
+        anchors.centerIn: pill
+        width: pill.width + 10; height: pill.height + 10; radius: height / 2
+        color: "transparent"; border.width: 4
+        border.color: Qt.rgba(0, 217 / 255, 244 / 255, 0.35)
+        SequentialAnimation on opacity {
+            loops: Animation.Infinite
+            NumberAnimation { from: 0.25; to: 0.9; duration: 1800; easing.type: Easing.InOutSine }
+            NumberAnimation { from: 0.9; to: 0.25; duration: 1800; easing.type: Easing.InOutSine }
+        }
+    }
+    // Mode pill: glowing, opens the deck (or press M, then a number).
     Rectangle {
         id: pill
         anchors.centerIn: parent
@@ -55,7 +67,7 @@ Item {
             Rectangle {
                 width: 40; height: 40; radius: 20
                 color: "#05223f"; border.color: Theme.cyan; border.width: 1.5
-                Icon { anchors.centerIn: parent; name: "player"; color: Theme.cyan; width: 18; height: 18 }
+                Icon { anchors.centerIn: parent; name: root.modeIcon; color: Theme.cyan; width: 18; height: 18 }
             }
             Column {
                 anchors.verticalCenter: parent.verticalCenter

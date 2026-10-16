@@ -11,7 +11,7 @@ ApplicationWindow {
     title: "SamNPlayer 2"
     color: Theme.bgBottom
     property int mode: 0
-    readonly property var modeNames: [qsTr("Player"), qsTr("Editor"), qsTr("Generator"), qsTr("Training"), qsTr("Scene Map")]
+    readonly property var modeNames: deck.modes.map(m => m.name)
 
     // Background: near-black navy with blue / orange light ribbons in the
     // top-right and bottom-left corners (0.7 assets).
@@ -39,6 +39,7 @@ ApplicationWindow {
         id: top
         width: parent.width
         modeName: win.modeNames[win.mode]
+        modeIcon: deck.modes[win.mode].icon
         onModeDeckRequested: deck.open = true
     }
 
@@ -49,7 +50,7 @@ ApplicationWindow {
         anchors.margins: 20; anchors.topMargin: 6
         currentIndex: win.mode
         PlayerPage { id: player; deckOpen: deck.open }
-        NotYetPage { mode: qsTr("Editor"); phase: "P4" }
+        // Generator and Editor are one mode: the Generator is the Editor (D-137).
         NotYetPage { mode: qsTr("Generator"); phase: "P3" }
         NotYetPage { mode: qsTr("Training"); phase: "P4" }
         NotYetPage { mode: qsTr("Scene Map"); phase: "P4" }
@@ -65,7 +66,7 @@ ApplicationWindow {
     Shortcut { sequence: "M"; onActivated: deck.open = !deck.open }
     Shortcut { sequence: "Esc"; enabled: deck.open; onActivated: deck.open = false }
     Repeater {
-        model: 5
+        model: deck.modes.length
         delegate: Item {
             required property int index
             Shortcut { sequence: String(index + 1); enabled: deck.open; onActivated: { win.mode = index; deck.open = false } }
