@@ -10,9 +10,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "build"))
 
 try:
-    import beat_strokes_native as bs
+    from samn_native import beat_strokes as bs
 except ImportError as e:
-    print("SKIP: beat_strokes_native not built", file=sys.stderr)
+    print("SKIP: samn_native not built", file=sys.stderr)
     print(e, file=sys.stderr)
     # CI sets SAMN_NATIVE_REQUIRED=1: a missing module must fail there, not pass.
     sys.exit(1 if os.environ.get("SAMN_NATIVE_REQUIRED") else 0)

@@ -4,7 +4,8 @@
 
 namespace py = pybind11;
 
-PYBIND11_MODULE(beatbar_native, m) {
+// Part of the samn_native module (samn_native_py.cpp).
+void BindBeatbar(py::module_& m) {
     py::class_<samn::GrayFrame>(m, "GrayFrame")
         .def(py::init<>())
         .def_readwrite("w", &samn::GrayFrame::w)
