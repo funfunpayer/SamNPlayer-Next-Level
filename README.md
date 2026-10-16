@@ -30,3 +30,5 @@ cmake --build build --parallel
 ctest --test-dir build
 ./build/app/samnplayer path/to/clip.funscript
 ```
+
+How we work: [`CONTRIBUTING.md`](CONTRIBUTING.md).
