@@ -130,6 +130,10 @@ TEST_CASE("variant_label") {
         {"Clip 2", "Clip", "", false},
         {"Clip.roll", "Clip", "", false},
         {"Other", "Clip", "", false},
+        // Case folding beyond ASCII (Go and Python fold Unicode too).
+        {"übung", "Übung", "", true},
+        {"ÜBUNG (Hard)", "Übung", "hard", true},
+        {"Москва", "МОСКВА", "", true},
     };
     for (const auto& r : rows) {
         CAPTURE(r.script);
@@ -143,6 +147,7 @@ TEST_CASE("variant_label") {
 TEST_CASE("normalize_title") {
     CHECK(normalize_title("Clip (2019) [1080p] x265.mp4") == "clip mp4");
     CHECK(normalize_title("My.Film_Name-HEVC") == "my film name");
+    CHECK(normalize_title("Ärger_IM.Büro [4K]") == "ärger im büro");
 }
 
 TEST_CASE("split_folders") {

@@ -1,4 +1,5 @@
 #include "samn/script_finder.h"
+#include "samn/text.h"
 
 #include <algorithm>
 #include <filesystem>
@@ -197,7 +198,7 @@ std::string normalize_title(const std::string& stem) {
         R"(\b(2160p|1440p|1080p|720p|480p|4k|8k|uhd|fhd|hd|x264|x265|h264|h265|hevc|av1)"
         R"(|60fps|30fps|vr180|vr|sbs|lr|180x180|3dh)\b)",
         std::regex::ECMAScript | std::regex::icase);
-    std::string s = ascii_lower(stem);
+    std::string s = FoldCase(stem);
     s = std::regex_replace(s, re_brackets, " ");
     s = std::regex_replace(s, re_year, " ");
     s = std::regex_replace(s, re_sep, " ");
@@ -220,7 +221,7 @@ std::string normalize_title(const std::string& stem) {
 
 std::pair<std::string, bool> variant_label(const std::string& script_stem,
                                            const std::string& video_stem) {
-    if (ascii_lower(script_stem) == ascii_lower(video_stem)) return {"", true};
+    if (FoldCase(script_stem) == FoldCase(video_stem)) return {"", true};
     std::string s = normalize_title(script_stem), v = normalize_title(video_stem);
     if (v.empty()) return {"", false};
     if (s == v) return {"", true};
@@ -252,7 +253,7 @@ VideoScriptMatch find_script_for_video(const std::string& video_path_in,
     auto consider = [&](const std::string& path, bool beside) {
         std::string ext = ascii_lower(go_ext(path));
         if (!has_script_ext(ext)) return;
-        std::string key = ascii_lower(normpath(path));
+        std::string key = FoldCase(normpath(path));
         if (seen.count(key)) return;
         std::string pbase = go_base(path);
         std::string stem = trim_suffix(pbase, go_ext(pbase));
@@ -286,7 +287,7 @@ VideoScriptMatch find_script_for_video(const std::string& video_path_in,
     // once (the better one, already first).
     std::set<std::string> by_name;
     for (const auto& c : cands) {
-        std::string k = ascii_lower(trim_suffix(c.variant.path, go_ext(c.variant.path)));
+        std::string k = FoldCase(trim_suffix(c.variant.path, go_ext(c.variant.path)));
         if (!by_name.insert(k).second) continue;
         out.variants.push_back(c.variant);
     }
