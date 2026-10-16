@@ -57,6 +57,9 @@ public:
     void setMarks(std::vector<int64_t> bookmarks, std::vector<std::pair<int64_t, int64_t>> chapters);
     // O-marker bands and the beat grid (period in ms, 0 = off).
     void setOverlays(std::vector<Band> bands, double beatPeriodMs);
+    // Red "too fast" bands above this intensity (0.7 speed highlights; 0 = off).
+    void setSpeedLimit(double maxIntensity);
+    double speedLimit() const { return speedLimit_; }
     // The marked range (0.7: translucent cyan over the curve).
     Q_PROPERTY(double markerStartMs MEMBER markerStart_ NOTIFY markerChanged)
     Q_PROPERTY(double markerEndMs MEMBER markerEnd_ NOTIFY markerChanged)
@@ -101,7 +104,7 @@ private:
     std::vector<int64_t> bookmarks_;
     std::vector<std::pair<int64_t, int64_t>> chapters_;
     std::vector<Band> bands_;
-    double beatPeriod_ = 0, markerStart_ = 0, markerEnd_ = 0;
+    double beatPeriod_ = 0, markerStart_ = 0, markerEnd_ = 0, speedLimit_ = 0;
     qint64 playhead_ = -1;
     double viewStart_ = 0, viewEnd_ = -1;
     QColor lineColor_{0xff, 0x8a, 0x23};

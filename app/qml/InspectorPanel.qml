@@ -156,6 +156,25 @@ GlassCard {
                             onClicked: root.ctrl.posOverlay = !root.ctrl.posOverlay
                         }
                     }
+                    // Speed highlights (0.7 pb-speed-hl): red bands over too fast strokes.
+                    Row {
+                        spacing: 10
+                        FlowButton {
+                            text: qsTr("Speed highlights"); checked: root.ctrl.speedHighlights
+                            onClicked: root.ctrl.speedHighlights = !root.ctrl.speedHighlights
+                            HoverHandler { id: hlHover }
+                            ToolTipText { shown: hlHover.hovered; text: qsTr("Paint red “too fast” bands on the curve (OFS community intensity). Display only — separate from Speed-cap edit.") }
+                        }
+                        FlowSlider {
+                            anchors.verticalCenter: parent.verticalCenter; width: 110
+                            enabled: root.ctrl.speedHighlights
+                            from: 150; to: 800; value: root.ctrl.speedHighlightThresh
+                            onMoved: (v) => root.ctrl.speedHighlightThresh = Math.round(v / 25) * 25
+                            HoverHandler { id: hlThHover }
+                            ToolTipText { shown: hlThHover.hovered; text: qsTr("Intensity threshold for Speed highlights on the curve (500×|Δpos|/|Δt|). Lower = more red bands.") }
+                        }
+                        Text { anchors.verticalCenter: parent.verticalCenter; text: Math.round(root.ctrl.speedHighlightThresh); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
+                    }
                     Note { text: qsTr("Heatmap: click = seek, drag = mark. Wheel on the curve zooms.") }
                 }
                 // O-markers (0.7 View): from the marked range on the heatmap.

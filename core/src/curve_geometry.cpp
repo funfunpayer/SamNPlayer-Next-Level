@@ -192,5 +192,18 @@ std::string FormatTooltipTime(int64_t ms) {
     return buf;
 }
 
+std::vector<SpeedSegment> SpeedHighlights(const std::vector<Action>& actions, double maxIntensity) {
+    if (maxIntensity <= 0) maxIntensity = kSpeedHighlightDefault;
+    std::vector<SpeedSegment> out;
+    for (size_t i = 0; i + 1 < actions.size(); ++i) {
+        const double dt = double(actions[i + 1].at - actions[i].at);
+        if (dt <= 0) continue;
+        const double intensity = 500.0 * std::abs(double(actions[i + 1].pos - actions[i].pos)) / dt;
+        if (intensity > maxIntensity)
+            out.push_back({actions[i].at, actions[i + 1].at, std::round(intensity * 10) / 10});
+    }
+    return out;
+}
+
 }  // namespace samn
 

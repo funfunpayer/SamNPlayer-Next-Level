@@ -133,3 +133,28 @@ TEST_CASE("timeline: tooltip time, with 0.7's tenths overflow fixed") {
     CHECK(samn::FormatTooltipTime(754300) == "12:34.3");
     CHECK(samn::FormatTooltipTime(-5) == "0.0s");
 }
+
+// 0.7 funscript/speed_highlight_test.go
+TEST_CASE("SpeedHighlights finds a fast segment") {
+    const std::vector<Action> a{{0, 0}, {50, 100}, {1000, 100}};  // 500*100/50 = 1000
+    const auto segs = samn::SpeedHighlights(a, 0);
+    REQUIRE(segs.size() == 1);
+    CHECK(segs[0].from_ms == 0);
+    CHECK(segs[0].to_ms == 50);
+    CHECK(segs[0].intensity == doctest::Approx(1000));
+}
+
+TEST_CASE("SpeedHighlights respects the threshold") {
+    const std::vector<Action> a{{0, 0}, {500, 100}};  // 100
+    CHECK(samn::SpeedHighlights(a, 400).empty());
+    CHECK(samn::SpeedHighlights(a, 50).size() == 1);
+}
+
+TEST_CASE("SpeedHighlights: empty, single point, equal times, rounding") {
+    CHECK(samn::SpeedHighlights({}, 0).empty());
+    CHECK(samn::SpeedHighlights({{0, 0}}, 0).empty());
+    CHECK(samn::SpeedHighlights({{100, 0}, {100, 100}}, 0).empty());
+    const auto s = samn::SpeedHighlights({{0, 0}, {3, 7}}, 0);  // 1166.666…
+    REQUIRE(s.size() == 1);
+    CHECK(s[0].intensity == doctest::Approx(1166.7));
+}
