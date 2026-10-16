@@ -9,6 +9,10 @@ GlassCard {
     property bool collapsed: false
     property alias tab: tabs.current
     signal seekRequested(real videoMs)
+    // The video position (for Save project) and the project picker (the page owns the dialog).
+    property real videoPositionMs: 0
+    signal projectLoadRequested()
+    property string projectStatus: ""
     width: collapsed ? 44 : 320
     Behavior on width { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
     clip: true
@@ -166,7 +170,7 @@ GlassCard {
                             ToolTipText { shown: hlHover.hovered; text: qsTr("Paint red “too fast” bands on the curve (OFS community intensity). Display only — separate from Speed-cap edit.") }
                         }
                         FlowSlider {
-                            anchors.verticalCenter: parent.verticalCenter; width: 110
+                            anchors.verticalCenter: parent.verticalCenter; width: 76
                             enabled: root.ctrl.speedHighlights
                             from: 150; to: 800; value: root.ctrl.speedHighlightThresh
                             onMoved: (v) => root.ctrl.speedHighlightThresh = Math.round(v / 25) * 25
@@ -176,6 +180,39 @@ GlassCard {
                         Text { anchors.verticalCenter: parent.verticalCenter; text: Math.round(root.ctrl.speedHighlightThresh); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
                     }
                     Note { text: qsTr("Heatmap: click = seek, drag = mark. Wheel on the curve zooms.") }
+                }
+                // Project & heatmap export (0.7 Tools "Project & heatmap export").
+                Card {
+                    title: qsTr("Project & heatmap export")
+                    Flow {
+                        width: parent.width
+                        spacing: 8
+                        FlowButton {
+                            text: qsTr("Heatmap PNG"); enabled: root.ctrl.hasScript
+                            HoverHandler { id: hmHover }
+                            ToolTipText { shown: hmHover.hovered; text: qsTr("Intensity heatmap as PNG (chapters as ticks)") }
+                            onClicked: {
+                                const path = root.ctrl.exportHeatmapPng()
+                                root.projectStatus = path !== "" ? qsTr("Heatmap: %1").arg(path) : root.ctrl.lastError
+                            }
+                        }
+                        FlowButton {
+                            text: qsTr("Save project"); enabled: root.ctrl.hasScript
+                            HoverHandler { id: spHover }
+                            ToolTipText { shown: spHover.hovered; text: qsTr("Save video+script+offset as .snp.json") }
+                            onClicked: {
+                                const path = root.ctrl.saveProject(Math.round(root.videoPositionMs))
+                                root.projectStatus = path !== "" ? qsTr("Project: %1").arg(path) : root.ctrl.lastError
+                            }
+                        }
+                        FlowButton {
+                            text: qsTr("Load project")
+                            HoverHandler { id: lpHover }
+                            ToolTipText { shown: lpHover.hovered; text: qsTr("Open a .snp.json project (script, video, offset, seek, loop)") }
+                            onClicked: root.projectLoadRequested()
+                        }
+                    }
+                    Note { visible: root.projectStatus !== ""; text: root.projectStatus; wrapMode: Text.WrapAnywhere }
                 }
                 // O-markers (0.7 View): from the marked range on the heatmap.
                 Card {
@@ -213,7 +250,7 @@ GlassCard {
                 }
                 Card {
                     title: qsTr("Curve editing")
-                    Note { text: qsTr("Editing dots, range tools and Undo come with the Editor (P4).") }
+                    Note { text: qsTr("Editing dots, range tools and Undo come with the Editor in the Generator mode (P3–P4).") }
                 }
             }
         }

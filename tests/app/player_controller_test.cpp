@@ -297,6 +297,46 @@ private slots:
         QCOMPARE(c2.speedHighlightThresh(), 550.0);
     }
 
+    void projectAndHeatmapExport() {
+        QTemporaryDir d;
+        QByteArray js = zigzag();
+        js.chop(1);
+        js += ",\"metadata\":{\"chapters\":[{\"name\":\"A\",\"startTime\":2000,\"endTime\":0}]}}";
+        writeFile(d.filePath("P.funscript"), js);
+        writeFile(d.filePath("P.mp4"), "not a real video");
+        QString projectPath;
+        {
+            PlayerController c;
+            QVERIFY(c.openScript(d.filePath("P.funscript")));
+            // Heatmap PNG beside the script, 960 x 56 (0.7).
+            const QString png = c.exportHeatmapPng();
+            QCOMPARE(png, d.filePath("P.heatmap.png"));
+            const QImage img(png);
+            QCOMPARE(img.size(), QSize(960, 56));
+            // Project with video, offset, seek and the marked range.
+            QVERIFY(c.attachVideo(d.filePath("P.mp4")));
+            c.setOffsetMs(250);
+            c.setMarker(1000, 4000);
+            projectPath = c.saveProject(5500);
+            QCOMPARE(projectPath, d.filePath("P.snp.json"));
+        }
+        // A fresh player restores everything from the project.
+        PlayerController c2;
+        QCOMPARE(c2.loadProject(projectPath), qint64(5500));
+        QCOMPARE(c2.scriptPath(), d.filePath("P.funscript"));
+        QCOMPARE(c2.videoPath(), d.filePath("P.mp4"));
+        QCOMPARE(c2.offsetMs(), 250);
+        QCOMPARE(c2.markerStartMs(), 1000.0);
+        QCOMPARE(c2.markerEndMs(), 4000.0);
+        // Errors as in 0.7.
+        writeFile(d.filePath("bad.snp.json"), "{\"version\":1}");
+        QCOMPARE(c2.loadProject(d.filePath("bad.snp.json")), qint64(-1));
+        QCOMPARE(c2.lastError(), QStringLiteral("Project has no script path"));
+        PlayerController empty;
+        QVERIFY(empty.saveProject(0).isEmpty());
+        QVERIFY(empty.exportHeatmapPng().isEmpty());
+    }
+
     void sleepTimer() {
         PlayerController c;
         QSignalSpy reached(&c, &PlayerController::sleepReached);

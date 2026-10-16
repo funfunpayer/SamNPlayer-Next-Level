@@ -145,6 +145,18 @@ public:
     Q_INVOKABLE bool removeOMarker(int index);
     // Link a video to the open script (0.7 "Select a video file…").
     Q_INVOKABLE bool attachVideo(const QString& pathOrUrl);
+    // 0.7 ExportScriptHeatmapPNG: "<script>.heatmap.png" beside the script,
+    // 960 x 56 with chapter ticks. The path, or "" with lastError.
+    Q_INVOKABLE QString exportHeatmapPng();
+    // 0.7 SavePlaybackProject: "<video or script>.snp.json" with video,
+    // script, offset, the video position and the marked range. The path, or
+    // "" with lastError.
+    Q_INVOKABLE QString saveProject(qint64 videoMs);
+    // 0.7 LoadPlaybackProject: opens the project's script and video and
+    // restores offset and marked range. The video position to seek to
+    // (0 = none), or -1 with lastError.
+    Q_INVOKABLE qint64 loadProject(const QString& pathOrUrl);
+    Q_INVOKABLE QString localPath(const QString& pathOrUrl) const { return toLocalPath(pathOrUrl); }
     // Snapshot of the current frame at full video resolution (0.7 saves a
     // PNG named "<video>_MM-SS.png"). videoSink is the VideoOutput's sink.
     Q_INVOKABLE QString snapshotName(qint64 videoMs) const;
