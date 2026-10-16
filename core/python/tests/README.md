@@ -1,4 +1,4 @@
-# native/tests
+# core/python/tests
 
 Parity tests for the C++ ports against the existing Go reference.
 
@@ -24,22 +24,17 @@ negative test).
 `funscript/funscript_test.go` / `parse_compat_test.go` plus ShiftActions
 from `shift_test.go`.
 
-Build first (from `native/`):
+All parts live in one module, `samn_native` (`from samn_native import beatbar`).
+`test_one_module.py` checks that they load into one process with one `Action` type.
+
+Build from the repo root (the module lands in `build/core`, or
+`build/core/Release` with MSVC):
 
 ```bash
-mkdir -p build && cd build
-cmake .. -Dpybind11_DIR=$(python3 -m pybind11 --cmakedir)
-make -j
+cmake -S . -B build -Dpybind11_DIR=$(python3 -m pybind11 --cmakedir)
+cmake --build build -j
+for t in core/python/tests/test_*.py; do PYTHONPATH=build/core python3 "$t"; done
 ```
 
-Then from the repo root:
-
-```bash
-PYTHONPATH=native/build python3 native/tests/test_beatbar_parity.py
-PYTHONPATH=native/build python3 native/tests/test_stroke_filter_parity.py
-PYTHONPATH=native/build python3 native/tests/test_beat_strokes_parity.py
-PYTHONPATH=native/build python3 native/tests/test_funscript_parity.py
-```
-
-The tests exit 0 (with a SKIP message) if the module is not built, so they can
-be called unconditionally in CI once the build step is present.
+A missing module prints SKIP and exits 0, except with `SAMN_NATIVE_REQUIRED=1`
+(set in CI), where it fails.

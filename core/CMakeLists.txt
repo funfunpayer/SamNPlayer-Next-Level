@@ -14,8 +14,9 @@ endif()
 
 if(SAMN_BUILD_PYTHON)
   find_package(pybind11 REQUIRED)
-  foreach(mod beatbar stroke_filter beat_strokes funscript)
-    pybind11_add_module(${mod}_native python/${mod}_py.cpp)
-    target_link_libraries(${mod}_native PRIVATE samn_core)
-  endforeach()
+  pybind11_add_module(samn_native
+    python/samn_native_py.cpp
+    python/beatbar_py.cpp python/stroke_filter_py.cpp
+    python/beat_strokes_py.cpp python/funscript_py.cpp)
+  target_link_libraries(samn_native PRIVATE samn_core)
 endif()

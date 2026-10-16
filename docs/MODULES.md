@@ -27,7 +27,6 @@ Functions use PascalCase and struct fields use snake_case.
 
 **Open cleanups:**
 - `script_finder`/`settings`/`playback` use snake_case function names; rename them to PascalCase.
-- The four Python modules each register `samn::Action`, so importing two of them in one process fails. Merge them into one `samn_native` module.
 
 ## app/ (Qt 6): `samn_app` + `samnplayer`
 
@@ -53,4 +52,4 @@ Functions use PascalCase and struct fields use snake_case.
 
 ## core/python/: Python bindings
 
-`beatbar_native`, `stroke_filter_native`, `beat_strokes_native` and `funscript_native`, with parity tests in `core/python/tests/`. In CI, `SAMN_NATIVE_REQUIRED=1` makes a missing module fail.
+One module, `samn_native`, with the submodules `beatbar`, `stroke_filter`, `beat_strokes` and `funscript` (`from samn_native import funscript`). `samn::Action` is registered once, so every part works in one process. New bindings: a `python/<part>_py.cpp` with a `Bind<Part>(py::module_&)` function, added in `samn_native_py.cpp` and `core/CMakeLists.txt`. Parity tests are in `core/python/tests/`. In CI, `SAMN_NATIVE_REQUIRED=1` makes a missing module fail.
