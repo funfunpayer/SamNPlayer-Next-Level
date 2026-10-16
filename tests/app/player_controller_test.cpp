@@ -332,6 +332,11 @@ private slots:
         QCOMPARE(c.chapters()[1].toMap().value("name").toString(), QStringLiteral("Main"));
         c.setOffsetMs(200);
         QCOMPARE(c.chapterVideoMs(1), qint64(4200));
+        const auto bands = c.chapterBands();
+        QCOMPARE(bands.size(), 2);
+        QCOMPARE(bands[0].toMap().value("endMs").toLongLong(), 4000LL);
+        QCOMPARE(bands[1].toMap().value("index").toInt(), 1);
+        QVERIFY(bands[1].toMap().value("tip").toString().startsWith(QStringLiteral("Main · 0:04–0:10")));
         QVERIFY(!stroke.empty() && !vib.empty() && !suc.empty() && !heat.empty());
         for (float v : heat.values()) QVERIFY(v >= 0.0f && v <= 1.0f);
     }
