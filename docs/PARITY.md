@@ -821,7 +821,7 @@ Source: `funfunpayer/SamNPlayer` `main` up to #553, plus open branches. Everythi
 - [ ] MEDIA-01 (#553): an MP4 whose codec cannot be read is "unknown", never assumed h264, so "Make playable" is offered (P1 open-media / P3 video layer)
 - [ ] D14 (#553): Suite files are never published with a public release (release workflow, when SamNPlayer 2 gets one)
 - [x] Empty Player = round Play button + Open… (#550) → SamN2: PlayerPage (D-138)
-- [ ] Silk look (#550): slow drifting silk layers behind the Training stage and the Player video area, stronger glow on rings and lanes, a soft breathing pulse on the Mode pill; all off with reduced motion
+- [ ] Silk look (#550): slow drifting silk layers behind the Training stage and the Player video area, stronger glow on rings and lanes, a soft breathing pulse on the Mode pill; all off with reduced motion — partly: SilkLayer.qml drifts behind the Player video stage (32 s / 40 s as the CSS), breathing halo on the Play button (4.5 s, 2.4 s playing), Mode pill pulse (#21); Training stage and ring glow come with Training; no reduced-motion switch yet
 - [ ] Training rings closer to the mockup: glow gauges, silk between rings, centre name / % / wave (#550, P4 Training)
 - [ ] Training categories, level programs, body cues, session recap (branch `cursor/training-levels-recap-8d66`, not merged in the old repo yet; P4 Training)
 - [x] Generator with editor (0.7 #540, `gen_editor.js`) → SamN2: one mode, the Generator is the Editor (D-137)
