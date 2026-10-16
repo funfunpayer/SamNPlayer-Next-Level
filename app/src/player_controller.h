@@ -170,6 +170,9 @@ public:
     // 0.7 ExportScriptHeatmapPNG: "<script>.heatmap.png" beside the script,
     // 960 x 56 with chapter ticks. The path, or "" with lastError.
     Q_INVOKABLE QString exportHeatmapPng();
+    // 0.7 Script Doctor (ScriptQuality): signal quality of the loaded script
+    // from its file. {score 0-1, passed, warnings[], error}.
+    Q_INVOKABLE QVariantMap scriptQuality();
     // 0.7 SavePlaybackProject: "<video or script>.snp.json" with video,
     // script, offset, the video position and the marked range. The path, or
     // "" with lastError.

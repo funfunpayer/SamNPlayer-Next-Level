@@ -13,6 +13,7 @@
 #include "curve_item.h"
 #include "samn/heatmap_image.h"
 #include "samn/project.h"
+#include "samn/script_quality.h"
 #include "heatmap_item.h"
 #include "samn/mapper.h"
 #include "samn/marks.h"
@@ -904,6 +905,18 @@ void PlayerController::pushMarks() {
         c->setSpeedLimit(stroke && speedHL_ ? speedHLThresh_ : 0.0);
     }
     if (heatmap_) heatmap_->setBands(bands);
+}
+
+QVariantMap PlayerController::scriptQuality() {
+    if (scriptPath_.isEmpty()) return {{"error", tr("no script loaded")}};
+    try {
+        const auto r = samn::ScriptQualityOfFile(std::filesystem::u8path(u8(scriptPath_)));
+        QStringList warnings;
+        for (const auto& w : r.warnings) warnings << q(w);
+        return {{"score", r.score}, {"passed", r.passed}, {"warnings", warnings}, {"error", QString()}};
+    } catch (const std::exception& e) {
+        return {{"error", q(e.what())}};
+    }
 }
 
 QString PlayerController::exportHeatmapPng() {
