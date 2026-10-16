@@ -435,6 +435,8 @@ int64_t FlexTimeMs(const json& value) {
 
 RawMap ReadMetadataMap(const std::filesystem::path& path) { return MetadataOf(ReadDoc(path)); }
 
+std::string GoJsonString(const std::string& raw) { return GoString(raw); }
+
 std::string GoIndent(const std::string& in) {
     std::string out;
     out.reserve(in.size() * 2);

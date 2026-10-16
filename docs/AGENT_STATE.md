@@ -44,6 +44,8 @@
 
 - **Library and Inspector** (`claude/samn2-library`): the 0.7 v1 three-column Player. Library: Local Files, Recent, Favorites (★), Scripts imported / generated / edited, Analysis shortcuts, drop zone; kept in the settings. Inspector: Devices (live channels), Audio (BPM), Playback (offset), View (audio lane, O-markers). Transport and zoom row in 0.7 order. Settings are now safe with several objects on one file.
 
+- **Project and range tools** (`claude/samn2-project-tools`): core ports of 0.7 `project.go` and `heatmap_png.go`: `project.h` (sidecar, byte-identical with Go), `range_edit.h` (snap, delete, cap speed, scale, soft-edge scale), `heatmap_image.h` (RGBA buffer, pixel-identical with Go; the app encodes the PNG). Base for the Editor's range tools and the Player's project file; not yet used by the app.
+
 ## Next (P1, in order)
 
 1. `docs/PARITY.md`: the full 0.7 inventory (every function, file:line), the checklist for "exact copy". A first attempt stopped at a usage limit; redo it.
