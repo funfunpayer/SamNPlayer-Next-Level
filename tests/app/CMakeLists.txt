@@ -1,6 +1,9 @@
 find_package(Qt6 REQUIRED COMPONENTS Test)
 set(CMAKE_AUTOMOC ON)
-add_executable(app_tests player_controller_test.cpp)
-target_link_libraries(app_tests PRIVATE samn_app Qt6::Test)
-add_test(NAME app_tests COMMAND app_tests)
-set_tests_properties(app_tests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+# One Qt Test executable per controller (QTEST_MAIN each).
+foreach(t player_controller library_controller)
+  add_executable(${t}_test ${t}_test.cpp)
+  target_link_libraries(${t}_test PRIVATE samn_app Qt6::Test)
+  add_test(NAME ${t}_test COMMAND ${t}_test)
+  set_tests_properties(${t}_test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+endforeach()

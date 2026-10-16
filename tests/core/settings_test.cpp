@@ -75,3 +75,20 @@ TEST_CASE("config_dir: SAMN_CONFIG_DIR wins") {
     unsetenv("XDG_CONFIG_HOME");
 }
 #endif
+
+TEST_CASE("settings: two objects on one file never lose each other's keys") {
+    const auto dir = fs::temp_directory_path() / ("samn_set2_" + std::to_string(std::random_device{}()));
+    fs::create_directories(dir);
+    const auto file = dir / "settings.json";
+    samn::Settings player(file), library(file);
+    player.set("playback.offset.a", 100);
+    library.set("library.recent", nlohmann::json::array({"x"}));
+    player.set("playback.offset.b", 200);  // must not drop library.recent
+    samn::Settings fresh(file);
+    CHECK(fresh.get("playback.offset.a") == 100);
+    CHECK(fresh.get("playback.offset.b") == 200);
+    CHECK(fresh.get("library.recent") == nlohmann::json::array({"x"}));
+    // A read sees the other object's newer value.
+    CHECK(library.get("playback.offset.b") == 200);
+    fs::remove_all(dir);
+}

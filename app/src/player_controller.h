@@ -65,7 +65,10 @@ class PlayerController : public QObject {
     Q_PROPERTY(bool loopEnabled READ loopEnabled WRITE setLoopEnabled NOTIFY loopChanged)
     Q_PROPERTY(bool loopActive READ loopActive NOTIFY loopChanged)
     // Live channel values at the playhead, 0-100 (0.7 "Vibration n / Suction n").
+    Q_PROPERTY(int strokeNow READ strokeNow NOTIFY playheadMsChanged)
     Q_PROPERTY(int vibrationNow READ vibrationNow NOTIFY playheadMsChanged)
+    // Audio Level lane under the curve (0.7: on by default, remembered).
+    Q_PROPERTY(bool audioLane READ audioLane WRITE setAudioLane NOTIFY viewOptionsChanged)
     Q_PROPERTY(int suctionNow READ suctionNow NOTIFY playheadMsChanged)
     // Sleep timer: stops playing after this many minutes of play (0 = off).
     Q_PROPERTY(int sleepMinutes READ sleepMinutes WRITE setSleepMinutes NOTIFY sleepChanged)
@@ -185,7 +188,10 @@ public:
     bool loopEnabled() const { return loopEnabled_; }
     void setLoopEnabled(bool on);
     bool loopActive() const { return loopEnabled_ && marker_.Valid(); }
+    int strokeNow() const;
     int vibrationNow() const;
+    bool audioLane() const;
+    void setAudioLane(bool on);
     int suctionNow() const;
     int sleepMinutes() const { return sleepMinutes_; }
     void setSleepMinutes(int minutes);
@@ -214,6 +220,11 @@ signals:
     void markerChanged();
     void marksChanged();
     void bpmChanged();
+    void viewOptionsChanged();
+    // For the Library: a script was opened, a video linked, marks edited.
+    void scriptOpened(const QString& path);
+    void videoLinked(const QString& path);
+    void scriptEdited(const QString& path);
     void sleepChanged();
     // The sleep timer ran out: the player stops.
     void sleepReached();
