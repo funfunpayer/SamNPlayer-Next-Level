@@ -10,14 +10,24 @@ Item {
     id: page
     property alias controller: ctrl
 
-    PlayerController { id: ctrl }
+    property real speed: 1.0
+    property bool muted: false
+    // The mode deck uses 1-5 while it is open.
+    property bool deckOpen: false
+
+    PlayerController {
+        id: ctrl
+        onSleepReached: media.pause()
+    }
 
     MediaPlayer {
         id: media
         source: ctrl.videoUrl
         videoOutput: videoOut
         onDurationChanged: ctrl.setVideoDurationMs(duration)
-        audioOutput: AudioOutput { id: audio; volume: volume.value }
+        audioOutput: AudioOutput { id: audio; volume: volume.value; muted: page.muted }
+        playbackRate: page.speed
+        onPlaybackStateChanged: ctrl.setPlaying(playbackState === MediaPlayer.PlayingState)
         onPositionChanged: {
             ctrl.setVideoPositionMs(position)
             const jump = ctrl.loopJumpFor(position)
@@ -46,6 +56,15 @@ Item {
     function openFile() { openDialog.open() }
     function togglePlay() { media.playbackState === MediaPlayer.PlayingState ? media.pause() : media.play() }
     function seekBy(ms) { media.position = Math.max(0, Math.min(media.duration, media.position + ms)) }
+    function seekTo(ms) { if (ms >= 0) media.position = Math.max(0, Math.min(media.duration, ms)) }
+    function showTip(item, x, y, text) {
+        if (text === "") { chartTip.visible = false; return }
+        const p = item.mapToItem(page, x, y)
+        tipText.text = text
+        chartTip.x = Math.min(p.x + 12, page.width - chartTip.width - 4)
+        chartTip.y = p.y + 12 + chartTip.height > page.height ? p.y - chartTip.height - 12 : p.y + 12
+        chartTip.visible = true
+    }
 
     // Header: what is open, the script variant, Open.
     Item {
@@ -204,49 +223,67 @@ Item {
                     onPositionChanged: (m) => { if (pressed) seek(m.x) }
                 }
             }
-            // Heatmap: intensity over the whole script, under the progress bar.
-            HeatmapItem {
-                id: heat
-                x: 18; y: 34; width: parent.width - 36; height: 10
-                visible: !empty
-                Component.onCompleted: ctrl.attachHeatmap(heat)
+            // Live channel values at the playhead (0.7 stat row).
+            Text {
+                x: 18; y: 34
+                visible: ctrl.hasScript
+                text: qsTr("Vibration %1   ·   Suction %2").arg(ctrl.vibrationNow).arg(ctrl.suctionNow)
+                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
             }
-            // Left: chapters and loop.
+            // Left: chapters, loop selection, A / B, sleep timer.
             Row {
                 anchors.left: parent.left; anchors.leftMargin: 18
                 y: 66; spacing: 8
                 FlowCombo {
                     id: chapterBox
-                    width: 190
+                    width: 170
                     visible: ctrl.chapters.length > 0
                     model: ctrl.chapters
                     textRole: "name"
                     displayText: qsTr("Chapters (%1)").arg(ctrl.chapters.length)
-                    onActivated: (i) => media.position = Math.max(0, ctrl.chapterVideoMs(i))
+                    onActivated: (i) => page.seekTo(ctrl.chapterVideoMs(i))
                 }
-                FlowButton { text: qsTr("A"); onClicked: ctrl.setLoopStart(media.position); implicitWidth: 40 }
-                FlowButton { text: qsTr("B"); onClicked: ctrl.setLoopEnd(media.position); implicitWidth: 40 }
                 FlowButton {
-                    text: qsTr("Loop off"); visible: ctrl.loopActive; checked: true
-                    onClicked: ctrl.clearLoop()
+                    text: qsTr("Loop"); checked: ctrl.loopEnabled
+                    onClicked: ctrl.loopEnabled = !ctrl.loopEnabled
+                }
+                FlowButton { text: "A"; implicitWidth: 40; onClicked: ctrl.setLoopStart(media.position) }
+                FlowButton { text: "B"; implicitWidth: 40; onClicked: ctrl.setLoopEnd(media.position) }
+                FlowCombo {
+                    width: 110
+                    model: [qsTr("Sleep off"), "15 min", "30 min", "45 min", "60 min", "90 min"]
+                    readonly property var minutes: [0, 15, 30, 45, 60, 90]
+                    currentIndex: Math.max(0, minutes.indexOf(ctrl.sleepMinutes))
+                    onActivated: (i) => ctrl.sleepMinutes = minutes[i]
                 }
             }
             Row {
                 anchors.horizontalCenter: parent.horizontalCenter
                 y: 54
                 spacing: 18
-                IconButton { glyph: "⟲"; tip: qsTr("Back 5 s"); onClicked: page.seekBy(-5000); anchors.verticalCenter: parent.verticalCenter }
+                IconButton { glyph: "⟲"; tip: qsTr("Back 10 s"); onClicked: page.seekBy(-10000); anchors.verticalCenter: parent.verticalCenter }
                 PlayButton {
                     playing: media.playbackState === MediaPlayer.PlayingState
                     onClicked: page.togglePlay()
                 }
-                IconButton { glyph: "⟳"; tip: qsTr("Forward 5 s"); onClicked: page.seekBy(5000); anchors.verticalCenter: parent.verticalCenter }
+                IconButton { glyph: "⟳"; tip: qsTr("Forward 10 s"); onClicked: page.seekBy(10000); anchors.verticalCenter: parent.verticalCenter }
             }
             Row {
                 anchors.right: parent.right; anchors.rightMargin: 18
                 y: 74; spacing: 10
-                Text { text: "🔊"; color: Theme.text; anchors.verticalCenter: parent.verticalCenter }
-                FlowSlider { id: volume; from: 0; to: 1; value: 0.8; width: 130; onMoved: (v) => value = v }
+                FlowCombo {
+                    width: 82
+                    model: ["0.5×", "0.75×", "1.0×", "1.25×", "1.5×", "2.0×"]
+                    readonly property var rates: [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
+                    currentIndex: rates.indexOf(page.speed)
+                    onActivated: (i) => page.speed = rates[i]
+                }
+                IconButton {
+                    width: 36; height: 36; glyph: page.muted ? "🔇" : "🔊"; tip: qsTr("Mute")
+                    anchors.verticalCenter: parent.verticalCenter
+                    onClicked: page.muted = !page.muted
+                }
+                FlowSlider { id: volume; from: 0; to: 1; value: 0.8; width: 110; anchors.verticalCenter: parent.verticalCenter; onMoved: (v) => value = v }
             }
         }
     }
@@ -293,16 +330,34 @@ Item {
             width: parent.width - 32; height: parent.height - 58
             readonly property int laneH: 34
             readonly property int extraLanes: (ctrl.hasScript ? 2 : 0) + (audioLane.empty ? 0 : 1)
+            readonly property int fixedH: ruler.height + (heatBar.visible ? heatBar.height + 4 : 0) + markRow.height
+            RulerItem {
+                id: ruler
+                width: parent.width; height: 22
+                visible: ctrl.hasScript
+                viewStartMs: ctrl.viewStartMs; viewEndMs: ctrl.viewEndMs
+                playheadMs: ctrl.playheadMs
+                textColor: Theme.textDim; markColor: Theme.laneVibration
+            }
             CurveItem {
                 id: curve
                 width: parent.width
-                height: Math.max(60, parent.height - lanes.extraLanes * lanes.laneH)
+                height: Math.max(60, parent.height - lanes.extraLanes * lanes.laneH - lanes.fixedH)
                 lane: "stroke"; lineColor: Theme.orange; showGrid: true
                 viewStartMs: ctrl.viewStartMs; viewEndMs: ctrl.viewEndMs
                 Component.onCompleted: ctrl.attachCurve(curve)
                 WheelHandler {
                     acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
                     onWheel: (e) => ctrl.zoomAt(e.angleDelta.y > 0 ? 1.25 : 1 / 1.25, point.position.x / curve.width)
+                }
+                // Hover shows time and position; a click seeks (0.7).
+                MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    acceptedButtons: Qt.LeftButton
+                    onPositionChanged: (m) => page.showTip(curve, m.x, m.y, curve.hoverText(m.x))
+                    onExited: chartTip.visible = false
+                    onClicked: (m) => page.seekTo(Math.round(curve.msAtX(m.x)) + ctrl.offsetMs)
                 }
                 Text {
                     anchors.centerIn: parent
@@ -342,7 +397,69 @@ Item {
                 playheadMs: ctrl.playheadMs
                 Rectangle { width: parent.width; height: 1; color: Qt.rgba(1, 1, 1, 0.08) }
             }
+            Item { width: 1; height: 4; visible: heatBar.visible }
+            // Heatmap: click = seek, drag = mark (0.7).
+            HeatmapItem {
+                id: heatBar
+                width: parent.width; height: 18
+                opacity: 0.9
+                visible: !empty
+                viewStartMs: ctrl.viewStartMs; viewEndMs: ctrl.viewEndMs
+                markerStartMs: dragArea.dragging ? Math.min(dragArea.fromMs, dragArea.toMs) : ctrl.markerStartMs
+                markerEndMs: dragArea.dragging ? Math.max(dragArea.fromMs, dragArea.toMs) : ctrl.markerEndMs
+                Component.onCompleted: ctrl.attachHeatmap(heatBar)
+                MouseArea {
+                    id: dragArea
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    property real fromMs: 0
+                    property real toMs: 0
+                    property bool dragging: false
+                    function msAt(x) { return ctrl.msAtFraction(x / width) }
+                    onPressed: (m) => { fromMs = msAt(m.x); toMs = fromMs; dragging = false }
+                    onPositionChanged: (m) => {
+                        if (pressed) {
+                            toMs = msAt(m.x)
+                            dragging = Math.abs(toMs - fromMs) > 150
+                            chartTip.visible = false
+                        } else {
+                            page.showTip(heatBar, m.x, m.y, ctrl.heatTooltip(msAt(m.x)))
+                        }
+                    }
+                    onReleased: (m) => { dragging = false; page.seekTo(ctrl.finishHeatmapDrag(fromMs, msAt(m.x))) }
+                    onExited: chartTip.visible = false
+                }
+            }
+            Row {
+                id: markRow
+                height: 34; spacing: 10
+                visible: ctrl.hasScript
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: qsTr("Heatmap: click = seek, drag = mark.") + "   " + ctrl.markerLabel
+                    color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                }
+                FlowButton {
+                    anchors.verticalCenter: parent.verticalCenter; implicitHeight: 28
+                    text: qsTr("Zoom selection"); enabled: ctrl.hasMarker
+                    onClicked: ctrl.zoomToSelection()
+                }
+                FlowButton {
+                    anchors.verticalCenter: parent.verticalCenter; implicitHeight: 28
+                    text: qsTr("Clear selection"); enabled: ctrl.hasMarker
+                    onClicked: ctrl.clearMarker()
+                }
+            }
         }
+    }
+
+    // Shared chart tooltip (curve, heatmap).
+    Rectangle {
+        id: chartTip
+        visible: false; z: 100
+        width: tipText.implicitWidth + 16; height: tipText.implicitHeight + 10
+        radius: 8; color: "#e60a1a2e"; border.color: Theme.cardBorder
+        Text { id: tipText; anchors.centerIn: parent; color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 12 }
     }
 
     // Drop a video or a script anywhere on the page.
@@ -351,14 +468,29 @@ Item {
         onDropped: (drop) => { if (drop.hasUrls) ctrl.openPath(drop.urls[0].toString()) }
     }
 
+    // Keys as 0.7 (Player, not while typing).
     Shortcut { sequence: "Space"; onActivated: page.togglePlay() }
     Shortcut { sequence: "Left"; onActivated: page.seekBy(-5000) }
     Shortcut { sequence: "Right"; onActivated: page.seekBy(5000) }
     Shortcut { sequence: "Shift+Left"; onActivated: page.seekBy(-1000) }
     Shortcut { sequence: "Shift+Right"; onActivated: page.seekBy(1000) }
-    Shortcut { sequence: "+"; onActivated: ctrl.offsetMs = ctrl.offsetMs + 50 }
-    Shortcut { sequence: "-"; onActivated: ctrl.offsetMs = ctrl.offsetMs - 50 }
+    Shortcut { sequence: ","; onActivated: page.seekBy(-200) }
+    Shortcut { sequence: "."; onActivated: page.seekBy(200) }
+    Shortcut { sequences: ["+", "="]; onActivated: ctrl.offsetMs = ctrl.offsetMs + 10 }
+    Shortcut { sequence: "-"; onActivated: ctrl.offsetMs = ctrl.offsetMs - 10 }
+    Shortcut { sequence: "L"; onActivated: ctrl.loopEnabled = !ctrl.loopEnabled }
     Shortcut { sequence: "A"; onActivated: ctrl.setLoopStart(media.position) }
     Shortcut { sequence: "B"; onActivated: ctrl.setLoopEnd(media.position) }
+    Repeater {
+        model: 9
+        delegate: Item {
+            required property int index
+            Shortcut {
+                sequence: String(index + 1)
+                enabled: !deckOpen
+                onActivated: page.seekTo(ctrl.jumpTenthVideoMs(index + 1))
+            }
+        }
+    }
     Shortcut { sequence: StandardKey.Open; onActivated: page.openFile() }
 }

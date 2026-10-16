@@ -62,6 +62,10 @@ public:
     // How the curve draws at this width: smooth, fine line or tempo wave.
     Mode modeFor(double widthPx) const;
     QString modeName() const;
+    // Tooltip at x (item pixels): "12.3s · 45" (0.7 curve hover).
+    Q_INVOKABLE QString hoverText(double x) const;
+    // Script time at x.
+    Q_INVOKABLE double msAtX(double x) const;
     void paint(QPainter* p) override;
     // How often the static layer (everything but the playhead) was drawn.
     int layerRenders() const { return layerRenders_; }

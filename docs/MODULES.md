@@ -14,7 +14,7 @@ Functions use PascalCase and struct fields use snake_case.
 | `funscript.h` | Parse/Write, ShiftActions, `samn::Action` (the only definition) | Go `funscript/funscript.go` | ✅ |
 | `samn_file.h` | `.samn` document, conversion and export | Go `samn/`, `convert.go` | ✅ byte-identical with Go |
 | `mapper.h` | Script → suction/vibration frames (heatmap, device) | Go `funscript/mapper.go` | ✅ values identical |
-| `marks.h` | Bookmarks and chapters, OFS times | Go `funscript/bookmarks.go` | ✅ files byte-identical |
+| `marks.h` | Bookmarks and chapters, OFS times; the marked range (`<script>.marker.json`) | Go `funscript/bookmarks.go` | ✅ files byte-identical |
 | `script_finder.h` | Script for a video: beside it, folders, tolerant names, variants | Go `app_open_media.go` | ✅ |
 | `settings.h` | Settings JSON with 0.7 keys, atomic writes | — | ✅ |
 | `text.h` | `FoldCase`: UTF-8 lower case without ICU (Latin, Greek, Cyrillic, full-width) | Go `strings.ToLower` | ✅ |
@@ -22,6 +22,7 @@ Functions use PascalCase and struct fields use snake_case.
 | `stroke_filter.h` | Live stroker filter (PCHIP/MAKIMA, speed limit, idle fill) | Go `funscript/stroke_filter.go` | ✅ parity |
 | `beatbar.h`, `beat_strokes.h` | Cock Hero beat bar → beats → strokes | Go `generator/beatbar.go` | ✅ parity |
 | `curve_geometry.h` | Curve as 0.7 draws it: Catmull-Rom (control points clamped to 0-100), tempo wave, density switch, zoom window. Binary search instead of 0.7's full scans. | 0.7 `playback.js` (smoothCurvePath, drawSpeedWave, zoomByFactor) | ✅ tempo wave equals 0.7 (node reference) |
+| `fileio.h` | `WriteFileAtomic`: temp file, flush, rename. The one writer for marks, `.samn`, settings and the range marker. | Go `writeFileAtomic` | ✅ |
 | `audio_envelope.h` | Loudness envelope 0..1 per 50 ms (Audio Level lane, vibration from sound). No ffmpeg: the app decodes. | Go `generator/audio_vibration.go` | ✅ Go tests ported |
 
 **Open cleanups:**
@@ -34,7 +35,8 @@ Functions use PascalCase and struct fields use snake_case.
 | `src/theme.h` | All colours and sizes of the Flow look (QML singleton `Theme`). |
 | `src/player_controller.*` | Player logic for QML: video first (folders, variants), `.samn`, lanes, heatmap, chapters, bookmarks, offset, loop, zoom window, errors. |
 | `src/curve_item.*` | One curve lane in the 0.7 look (soft line, glow, fill, dots, live dot, tempo wave). The static layer is cached; playing only moves the playhead. |
-| `src/heatmap_item.*` | The intensity strip under the progress bar. |
+| `src/heatmap_item.*` | The heatmap bar (0.7 colours, 300 buckets) on the zoom window, with the marked range and the playhead. |
+| `src/ruler_item.*` | The time ruler above the curve (0.7 steps and labels). |
 | `src/audio_level.*` | `AudioLevelDecoder` (Qt Multimedia, cached per file) and the Audio Level lane. |
 | `qml/FlowButton.qml`, `IconButton.qml`, `FlowSlider.qml`, `OffsetField.qml`, `FlowCombo.qml` | Styled controls; no default Qt Quick Controls look. |
 | `qml/Main.qml` | Window, background ribbons, top bar, pages, mode deck, keys. |

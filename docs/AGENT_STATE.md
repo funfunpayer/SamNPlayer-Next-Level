@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 16 Oct 2026, Claude, branch `claude/samn2-p1-ui`.
+**Last update:** 16 Oct 2026, Claude, branch `claude/samn2-p1-player2`.
 
 ## Rules
 
@@ -38,11 +38,13 @@
   - Styled controls, the no-script card, error bar. A broken QML file now fails the smoke test (exit 1).
   - Tests: 60+ core cases, 13 app Qt tests (controller, zoom, decoder with a generated WAV, curve modes and layer cache).
 
+- **P1 Player part 2** (`claude/samn2-p1-player2`): time ruler; heatmap in the timeline (0.7 colours, 300 buckets, zoom; click = seek, drag = mark); marked range saved beside the script (0.7 `.marker.json`), loop over it, A / B, zoom selection; hover tooltips; live Vibration / Suction values; speed, sleep timer, mute, ±10 s; 0.7 keys (`,` `.` ±200 ms, +/- offset 10 ms, L, 1–9). Core: one atomic file writer (`fileio.h`) instead of three copies.
+
 ## Next (P1, in order)
 
 1. `docs/PARITY.md`: the full 0.7 inventory (every function, file:line), the checklist for "exact copy". A first attempt stopped at a usage limit; redo it.
 2. Library panel (left) and Inspector (right), as in 0.7.
-3. Heatmap range marker (select a range → zoom selection, chapter add), BPM grid, O-marker bands, feel segment bands, speed highlights, scene strip.
+3. BPM grid, O-marker bands, feel segment bands, speed highlights, scene strip, chapter bands; O-markers, bookmarks and chapters panels (add from selection).
 4. Audio Analysis card and audio segments, auto sync (audio), playback speed, `.samn` export, recent files, soft seek.
 5. Core cleanups from `MODULES.md`: names, Unicode case folding, one Python module.
 

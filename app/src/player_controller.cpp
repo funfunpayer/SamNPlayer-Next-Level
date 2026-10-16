@@ -3,6 +3,8 @@
 #include <QDir>
 #include <QFileInfo>
 #include <algorithm>
+#include <cmath>
+#include <filesystem>
 
 #include "curve_item.h"
 #include "heatmap_item.h"
@@ -33,7 +35,18 @@ std::vector<samn::Action> laneFrom(const std::vector<samn::Frame>& frames, bool 
 
 }  // namespace
 
-PlayerController::PlayerController(QObject* parent) : QObject(parent) {}
+PlayerController::PlayerController(QObject* parent) : QObject(parent) {
+    sleepTimer_.setInterval(1000);
+    connect(&sleepTimer_, &QTimer::timeout, this, [this] {
+        if (sleepMinutes_ <= 0 || !playClock_.isValid()) return;
+        if (playedMs_ + playClock_.elapsed() >= qint64(sleepMinutes_) * 60000) {
+            playedMs_ = 0;
+            playClock_.invalidate();
+            sleepTimer_.stop();
+            emit sleepReached();
+        }
+    });
+}
 PlayerController::~PlayerController() = default;
 
 samn::Settings& PlayerController::settings() {
@@ -146,9 +159,11 @@ bool PlayerController::openScript(const QString& pathIn, const QString& videoIn)
     for (const auto& f : frames) heat_.push_back(static_cast<float>(std::max(f.vibration, f.suction)));
 
     scriptPath_ = path;
-    loop_.reset();
-    emit loopChanged();
     loadMarks(path);
+    pendingStart_.reset();
+    marker_ = samn::LoadMarker(std::filesystem::u8path(u8(path))).value_or(samn::RangeMarker{});
+    emit markerChanged();
+    emit loopChanged();
     // Offset saved per script (0.7 key playback.offset.<path>).
     const auto saved = settings().get(samn::offset_key(u8(path)), 0);
     offsetMs_ = static_cast<int>(samn::clamp_offset(saved.is_number() ? saved.get<int64_t>() : 0));
@@ -198,7 +213,8 @@ void PlayerController::clearScript() {
     chapters_.clear();
     scriptPath_.clear();
     playheadMs_ = -1;
-    loop_.reset();
+    marker_ = {};
+    emit markerChanged();
     emit loopChanged();
     pushToViews();
     emit scriptChanged();
@@ -250,29 +266,119 @@ void PlayerController::setVideoPositionMs(qint64 videoMs) {
 }
 
 qint64 PlayerController::loopJumpFor(qint64 videoMs) const {
-    if (!loop_) return -1;
-    const auto j = loop_->jump(videoMs);
-    return j ? *j : -1;
+    if (!loopActive()) return -1;
+    if (samn::script_time(videoMs, offsetMs_) < marker_.end_ms) return -1;
+    return std::max<qint64>(0, marker_.start_ms + offsetMs_);
 }
 
 void PlayerController::setLoopStart(qint64 videoMs) {
-    samn::LoopRange r = loop_.value_or(samn::LoopRange{0, 0});
-    r.start_ms = videoMs;
-    loop_ = r;
-    emit loopChanged();
+    const int64_t t = std::max<int64_t>(0, samn::script_time(videoMs, offsetMs_));
+    if (marker_.Valid() && t < marker_.end_ms) {
+        pendingStart_.reset();
+        setMarker(double(t), double(marker_.end_ms));
+    } else {
+        pendingStart_ = t;  // waits for B
+    }
 }
 
 void PlayerController::setLoopEnd(qint64 videoMs) {
-    samn::LoopRange r = loop_.value_or(samn::LoopRange{0, 0});
-    r.end_ms = videoMs;
-    loop_ = r;
+    const int64_t t = samn::script_time(videoMs, offsetMs_);
+    const int64_t start = pendingStart_ ? *pendingStart_ : marker_.Valid() ? marker_.start_ms : 0;
+    if (t <= start) return;
+    pendingStart_.reset();
+    setMarker(double(start), double(t));
+}
+
+void PlayerController::setLoopEnabled(bool on) {
+    if (on == loopEnabled_) return;
+    loopEnabled_ = on;
     emit loopChanged();
 }
 
-void PlayerController::clearLoop() {
-    loop_.reset();
+void PlayerController::setMarker(double startMs, double endMs) {
+    samn::RangeMarker m{int64_t(std::llround(std::min(startMs, endMs))), int64_t(std::llround(std::max(startMs, endMs)))};
+    m.start_ms = std::max<int64_t>(0, m.start_ms);
+    if (!m.Valid()) m = {};
+    if (m == marker_) return;
+    marker_ = m;
+    if (!scriptPath_.isEmpty()) {
+        try {
+            samn::SaveMarker(std::filesystem::u8path(u8(scriptPath_)), marker_);
+        } catch (const std::exception& e) {
+            setError(tr("Could not save the marked range: %1").arg(q(e.what())));
+        }
+    }
+    emit markerChanged();
     emit loopChanged();
 }
+
+void PlayerController::clearMarker() { setMarker(0, 0); }
+
+void PlayerController::zoomToSelection() {
+    if (!marker_.Valid()) return;
+    setView(samn::ZoomToRange(marker_.start_ms, marker_.end_ms, timelineMs()));
+}
+
+QString PlayerController::markerLabel() const {
+    if (!marker_.Valid()) return tr("(no selection)");
+    return tr("Marked: %1s - %2s").arg(marker_.start_ms / 1000.0, 0, 'f', 1).arg(marker_.end_ms / 1000.0, 0, 'f', 1);
+}
+
+double PlayerController::msAtFraction(double fraction) const {
+    return double(view_.start_ms) + std::clamp(fraction, 0.0, 1.0) * double(view_.end_ms - view_.start_ms);
+}
+
+qint64 PlayerController::finishHeatmapDrag(double startMs, double endMs) {
+    if (std::abs(endMs - startMs) > double(samn::kMarkDragMinMs)) {
+        setMarker(startMs, endMs);
+        return -1;
+    }
+    return std::max<qint64>(0, qint64(std::llround(startMs)) + offsetMs_);
+}
+
+qint64 PlayerController::jumpTenthVideoMs(int n) const {
+    const int64_t total = timelineMs();
+    return std::max<qint64>(0, qint64(total * std::clamp(n, 0, 10) / 10) + offsetMs_);
+}
+
+int PlayerController::vibrationNow() const {
+    if (playheadMs_ < 0) return 0;
+    return int(std::lround(samn::PositionAt(vibration_, playheadMs_).value_or(0)));
+}
+
+int PlayerController::suctionNow() const {
+    if (playheadMs_ < 0) return 0;
+    return int(std::lround(samn::PositionAt(suction_, playheadMs_).value_or(0)));
+}
+
+QString PlayerController::heatTooltip(double ms) const {
+    if (heat_.empty() || stroke_.empty()) return {};
+    const double span = std::max<double>(1, double(scriptDurationMs()));
+    const auto i = std::clamp<long long>(std::llround(ms / span * double(heat_.size() - 1)), 0,
+                                         (long long)heat_.size() - 1);
+    return q(samn::FormatTooltipTime(int64_t(ms))) + QStringLiteral(" · %1%").arg(std::lround(heat_[size_t(i)] * 100));
+}
+
+void PlayerController::setSleepMinutes(int minutes) {
+    minutes = std::clamp(minutes, 0, 24 * 60);
+    if (minutes == sleepMinutes_) return;
+    sleepMinutes_ = minutes;
+    playedMs_ = 0;  // a new choice counts from now (0.7 re-arms on change)
+    if (playClock_.isValid()) playClock_.restart();
+    emit sleepChanged();
+}
+
+void PlayerController::setPlaying(bool playing) {
+    if (playing) {
+        if (!playClock_.isValid()) playClock_.start();
+        if (!sleepTimer_.isActive()) sleepTimer_.start();
+    } else {
+        if (playClock_.isValid()) playedMs_ += playClock_.elapsed();
+        playClock_.invalidate();
+        sleepTimer_.stop();
+    }
+}
+
 
 qint64 PlayerController::chapterVideoMs(int index) const {
     if (index < 0 || index >= static_cast<int>(chapterRanges_.size())) return -1;
@@ -338,7 +444,7 @@ void PlayerController::pushToViews() {
         c->setPlayheadMs(playheadMs_);
     }
     if (heatmap_) {
-        heatmap_->setValues(heat_, stroke_.empty() ? 0 : stroke_.front().at, scriptDurationMs());
+        heatmap_->setValues(heat_, 0, scriptDurationMs());
         heatmap_->setPlayheadMs(playheadMs_);
     }
 }

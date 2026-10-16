@@ -83,6 +83,19 @@ CurveItem::Mode CurveItem::modeFor(double widthPx) const {
     return lane_ == QLatin1String("stroke") ? Mode::Tempo : Mode::Fine;
 }
 
+double CurveItem::msAtX(double x) const {
+    const auto [t0, t1] = timeWindow();
+    return t0 + std::clamp(x / std::max(1.0, width()), 0.0, 1.0) * (t1 - t0);
+}
+
+QString CurveItem::hoverText(double x) const {
+    if (actions_.empty()) return {};
+    const double ms = msAtX(x);
+    const auto pos = samn::PositionAt(actions_, int64_t(ms));
+    return QString::fromStdString(samn::FormatTooltipTime(int64_t(ms))) +
+           QStringLiteral(" · %1").arg(std::lround(pos.value_or(0)));
+}
+
 QString CurveItem::modeName() const {
     switch (mode_) {
     case Mode::Smooth: return QStringLiteral("smooth");

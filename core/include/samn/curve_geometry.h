@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -94,5 +95,19 @@ bool IsZoomed(ViewWindow v, int64_t totalMs);
 ViewWindow ZoomView(ViewWindow v, int64_t totalMs, double factor, std::optional<double> anchorMs = std::nullopt);
 // A range with a margin of 8 % (at least 200 ms) on each side.
 ViewWindow ZoomToRange(int64_t startMs, int64_t endMs, int64_t totalMs);
+
+// --- Time ruler and labels ---------------------------------------------------
+
+// Ruler tick distance: the first of 1, 2, 5, 10, 15, 30 s, 1, 2, 5, 10, 15,
+// 30, 60 min whose ticks are at least minPx (0.7: 72 px) apart.
+int64_t RulerStepMs(double spanMs, double widthPx, double minPx = 72.0);
+// Ruler label: "mm:ss", or "h:mm:ss" from one hour (rounded to seconds).
+std::string FormatRulerTime(int64_t ms);
+// Tooltip time: "12.3s" below a minute, else "m:ss.t". (0.7 could print
+// "1:01.10" for 61.96 s; here the tenths carry over: "1:02.0".)
+std::string FormatTooltipTime(int64_t ms);
+// A drag on the heatmap marks a range only when it spans more than this;
+// a shorter one is a click that seeks (0.7).
+constexpr int64_t kMarkDragMinMs = 150;
 
 }  // namespace samn

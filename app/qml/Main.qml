@@ -48,7 +48,7 @@ ApplicationWindow {
         anchors.left: parent.left; anchors.right: parent.right
         anchors.margins: 20; anchors.topMargin: 6
         currentIndex: win.mode
-        PlayerPage { id: player }
+        PlayerPage { id: player; deckOpen: deck.open }
         NotYetPage { mode: qsTr("Editor"); phase: "P4" }
         NotYetPage { mode: qsTr("Generator"); phase: "P3" }
         NotYetPage { mode: qsTr("Training"); phase: "P4" }
