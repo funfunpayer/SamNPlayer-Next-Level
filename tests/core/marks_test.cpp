@@ -216,3 +216,22 @@ TEST_CASE("range marker: 0.7 sidecar file") {
     CHECK_FALSE(samn::LoadMarker(script).has_value());
     std::filesystem::remove_all(dir);
 }
+
+// 0.7 playback.js chapterRanges
+TEST_CASE("ChapterRanges: sorted, open ends run on, names filled") {
+    std::vector<samn::Chapter> in{{"B", 5000, 0}, {"", 1000, 3000}, {"C", 9000, 8000}};
+    const auto r = samn::ChapterRanges(in, 12000);
+    REQUIRE(r.size() == 3);
+    CHECK(r[0].name == "Chapter 1");
+    CHECK(r[0].start_ms == 1000);
+    CHECK(r[0].end_ms == 3000);
+    CHECK(r[0].index == 0);
+    CHECK(r[1].name == "B");
+    CHECK(r[1].end_ms == 9000);   // open end -> next start
+    CHECK(r[2].end_ms == 12000);  // end before start -> script end
+    CHECK(r[2].index == 2);
+    CHECK(samn::ChapterRanges({}, 1000).empty());
+    // Script end before the start: never negative.
+    const auto z = samn::ChapterRanges({{"X", 5000, 0}}, 2000);
+    CHECK(z[0].end_ms == 5000);
+}

@@ -603,4 +603,19 @@ void SaveMarker(const std::filesystem::path& script, RangeMarker marker) {
                               std::to_string(marker.end_ms) + "}");
 }
 
+std::vector<ChapterRange> ChapterRanges(std::vector<Chapter> chapters, int64_t total_ms) {
+    std::stable_sort(chapters.begin(), chapters.end(),
+                     [](const Chapter& a, const Chapter& b) { return a.start_ms < b.start_ms; });
+    std::vector<ChapterRange> out;
+    out.reserve(chapters.size());
+    for (size_t i = 0; i < chapters.size(); ++i) {
+        const Chapter& c = chapters[i];
+        const int64_t next = i + 1 < chapters.size() ? chapters[i + 1].start_ms : total_ms;
+        const int64_t end = c.end_ms > c.start_ms ? c.end_ms : next;
+        out.push_back({c.name.empty() ? "Chapter " + std::to_string(i + 1) : c.name, c.start_ms,
+                       std::max(c.start_ms, end), int(i)});
+    }
+    return out;
+}
+
 }  // namespace samn

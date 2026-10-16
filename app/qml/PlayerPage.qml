@@ -437,6 +437,7 @@ Item {
                 LaneName { name: qsTr("Vibration"); dot: Theme.laneVibration; height: vibLane.height; visible: vibLane.visible }
                 LaneName { name: qsTr("Suction"); dot: Theme.laneSuction; height: sucLane.height; visible: sucLane.visible }
                 LaneName { name: qsTr("Audio Level"); dot: "#93aec4"; height: audioLane.height; visible: audioLane.visible }
+                LaneName { name: qsTr("Chapters"); dot: "#2f80ed"; height: chapterStrip.height; visible: chapterStrip.visible }
                 Item { width: 1; height: 4; visible: heatBar.visible }
                 LaneName { name: qsTr("Heatmap"); dot: "#e8603c"; height: heatBar.height; visible: heatBar.visible }
             }
@@ -448,6 +449,7 @@ Item {
                 readonly property int laneH: 34
                 readonly property int extraLanes: (vibLane.visible ? 1 : 0) + (sucLane.visible ? 1 : 0) + (audioLane.visible ? 1 : 0)
                 readonly property int fixedH: ruler.height + (heatBar.visible ? heatBar.height + 4 : 0) + markRow.height
+                                              + (chapterStrip.visible ? chapterStrip.height : 0)
                 RulerItem {
                     id: ruler
                     width: parent.width; height: 22
@@ -513,6 +515,46 @@ Item {
                     playheadMs: ctrl.playheadMs
                     label: ""
                     Rectangle { width: parent.width; height: 1; color: Qt.rgba(1, 1, 1, 0.08) }
+                }
+                // Chapter bands (0.7 pb-chapter-bands): one coloured band per
+                // chapter on the curve's time scale; click = seek to its start.
+                Item {
+                    id: chapterStrip
+                    width: parent.width; height: 30
+                    visible: ctrl.hasScript && ctrl.chapterBands.length > 0
+                    clip: true
+                    readonly property var colors: [Qt.rgba(47 / 255, 128 / 255, 237 / 255, 0.45), Qt.rgba(242 / 255, 140 / 255, 40 / 255, 0.45),
+                                                   Qt.rgba(155 / 255, 81 / 255, 224 / 255, 0.45), Qt.rgba(39 / 255, 174 / 255, 160 / 255, 0.45),
+                                                   Qt.rgba(86 / 255, 140 / 255, 220 / 255, 0.38)]
+                    readonly property real span: Math.max(1, ctrl.viewEndMs - ctrl.viewStartMs)
+                    Repeater {
+                        model: ctrl.chapterBands
+                        delegate: Rectangle {
+                            required property var modelData
+                            readonly property real from: Math.max(modelData.startMs, ctrl.viewStartMs)
+                            readonly property real to: Math.min(modelData.endMs, ctrl.viewEndMs)
+                            readonly property bool current: ctrl.playheadMs >= modelData.startMs && ctrl.playheadMs < modelData.endMs
+                            visible: modelData.endMs > ctrl.viewStartMs && modelData.startMs < ctrl.viewEndMs
+                            x: (from - ctrl.viewStartMs) / chapterStrip.span * chapterStrip.width
+                            width: Math.max(chapterStrip.width * 0.005, (to - from) / chapterStrip.span * chapterStrip.width)
+                            y: 2; height: 26; radius: 7
+                            color: chapterStrip.colors[modelData.index % 5]
+                            border.width: 1; border.color: current ? "white" : "transparent"
+                            Text {
+                                anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 4
+                                verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                                text: modelData.name; color: parent.current ? "white" : "#e9f4ff"
+                                font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                            MouseArea {
+                                anchors.fill: parent; hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onPositionChanged: (m) => page.showTip(parent, m.x, m.y, modelData.tip)
+                                onExited: chartTip.visible = false
+                                onClicked: page.seekTo(modelData.startMs + ctrl.offsetMs)
+                            }
+                        }
+                    }
                 }
                 Item { width: 1; height: 4; visible: heatBar.visible }
                 // Heatmap: click = seek, drag = mark (0.7).

@@ -97,4 +97,15 @@ std::optional<RangeMarker> LoadMarker(const std::filesystem::path& script);
 // An invalid range (end <= start) removes the file, as in 0.7.
 void SaveMarker(const std::filesystem::path& script, RangeMarker marker);
 
+// A chapter as a band on the timeline (0.7 chapterRanges): sorted by start;
+// an open end (end <= start) runs to the next chapter's start or the script
+// end; an empty name becomes "Chapter <n>"; index = position after sorting
+// (picks one of five colours).
+struct ChapterRange {
+    std::string name;
+    int64_t start_ms = 0, end_ms = 0;
+    int index = 0;
+};
+std::vector<ChapterRange> ChapterRanges(std::vector<Chapter> chapters, int64_t total_ms);
+
 }  // namespace samn

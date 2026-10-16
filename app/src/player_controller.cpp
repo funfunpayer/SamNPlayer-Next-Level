@@ -232,6 +232,19 @@ QVariantList PlayerController::chapters() const {
     return out;
 }
 
+QVariantList PlayerController::chapterBands() const {
+    QVariantList out;
+    for (const auto& r : samn::ChapterRanges(marks_.chapters, scriptDurationMs())) {
+        const QString name = q(r.name);
+        out.append(QVariantMap{{"name", name},
+                               {"startMs", qint64(r.start_ms)},
+                               {"endMs", qint64(r.end_ms)},
+                               {"index", r.index},
+                               {"tip", tr("%1 · %2–%3 — click to seek").arg(name, formatTime(r.start_ms), formatTime(r.end_ms))}});
+    }
+    return out;
+}
+
 QVariantList PlayerController::bookmarks() const {
     QVariantList out;
     for (const auto& b : marks_.bookmarks)

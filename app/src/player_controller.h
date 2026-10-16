@@ -47,6 +47,10 @@ class PlayerController : public QObject {
     // Marks of the script ({name, startMs, endMs, label}, {name, timeMs,
     // label}, {kind, startMs, endMs, intensity, label}); edits save at once.
     Q_PROPERTY(QVariantList chapters READ chapters NOTIFY marksChanged)
+    // Chapter bands on the timeline (0.7 renderChapterBands): sorted, open
+    // ends run to the next chapter or the script end; name, startMs, endMs,
+    // index (colour), tip.
+    Q_PROPERTY(QVariantList chapterBands READ chapterBands NOTIFY marksChanged)
     Q_PROPERTY(QVariantList bookmarks READ bookmarks NOTIFY marksChanged)
     Q_PROPERTY(QVariantList oMarkers READ oMarkers NOTIFY marksChanged)
     // Intensity for a new secondary O-marker (0.7 playback.omarker_intensity).
@@ -176,6 +180,7 @@ public:
     QVariantList variants() const { return variants_; }
     int variantIndex() const { return variantIndex_; }
     QVariantList chapters() const;
+    QVariantList chapterBands() const;
     QVariantList bookmarks() const;
     QVariantList oMarkers() const;
     double oMarkerIntensity() const { return oMarkerIntensity_; }
