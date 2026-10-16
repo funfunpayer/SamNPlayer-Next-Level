@@ -381,6 +381,19 @@ private slots:
         QVERIFY(empty.exportHeatmapPng().isEmpty());
     }
 
+    void scriptDoctor() {
+        QTemporaryDir d;
+        writeFile(d.filePath("Q.funscript"), zigzag());
+        PlayerController c;
+        QCOMPARE(c.scriptQuality().value("error").toString(), QStringLiteral("no script loaded"));
+        QVERIFY(c.openScript(d.filePath("Q.funscript")));
+        const auto r = c.scriptQuality();
+        QCOMPARE(r.value("error").toString(), QString());
+        QVERIFY(r.value("score").toDouble() >= 0 && r.value("score").toDouble() <= 1);
+        QVERIFY(r.contains("passed"));
+        QVERIFY(r.value("warnings").canConvert<QStringList>());
+    }
+
     void sleepTimer() {
         PlayerController c;
         QSignalSpy reached(&c, &PlayerController::sleepReached);
