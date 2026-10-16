@@ -35,17 +35,24 @@ BleTransport::BleTransport(Options options, QObject* parent)
 BleTransport::~BleTransport() { Teardown(); }
 
 Status BleTransport::Scan() {
-#ifdef Q_OS_LINUX
-    // Qt asks BlueZ over D-Bus; without an adapter (a CI machine, a VM, a
-    // desktop without Bluetooth) there is nothing to scan with.
+    // Without an adapter (a CI machine, a VM, a desktop without Bluetooth)
+    // there is nothing to scan with. Checked first on every platform: on
+    // Windows a discovery agent started without a radio can call back after
+    // it is gone.
     const QList<QBluetoothHostInfo> adapters = QBluetoothLocalDevice::allDevices();
-    if (adapters.isEmpty())
-        return Fail("Bluetooth: no Bluetooth adapter found (is the computer's Bluetooth built in, "
-                    "enabled, and is the BlueZ service running?)");
+    if (adapters.isEmpty()) {
+#ifdef Q_OS_LINUX
+        const char* extra = " Is the BlueZ service running?";
+#else
+        const char* extra = "";
+#endif
+        return Fail(std::string("Bluetooth: no Bluetooth adapter found (is the computer's Bluetooth built in "
+                                "and enabled?") +
+                    extra + ")");
+    }
     QBluetoothLocalDevice radio(adapters.first().address());
     if (radio.isValid() && radio.hostMode() == QBluetoothLocalDevice::HostPoweredOff)
         return Fail("Bluetooth: the Bluetooth adapter is switched off - turn it on and try again");
-#endif
     QBluetoothDeviceDiscoveryAgent agent;
     agent.setLowEnergyDiscoveryTimeout(options_.scan_timeout_ms);
     bool have = false;

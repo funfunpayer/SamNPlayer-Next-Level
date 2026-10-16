@@ -60,6 +60,22 @@ jobs:
       - name: Core tests (C++)
         run: ctest --test-dir build -C Release --output-on-failure
 
+      # A test that crashes on Windows loses its buffered output; run the
+      # failed app tests one function at a time to show where it stops.
+      - name: App tests per function (on failure)
+        if: failure()
+        shell: bash
+        run: |
+          for t in device_transports device_controller; do
+            exe=$(find build -name "${t}_test" -o -name "${t}_test.exe" | head -1)
+            [ -n "$exe" ] || continue
+            for f in $("$exe" -functions | sed 's/()//'); do
+              "$exe" "$f" -silent > /dev/null 2>&1; rc=$?
+              echo "$t::$f exit $rc"
+              [ $rc -eq 0 ] || "$exe" "$f" -v1 2>&1 | tail -40
+            done
+          done
+
       - name: Parity tests (Python bindings)
         shell: bash
         run: |
