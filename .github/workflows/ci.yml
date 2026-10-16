@@ -67,7 +67,7 @@ jobs:
         shell: bash
         run: |
           set +e  # keep going after a failing function
-          for t in device_transports device_controller; do
+          for t in device_transports device_controller playback_output inspector_qml; do
             exe=$(find build -name "${t}_test" -o -name "${t}_test.exe" | head -1)
             [ -n "$exe" ] || continue
             for f in $("$exe" -functions | sed 's/()//'); do

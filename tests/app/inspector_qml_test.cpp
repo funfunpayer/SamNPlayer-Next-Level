@@ -61,10 +61,14 @@ private slots:
                 })",
                          QUrl("qrc:/test/Wrapper.qml"));
             QVERIFY2(comp.status() == QQmlComponent::Ready, qPrintable(comp.errorString()));
-            std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
-            QVERIFY(root);
+            // The window is declared first so it outlives the root item:
+            // the root sits in the window's content item, and destroying the
+            // window first leaves it with a dangling parent (a crash at the
+            // end of the test on Windows).
             QQuickWindow window;
             window.resize(360, 900);
+            std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
+            QVERIFY(root);
             root->setParentItem(window.contentItem());
             window.show();
             QVERIFY(QTest::qWaitForWindowExposed(&window));
