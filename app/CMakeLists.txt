@@ -17,6 +17,7 @@ qt_add_qml_module(samn_app
     src/audio_level.h src/audio_level.cpp
     src/ruler_item.h src/ruler_item.cpp
     src/player_controller.h src/player_controller.cpp
+    src/library_controller.h src/library_controller.cpp
   QML_FILES
     qml/Main.qml
     qml/GlassCard.qml

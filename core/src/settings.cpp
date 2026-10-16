@@ -97,11 +97,32 @@ Settings::Settings(fs::path path) : path_(path.empty() ? config_dir() / "setting
         fs::path bad = path_;
         bad.replace_extension(".broken.json");
         replace_file(path_, bad);
+        return;
     }
+    stamp_ = fs::last_write_time(path_, ec);
+    size_ = fs::file_size(path_, ec);
+}
+
+void Settings::RefreshLocked(bool force) const {
+    std::error_code ec;
+    const auto stamp = fs::last_write_time(path_, ec);
+    if (ec) return;  // no file (yet): keep what we have
+    const auto size = fs::file_size(path_, ec);
+    if (ec || (!force && stamp == stamp_ && size == size_)) return;
+    std::ifstream in(path_, std::ios::binary);
+    if (!in) return;
+    std::ostringstream ss;
+    ss << in.rdbuf();
+    auto parsed = nlohmann::json::parse(ss.str(), nullptr, false);
+    if (!parsed.is_object()) return;  // a half-broken file never wipes our values
+    data_ = std::move(parsed);
+    stamp_ = stamp;
+    size_ = size;
 }
 
 nlohmann::json Settings::get(const std::string& key, const nlohmann::json& default_value) const {
     std::lock_guard<std::mutex> lk(mutex_);
+    RefreshLocked(false);
     auto it = data_.find(key);
     return it == data_.end() ? default_value : *it;
 }
@@ -112,6 +133,7 @@ void Settings::set(const std::string& key, const nlohmann::json& value) {
 
 void Settings::set_many(const std::map<std::string, nlohmann::json>& values) {
     std::lock_guard<std::mutex> lk(mutex_);
+    RefreshLocked(true);  // keep what other Settings objects wrote
     for (const auto& [k, v] : values) data_[k] = v;
     fs::path dir = path_.parent_path();
     if (dir.empty()) dir = ".";
@@ -122,6 +144,8 @@ void Settings::set_many(const std::map<std::string, nlohmann::json>& values) {
     } catch (const std::exception&) {
         throw std::runtime_error("cannot write settings file: " + path_.string());
     }
+    stamp_ = fs::last_write_time(path_, ec);
+    size_ = fs::file_size(path_, ec);
 }
 
 }  // namespace samn

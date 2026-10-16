@@ -2,6 +2,10 @@
 // App settings: one JSON file in the user's config folder. Port of samn/settings.py.
 // Same keys as SamNPlayer 0.7 where a setting exists there (for example
 // "playback.offset.<script path>"). Writes are atomic (temp file + replace).
+// Several Settings objects (one per controller) may share one file: a write
+// re-reads the file first and changes only its own keys, and a read picks
+// up a newer file, so no object overwrites another one's change.
+#include <cstdint>
 #include <filesystem>
 #include <map>
 #include <mutex>
@@ -31,9 +35,14 @@ public:
     void set_many(const std::map<std::string, nlohmann::json>& values);
 
 private:
+    // Re-read the file when it changed on disk (or always, with force).
+    void RefreshLocked(bool force) const;
+
     std::filesystem::path path_;
     mutable std::mutex mutex_;
-    nlohmann::json data_ = nlohmann::json::object();
+    mutable nlohmann::json data_ = nlohmann::json::object();
+    mutable std::filesystem::file_time_type stamp_{};
+    mutable std::uintmax_t size_ = 0;
 };
 
 }  // namespace samn
