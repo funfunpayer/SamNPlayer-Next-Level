@@ -37,6 +37,13 @@ Item {
         audioOutput: AudioOutput { id: audio; volume: volume.value; muted: page.muted }
         playbackRate: page.speed
         onPlaybackStateChanged: ctrl.setPlaying(playbackState === MediaPlayer.PlayingState)
+        // Play list: at the end of the video, Auto-advance opens the next
+        // script and it starts once its video is loaded (0.7).
+        property bool playWhenLoaded: false
+        onMediaStatusChanged: {
+            if (mediaStatus === MediaPlayer.EndOfMedia && ctrl.playlistFinished()) playWhenLoaded = ctrl.videoName !== ""
+            else if (mediaStatus === MediaPlayer.LoadedMedia && playWhenLoaded) { playWhenLoaded = false; media.play() }
+        }
         onPositionChanged: {
             ctrl.setVideoPositionMs(position)
             const jump = ctrl.loopJumpFor(position)
@@ -68,6 +75,13 @@ Item {
         fileMode: FileDialog.SaveFile
         nameFilters: [qsTr("PNG image (*.png)")]
         onAccepted: ctrl.saveSnapshot(videoOut.videoSink, selectedFile.toString())
+    }
+    FileDialog {
+        id: addListDialog
+        title: qsTr("Add a script to the list")
+        fileMode: FileDialog.OpenFiles
+        nameFilters: [qsTr("Script (*.funscript *.samn)"), qsTr("All files (*)")]
+        onAccepted: { for (const f of selectedFiles) ctrl.addToPlaylist(f.toString()) }
     }
     FileDialog {
         id: projectDialog
@@ -128,6 +142,7 @@ Item {
         collapsed: ctrl.uiValue("player.inspectorCollapsed", false)
         onCollapsedChanged: ctrl.setUiValue("player.inspectorCollapsed", collapsed)
         onSeekRequested: (ms) => page.seekTo(ms)
+        onAddToListRequested: addListDialog.open()
         videoPositionMs: media.position
         onProjectLoadRequested: projectDialog.open()
     }
@@ -396,6 +411,7 @@ Item {
                     }
                 }
                 Row {
+                    id: transportRow
                     anchors.horizontalCenter: parent.horizontalCenter
                     y: 54
                     spacing: 18
@@ -405,6 +421,18 @@ Item {
                         onClicked: page.togglePlay()
                     }
                     IconButton { icon: "forward10"; tip: qsTr("Forward 10 s"); onClicked: page.seekBy(10000); anchors.verticalCenter: parent.verticalCenter }
+                }
+                IconButton {
+                    icon: "skipForward"; tip: qsTr("Next item in the list")
+                    // Beside the centred row, so Play stays in the middle.
+                    visible: ctrl.playlistHasNext
+                    anchors.left: transportRow.right; anchors.leftMargin: 18
+                    anchors.verticalCenter: transportRow.verticalCenter
+                    onClicked: {
+                        const wasPlaying = media.playbackState === MediaPlayer.PlayingState
+                        media.stop()
+                        if (ctrl.playlistNext()) media.playWhenLoaded = wasPlaying && ctrl.videoName !== ""
+                    }
                 }
                 Row {
                     anchors.right: parent.right; anchors.rightMargin: 18
@@ -789,7 +817,7 @@ Item {
     // Drop a video or a script anywhere on the page.
     DropArea {
         anchors.fill: parent
-        onDropped: (drop) => { if (drop.hasUrls) ctrl.openPath(drop.urls[0].toString()) }
+        onDropped: (drop) => { if (drop.hasUrls) ctrl.openPaths(drop.urls.map(u => u.toString())) }
     }
 
     // Keys as 0.7 (Player, not while typing).

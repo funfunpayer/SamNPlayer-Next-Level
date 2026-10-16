@@ -52,6 +52,14 @@ PlayerController::PlayerController(QObject* parent) : QObject(parent) {
             emit sleepReached();
         }
     });
+    // Play list options (0.7 kept Shuffle / Repeat in localStorage).
+    auto flag = [this](const char* key, bool def) {
+        const auto v = settings().get(key, def);
+        return v.is_boolean() ? v.get<bool>() : def;
+    };
+    playlist_.SetAuto(flag("ui.player.playlist.auto", true));
+    playlist_.SetRepeat(flag("ui.player.playlist.repeat", false));
+    if (flag("ui.player.playlist.shuffle", false)) playlist_.SetShuffle(true, rng_);
 }
 PlayerController::~PlayerController() = default;
 
@@ -80,7 +88,11 @@ bool PlayerController::openPath(const QString& pathOrUrl) {
         variants_.clear();
         variantIndex_ = -1;
         emit variantsChanged();
-        return openScript(path);
+        if (!openScript(path)) return false;
+        // Open… makes a fresh one-item list (0.7).
+        playlist_.Replace({u8(scriptPath_)});
+        emit playlistChanged();
+        return true;
     }
     // Video first: beside it, in the script folders, tolerant names, variants.
     std::vector<std::string> folders;
@@ -94,11 +106,116 @@ bool PlayerController::openPath(const QString& pathOrUrl) {
         if (v.path == match.script_path) variantIndex_ = static_cast<int>(i);
     }
     emit variantsChanged();
-    if (match.found && !match.script_path.empty()) return openScript(q(match.script_path), path);
+    if (match.found && !match.script_path.empty()) {
+        if (!openScript(q(match.script_path), path)) return false;
+        playlist_.Replace({u8(scriptPath_)});
+        emit playlistChanged();
+        return true;
+    }
     clearScript();
     setVideo(path);
     setError({});
     return true;
+}
+
+bool PlayerController::openPaths(const QStringList& pathsOrUrls) {
+    std::vector<std::string> scripts;
+    QString video;
+    for (const QString& p : pathsOrUrls) {
+        const QString local = toLocalPath(p);
+        if (isVideo(local)) {
+            if (video.isEmpty()) video = local;
+        } else {
+            scripts.push_back(u8(local));
+        }
+    }
+    if (scripts.empty()) return pathsOrUrls.isEmpty() ? false : openPath(pathsOrUrls.front());
+    if (scripts.size() == 1 && video.isEmpty()) return openPath(q(scripts.front()));
+    // A video and a script dropped together open that script with that
+    // video; several scripts become the play list.
+    playlist_.Replace(scripts);
+    emit playlistChanged();
+    variants_.clear();
+    variantIndex_ = -1;
+    emit variantsChanged();
+    return openScript(q(playlist_.Current()->path), video);
+}
+
+QVariantList PlayerController::playlist() const {
+    QVariantList out;
+    const auto& items = playlist_.Items();
+    for (size_t i = 0; i < items.size(); ++i)
+        out.append(QVariantMap{{"name", q(items[i].name)}, {"path", q(items[i].path)}, {"active", i == playlist_.Index()}});
+    return out;
+}
+
+bool PlayerController::loadPlaylistCurrent() {
+    const auto* cur = playlist_.Current();
+    emit playlistChanged();
+    if (!cur) return false;
+    variants_.clear();
+    variantIndex_ = -1;
+    emit variantsChanged();
+    return openScript(q(cur->path));
+}
+
+bool PlayerController::addToPlaylist(const QString& pathOrUrl) {
+    const QString path = toLocalPath(pathOrUrl);
+    if (!playlist_.Append(u8(path), u8(scriptPath_))) {
+        setError(tr("Already in list: %1").arg(QFileInfo(path).completeBaseName()));
+        return false;
+    }
+    emit playlistChanged();
+    return true;
+}
+
+bool PlayerController::removeFromPlaylist(int index) {
+    if (index < 0) return false;
+    const size_t before = playlist_.Items().size();
+    const bool wasCurrent = playlist_.Remove(size_t(index));
+    if (playlist_.Items().size() == before) return false;
+    if (wasCurrent && playlist_.Current()) return loadPlaylistCurrent();
+    emit playlistChanged();
+    return true;
+}
+
+bool PlayerController::pickPlaylist(int index) {
+    if (index < 0 || !playlist_.Pick(size_t(index))) return false;
+    return loadPlaylistCurrent();
+}
+
+bool PlayerController::playlistNext() { return playlist_.Advance(rng_) && loadPlaylistCurrent(); }
+
+bool PlayerController::playlistFinished() { return playlist_.AdvanceOnFinish(rng_) && loadPlaylistCurrent(); }
+
+void PlayerController::setPlaylistAuto(bool on) {
+    if (on == playlist_.Auto()) return;
+    playlist_.SetAuto(on);
+    try {
+        settings().set("ui.player.playlist.auto", on);
+    } catch (const std::exception&) {
+    }
+    emit playlistChanged();
+}
+
+void PlayerController::setPlaylistShuffle(bool on) {
+    if (on == playlist_.Shuffle()) return;
+    playlist_.SetShuffle(on, rng_);
+    try {
+        settings().set("ui.player.playlist.shuffle", on);
+    } catch (const std::exception&) {
+    }
+    emit playlistChanged();
+}
+
+void PlayerController::setPlaylistRepeat(bool on) {
+    if (on == playlist_.Repeat()) return;
+    playlist_.SetRepeat(on);
+    try {
+        settings().set("ui.player.playlist.repeat", on);
+    } catch (const std::exception&) {
+    }
+    emit playlistChanged();
 }
 
 bool PlayerController::chooseVariant(int index) {

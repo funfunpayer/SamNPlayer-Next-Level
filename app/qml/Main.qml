@@ -73,5 +73,5 @@ ApplicationWindow {
         }
     }
 
-    Component.onCompleted: if (startupPath !== "") player.controller.openPath(startupPath)
+    Component.onCompleted: if (startupPaths.length > 0) player.controller.openPaths(startupPaths)
 }

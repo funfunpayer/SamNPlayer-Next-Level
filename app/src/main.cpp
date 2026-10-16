@@ -2,6 +2,7 @@
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <QStringList>
 #include <QQuickWindow>
 #include <QTimer>
 #include <QtQml/QQmlExtensionPlugin>
@@ -20,7 +21,10 @@ int main(int argc, char** argv) {
 
     QQmlApplicationEngine engine;
     engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
-    engine.rootContext()->setContextProperty("startupPath", argc > 1 ? QString::fromLocal8Bit(argv[1]) : QString());
+    // Files on the command line open like a drop: several scripts become the play list.
+    QStringList startupPaths;
+    for (int i = 1; i < argc; ++i) startupPaths << QString::fromLocal8Bit(argv[i]);
+    engine.rootContext()->setContextProperty("startupPaths", startupPaths);
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &app, [] { QCoreApplication::exit(1); },
                      Qt::QueuedConnection);
     // Resource path instead of loadFromModule (Qt 6.5+) so Qt 6.4 works too.

@@ -297,6 +297,50 @@ private slots:
         QCOMPARE(c2.speedHighlightThresh(), 550.0);
     }
 
+    void playlist() {
+        QTemporaryDir d;
+        for (const char* n : {"A", "B", "C"}) writeFile(d.filePath(QString(n) + ".funscript"), zigzag());
+        PlayerController c;
+        // Open… makes a one-item list: no list shown.
+        QVERIFY(c.openPath(d.filePath("A.funscript")));
+        QVERIFY(!c.playlistVisible());
+        // Add to list: the loaded script comes first.
+        QVERIFY(c.addToPlaylist(d.filePath("B.funscript")));
+        QVERIFY(!c.addToPlaylist(d.filePath("B.funscript")));
+        QCOMPARE(c.lastError(), QStringLiteral("Already in list: B"));
+        QVERIFY(c.playlistVisible());
+        QCOMPARE(c.playlist().size(), 2);
+        QCOMPARE(c.playlist()[0].toMap().value("name").toString(), QStringLiteral("A"));
+        // Next loads the next script.
+        QVERIFY(c.playlistHasNext());
+        QVERIFY(c.playlistNext());
+        QCOMPARE(c.scriptPath(), d.filePath("B.funscript"));
+        QVERIFY(!c.playlistHasNext());
+        // Removing the active one loads the new active one.
+        QVERIFY(c.removeFromPlaylist(1));
+        QCOMPARE(c.scriptPath(), d.filePath("A.funscript"));
+        // A drop of several scripts becomes the list; the first opens.
+        QVERIFY(c.openPaths({QUrl::fromLocalFile(d.filePath("C.funscript")).toString(), d.filePath("A.funscript")}));
+        QCOMPARE(c.scriptPath(), d.filePath("C.funscript"));
+        QCOMPARE(c.playlist().size(), 2);
+        // End of the video: Auto-advance (default on), then Repeat.
+        QVERIFY(c.playlistAuto());
+        QVERIFY(c.playlistFinished());
+        QCOMPARE(c.scriptPath(), d.filePath("A.funscript"));
+        QVERIFY(!c.playlistFinished());  // at the end, no Repeat
+        c.setPlaylistRepeat(true);
+        QVERIFY(c.playlistFinished());
+        QCOMPARE(c.playlistIndex(), 0);
+        c.setPlaylistAuto(false);
+        QVERIFY(!c.playlistFinished());
+        // Pick and the options survive a restart.
+        QVERIFY(c.pickPlaylist(1));
+        QCOMPARE(c.scriptPath(), d.filePath("A.funscript"));
+        PlayerController again;
+        QVERIFY(again.playlistRepeat());
+        QVERIFY(!again.playlistAuto());
+    }
+
     void projectAndHeatmapExport() {
         QTemporaryDir d;
         QByteArray js = zigzag();

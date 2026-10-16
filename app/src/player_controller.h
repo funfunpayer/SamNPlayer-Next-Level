@@ -9,6 +9,7 @@
 #include <QtQml/qqmlregistration.h>
 #include <memory>
 #include <optional>
+#include <random>
 #include <vector>
 
 #include "samn/curve_geometry.h"
@@ -16,6 +17,7 @@
 #include "samn/marks.h"
 #include "samn/samn_file.h"
 #include "samn/playback.h"
+#include "samn/playlist.h"
 #include "samn/settings.h"
 
 namespace samn::ui {
@@ -47,6 +49,14 @@ class PlayerController : public QObject {
     // Marks of the script ({name, startMs, endMs, label}, {name, timeMs,
     // label}, {kind, startMs, endMs, intensity, label}); edits save at once.
     Q_PROPERTY(QVariantList chapters READ chapters NOTIFY marksChanged)
+    // Play list (0.7 playlist): {name, path, active}; shown with 2+ items.
+    Q_PROPERTY(QVariantList playlist READ playlist NOTIFY playlistChanged)
+    Q_PROPERTY(int playlistIndex READ playlistIndex NOTIFY playlistChanged)
+    Q_PROPERTY(bool playlistVisible READ playlistVisible NOTIFY playlistChanged)
+    Q_PROPERTY(bool playlistHasNext READ playlistHasNext NOTIFY playlistChanged)
+    Q_PROPERTY(bool playlistAuto READ playlistAuto WRITE setPlaylistAuto NOTIFY playlistChanged)
+    Q_PROPERTY(bool playlistShuffle READ playlistShuffle WRITE setPlaylistShuffle NOTIFY playlistChanged)
+    Q_PROPERTY(bool playlistRepeat READ playlistRepeat WRITE setPlaylistRepeat NOTIFY playlistChanged)
     // Chapter bands on the timeline (0.7 renderChapterBands): sorted, open
     // ends run to the next chapter or the script end; name, startMs, endMs,
     // index (colour), tip.
@@ -102,6 +112,18 @@ public:
     // A video or a script (local path or file URL). Returns false and sets
     // lastError when it cannot be opened.
     Q_INVOKABLE bool openPath(const QString& pathOrUrl);
+    // Several dropped files: the scripts become the play list (0.7
+    // drop:script) and the first one opens; else as openPath(first).
+    Q_INVOKABLE bool openPaths(const QStringList& pathsOrUrls);
+    // Play list (0.7): add (the loaded script comes first in a new list),
+    // remove (loads the next one when the active one goes), pick, next.
+    Q_INVOKABLE bool addToPlaylist(const QString& pathOrUrl);
+    Q_INVOKABLE bool removeFromPlaylist(int index);
+    Q_INVOKABLE bool pickPlaylist(int index);
+    Q_INVOKABLE bool playlistNext();
+    // The video ended: true when Auto-advance opened the next script (the
+    // page then starts playing it).
+    Q_INVOKABLE bool playlistFinished();
     Q_INVOKABLE bool openScript(const QString& path, const QString& video = {});
     Q_INVOKABLE bool chooseVariant(int index);
     Q_INVOKABLE void addScriptFolder(const QString& pathOrUrl);
@@ -239,7 +261,19 @@ public:
 
     static QString toLocalPath(const QString& pathOrUrl);
 
+    QVariantList playlist() const;
+    int playlistIndex() const { return int(playlist_.Index()); }
+    bool playlistVisible() const { return playlist_.Visible(); }
+    bool playlistHasNext() const { return playlist_.HasNext(); }
+    bool playlistAuto() const { return playlist_.Auto(); }
+    bool playlistShuffle() const { return playlist_.Shuffle(); }
+    bool playlistRepeat() const { return playlist_.Repeat(); }
+    void setPlaylistAuto(bool on);
+    void setPlaylistShuffle(bool on);
+    void setPlaylistRepeat(bool on);
+
 signals:
+    void playlistChanged();
     void speedHighlightChanged();
     void scriptChanged();
     void videoChanged();
@@ -282,6 +316,9 @@ private:
     QVariantList variants_;
     int variantIndex_ = -1;
     QString scriptPath_, videoPath_, lastError_;
+    bool loadPlaylistCurrent();
+    samn::Playlist playlist_;
+    std::mt19937 rng_{std::random_device{}()};
     int offsetMs_ = 0;
     bool vibrationFromScript_ = false, suctionFromScript_ = false;
     qint64 videoDurationMs_ = 0;
