@@ -2,6 +2,9 @@
 
 #include <QDir>
 #include <QFileInfo>
+#include <QImage>
+#include <QVideoFrame>
+#include <QVideoSink>
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
@@ -160,6 +163,10 @@ bool PlayerController::openScript(const QString& pathIn, const QString& videoIn)
 
     scriptPath_ = path;
     loadMarks(path);
+    {
+        const auto v = settings().get("playback.omarker_intensity", 0.5);
+        oMarkerIntensity_ = v.is_number() ? std::clamp(v.get<double>(), 0.0, 1.0) : 0.5;
+    }
     pendingStart_.reset();
     marker_ = samn::LoadMarker(std::filesystem::u8path(u8(path))).value_or(samn::RangeMarker{});
     emit markerChanged();
@@ -183,34 +190,261 @@ bool PlayerController::openScript(const QString& pathIn, const QString& videoIn)
 }
 
 void PlayerController::loadMarks(const QString& path) {
-    bookmarks_.clear();
-    chapterRanges_.clear();
-    chapters_.clear();
     try {
-        const auto p = std::filesystem::u8path(u8(path));
-        for (const auto& b : samn::LoadBookmarks(p)) bookmarks_.push_back(b.time_ms);
-        for (const auto& c : samn::LoadChapters(p)) {
-            chapterRanges_.emplace_back(c.start_ms, c.end_ms);
-            chapters_.append(QVariantMap{{"name", c.name.empty() ? tr("Chapter at %1").arg(formatTime(c.start_ms)) : q(c.name)},
-                                         {"startMs", qint64(c.start_ms)},
-                                         {"endMs", qint64(c.end_ms)}});
-        }
+        marks_ = samn::LoadScriptMarks(std::filesystem::u8path(u8(path)));
     } catch (const std::exception&) {
-        // Broken chapter metadata must not block playing.
-        bookmarks_.clear();
-        chapterRanges_.clear();
-        chapters_.clear();
+        marks_ = {};  // broken marks must not block playing
+    }
+    emit marksChanged();
+}
+
+namespace {
+
+QString Secs(int64_t ms) { return QString::number(ms / 1000.0, 'f', 1) + QLatin1Char('s'); }
+
+QString CleanName(const QString& name, const QString& fallback) {
+    const QString n = name.trimmed().left(80);
+    return n.isEmpty() ? fallback : n;
+}
+
+}  // namespace
+
+QVariantList PlayerController::chapters() const {
+    QVariantList out;
+    for (const auto& c : marks_.chapters) {
+        const QString name = c.name.empty() ? tr("Chapter at %1").arg(formatTime(c.start_ms)) : q(c.name);
+        const QString span = c.end_ms > c.start_ms ? Secs(c.start_ms) + QStringLiteral(" - ") + Secs(c.end_ms)
+                                                   : Secs(c.start_ms) + QStringLiteral(" → end");
+        out.append(QVariantMap{{"name", name},
+                               {"startMs", qint64(c.start_ms)},
+                               {"endMs", qint64(c.end_ms)},
+                               {"label", name + QStringLiteral(" · ") + span}});
+    }
+    return out;
+}
+
+QVariantList PlayerController::bookmarks() const {
+    QVariantList out;
+    for (const auto& b : marks_.bookmarks)
+        out.append(QVariantMap{{"name", q(b.name)},
+                               {"timeMs", qint64(b.time_ms)},
+                               {"label", q(b.name) + QStringLiteral(" · ") + Secs(b.time_ms)}});
+    return out;
+}
+
+QVariantList PlayerController::oMarkers() const {
+    QVariantList out;
+    for (const auto& m : marks_.o_markers) {
+        const bool primary = m.kind == samn::OMarkerPrimary;
+        QString label = (primary ? tr("Primary") : tr("Secondary")) + QStringLiteral(": ") + Secs(m.start_ms) +
+                        QStringLiteral(" - ") + Secs(m.end_ms);
+        if (!primary) label += QStringLiteral(" · %1%").arg(std::lround(m.intensity * 100));
+        out.append(QVariantMap{{"kind", q(m.kind)},
+                               {"startMs", qint64(m.start_ms)},
+                               {"endMs", qint64(m.end_ms)},
+                               {"intensity", m.intensity},
+                               {"label", label}});
+    }
+    return out;
+}
+
+template <typename T, typename Save>
+bool PlayerController::commitMarks(std::vector<T>& list, std::vector<T> next, Save save) {
+    if (scriptPath_.isEmpty()) {
+        setError(tr("Open a script first."));
+        return false;
+    }
+    try {
+        save(std::filesystem::u8path(u8(scriptPath_)), next);
+    } catch (const std::exception& e) {
+        setError(tr("Could not save: %1").arg(q(e.what())));
+        return false;  // the old list stays (0.7: rollback)
+    }
+    list = std::move(next);
+    emit marksChanged();
+    pushMarks();
+    return true;
+}
+
+bool PlayerController::addBookmark(const QString& name, qint64 videoMs) {
+    auto next = marks_.bookmarks;
+    next.push_back({u8(CleanName(name, tr("Bookmark"))), std::max<int64_t>(0, samn::script_time(videoMs, offsetMs_))});
+    std::stable_sort(next.begin(), next.end(), [](const auto& a, const auto& b) { return a.time_ms < b.time_ms; });
+    return commitMarks(marks_.bookmarks, std::move(next), samn::SaveScriptBookmarks);
+}
+
+bool PlayerController::renameBookmark(int index, const QString& name) {
+    if (index < 0 || index >= int(marks_.bookmarks.size())) return false;
+    auto next = marks_.bookmarks;
+    next[size_t(index)].name = u8(CleanName(name, tr("Bookmark")));
+    return commitMarks(marks_.bookmarks, std::move(next), samn::SaveScriptBookmarks);
+}
+
+bool PlayerController::removeBookmark(int index) {
+    if (index < 0 || index >= int(marks_.bookmarks.size())) return false;
+    auto next = marks_.bookmarks;
+    next.erase(next.begin() + index);
+    return commitMarks(marks_.bookmarks, std::move(next), samn::SaveScriptBookmarks);
+}
+
+qint64 PlayerController::bookmarkVideoMs(int index) const {
+    if (index < 0 || index >= int(marks_.bookmarks.size())) return -1;
+    return std::max<qint64>(0, marks_.bookmarks[size_t(index)].time_ms + offsetMs_);
+}
+
+bool PlayerController::addChapterFromSelection(const QString& name) {
+    if (!marker_.Valid()) {
+        setError(tr("Mark a range on the heatmap first."));
+        return false;
+    }
+    auto next = marks_.chapters;
+    next.push_back({u8(CleanName(name, tr("Chapter"))), marker_.start_ms, marker_.end_ms});
+    std::stable_sort(next.begin(), next.end(), [](const auto& a, const auto& b) { return a.start_ms < b.start_ms; });
+    return commitMarks(marks_.chapters, std::move(next), samn::SaveScriptChapters);
+}
+
+bool PlayerController::renameChapter(int index, const QString& name) {
+    if (index < 0 || index >= int(marks_.chapters.size())) return false;
+    auto next = marks_.chapters;
+    next[size_t(index)].name = u8(CleanName(name, tr("Chapter")));
+    return commitMarks(marks_.chapters, std::move(next), samn::SaveScriptChapters);
+}
+
+bool PlayerController::removeChapter(int index) {
+    if (index < 0 || index >= int(marks_.chapters.size())) return false;
+    auto next = marks_.chapters;
+    next.erase(next.begin() + index);
+    return commitMarks(marks_.chapters, std::move(next), samn::SaveScriptChapters);
+}
+
+bool PlayerController::addOMarkerFromSelection(const QString& kind) {
+    if (!marker_.Valid()) {
+        setError(tr("Mark a range on the heatmap first."));
+        return false;
+    }
+    samn::OMarker m;
+    m.start_ms = marker_.start_ms;
+    m.end_ms = marker_.end_ms;
+    const bool primary = kind != QLatin1String("secondary");
+    m.kind = primary ? samn::OMarkerPrimary : samn::OMarkerSecondary;
+    m.intensity = primary ? 1.0 : oMarkerIntensity_;
+    auto next = marks_.o_markers;
+    next.push_back(m);
+    std::stable_sort(next.begin(), next.end(), [](const auto& a, const auto& b) { return a.start_ms < b.start_ms; });
+    return commitMarks(marks_.o_markers, std::move(next), samn::SaveScriptOMarkers);
+}
+
+bool PlayerController::removeOMarker(int index) {
+    if (index < 0 || index >= int(marks_.o_markers.size())) return false;
+    auto next = marks_.o_markers;
+    next.erase(next.begin() + index);
+    return commitMarks(marks_.o_markers, std::move(next), samn::SaveScriptOMarkers);
+}
+
+void PlayerController::setOMarkerIntensity(double v) {
+    v = std::clamp(v, 0.0, 1.0);
+    if (v == oMarkerIntensity_) return;
+    oMarkerIntensity_ = v;
+    try {
+        settings().set("playback.omarker_intensity", v);
+    } catch (const std::exception&) {
+    }
+    emit marksChanged();
+}
+
+void PlayerController::setBpm(double v) {
+    v = (v >= 20 && v <= 240) ? v : 0;  // 0.7: 20-240, else none
+    if (v == bpm_) return;
+    bpm_ = v;
+    emit bpmChanged();
+    pushMarks();
+}
+
+void PlayerController::setBpmGrid(bool on) {
+    if (on == bpmGrid_) return;
+    bpmGrid_ = on;
+    emit bpmChanged();
+    pushMarks();
+}
+
+bool PlayerController::attachVideo(const QString& pathOrUrl) {
+    const QString path = toLocalPath(pathOrUrl);
+    if (!QFileInfo(path).isFile()) {
+        setError(tr("Video not found: %1").arg(path));
+        return false;
+    }
+    if (scriptPath_.isEmpty()) return openPath(path);
+    setVideo(path);
+    setError({});
+    return true;
+}
+
+QString PlayerController::snapshotName(qint64 videoMs) const {
+    const qint64 sec = std::max<qint64>(0, videoMs) / 1000;
+    return QStringLiteral("%1_%2-%3.png")
+        .arg(QFileInfo(videoPath_).completeBaseName())
+        .arg(sec / 60, 2, 10, QLatin1Char('0'))
+        .arg(sec % 60, 2, 10, QLatin1Char('0'));
+}
+
+QString PlayerController::snapshotFolder() const {
+    return videoPath_.isEmpty() ? QString() : QUrl::fromLocalFile(QFileInfo(videoPath_).absolutePath()).toString();
+}
+
+bool PlayerController::saveSnapshot(QObject* videoSink, const QString& pathOrUrl) {
+    auto* sink = qobject_cast<QVideoSink*>(videoSink);
+    const QImage img = sink ? sink->videoFrame().toImage() : QImage();
+    if (img.isNull()) {
+        setError(tr("Snapshot failed: no video frame yet."));
+        return false;
+    }
+    QString path = toLocalPath(pathOrUrl);
+    if (!path.endsWith(QLatin1String(".png"), Qt::CaseInsensitive)) path += QStringLiteral(".png");
+    if (!img.save(path, "PNG")) {
+        setError(tr("Snapshot failed: cannot write %1").arg(path));
+        return false;
+    }
+    setError({});
+    return true;
+}
+
+QVariant PlayerController::uiValue(const QString& key, const QVariant& fallback) {
+    try {
+        const auto v = settings().get("ui." + u8(key), nlohmann::json());
+        if (v.is_string()) return q(v.get<std::string>());
+        if (v.is_boolean()) return v.get<bool>();
+        if (v.is_number_integer()) return qint64(v.get<int64_t>());
+        if (v.is_number()) return v.get<double>();
+    } catch (const std::exception&) {
+    }
+    return fallback;
+}
+
+void PlayerController::setUiValue(const QString& key, const QVariant& value) {
+    nlohmann::json j;
+    switch (value.typeId()) {
+    case QMetaType::Bool: j = value.toBool(); break;
+    case QMetaType::Int:
+    case QMetaType::LongLong: j = value.toLongLong(); break;
+    case QMetaType::Double: j = value.toDouble(); break;
+    default: j = u8(value.toString());
+    }
+    try {
+        settings().set("ui." + u8(key), j);
+    } catch (const std::exception&) {
+        // A remembered tab is a convenience; never an error for the user.
     }
 }
+
+double PlayerController::beatPeriodMs() const { return bpmGrid_ && bpm_ > 0 ? 60000.0 / bpm_ : 0.0; }
 
 void PlayerController::clearScript() {
     stroke_.clear();
     vibration_.clear();
     suction_.clear();
     heat_.clear();
-    bookmarks_.clear();
-    chapterRanges_.clear();
-    chapters_.clear();
+    marks_ = {};
+    emit marksChanged();
     scriptPath_.clear();
     playheadMs_ = -1;
     marker_ = {};
@@ -381,9 +615,9 @@ void PlayerController::setPlaying(bool playing) {
 
 
 qint64 PlayerController::chapterVideoMs(int index) const {
-    if (index < 0 || index >= static_cast<int>(chapterRanges_.size())) return -1;
+    if (index < 0 || index >= static_cast<int>(marks_.chapters.size())) return -1;
     // Script time → video time: the offset moves the script later.
-    return chapterRanges_[index].first + offsetMs_;
+    return marks_.chapters[size_t(index)].start_ms + offsetMs_;
 }
 
 int64_t PlayerController::timelineMs() const {
@@ -439,14 +673,30 @@ void PlayerController::pushToViews() {
         if (!c) continue;
         const QString lane = c->lane();
         c->setActions(lane == QLatin1String("vibration") ? vibration_ : lane == QLatin1String("suction") ? suction_ : stroke_);
-        c->setMarks(lane == QLatin1String("stroke") ? bookmarks_ : std::vector<int64_t>{},
-                    lane == QLatin1String("stroke") ? chapterRanges_ : std::vector<std::pair<int64_t, int64_t>>{});
         c->setPlayheadMs(playheadMs_);
     }
     if (heatmap_) {
         heatmap_->setValues(heat_, 0, scriptDurationMs());
         heatmap_->setPlayheadMs(playheadMs_);
     }
+    pushMarks();
+}
+
+void PlayerController::pushMarks() {
+    std::vector<int64_t> bookmarks;
+    for (const auto& b : marks_.bookmarks) bookmarks.push_back(b.time_ms);
+    std::vector<std::pair<int64_t, int64_t>> chapters;
+    for (const auto& c : marks_.chapters) chapters.emplace_back(c.start_ms, c.end_ms);
+    std::vector<CurveItem::Band> bands;
+    for (const auto& m : marks_.o_markers) bands.push_back({m.start_ms, m.end_ms, m.kind == samn::OMarkerPrimary, m.intensity});
+    for (const auto& c : curves_) {
+        if (!c) continue;
+        const bool stroke = c->lane() == QLatin1String("stroke");
+        c->setMarks(stroke ? bookmarks : std::vector<int64_t>{},
+                    stroke ? chapters : std::vector<std::pair<int64_t, int64_t>>{});
+        c->setOverlays(stroke ? bands : std::vector<CurveItem::Band>{}, stroke ? beatPeriodMs() : 0.0);
+    }
+    if (heatmap_) heatmap_->setBands(bands);
 }
 
 QString PlayerController::scriptName() const { return QFileInfo(scriptPath_).fileName(); }

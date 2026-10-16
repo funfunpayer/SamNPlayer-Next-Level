@@ -302,6 +302,23 @@ FunscriptView ParseFunscript(const std::string& data);
 FunscriptView LoadFunscript(const std::filesystem::path& path);
 // Go: funscript.LoadOMarkers.
 std::vector<OMarker> LoadOMarkers(const std::filesystem::path& path);
+// Go: funscript.SaveOMarkers. Validates every marker first (the file stays
+// untouched on an error), sorts by start, writes metadata.oMarkers and keeps
+// every other field; an empty list writes null. Same bytes as 0.7.
+void SaveOMarkers(const std::filesystem::path& path, const std::vector<OMarker>& markers);
+
+// The marks of a script for the Player (bookmarks, chapters, O-markers),
+// from a .funscript's metadata or a .samn document (0.7 app_ofs.go /
+// app_markers.go). Saving writes only the one list and keeps the rest.
+struct ScriptMarks {
+    std::vector<Bookmark> bookmarks;
+    std::vector<Chapter> chapters;
+    std::vector<OMarker> o_markers;
+};
+ScriptMarks LoadScriptMarks(const std::filesystem::path& path);
+void SaveScriptBookmarks(const std::filesystem::path& path, const std::vector<Bookmark>& bookmarks);
+void SaveScriptChapters(const std::filesystem::path& path, const std::vector<Chapter>& chapters);
+void SaveScriptOMarkers(const std::filesystem::path& path, const std::vector<OMarker>& markers);
 
 // ---------------------------------------------------------------------------
 // Recipes and conversion

@@ -208,6 +208,67 @@ private slots:
         }
     }
 
+    void editMarks() {
+        QTemporaryDir d;
+        writeFile(d.filePath("M.funscript"), zigzag());
+        {
+            PlayerController c;
+            QVERIFY(c.openScript(d.filePath("M.funscript")));
+            QSignalSpy marks(&c, &PlayerController::marksChanged);
+            // Bookmarks at the playhead (video time -> script time).
+            c.setOffsetMs(200);
+            QVERIFY(c.addBookmark("", 2700));
+            QVERIFY(c.addBookmark("  Late one  ", 5200));
+            QCOMPARE(c.bookmarks().size(), 2);
+            QCOMPARE(c.bookmarks()[0].toMap()["label"].toString(), QString("Bookmark · 2.5s"));
+            QCOMPARE(c.bookmarks()[1].toMap()["name"].toString(), QString("Late one"));
+            QCOMPARE(c.bookmarkVideoMs(0), qint64(2700));
+            QVERIFY(c.renameBookmark(0, "First"));
+            QVERIFY(c.removeBookmark(1));
+            c.setOffsetMs(0);
+            // Chapters and O-markers need a marked range.
+            QVERIFY(!c.addChapterFromSelection("x"));
+            QVERIFY(!c.lastError().isEmpty());
+            c.setMarker(1000, 4000);
+            QVERIFY(c.addChapterFromSelection("Build-up"));
+            QCOMPARE(c.chapters()[0].toMap()["label"].toString(), QString("Build-up · 1.0s - 4.0s"));
+            QVERIFY(c.addOMarkerFromSelection("primary"));
+            c.setOMarkerIntensity(0.25);
+            c.setMarker(5000, 6000);
+            QVERIFY(c.addOMarkerFromSelection("secondary"));
+            QCOMPARE(c.oMarkers().size(), 2);
+            QCOMPARE(c.oMarkers()[1].toMap()["label"].toString(), QString("Secondary: 5.0s - 6.0s · 25%"));
+            QVERIFY(marks.count() >= 7);
+        }
+        {
+            // Everything was saved in the script.
+            PlayerController c;
+            QVERIFY(c.openScript(d.filePath("M.funscript")));
+            QCOMPARE(c.bookmarks().size(), 1);
+            QCOMPARE(c.bookmarks()[0].toMap()["name"].toString(), QString("First"));
+            QCOMPARE(c.chapters().size(), 1);
+            QCOMPARE(c.oMarkers().size(), 2);
+            QCOMPARE(c.oMarkerIntensity(), 0.25);
+            QVERIFY(c.removeOMarker(0));
+            QVERIFY(c.removeChapter(0));
+            // A failed save keeps the old list and says why.
+            QFile::remove(d.filePath("M.funscript"));
+            QVERIFY(!c.addBookmark("gone", 100));
+            QCOMPARE(c.bookmarks().size(), 1);
+            QVERIFY(c.lastError().startsWith("Could not save"));
+        }
+    }
+
+    void bpmGrid() {
+        PlayerController c;
+        c.setBpm(10);  // out of 20-240
+        QCOMPARE(c.bpm(), 0.0);
+        c.setBpm(120);
+        QCOMPARE(c.beatPeriodMs(), 0.0);  // grid off
+        c.setBpmGrid(true);
+        QCOMPARE(c.beatPeriodMs(), 500.0);
+    }
+
     void sleepTimer() {
         PlayerController c;
         QSignalSpy reached(&c, &PlayerController::sleepReached);
