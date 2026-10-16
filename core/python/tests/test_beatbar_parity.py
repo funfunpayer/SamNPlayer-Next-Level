@@ -18,9 +18,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "build"))
 
 try:
-    import beatbar_native as bb
+    from samn_native import beatbar as bb
 except ImportError as e:
-    print("SKIP: beatbar_native not built or not on PYTHONPATH", file=sys.stderr)
+    print("SKIP: samn_native not built or not on PYTHONPATH", file=sys.stderr)
     print(e, file=sys.stderr)
     # CI sets SAMN_NATIVE_REQUIRED=1: a missing module must fail there, not pass.
     sys.exit(1 if os.environ.get("SAMN_NATIVE_REQUIRED") else 0)

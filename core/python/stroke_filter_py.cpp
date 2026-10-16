@@ -4,13 +4,8 @@
 
 namespace py = pybind11;
 
-PYBIND11_MODULE(stroke_filter_native, m) {
-    py::class_<samn::Action>(m, "Action")
-        .def(py::init<>())
-        .def(py::init([](int64_t at, int pos) { return samn::Action{at, pos}; }))
-        .def_readwrite("at", &samn::Action::at)
-        .def_readwrite("pos", &samn::Action::pos);
-
+// Part of the samn_native module (samn_native_py.cpp).
+void BindStrokeFilter(py::module_& m) {
     py::class_<samn::StrokeFilter>(m, "StrokeFilter")
         .def(py::init<>())
         .def_readwrite("smooth", &samn::StrokeFilter::smooth)
