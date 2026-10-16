@@ -480,6 +480,42 @@ GlassCard {
                     }
                     Note { text: qsTr("Positive: the script comes later. Saved per script. Baking it into the script's times (all channels, bookmarks and chapters in one safe step) comes with the Editor (P4).") }
                 }
+                // Script Doctor (0.7 pb-quality): signal quality from the script alone.
+                Card {
+                    id: doctor
+                    title: qsTr("Script Doctor")
+                    property var result: null
+                    FlowButton {
+                        text: qsTr("Check script"); enabled: root.ctrl.hasScript
+                        onClicked: doctor.result = root.ctrl.scriptQuality()
+                    }
+                    Rectangle {
+                        visible: doctor.result !== null
+                        width: parent.width; radius: 8
+                        height: doctorText.implicitHeight + 16
+                        readonly property bool failed: doctor.result !== null && (doctor.result.error !== "" || !doctor.result.passed)
+                        color: failed ? Qt.rgba(216 / 255, 77 / 255, 77 / 255, 0.12) : Qt.rgba(61 / 255, 216 / 255, 117 / 255, 0.12)
+                        border.color: failed ? "#d84d4d" : "#3dd875"
+                        Text {
+                            id: doctorText
+                            x: 8; y: 8; width: parent.width - 16
+                            wrapMode: Text.Wrap; textFormat: Text.StyledText
+                            color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 12
+                            text: {
+                                const r = doctor.result
+                                if (r === null) return ""
+                                if (r.error !== "") return qsTr("Quality check: %1").arg(r.error)
+                                let t = "<b>" + qsTr("Signal Quality (Script Doctor): %1% %2").arg(Math.round(r.score * 100))
+                                        .arg(r.passed ? qsTr("(within normal)") : qsTr("(review recommended)")) + "</b><br>"
+                                t += "<font color='#9fb3c8'>" + qsTr("Signal quality only — jitter, jumps, gaps, device density. Not proof the curve matches the video (that would be motion fidelity / phase comparison). Estimated from the script only, without video; tracking-based checks are missing here, unlike right after generation.") + "</font>"
+                                for (const w of r.warnings) t += "<br>• " + w
+                                return t
+                            }
+                        }
+                    }
+                    // A new script: the old verdict no longer applies.
+                    Connections { target: root.ctrl; function onScriptChanged() { doctor.result = null } }
+                }
                 // Play list (0.7 pb-playlist): shown with 2+ scripts.
                 Card {
                     title: qsTr("Playlist")
