@@ -1,6 +1,6 @@
 # The SamNPlayer 2 application: C++ logic (core + controllers) with a Qt Quick
 # (QML) interface, animated like the 0.7 Flow look.
-find_package(Qt6 6.4 REQUIRED COMPONENTS Gui Quick Qml Multimedia Svg)
+find_package(Qt6 6.4 REQUIRED COMPONENTS Gui Quick Qml Multimedia Svg Network WebSockets SerialPort Bluetooth)
 qt_standard_project_setup()
 
 # Controllers and painted items, shared with tests/app.
@@ -21,6 +21,13 @@ qt_add_qml_module(samn_app
     src/player_controller.h src/player_controller.cpp
     src/library_controller.h src/library_controller.cpp
     src/icon_provider.h src/icon_provider.cpp
+    src/device_controller.h src/device_controller.cpp
+    src/device_io/waiter.h
+    src/device_io/qt_transport.h
+    src/device_io/socket_line_transport.h src/device_io/socket_line_transport.cpp
+    src/device_io/serial_line_transport.h src/device_io/serial_line_transport.cpp
+    src/device_io/websocket_transport.h src/device_io/websocket_transport.cpp
+    src/device_io/ble_transport.h src/device_io/ble_transport.cpp
   QML_FILES
     qml/Main.qml
     qml/GlassCard.qml
@@ -58,8 +65,9 @@ qt_add_qml_module(samn_app
     qml/fonts/Sora.ttf
     qml/fonts/Figtree.ttf
 )
-target_include_directories(samn_app PUBLIC src)
-target_link_libraries(samn_app PUBLIC samn_core Qt6::Gui Qt6::Quick Qt6::Qml Qt6::Multimedia Qt6::Svg)
+target_include_directories(samn_app PUBLIC src src/device_io)
+target_link_libraries(samn_app PUBLIC samn_core Qt6::Gui Qt6::Quick Qt6::Qml Qt6::Multimedia Qt6::Svg
+  Qt6::Network Qt6::WebSockets Qt6::SerialPort Qt6::Bluetooth)
 
 qt_add_executable(samnplayer WIN32 src/main.cpp)
 target_link_libraries(samnplayer PRIVATE samn_app samn_appplugin)

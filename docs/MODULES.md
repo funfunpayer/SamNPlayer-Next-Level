@@ -47,6 +47,13 @@ Functions use PascalCase and struct fields use snake_case.
 | `src/heatmap_item.*` | The heatmap bar (0.7 colours, 300 buckets) on the zoom window, with the marked range and the playhead. |
 | `src/library_controller.*` | The Library column: recent scripts and videos, favorites, imported / generated / edited. |
 | `qml/LibraryPanel.qml`, `qml/InspectorPanel.qml` | Player columns as 0.7 v1: Library (left), Inspector with Devices · Audio · Playback · View (right). |
+| `src/device_controller.*` | `DeviceController` for QML: connect / disconnect by kind (Sam Neo 2 BLE, TCode address or serial, Intiface URL, Mock), status, last error and hint, battery, capabilities (channels, axes), levels / position / axes, Stop, emergency stop, diagnostics, serial port list. Every device and transport lives on ONE worker `QThread` it owns; the GUI thread never blocks. 2 s timer (keepalive / ping / battery), incoming pumping, coalesced level commands, lost-link handling. |
+| `src/device_io/waiter.h` | `Waiter`: blocks the worker thread until a condition holds while the Qt event loop runs (how async Qt APIs become the blocking `Transport` calls); polls cancel every 25 ms. |
+| `src/device_io/qt_transport.h` | `QtTransport`: base of the Qt transports (a `QObject` + `samn::device::Transport`), `incoming()` signal, cancel hook, `LastError()`. |
+| `src/device_io/ble_transport.*` | Qt Bluetooth LE for the Sam Neo 2: scan for `kSamNeo2NamePrefix`, connect, service ffe0 / characteristic ffe1, write with or without response, `ReadCharacteristic` (battery 0x180F / 0x2A19), `Peer()`. Bounded waits; every error says "Bluetooth". |
+| `src/device_io/socket_line_transport.*` | TCode over UDP / TCP: one line per `Send`; "refused" / "timeout" / "no such host" in the error texts (`DescribeSocketError`). |
+| `src/device_io/serial_line_transport.*` | TCode over USB serial (115200 8N1) and `SerialPorts()` (sorted, `/dev/ttyUSB0` / `COM3`). |
+| `src/device_io/websocket_transport.*` | Buttplug / Intiface: Qt WebSockets text transport with a dial timeout; same error words, so `IntifaceHint` matches. |
 | `src/ruler_item.*` | The time ruler above the curve (0.7 steps and labels). |
 | `src/audio_level.*` | `AudioLevelDecoder` (Qt Multimedia, cached per file) and the Audio Level lane. |
 | `qml/FlowButton.qml`, `IconButton.qml`, `FlowSlider.qml`, `OffsetField.qml`, `FlowCombo.qml` | Styled controls; no default Qt Quick Controls look. |
