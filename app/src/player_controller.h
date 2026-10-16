@@ -51,6 +51,10 @@ class PlayerController : public QObject {
     Q_PROPERTY(QVariantList oMarkers READ oMarkers NOTIFY marksChanged)
     // Intensity for a new secondary O-marker (0.7 playback.omarker_intensity).
     Q_PROPERTY(double oMarkerIntensity READ oMarkerIntensity WRITE setOMarkerIntensity NOTIFY marksChanged)
+    // Speed highlights on the curve (0.7 playback.speed_highlights, default on;
+    // playback.speed_highlight_thresh 150-800, default 400). Display only.
+    Q_PROPERTY(bool speedHighlights READ speedHighlights WRITE setSpeedHighlights NOTIFY speedHighlightChanged)
+    Q_PROPERTY(double speedHighlightThresh READ speedHighlightThresh WRITE setSpeedHighlightThresh NOTIFY speedHighlightChanged)
     // Beat grid on the curve: BPM 20-240 (0 = none yet) and on/off.
     Q_PROPERTY(double bpm READ bpm WRITE setBpm NOTIFY bpmChanged)
     Q_PROPERTY(bool bpmGrid READ bpmGrid WRITE setBpmGrid NOTIFY bpmChanged)
@@ -175,6 +179,10 @@ public:
     QVariantList bookmarks() const;
     QVariantList oMarkers() const;
     double oMarkerIntensity() const { return oMarkerIntensity_; }
+    bool speedHighlights() const { return speedHL_; }
+    void setSpeedHighlights(bool on);
+    double speedHighlightThresh() const { return speedHLThresh_; }
+    void setSpeedHighlightThresh(double v);
     void setOMarkerIntensity(double v);
     double bpm() const { return bpm_; }
     void setBpm(double v);
@@ -212,6 +220,7 @@ public:
     static QString toLocalPath(const QString& pathOrUrl);
 
 signals:
+    void speedHighlightChanged();
     void scriptChanged();
     void videoChanged();
     void offsetMsChanged();
@@ -260,6 +269,8 @@ private:
     qint64 videoMs_ = 0, playheadMs_ = -1;
     samn::RangeMarker marker_;
     double oMarkerIntensity_ = 0.5, bpm_ = 0;
+    bool speedHL_ = true;
+    double speedHLThresh_ = 400;
     bool bpmGrid_ = false;
     std::optional<int64_t> pendingStart_;  // A pressed, B not yet
     bool loopEnabled_ = false;

@@ -42,6 +42,12 @@ void CurveItem::setOverlays(std::vector<Band> bands, double beatPeriodMs) {
     invalidate();
 }
 
+void CurveItem::setSpeedLimit(double maxIntensity) {
+    if (maxIntensity == speedLimit_) return;
+    speedLimit_ = maxIntensity;
+    invalidate();
+}
+
 void CurveItem::setPlayheadMs(qint64 ms) {
     if (ms == playhead_) return;
     playhead_ = ms;
@@ -218,6 +224,15 @@ void CurveItem::paintLayer(QPainter* p, double w, double h, Mode mode) {
             p->setPen(QPen(QColor(184, 150, 232, bar ? 97 : 41), bar ? 1.25 : 1.0));
             p->drawLine(QPointF(x, 0), QPointF(x, h));
             ++drawn;
+        }
+    }
+    // Speed highlights (0.7 redrawCurve): rgba(239,95,95,0.22) over each
+    // step faster than the limit. Display only.
+    if (speedLimit_ > 0) {
+        for (const auto& s : samn::SpeedHighlights(actions_, speedLimit_)) {
+            if (double(s.to_ms) < g0 || double(s.from_ms) > g1) continue;
+            const double x0 = X(double(s.from_ms)), x1 = X(double(s.to_ms));
+            if (x1 > x0) p->fillRect(QRectF(x0, 0, x1 - x0, h), QColor(239, 95, 95, 56));
         }
     }
     for (const auto& b : bands_) {

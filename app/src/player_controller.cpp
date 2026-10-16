@@ -167,6 +167,14 @@ bool PlayerController::openScript(const QString& pathIn, const QString& videoIn)
         const auto v = settings().get("playback.omarker_intensity", 0.5);
         oMarkerIntensity_ = v.is_number() ? std::clamp(v.get<double>(), 0.0, 1.0) : 0.5;
     }
+    {
+        const auto on = settings().get("playback.speed_highlights", true);
+        speedHL_ = on.is_boolean() ? on.get<bool>() : true;
+        const auto t = settings().get("playback.speed_highlight_thresh", 400.0);
+        const double v = t.is_number() ? t.get<double>() : 400.0;
+        speedHLThresh_ = (std::isfinite(v) && v > 0) ? std::clamp(v, 50.0, 2000.0) : 400.0;
+        emit speedHighlightChanged();
+    }
     pendingStart_.reset();
     marker_ = samn::LoadMarker(std::filesystem::u8path(u8(path))).value_or(samn::RangeMarker{});
     emit markerChanged();
@@ -352,6 +360,30 @@ void PlayerController::setOMarkerIntensity(double v) {
     } catch (const std::exception&) {
     }
     emit marksChanged();
+}
+
+void PlayerController::setSpeedHighlights(bool on) {
+    if (on == speedHL_) return;
+    speedHL_ = on;
+    try {
+        settings().set("playback.speed_highlights", on);
+    } catch (const std::exception&) {
+    }
+    emit speedHighlightChanged();
+    pushMarks();
+}
+
+void PlayerController::setSpeedHighlightThresh(double v) {
+    // 0.7 speedHighlightThresh(): not a number or <= 0 -> 400, else 50-2000.
+    v = (std::isfinite(v) && v > 0) ? std::clamp(v, 50.0, 2000.0) : 400.0;
+    if (v == speedHLThresh_) return;
+    speedHLThresh_ = v;
+    try {
+        settings().set("playback.speed_highlight_thresh", v);
+    } catch (const std::exception&) {
+    }
+    emit speedHighlightChanged();
+    pushMarks();
 }
 
 void PlayerController::setBpm(double v) {
@@ -723,6 +755,7 @@ void PlayerController::pushMarks() {
         c->setMarks(stroke ? bookmarks : std::vector<int64_t>{},
                     stroke ? chapters : std::vector<std::pair<int64_t, int64_t>>{});
         c->setOverlays(stroke ? bands : std::vector<CurveItem::Band>{}, stroke ? beatPeriodMs() : 0.0);
+        c->setSpeedLimit(stroke && speedHL_ ? speedHLThresh_ : 0.0);
     }
     if (heatmap_) heatmap_->setBands(bands);
 }

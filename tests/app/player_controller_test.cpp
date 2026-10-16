@@ -269,6 +269,34 @@ private slots:
         QCOMPARE(c.beatPeriodMs(), 500.0);
     }
 
+    void speedHighlights() {
+        QTemporaryDir d;
+        writeFile(d.filePath("S.funscript"), zigzag());
+        CurveItem stroke, vib;
+        vib.setProperty("lane", "vibration");
+        {
+            PlayerController c;
+            c.attachCurve(&stroke);
+            c.attachCurve(&vib);
+            QVERIFY(c.openScript(d.filePath("S.funscript")));
+            QVERIFY(c.speedHighlights());  // 0.7 default: on, 400
+            QCOMPARE(c.speedHighlightThresh(), 400.0);
+            QCOMPARE(stroke.speedLimit(), 400.0);
+            QCOMPARE(vib.speedLimit(), 0.0);  // only the main curve
+            c.setSpeedHighlightThresh(10);    // clamped to 50-2000
+            QCOMPARE(c.speedHighlightThresh(), 50.0);
+            c.setSpeedHighlightThresh(-1);    // not > 0 -> 400
+            QCOMPARE(c.speedHighlightThresh(), 400.0);
+            c.setSpeedHighlightThresh(550);
+            c.setSpeedHighlights(false);
+            QCOMPARE(stroke.speedLimit(), 0.0);
+        }
+        PlayerController c2;  // saved in the settings
+        QVERIFY(c2.openScript(d.filePath("S.funscript")));
+        QVERIFY(!c2.speedHighlights());
+        QCOMPARE(c2.speedHighlightThresh(), 550.0);
+    }
+
     void sleepTimer() {
         PlayerController c;
         QSignalSpy reached(&c, &PlayerController::sleepReached);

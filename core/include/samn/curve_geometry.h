@@ -49,6 +49,16 @@ std::pair<size_t, size_t> VisibleRange(const std::vector<Action>& actions, int64
 std::optional<double> PositionAt(const std::vector<Action>& actions, int64_t ms);
 
 // Positions per second at which the tempo wave is full (0.7: 600 u/s).
+// Speed highlights (0.7 funscript/speed_highlight.go, OFS "max speed"):
+// intensity = 500 x |dpos| / dt_ms; a step above maxIntensity is "too fast".
+constexpr double kSpeedHighlightDefault = 400.0;
+struct SpeedSegment {
+    int64_t from_ms = 0, to_ms = 0;
+    double intensity = 0;  // rounded to 0.1
+};
+// maxIntensity <= 0 uses kSpeedHighlightDefault. Steps with dt <= 0 are skipped.
+std::vector<SpeedSegment> SpeedHighlights(const std::vector<Action>& actions, double maxIntensity);
+
 constexpr double kSpeedWaveFull = 600.0;
 // Average gap (px) below which single strokes are no longer readable while
 // playing (0.7 DOT_MIN_GAP) and while editing.
