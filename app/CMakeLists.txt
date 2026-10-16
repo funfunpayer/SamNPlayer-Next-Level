@@ -5,6 +5,8 @@ qt_standard_project_setup()
 
 # Controllers and painted items, shared with tests/app.
 qt_add_library(samn_app STATIC)
+# The Flow icon set (0.7 flow_icons.js), one SVG per icon.
+file(GLOB SAMN_ICONS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} CONFIGURE_DEPENDS qml/icons/*.svg)
 qt_add_qml_module(samn_app
   URI SamN
   # Same resource path on Qt 6.4 and 6.5+ (6.5 changed the default).
@@ -18,6 +20,7 @@ qt_add_qml_module(samn_app
     src/ruler_item.h src/ruler_item.cpp
     src/player_controller.h src/player_controller.cpp
     src/library_controller.h src/library_controller.cpp
+    src/icon_provider.h src/icon_provider.cpp
   QML_FILES
     qml/Main.qml
     qml/GlassCard.qml
@@ -35,10 +38,12 @@ qt_add_qml_module(samn_app
     qml/FlowTextField.qml
     qml/MarkList.qml
     qml/LaneName.qml
+    qml/Icon.qml
     qml/LibraryPanel.qml
     qml/InspectorPanel.qml
     qml/ToolTipText.qml
   RESOURCES
+    ${SAMN_ICONS}
     qml/assets/bg-top.svg
     qml/assets/bg-bottom.svg
     qml/assets/empty-video.svg

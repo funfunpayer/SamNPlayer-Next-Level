@@ -55,7 +55,7 @@ GlassCard {
         anchors.right: parent.right; anchors.rightMargin: 8; y: 10; z: 2
         width: 28; height: 28; radius: 14
         color: tg.containsMouse ? Qt.rgba(1, 1, 1, 0.08) : "transparent"
-        Text { anchors.centerIn: parent; text: root.collapsed ? "⟨" : "⟩"; color: Theme.textDim; font.pixelSize: 15 }
+        Icon { anchors.centerIn: parent; name: root.collapsed ? "chevronLeft" : "chevronRight"; width: 16; height: 16; color: Theme.textDim }
         MouseArea { id: tg; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.collapsed = !root.collapsed }
     }
     Text {

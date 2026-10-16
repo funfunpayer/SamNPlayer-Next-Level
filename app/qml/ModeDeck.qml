@@ -8,11 +8,11 @@ Item {
     property bool open: false
     signal chosen(int index)
     readonly property var modes: [
-        { name: qsTr("Player"), text: qsTr("Play scripts with video\nand your device"), color: Theme.cyan, glyph: "▶" },
-        { name: qsTr("Editor"), text: qsTr("Edit points, axes and\ncurves"), color: "#a07cf0", glyph: "✎" },
-        { name: qsTr("Generator"), text: qsTr("Create a script from a\nvideo"), color: Theme.orange, glyph: "✦" },
-        { name: qsTr("Training"), text: qsTr("Guided sessions with\nlive curves"), color: Theme.blue, glyph: "∿" },
-        { name: qsTr("Scene Map"), text: qsTr("Scenes, chapters and\nrhythm"), color: "#2fd6a8", glyph: "▦" }
+        { name: qsTr("Player"), text: qsTr("Play scripts with video\nand your device"), color: Theme.cyan, icon: "player" },
+        { name: qsTr("Editor"), text: qsTr("Edit points, axes and\ncurves"), color: "#a07cf0", icon: "edit" },
+        { name: qsTr("Generator"), text: qsTr("Create a script from a\nvideo"), color: Theme.orange, icon: "create" },
+        { name: qsTr("Training"), text: qsTr("Guided sessions with\nlive curves"), color: Theme.blue, icon: "training" },
+        { name: qsTr("Scene Map"), text: qsTr("Scenes, chapters and\nrhythm"), color: "#2fd6a8", icon: "scenemap" }
     ]
     visible: opacity > 0
     opacity: open ? 1 : 0
@@ -64,7 +64,7 @@ Item {
                         anchors.horizontalCenter: parent.horizontalCenter; y: 18
                         width: 70; height: 70; radius: 35
                         color: "#06182c"; border.width: 2; border.color: modelData.color
-                        Text { anchors.centerIn: parent; text: modelData.glyph; color: modelData.color; font.pixelSize: 26 }
+                        Icon { anchors.centerIn: parent; name: modelData.icon; color: modelData.color; width: 28; height: 28 }
                     }
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter; y: 100

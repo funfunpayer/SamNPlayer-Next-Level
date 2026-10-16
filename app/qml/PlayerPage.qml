@@ -144,15 +144,16 @@ Item {
                 spacing: 8
                 visible: ctrl.hasScript
                 FlowButton {
-                    text: ctrl.videoName !== "" ? "🎞  " + ctrl.videoName : qsTr("Select a video file…")
+                    icon: "video"
+                    text: ctrl.videoName !== "" ? ctrl.videoName : qsTr("Select a video file…")
                     onClicked: videoDialog.open()
                 }
                 IconButton {
-                    width: 36; height: 36; glyph: "🔖"; tip: qsTr("Add a bookmark at the current time")
+                    width: 36; height: 36; icon: "bookmark"; tip: qsTr("Add a bookmark at the current time")
                     onClicked: ctrl.addBookmark("", media.position)
                 }
                 IconButton {
-                    width: 36; height: 36; glyph: "📷"; tip: qsTr("Save the current video frame as PNG")
+                    width: 36; height: 36; icon: "snapshot"; tip: qsTr("Save the current video frame as PNG")
                     visible: ctrl.videoName !== ""
                     onClicked: {
                         snapshotDialog.currentFile = ctrl.snapshotFolder() + "/" + ctrl.snapshotName(media.position)
@@ -163,7 +164,7 @@ Item {
             FlowButton {
                 id: openBtn
                 anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
-                primary: true; text: qsTr("Open…")
+                primary: true; icon: "folder"; text: qsTr("Open…")
                 onClicked: page.openFile()
             }
         }
@@ -329,18 +330,18 @@ Item {
                     anchors.horizontalCenter: parent.horizontalCenter
                     y: 54
                     spacing: 18
-                    IconButton { glyph: "⟲"; tip: qsTr("Back 10 s"); onClicked: page.seekBy(-10000); anchors.verticalCenter: parent.verticalCenter }
+                    IconButton { icon: "back10"; tip: qsTr("Back 10 s"); onClicked: page.seekBy(-10000); anchors.verticalCenter: parent.verticalCenter }
                     PlayButton {
                         playing: media.playbackState === MediaPlayer.PlayingState
                         onClicked: page.togglePlay()
                     }
-                    IconButton { glyph: "⟳"; tip: qsTr("Forward 10 s"); onClicked: page.seekBy(10000); anchors.verticalCenter: parent.verticalCenter }
+                    IconButton { icon: "forward10"; tip: qsTr("Forward 10 s"); onClicked: page.seekBy(10000); anchors.verticalCenter: parent.verticalCenter }
                 }
                 Row {
                     anchors.right: parent.right; anchors.rightMargin: 18
                     y: 74; spacing: 10
                     IconButton {
-                        width: 36; height: 36; glyph: page.muted ? "🔇" : "🔊"; tip: qsTr("Mute")
+                        width: 36; height: 36; icon: page.muted ? "mute" : "volume"; tip: qsTr("Mute")
                         anchors.verticalCenter: parent.verticalCenter
                         onClicked: page.muted = !page.muted
                     }
@@ -509,13 +510,13 @@ Item {
                         onClicked: ctrl.clearMarker()
                     }
                     // Zoom (0.7 zoom row): wheel on the curve, buttons around the playhead.
-                    IconButton { anchors.verticalCenter: parent.verticalCenter; width: 28; height: 28; glyph: "−"; tip: qsTr("Zoom out"); onClicked: ctrl.zoomBy(1 / 1.6) }
+                    IconButton { anchors.verticalCenter: parent.verticalCenter; width: 28; height: 28; icon: "minus"; tip: qsTr("Zoom out"); onClicked: ctrl.zoomBy(1 / 1.6) }
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
                         text: ctrl.zoomLabel; color: ctrl.zoomed ? Theme.cyan : Theme.textDim
                         font.family: Theme.fontSoft; font.pixelSize: 12
                     }
-                    IconButton { anchors.verticalCenter: parent.verticalCenter; width: 28; height: 28; glyph: "+"; tip: qsTr("Zoom in"); onClicked: ctrl.zoomBy(1.6) }
+                    IconButton { anchors.verticalCenter: parent.verticalCenter; width: 28; height: 28; icon: "plus"; tip: qsTr("Zoom in"); onClicked: ctrl.zoomBy(1.6) }
                     FlowButton { anchors.verticalCenter: parent.verticalCenter; text: qsTr("Reset zoom"); visible: ctrl.zoomed; implicitHeight: 28; onClicked: ctrl.resetZoom() }
                 }
             }
