@@ -25,6 +25,11 @@ Functions use PascalCase and struct fields use snake_case.
 | `fileio.h` | `WriteFileAtomic`: temp file, flush, rename. The one writer for marks, `.samn`, settings and the range marker. | Go `writeFileAtomic` | ✅ |
 | `library.h` | Library lists (recent 8, favorites 50, scripts 50), settings keys `library.*` | 0.7 `player_layout.js` | ✅ |
 | `audio_envelope.h` | Loudness envelope 0..1 per 50 ms (Audio Level lane, vibration from sound). No ffmpeg: the app decodes. | Go `generator/audio_vibration.go` | ✅ Go tests ported |
+| `device/device.h`, `device/transport.h` | `Device` + optional interfaces (linear, multi-axis, motor level, raw, battery), `Status`; `Transport` = the I/O seam (BLE GATT write / line writer / WebSocket text) the app implements | Go `device/device.go` | ✅ |
+| `device/protocol.h`, `device/samneo2.h`, `device/battery.h` | Sam Neo 2 + legacy Sam packets (byte-exact), change detection, Stop/raw state, keepalive, battery cache | Go `protocol.go`, `samneo2.go`, `battery.go` | ✅ Go tests ported |
+| `device/tcode.h` | TCode strings and address parsing (identical to Go), `TCodeDevice` over a Transport | Go `tcode.go`, `tcode_serial.go` | ✅ Go tests ported; strings diffed against Go |
+| `device/intiface.h`, `device/go_json.h` | Buttplug v3 messages (bytes as Go's `encoding/json`), handshake, device adoption, one-shot reconnect, battery | Go `intiface.go` | ✅ Go tests ported; bytes diffed against Go |
+| `device/capabilities.h`, `device/mock.h`, `device/diagnostics.h` | Channels / features, `MockDevice` + `MockTransport`, the diagnostics run | Go `capabilities.go`, `mock.go`, `diagnostics.go` | ✅ Go tests ported |
 | `project.h` | Project sidecar `<name>.snp.json` (offset, seek, loop marker, bookmarks, chapters): `ProjectPathFor`, `SaveProject`, `LoadProject` | Go `funscript/project.go` | ✅ file byte-identical with Go |
 | `range_edit.h` | Editor range tools: `SnapMs`, `DeleteRange`, `CapSpeedRange`, `ScaleRangePos`, `ScaleRangePosFade` (errors as `RangeEditError`) | Go `funscript/project.go` | ✅ Go tests ported |
 | `heatmap_image.h` | Heatmap as an RGBA buffer (buckets, colours, chapter ticks); the app encodes the PNG | Go `funscript/heatmap_png.go` | ✅ pixels identical with Go |
