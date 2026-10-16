@@ -34,6 +34,7 @@ qt_add_qml_module(samn_app
     qml/FlowTabs.qml
     qml/FlowTextField.qml
     qml/MarkList.qml
+    qml/LaneName.qml
     qml/LibraryPanel.qml
     qml/InspectorPanel.qml
     qml/ToolTipText.qml

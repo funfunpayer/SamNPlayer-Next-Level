@@ -369,13 +369,26 @@ Item {
                 Text { anchors.verticalCenter: parent.verticalCenter; text: qsTr("Offset"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13 }
                 OffsetField { value: ctrl.offsetMs; onChanged: (v) => ctrl.offsetMs = v }
             }
+            // Lane names left of the lanes (0.7 v1), one per visible row.
+            Column {
+                id: laneNames
+                visible: lanes.visible
+                x: 16; y: 46; width: 108
+                Item { width: 1; height: ruler.height; visible: ruler.visible }
+                LaneName { name: qsTr("Stroke"); dot: Theme.orange; height: curve.height; visible: ctrl.hasScript }
+                LaneName { name: qsTr("Vibration"); dot: Theme.laneVibration; height: vibLane.height; visible: vibLane.visible }
+                LaneName { name: qsTr("Suction"); dot: Theme.laneSuction; height: sucLane.height; visible: sucLane.visible }
+                LaneName { name: qsTr("Audio Level"); dot: "#93aec4"; height: audioLane.height; visible: audioLane.visible }
+                Item { width: 1; height: 4; visible: heatBar.visible }
+                LaneName { name: qsTr("Heatmap"); dot: "#e8603c"; height: heatBar.height; visible: heatBar.visible }
+            }
             Column {
                 id: lanes
                 visible: bottomTabs.current === 0
-                x: 16; y: 46
-                width: parent.width - 32; height: parent.height - 58
+                x: 16 + 112; y: 46
+                width: parent.width - 32 - 112; height: parent.height - 58
                 readonly property int laneH: 34
-                readonly property int extraLanes: (ctrl.hasScript ? 2 : 0) + (audioLane.visible ? 1 : 0)
+                readonly property int extraLanes: (vibLane.visible ? 1 : 0) + (sucLane.visible ? 1 : 0) + (audioLane.visible ? 1 : 0)
                 readonly property int fixedH: ruler.height + (heatBar.visible ? heatBar.height + 4 : 0) + markRow.height
                 RulerItem {
                     id: ruler
@@ -415,9 +428,8 @@ Item {
                 CurveItem {
                     id: vibLane
                     width: parent.width; height: lanes.laneH
-                    visible: ctrl.hasScript
+                    visible: ctrl.hasScript && ctrl.vibrationFromScript  // 0.7: only channels the script carries
                     lane: "vibration"; lineColor: Theme.laneVibration
-                    label: ctrl.vibrationFromScript ? qsTr("VIBRATION") : qsTr("VIBRATION · device preview")
                     lineWidth: 1.15; glow: 4; fill: 0.2
                     viewStartMs: ctrl.viewStartMs; viewEndMs: ctrl.viewEndMs
                     Component.onCompleted: ctrl.attachCurve(vibLane)
@@ -426,9 +438,8 @@ Item {
                 CurveItem {
                     id: sucLane
                     width: parent.width; height: lanes.laneH
-                    visible: ctrl.hasScript
+                    visible: ctrl.hasScript && ctrl.suctionFromScript
                     lane: "suction"; lineColor: Theme.laneSuction
-                    label: ctrl.suctionFromScript ? qsTr("SUCTION") : qsTr("SUCTION · device preview")
                     lineWidth: 1.15; glow: 4; fill: 0.2
                     viewStartMs: ctrl.viewStartMs; viewEndMs: ctrl.viewEndMs
                     Component.onCompleted: ctrl.attachCurve(sucLane)
@@ -442,6 +453,7 @@ Item {
                     viewStartMs: ctrl.viewStartMs; viewEndMs: ctrl.viewEndMs
                     offsetMs: ctrl.offsetMs
                     playheadMs: ctrl.playheadMs
+                    label: ""
                     Rectangle { width: parent.width; height: 1; color: Qt.rgba(1, 1, 1, 0.08) }
                 }
                 Item { width: 1; height: 4; visible: heatBar.visible }
