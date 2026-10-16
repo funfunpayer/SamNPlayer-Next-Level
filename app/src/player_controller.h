@@ -19,6 +19,8 @@
 #include "samn/playback.h"
 #include "samn/playlist.h"
 #include "samn/settings.h"
+#include "device_controller.h"
+#include "playback_output.h"
 
 namespace samn::ui {
 
@@ -90,6 +92,17 @@ class PlayerController : public QObject {
     // 0-100 position gauge on the video (0.7: on by default, remembered).
     Q_PROPERTY(bool posOverlay READ posOverlay WRITE setPosOverlay NOTIFY viewOptionsChanged)
     Q_PROPERTY(int suctionNow READ suctionNow NOTIFY playheadMsChanged)
+    // The device the script plays on (one DeviceController for the app) and
+    // what goes to it while playing (the stroke filter, safety range ...).
+    Q_PROPERTY(samn::ui::DeviceController* device READ device WRITE setDevice NOTIFY deviceChanged)
+    Q_PROPERTY(samn::ui::PlaybackOutput* output READ output CONSTANT)
+    // D-132: which lanes show. Without a connected device: what the script
+    // carries (the stroke; vibration / suction only when the file has them).
+    // With one: the channels that device can use (a stroker: the stroke; a
+    // Sam Neo 2: vibration and suction).
+    Q_PROPERTY(bool showStrokeLane READ showStrokeLane NOTIFY lanesChanged)
+    Q_PROPERTY(bool showVibrationLane READ showVibrationLane NOTIFY lanesChanged)
+    Q_PROPERTY(bool showSuctionLane READ showSuctionLane NOTIFY lanesChanged)
     // Sleep timer: stops playing after this many minutes of play (0 = off).
     Q_PROPERTY(int sleepMinutes READ sleepMinutes WRITE setSleepMinutes NOTIFY sleepChanged)
     // False: the lane is the device preview from the stroke (mapper), not
@@ -254,6 +267,12 @@ public:
     void setSleepMinutes(int minutes);
     bool vibrationFromScript() const { return vibrationFromScript_; }
     bool suctionFromScript() const { return suctionFromScript_; }
+    DeviceController* device() const { return device_; }
+    void setDevice(DeviceController* device);
+    PlaybackOutput* output() { return &output_; }
+    bool showStrokeLane() const;
+    bool showVibrationLane() const;
+    bool showSuctionLane() const;
     double viewStartMs() const { return double(view_.start_ms); }
     double viewEndMs() const { return double(view_.end_ms); }
     bool zoomed() const { return samn::IsZoomed(view_, timelineMs()); }
@@ -276,6 +295,10 @@ public:
     void setPlaylistRepeat(bool on);
 
 signals:
+    void deviceChanged();
+    // The Emergency stop was pressed: the page pauses the video.
+    void emergencyStopped();
+    void lanesChanged();
     void playlistChanged();
     void speedHighlightChanged();
     void scriptChanged();
@@ -313,6 +336,8 @@ private:
     samn::Settings& settings();
 
     std::unique_ptr<samn::Settings> settings_;
+    PlaybackOutput output_;
+    QPointer<DeviceController> device_;
     std::vector<samn::Action> stroke_, vibration_, suction_;
     samn::ScriptMarks marks_;
     std::vector<float> heat_;

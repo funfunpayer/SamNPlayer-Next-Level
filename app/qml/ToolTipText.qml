@@ -1,5 +1,5 @@
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Controls.Basic  // Basic: our own look on every system (the native Windows style ignores it)
 import SamN
 
 // A small tooltip in the Flow look, shown while `shown` is true.

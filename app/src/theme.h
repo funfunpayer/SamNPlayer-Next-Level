@@ -32,6 +32,8 @@ private:
     SAMN_COLOR(textMuted, "#6f8399")
     SAMN_COLOR(laneVibration, "#00d9f4")
     SAMN_COLOR(laneSuction, "#b896e8")
+    SAMN_COLOR(danger, "#ff6b7a")
+    SAMN_COLOR(good, "#3ddc97")
 #undef SAMN_COLOR
     Q_PROPERTY(QString font READ font CONSTANT)
     Q_PROPERTY(QString fontSoft READ fontSoft CONSTANT)
