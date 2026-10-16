@@ -201,9 +201,12 @@ TEST_CASE("range marker: 0.7 sidecar file") {
     const auto script = dir / "clip.funscript";
     CHECK_FALSE(samn::LoadMarker(script).has_value());
     samn::SaveMarker(script, {1500, 4200});
-    std::ifstream in(dir / "clip.funscript.marker.json", std::ios::binary);
-    std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    CHECK(text == R"({"startMs":1500,"endMs":4200})");  // same bytes as Go
+    {
+        // Closed before the file is removed below (Windows locks open files).
+        std::ifstream in(dir / "clip.funscript.marker.json", std::ios::binary);
+        std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        CHECK(text == R"({"startMs":1500,"endMs":4200})");  // same bytes as Go
+    }
     CHECK(samn::LoadMarker(script) == samn::RangeMarker{1500, 4200});
     // An empty range removes it.
     samn::SaveMarker(script, {10, 10});
