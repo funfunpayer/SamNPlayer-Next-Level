@@ -1,30 +1,32 @@
 # SamNPlayer 2
 
-SamNPlayer rebuilt in **Python and C++** with a **Qt (PySide6)** interface:
-a funscript player, editor and generator for the SVAKOM Sam Neo 2 and
-other devices. It replaces the Go/Wails app in
-[`funfunpayer/SamNPlayer`](https://github.com/funfunpayer/SamNPlayer), which
-gets fixes only until this one ships.
+SamNPlayer, rebuilt in **C++** with **Qt 6** and a **QML** interface in the animated Flow look of 0.7. It is a funscript player, editor and generator for the SVAKOM Sam Neo 2 and other devices. Python is used only where it is clearly better (AI training), through bindings of the C++ core.
 
-**Status:** phase P0, the foundation. A window with Play / Edit / Generate
-opens a funscript and draws its curve; nothing else works yet. The plan is
-in [`docs/PLAN.md`](docs/PLAN.md) and the current state in
-[`docs/AGENT_STATE.md`](docs/AGENT_STATE.md).
+It replaces the Go/Wails app in [`funfunpayer/SamNPlayer`](https://github.com/funfunpayer/SamNPlayer), which gets fixes only until this one ships.
+
+**Status:** phase P1 (Player).
+- The core holds all Player logic and its tests.
+- The interface shows the Flow shell and the Player page with video, curve and offset.
+
+The plan is in [`docs/PLAN.md`](docs/PLAN.md), the decisions in [`docs/DECISIONS.md`](docs/DECISIONS.md) and the roadmap in [`docs/ROADMAP.md`](docs/ROADMAP.md). The current state is in [`docs/AGENT_STATE.md`](docs/AGENT_STATE.md).
 
 ## Layout
 
-| Folder | Language | What |
-|---|---|---|
-| `samn/` | Python | app logic and the Qt interface (`samn/ui/`) |
-| `native/` | C++ (CMake, pybind11) | fast paths: funscript parsing, stroke filter, beat bar, beat strokes; later tracking and the frame pipeline |
-| `tests/` | Python | pytest and pytest-qt |
+| Folder | What |
+|---|---|
+| `core/` | C++17 library without Qt: formats, mapping, filters, beat bar, script search, settings, playback |
+| `core/python/` | pybind11 bindings for AI tools and parity tests |
+| `app/` | Qt 6 app: C++ controllers (`src/`) and the QML interface (`qml/`) |
+| `tests/core/` | Core tests (doctest) |
+| `third_party/` | Vendored doctest (MIT) |
 
 ## Build and run
 
+You need CMake 3.21+, a C++17 compiler and Qt 6.4+ (Quick, Multimedia, Svg). For the Python bindings you also need pybind11.
+
 ```bash
-python -m pip install -e ".[test]" pybind11
-cmake -S native -B native/build -Dpybind11_DIR=$(python -m pybind11 --cmakedir)
-cmake --build native/build --config Release
-python -m samn path/to/clip.funscript
-pytest
+cmake -S . -B build -Dpybind11_DIR=$(python -m pybind11 --cmakedir)   # or -DSAMN_BUILD_PYTHON=OFF
+cmake --build build --parallel
+ctest --test-dir build
+./build/app/samnplayer path/to/clip.funscript
 ```

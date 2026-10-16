@@ -1,6 +1,6 @@
 __pycache__/
 *.pyc
-native/build/
+build*/
 build/
 dist/
 .pytest_cache/
