@@ -6,6 +6,8 @@
 #include <QTimer>
 #include <QtQml/QQmlExtensionPlugin>
 
+#include "icon_provider.h"
+
 // The SamN QML module is a static library: import its plugin explicitly.
 Q_IMPORT_QML_PLUGIN(SamNPlugin)
 
@@ -17,6 +19,7 @@ int main(int argc, char** argv) {
     QFontDatabase::addApplicationFont(":/qt/qml/SamN/qml/fonts/Figtree.ttf");
 
     QQmlApplicationEngine engine;
+    engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
     engine.rootContext()->setContextProperty("startupPath", argc > 1 ? QString::fromLocal8Bit(argv[1]) : QString());
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &app, [] { QCoreApplication::exit(1); },
                      Qt::QueuedConnection);
