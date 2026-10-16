@@ -1,0 +1,13 @@
+import QtQuick
+import QtQuick.Controls
+import SamN
+
+// A small tooltip in the Flow look, shown while `shown` is true.
+ToolTip {
+    id: tip
+    property bool shown: false
+    visible: shown && text !== ""
+    delay: 500
+    contentItem: Text { text: tip.text; color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 12 }
+    background: Rectangle { color: "#0a1a2e"; border.color: Theme.cardBorder; radius: 8 }
+}
