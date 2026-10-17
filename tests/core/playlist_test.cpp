@@ -84,3 +84,19 @@ TEST_CASE("Playlist: shuffle keeps the current item first and all items") {
     CHECK(p.Index() == 0);
     CHECK(p.Items().size() == 6);
 }
+
+// 0.7 #pb-prev: the item before, never wrapping (even with Repeat).
+TEST_CASE("Playlist: back goes to the item before and stops at the first") {
+    Playlist p;
+    CHECK_FALSE(p.Back());  // empty
+    p.Replace({"/a.funscript"});
+    CHECK_FALSE(p.Back());  // one item
+    p.Replace({"/a.funscript", "/b.funscript", "/c.funscript"}, 2);
+    p.SetRepeat(true);
+    CHECK(p.Back());
+    CHECK(p.Index() == 1);
+    CHECK(p.Back());
+    CHECK(p.Index() == 0);
+    CHECK_FALSE(p.Back());
+    CHECK(p.Index() == 0);
+}

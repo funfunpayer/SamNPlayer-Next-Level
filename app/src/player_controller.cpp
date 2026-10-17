@@ -249,6 +249,8 @@ bool PlayerController::pickPlaylist(int index) {
 
 bool PlayerController::playlistNext() { return playlist_.Advance(rng_) && loadPlaylistCurrent(); }
 
+bool PlayerController::playlistPrevious() { return playlist_.Back() && loadPlaylistCurrent(); }
+
 bool PlayerController::playlistFinished() { return playlist_.AdvanceOnFinish(rng_) && loadPlaylistCurrent(); }
 
 void PlayerController::setPlaylistAuto(bool on) {
