@@ -15,6 +15,8 @@ Q_IMPORT_QML_PLUGIN(SamNPlugin)
 int main(int argc, char** argv) {
     QGuiApplication app(argc, argv);
     QGuiApplication::setApplicationName("SamNPlayer2");
+    // Shown in the top bar; "-dev" unless a release build (0.7 "dev" label).
+    QGuiApplication::setApplicationVersion(QStringLiteral(SAMN_VERSION));
     QGuiApplication::setOrganizationName("SamNPlayer");
     QFontDatabase::addApplicationFont(":/qt/qml/SamN/qml/fonts/Sora.ttf");
     QFontDatabase::addApplicationFont(":/qt/qml/SamN/qml/fonts/Figtree.ttf");

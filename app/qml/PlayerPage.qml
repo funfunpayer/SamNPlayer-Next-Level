@@ -147,6 +147,8 @@ Item {
     }
 
     function openFile() { openDialog.open() }
+    // The top-bar device chip: Inspector open on Devices.
+    function showDevices() { inspector.collapsed = false; inspector.tab = 0 }
     readonly property bool playing: player.playbackState === MediaPlayer.PlayingState
     function togglePlay() { playing ? player.pause() : player.play() }
     function setVolume(v) {
@@ -954,10 +956,6 @@ Item {
     }
 
     // Drop a video or a script anywhere on the page.
-    DropArea {
-        anchors.fill: parent
-        onDropped: (drop) => { if (drop.hasUrls) ctrl.openPaths(drop.urls.map(u => u.toString())) }
-    }
 
     // Keys as 0.7 (Player, not while typing).
     Shortcut { sequence: "Space"; enabled: !page.deckOpen; onActivated: page.togglePlay() }
@@ -985,6 +983,5 @@ Item {
             }
         }
     }
-    Shortcut { sequence: StandardKey.Open; enabled: !page.deckOpen; onActivated: page.openFile() }
     Shortcut { sequence: "Esc"; enabled: page.fullStage && !page.deckOpen; onActivated: page.fullStage = false }
 }
