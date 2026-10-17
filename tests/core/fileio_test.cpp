@@ -44,3 +44,23 @@ TEST_CASE("fileio: atomic write creates, replaces and leaves no temp file") {
     CHECK_FALSE(fs::exists(dir / "missing"));
     fs::remove_all(dir);
 }
+
+// 0.7 funscript/atomic_write_test.go TestWriteFileAtomicCleansTempAfterRenameFailure
+// (and its generator/native_write_test.go twin): a failed rename throws,
+// leaves the destination as it was and leaves no temp file behind.
+TEST_CASE("fileio: a failed rename leaves the destination and the folder clean") {
+    const fs::path dir = fs::temp_directory_path() / ("samn_fileio_" + std::to_string(std::random_device{}()));
+    const fs::path dest = dir / "target.json";
+    fs::create_directories(dest);  // a non-empty folder cannot be replaced by a file
+    std::ofstream(dest / "keep.txt") << "keep";
+    CHECK_THROWS_AS(samn::WriteFileAtomic(dest, "new"), std::runtime_error);
+    CHECK(fs::is_directory(dest));
+    CHECK(Read(dest / "keep.txt") == "keep");
+    int entries = 0;
+    for (const auto& e : fs::directory_iterator(dir)) {
+        CHECK_MESSAGE(e.path().filename() == "target.json", "left behind: " << e.path().filename().string());
+        ++entries;
+    }
+    CHECK(entries == 1);
+    fs::remove_all(dir);
+}

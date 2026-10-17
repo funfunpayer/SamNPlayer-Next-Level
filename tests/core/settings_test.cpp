@@ -48,6 +48,22 @@ TEST_CASE("broken settings file is kept aside") {
     CHECK(Settings(p).get("x") == 1);
 }
 
+// 0.7 cmd/gui-wails/settings_store_test.go TestSettingsStoreNullFile: a file
+// holding just `null` loads as empty, and a later set works and persists.
+TEST_CASE("settings: a file holding null loads as empty and accepts a set") {
+    TempDir t;
+    fs::path p = t.path / "settings.json";
+    std::ofstream(p) << "null";
+    {
+        Settings st(p);
+        CHECK(st.get("x").is_null());
+        CHECK(st.get("x", 7) == 7);
+        CHECK_FALSE(fs::exists(t.path / "settings.broken.json"));
+        st.set("x", 1);
+    }
+    CHECK(Settings(p).get("x") == 1);
+}
+
 TEST_CASE("settings: set_many, defaults, atomic write leaves no temp files") {
     TempDir t;
     fs::path p = t.path / "sub" / "settings.json";

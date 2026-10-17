@@ -27,7 +27,7 @@ std::vector<Action> dedupeActionTimes(std::vector<Action> a) {
 }
 
 const int64_t idleWaveMs = 1600;
-const int idleWaveAmp = 12;
+const int idleWaveAmp = kIdleWaveAmp;
 const int64_t idleMarginM = 400;
 
 std::vector<Action> idleFill(const std::vector<Action>& a, int64_t minGap) {
@@ -169,12 +169,12 @@ std::vector<Action> limitSpeed(std::vector<Action> a, double maxSpeed) {
     return a;
 }
 
+}  // namespace
+
 std::string NormalizeSmooth(const std::string& s) {
     if (s == "pchip" || s == "makima") return s;
     return "";
 }
-
-}  // namespace
 
 bool Active(const StrokeFilter& f) {
     return !f.smooth.empty() || f.maxSpeed > 0 || f.idleFillMs > 0;

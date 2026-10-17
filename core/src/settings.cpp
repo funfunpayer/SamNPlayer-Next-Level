@@ -88,8 +88,9 @@ Settings::Settings(fs::path path) : path_(path.empty() ? config_dir() / "setting
             auto parsed = nlohmann::json::parse(ss.str(), nullptr, false);
             if (parsed.is_object())
                 data_ = std::move(parsed);
-            else
+            else if (!parsed.is_null())
                 broken = true;  // invalid JSON, or not an object
+            // A file holding just `null` is empty, not broken (0.7 did the same).
         }
     }
     if (broken) {
