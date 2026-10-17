@@ -16,6 +16,9 @@ old repo's `CONTRIBUTING.md` and add the Owner's rules for SamNPlayer 2.
 | `docs/MODULES.md` | Where each piece lives. |
 | `docs/AGENT_STATE.md` | Current state and the next steps. |
 | `docs/P3_GENERATOR.md` | The Generator (which is the Editor, D-137). |
+| `docs/LESSONS.md` | What 0.7 learned, per area, with a rule each; tested-and-rejected ideas; gaps. |
+| `docs/TEST_PARITY.md` | Every 0.7 test and where it went (ported, todo, n/a). |
+| `docs/VERSIONS_AND_PLANS.md` | Every 0.x version, what was removed on purpose and why, what is still missing. |
 
 When sources disagree, the code and reproducible tests win. The 0.7 code
 (`funfunpayer/SamNPlayer`, Go + Wails + JS) is the reference for behaviour.
@@ -60,6 +63,13 @@ When sources disagree, the code and reproducible tests win. The 0.7 code
     No model names in code, docs or commits.
 12. **Generator = Editor.** One mode: the Generator creates and edits
     (D-137). Editor work goes into the Generator page.
+13. **Read the lessons first.** Before you build or change an area, read
+    its section in `docs/LESSONS.md` and the "Tested and rejected" table.
+    What 0.7 removed on purpose stays out; bringing it back needs a
+    measurement against 0.7 and a decision (see `VERSIONS_AND_PLANS.md`).
+14. **Old tests come with the code.** When a module is ported, its 0.7
+    tests are ported in the same PR, and its rows in `docs/TEST_PARITY.md`
+    are updated. A port is not done while a row says `todo-now`.
 
 ## Workflow
 
