@@ -3,6 +3,7 @@
 // stop and the lanes that follow the device (D-132). Real DeviceController on
 // its worker thread against the Mock device and a UDP sink (TCode).
 #include <QFile>
+#include <QRegularExpression>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QtTest>
@@ -307,6 +308,153 @@ private slots:
         QTRY_VERIFY_WITH_TIMEOUT(Lines(sink).contains(Move("L1", 1.0, 1000)), kWait);
         QVERIFY(!Lines(sink).filter("L0").isEmpty());
         p.output()->setPlaying(false);
+    }
+
+    // 0.7 TestDriveAxesSendsEachAxisOnce. Over TCode UDP: twist is R0, roll is R1.
+    void extraAxesSendEachAxisOnce() {
+        UdpLineSink sink;
+        DeviceController dev;
+        PlayerController p;
+        p.setDevice(&dev);
+        connectStroker(dev, sink);
+        auto count = [&](const char* prefix) { return Lines(sink).filter(QRegularExpression(QString("^") + prefix)).size(); };
+        p.output()->setScript({{0, 0}, {1000, 100}, {2000, 0}}, {}, {},
+                              {{"twist", {{0, 50}, {800, 90}}},
+                               {"roll", {{600, 10}, {0, 50}}},  // unsorted on purpose
+                               {"nonsense", {{0, 50}, {500, 0}}},  // the device does not take it
+                               {"sway", {}}});
+        p.output()->setPlaying(true);
+        p.output()->update(100);
+        // One move per axis, sorted by name (roll before twist), the untaken and the empty axis skipped.
+        QTRY_VERIFY_WITH_TIMEOUT(Lines(sink).contains(Move("R0", 0.9, 700)), kWait);
+        QCOMPARE(Lines(sink).filter("R1").size(), 1);
+        QVERIFY(Lines(sink).contains(Move("R1", 0.1, 500)));
+        QVERIFY(Lines(sink).indexOf(Move("R1", 0.1, 500)) < Lines(sink).indexOf(Move("R0", 0.9, 700)));
+        QCOMPARE(count("L2"), 0);  // sway: empty
+        // The same targets are not sent again while the playhead moves on inside the move.
+        p.output()->update(200);
+        QTest::qWait(250);
+        QCOMPARE(count("R0"), 1);
+        QCOMPARE(count("R1"), 1);
+        // Stroke off stops the extra axes too.
+        p.output()->setStrokeOn(false);
+        p.output()->update(300);
+        QTest::qWait(250);
+        QCOMPARE(count("R0"), 1);
+        QCOMPARE(count("R1"), 1);
+        // Back on resends; the stroke range does not scale the extra axes.
+        p.output()->setStrokeRange(40, 60, true);
+        p.output()->setStrokeOn(true);
+        p.output()->update(300);
+        QTRY_COMPARE_WITH_TIMEOUT(count("R1"), 2, kWait);
+        QCOMPARE(count("R0"), 2);
+        QCOMPARE(Lines(sink).filter("R1").last(), Move("R1", 0.1, 300));
+        QCOMPARE(Lines(sink).filter("R0").last(), Move("R0", 0.9, 500));
+        QCOMPARE(Lines(sink).filter("L0").last(), Move("L0", 0.6, 700));  // the stroke itself is scaled into 40-60 %
+        // A pause resets the targets: the next start sends every axis again.
+        p.output()->setPlaying(false);
+        p.output()->setPlaying(true);
+        p.output()->update(300);
+        QTRY_COMPARE_WITH_TIMEOUT(count("R1"), 3, kWait);
+        QCOMPARE(count("R0"), 3);
+        p.output()->setPlaying(false);
+    }
+
+    // 0.7 TestDriveAxesNeedsMultiAxisDevice: a plain stroker (Buttplug LinearCmd) has the stroke only.
+    void extraAxesNeedAMultiAxisDevice() {
+        FakeButtplugServer server(FakeButtplugServer::StrokerMessages());
+        DeviceController dev;
+        PlayerController p;
+        p.setDevice(&dev);
+        dev.connectIntiface(server.url());
+        QTRY_COMPARE_WITH_TIMEOUT(dev.state(), QString("connected"), kWait);
+        QVERIFY(dev.capLinear());
+        QVERIFY(!dev.axes().contains("surge"));
+        p.output()->setScript({{0, 0}, {1000, 100}}, {}, {}, {{"surge", {{0, 50}, {800, 90}}}, {"twist", {{0, 50}, {800, 90}}}});
+        p.output()->setPlaying(true);
+        p.output()->update(100);
+        QTRY_COMPARE_WITH_TIMEOUT(server.Count("LinearCmd"), 1, kWait);  // the stroke only
+        p.output()->update(200);
+        QTest::qWait(250);
+        QCOMPARE(server.Count("LinearCmd"), 1);
+        QVERIFY2(dev.lastError().isEmpty(), qPrintable(dev.lastError()));  // no axis command, no error
+        p.output()->setPlaying(false);
+    }
+
+    // 0.7 TestChannelLevelsDefaultFullAndClamp (levels are 0-100 here, not 0-1).
+    void channelLevelsDefaultFullAndClamp() {
+        PlaybackOutput o;
+        QCOMPARE(o.vibrationLevel(), 100);
+        QCOMPARE(o.suctionLevel(), 100);
+        o.setVibrationLevel(40);
+        o.setSuctionLevel(-3);
+        QCOMPARE(o.vibrationLevel(), 40);
+        QCOMPARE(o.suctionLevel(), 0);
+        o.setVibrationLevel(700);
+        o.setSuctionLevel(25);
+        QCOMPARE(o.vibrationLevel(), 100);
+        QCOMPARE(o.suctionLevel(), 25);
+        o.setSuctionLevel(1000);
+        QCOMPARE(o.suctionLevel(), 100);
+    }
+
+    // 0.7 TestDriveStrokeHonoursSpeedAndMinimum, the minimum half.
+    void lateStrokePositionStillGetsTheMinimumMove() {
+        const QString script = writeScript(files_.path(), "late.funscript", {{0, 0}, {1000, 100}, {2000, 0}});
+        UdpLineSink sink;
+        DeviceController dev;
+        PlayerController p;
+        p.setDevice(&dev);
+        QVERIFY(p.openScript(script));
+        connectStroker(dev, sink);
+        p.setPlaying(true);
+        p.setVideoPositionMs(900);  // start: eases in towards the point at 1000
+        QTRY_COMPARE_WITH_TIMEOUT(Lines(sink).filter("L0").size(), 1, kWait);
+        // 5 ms before the next point (2000): not a 5 ms move, the minimum.
+        p.setVideoPositionMs(1995);
+        QTRY_COMPARE_WITH_TIMEOUT(Lines(sink).filter("L0").size(), 2, kWait);
+        QCOMPARE(Lines(sink).filter("L0").last(), Move("L0", 0.0, 20));  // 0.7 minStrokeMove
+        QCOMPARE(PlaybackOutput::kMinMoveMs, 20);
+        p.setPlaying(false);
+    }
+
+    // 0.7 TestDriveStrokeOnlyForLinearDevices.
+    void strokeOnlyForLinearDevices() {
+        // The Mock has no linear channel: no positions, no error (vibration still flows).
+        {
+            DeviceController dev;
+            PlayerController p;
+            p.setDevice(&dev);
+            connectMock(dev);
+            QVERIFY(!dev.capLinear());
+            QSignalSpy logSpy(&dev, &DeviceController::logMessage);
+            p.output()->setScript({{0, 0}, {1000, 100}, {2000, 0}}, {{0, 80}, {2000, 80}}, {});
+            p.output()->setPlaying(true);
+            p.output()->update(100);
+            QTRY_VERIFY_WITH_TIMEOUT([&] { for (const auto& a : logSpy) if (a.at(0).toString().startsWith("[mock] vibration")) return true; return false; }(), kWait);
+            QTest::qWait(200);
+            for (const auto& a : logSpy) QVERIFY2(!a.at(0).toString().contains("position"), qPrintable(a.at(0).toString()));
+            QVERIFY2(dev.lastError().isEmpty(), qPrintable(dev.lastError()));
+            p.output()->setPlaying(false);
+        }
+        // A stroker with a script that has no stroke actions: nothing is sent.
+        {
+            UdpLineSink sink;
+            DeviceController dev;
+            PlayerController p;
+            p.setDevice(&dev);
+            connectStroker(dev, sink);
+            p.output()->setScript({}, {}, {});
+            p.output()->setPlaying(true);
+            p.output()->update(100);
+            QTest::qWait(300);
+            QVERIFY(Lines(sink).filter("L0").isEmpty());
+            // The same device does move once the script has a stroke.
+            p.output()->setScript({{0, 0}, {1000, 100}}, {}, {});
+            p.output()->update(100);
+            QTRY_VERIFY_WITH_TIMEOUT(!Lines(sink).filter("L0").isEmpty(), kWait);
+            p.output()->setPlaying(false);
+        }
     }
 
     // --- pause, stop, home ---

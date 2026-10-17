@@ -29,3 +29,10 @@ target_link_libraries(player_page_qml_test PRIVATE samn_app samn_appplugin Qt6::
 target_compile_definitions(player_page_qml_test PRIVATE SAMN_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data")
 add_test(NAME player_page_qml_test COMMAND player_page_qml_test)
 set_tests_properties(player_page_qml_test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_MEDIA_BACKEND=ffmpeg")
+
+# The shell (Main.qml) and the bundled vector assets.
+add_executable(shell_qml_test shell_qml_test.cpp)
+target_link_libraries(shell_qml_test PRIVATE samn_app samn_appplugin Qt6::Test)
+target_compile_definitions(shell_qml_test PRIVATE SAMN_APP_QML_DIR="${CMAKE_SOURCE_DIR}/app/qml")
+add_test(NAME shell_qml_test COMMAND shell_qml_test)
+set_tests_properties(shell_qml_test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_MEDIA_BACKEND=ffmpeg")
