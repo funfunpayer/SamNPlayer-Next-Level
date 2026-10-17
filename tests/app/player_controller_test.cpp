@@ -2,6 +2,7 @@
 // Python play page tests and 0.7 behaviour).
 #include <QFile>
 #include <QGuiApplication>
+#include <QMediaPlayer>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QtTest>
@@ -462,6 +463,29 @@ private slots:
         QVERIFY(c.chapters().isEmpty());
         QVERIFY(c.lastError().isEmpty());
         QVERIFY(!c.openScript(d.filePath("missing.funscript")));
+    }
+
+    // 0.7 0.5.41: a video decode failure names its class and the file, and
+    // goes away once the video plays; other errors stay.
+    void mediaErrorsAreReportedAndClearOnPlay() {
+        PlayerController c;
+        c.reportMediaError(QMediaPlayer::NoError, QString());
+        QVERIFY(c.lastError().isEmpty());
+        c.reportMediaError(QMediaPlayer::FormatError, QStringLiteral("no decoder"));
+        QVERIFY(c.lastError().contains(QStringLiteral("format not supported")));
+        QVERIFY(c.lastError().contains(QStringLiteral("no decoder")));
+        c.setPlaying(false);
+        QVERIFY(!c.lastError().isEmpty());
+        c.setPlaying(true);
+        QVERIFY(c.lastError().isEmpty());
+        c.setPlaying(false);
+        // A script error is not cleared by playing.
+        QTemporaryDir d;
+        writeFile(d.filePath("bad.funscript"), "{oops");
+        QVERIFY(!c.openScript(d.filePath("bad.funscript")));
+        c.setPlaying(true);
+        QVERIFY(c.lastError().contains("bad.funscript"));
+        c.setPlaying(false);
     }
 
     void zoomWindow() {

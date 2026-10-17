@@ -1,6 +1,7 @@
 // The Player page: a seek asked for before the video is loaded (a project's
 // saved position) lands once the video is there, not at 0. The clip is a
 // synthetic 4 s test pattern (tests/app/data).
+#include <QFile>
 #include <QGuiApplication>
 #include <QMediaPlayer>
 #include <QQmlComponent>
@@ -109,6 +110,17 @@ private:
             QSKIP("no media backend can decode the test clip here");
         QTRY_VERIFY_WITH_TIMEOUT(std::abs(media->position() - 2500) <= 150, 5000);
         QCOMPARE(media->property("pendingSeekMs").toDouble(), -1.0);
+
+        // A file that is no video: the error bar says so (0.7 0.5.41).
+        QTemporaryDir dir;
+        const QString broken = dir.filePath(QStringLiteral("broken.mp4"));
+        QFile f(broken);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(QByteArray(4096, 'x'));
+        f.close();
+        QVERIFY(ctrl->openPath(broken));
+        QTRY_VERIFY_WITH_TIMEOUT(ctrl->lastError().contains(QStringLiteral("cannot be played")), 10000);
+        QVERIFY(ctrl->lastError().contains(QStringLiteral("broken.mp4")));
     }
 };
 

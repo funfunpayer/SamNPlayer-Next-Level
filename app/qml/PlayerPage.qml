@@ -45,6 +45,9 @@ Item {
         audioOutput: AudioOutput { id: audio; volume: volume.value; muted: page.muted }
         playbackRate: page.speed
         onPlaybackStateChanged: ctrl.setPlaying(playbackState === MediaPlayer.PlayingState)
+        // errorChanged, not errorOccurred: the FFmpeg backend of Qt 6.4 sets
+        // the error without emitting errorOccurred.
+        onErrorChanged: if (media.error !== MediaPlayer.NoError) ctrl.reportMediaError(media.error, media.errorString)
         // Play list: at the end of the video, Auto-advance opens the next
         // script and it starts once its video is loaded (0.7).
         property bool playWhenLoaded: false
