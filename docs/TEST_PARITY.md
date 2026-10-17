@@ -27,7 +27,7 @@
 
 - A **test** is one `func TestXxx` (Go) or one `def test_xxx` (Python). Python scripts that have no `def test_` (almost all of the frontend and many generator tests are a `main()` with many `check(...)` calls) count as **one test per file**; the number of checks is in the table. Subtests (`t.Run`) are not counted separately.
 - Old suite: **222** Go test files and **209** Python test files (431 files). They hold **821** Go test functions and **320** Python tests (script files counted once). `cmd/gui-wails/counting_device_test.go` has no test function (a helper type), so it is listed as n/a with 0 tests.
-- New suite: `tests/core/*_test.cpp` (doctest, 28 files), `tests/app/*_test.cpp` (Qt Test, 7 files) and `core/python/tests/*.py` (5 files). Evidence for a mapping is one of: a Go name in a comment of the new test, the identical test name, or the same behaviour checked (named in the row).
+- New suite: `tests/core/*_test.cpp` (doctest, 28 files), `tests/app/*_test.cpp` (Qt Test, 11 files) and `core/python/tests/*.py` (5 files). Evidence for a mapping is one of: a Go name in a comment of the new test, the identical test name, or the same behaviour checked (named in the row).
 - Method: the old tree was read with `git show origin/main:<path>`; the new tree with `grep` over `tests/`, `core/` and `app/`. "Ported code" means a function exists in `core/include/samn`, `core/src` or `app/src`.
 
 ## 1. Summary
@@ -36,9 +36,9 @@
 
 | | Tests | ported | covered | todo-now | todo-later | n/a |
 |---|---:|---:|---:|---:|---:|---:|
-| **All** | **1141** | 154 | 64 | **12** | 861 | 50 |
-| Go | 821 | 141 | 30 | 6 | 599 | 45 |
-| Python | 320 | 13 | 34 | 6 | 262 | 5 |
+| **All** | **1141** | 166 | 64 | **0** | 861 | 50 |
+| Go | 821 | 147 | 30 | 0 | 599 | 45 |
+| Python | 320 | 19 | 34 | 0 | 262 | 5 |
 
 ### Per old package
 
@@ -46,7 +46,7 @@
 |---|---:|---:|---:|---:|---:|---:|---:|
 | `funscript` | 36 | 170 | 75 | 1 | 0 | 94 | 0 |
 | `device` | 7 | 41 | 39 | 2 | 0 | 0 | 0 |
-| `player` | 7 | 61 | 0 | 9 | 5 | 44 | 3 |
+| `player` | 7 | 61 | 5 | 9 | 0 | 44 | 3 |
 | `samn` | 2 | 5 | 5 | 0 | 0 | 0 | 0 |
 | `sam` | 7 | 37 | 0 | 0 | 0 | 37 | 0 |
 | `videox` | 6 | 26 | 0 | 0 | 0 | 17 | 9 |
@@ -57,13 +57,13 @@
 | `legal` | 1 | 2 | 0 | 0 | 0 | 2 | 0 |
 | `logging` | 1 | 1 | 0 | 0 | 0 | 1 | 0 |
 | `cmd/cli` | 7 | 18 | 0 | 0 | 0 | 12 | 6 |
-| `cmd/gui-wails (Go)` | 68 | 188 | 15 | 17 | 1 | 142 | 13 |
+| `cmd/gui-wails (Go)` | 68 | 188 | 16 | 17 | 0 | 142 | 13 |
 | `generator (Go)` | 72 | 237 | 7 | 1 | 0 | 216 | 13 |
 | `generator (Python)` | 56 | 151 | 0 | 0 | 0 | 151 | 0 |
 | `native/tests (Python)` | 4 | 13 | 13 | 0 | 0 | 0 | 0 |
 | `scripts/benchmark-prep (Python)` | 1 | 8 | 0 | 0 | 0 | 8 | 0 |
-| `frontend (Python/Playwright UI tests)` | 148 | 148 | 0 | 34 | 6 | 103 | 5 |
-| **Total** | **431** | **1141** | **154** | **64** | **12** | **861** | **50** |
+| `frontend (Python/Playwright UI tests)` | 148 | 148 | 6 | 34 | 0 | 103 | 5 |
+| **Total** | **431** | **1141** | **166** | **64** | **0** | **861** | **50** |
 
 `generator (Go)` includes the sub-packages `aiscript`, `bodyparts`, `posttrack`, `profilemodel`, `simpletrack`, `strokepreview`, `trackcv`, `trackutil`.
 
@@ -215,26 +215,26 @@ One row per old test function (grouped when a whole file shares the same answer)
 
 ### 2.3 `player`
 
-7 files, 61 tests: 0 ported, 9 covered, 5 todo-now, 44 todo-later, 3 n/a.
+7 files, 61 tests: 5 ported, 9 covered, 0 todo-now, 44 todo-later, 3 n/a.
 
 | Old file | Test function(s) | Status | Where / why |
 |---|---|---|---|
-| `axes_test.go` | `TestDriveAxesSendsEachAxisOnce` | todo-now | partly in tests/app/playback_output_test.cpp `extraAxesFollowTheScript` (see Port now) |
-| `axes_test.go` | `TestDriveAxesNeedsMultiAxisDevice` | todo-now | see Port now |
+| `axes_test.go` | `TestDriveAxesSendsEachAxisOnce` | ported | tests/app/playback_output_test.cpp `extraAxesSendEachAxisOnce` (one move per axis sorted by name, untaken and empty axes skipped, stroke off stops them, the stroke range does not scale them, a pause resends all); `extraAxesFollowTheScript` checks the first move |
+| `axes_test.go` | `TestDriveAxesNeedsMultiAxisDevice` | ported | tests/app/playback_output_test.cpp `extraAxesNeedAMultiAxisDevice` (a Buttplug stroker gets the stroke only, no axis command, no error) |
 | `extendedo_test.go` | `TestExtendedOScalesAmplitudeKeepsRhythm` | todo-later | P2 (Effects: Extended-O): not ported (listed as open in `AGENT_STATE.md`). |
 | `extendedo_test.go` | `TestSetOutputAppliesIntensityScale` | todo-later | P2 (Effects: master intensity scale / Extended-O): not ported. |
 | `extendedo_test.go` | `TestExtendedOMinLevelZeroSilences` | todo-later | P2 (Extended-O): not ported. |
 | `extendedo_test.go` | `TestZeroValuePlayerPlaysFullHeight` | n/a | Go zero-value `Player` struct semantics; `PlaybackOutput` is always constructed. |
 | `speed_test.go` | `TestClampSpeed` | todo-later | P2 (play speed 0.5-2x): `PlaybackOutput::setSpeed` only rejects values <= 0; the `MinSpeed`/`MaxSpeed` clamp is not in C++ (check QML) - add the clamp and the test together. |
 | `speed_test.go` | `TestSpeedScalesClockAndReanchors` | covered | tests/app/playback_output_test.cpp `playSpeedShortensTheMoves` (2x halves a 1000 ms move). Clock re-anchoring has no meaning: time comes from the video position. |
-| `speed_test.go` | `TestChannelLevelsDefaultFullAndClamp` | todo-now | partly in tests/app/playback_output_test.cpp `channelOffAndLevelScaleTheOutput` (see Port now) |
+| `speed_test.go` | `TestChannelLevelsDefaultFullAndClamp` | ported | tests/app/playback_output_test.cpp `channelLevelsDefaultFullAndClamp` (levels are 0-100 here: default 100, -3 gives 0, 7 and 700 give 100); `channelOffAndLevelScaleTheOutput` covers the scaling |
 | `speed_test.go` | `TestReducePeak` | todo-later | P2 (Effects: Reduce peaks): `ReducePeak` is not ported. |
 | `speed_test.go` | `TestSetOutputReducePeaks` | todo-later | P2 (Effects: Reduce peaks): not ported. |
 | `speed_test.go` | `TestPlayStartAtMsResumes` | n/a | Go `Player.Play` clock loop with `StartAtMs`; output is driven by video position reports. |
 | `stroke_test.go` | `TestDriveStrokeSendsNextActionOnce` | covered | tests/app/playback_output_test.cpp `strokerGetsTheNextActionWithSafetyRange` (same target not resent within a move) |
-| `stroke_test.go` | `TestDriveStrokeHonoursSpeedAndMinimum` | todo-now | speed half in tests/app/playback_output_test.cpp `playSpeedShortensTheMoves` (see Port now) |
+| `stroke_test.go` | `TestDriveStrokeHonoursSpeedAndMinimum` | ported | tests/app/playback_output_test.cpp `playSpeedShortensTheMoves` (speed half), `lateStrokePositionStillGetsTheMinimumMove` (a position 5 ms before it is due gets the 20 ms minimum) |
 | `stroke_test.go` | `TestDriveStrokeSoftSeek` | covered | tests/app/playback_output_test.cpp `seekEasesIn` |
-| `stroke_test.go` | `TestDriveStrokeOnlyForLinearDevices` | todo-now | see Port now |
+| `stroke_test.go` | `TestDriveStrokeOnlyForLinearDevices` | ported | tests/app/playback_output_test.cpp `strokeOnlyForLinearDevices` (the Mock gets no position and no error; a stroker with a stroke-less script gets none, and does move once the script has a stroke) |
 | `stroke_test.go` | `TestSyncDrivesStrokeAndStopsOnPause` | covered | tests/app/playback_output_test.cpp `pauseWithoutHomeOnlyStops` |
 | `stroke_test.go` | `TestPlayDrivesStroke` | n/a | Go `Player.Play` (no video, player clock); the Qt output is only driven by the video position. |
 | `stroke_test.go` | `TestStrokeRangeScalesPositions` | covered | tests/app/playback_output_test.cpp `strokerGetsTheNextActionWithSafetyRange` (positions land inside the safety range) |
@@ -354,7 +354,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 
 ### 2.14 `cmd/gui-wails (Go)`
 
-68 files, 188 tests: 15 ported, 17 covered, 1 todo-now, 142 todo-later, 13 n/a.
+68 files, 188 tests: 16 ported, 17 covered, 0 todo-now, 142 todo-later, 13 n/a.
 
 | Old file | Test function(s) | Status | Where / why |
 |---|---|---|---|
@@ -431,7 +431,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 | `app_script_state_test.go` | `TestLoadedScriptStateNoRace` | n/a | Go data-race test of the loaded-script state. |
 | `app_session_guard_test.go` | `TestStartTrainingKeepsDeviceWhenSessionBusy` | todo-later | P2 (Training). |
 | `app_session_guard_test.go` | `TestStartPlaybackKeepsPlayerWhenSessionBusy` | n/a | Go `App` pointer bookkeeping (`activePlayer` / `activeDevice`); the Qt rule "no connect while a session is active" is covered by `playback_output_test.cpp connectionIsRefusedWhilePlaying`. |
-| `app_snapshot_test.go` | `TestSaveVideoSnapshot` | todo-now | see Port now |
+| `app_snapshot_test.go` | `TestSaveVideoSnapshot` | ported | tests/app/player_controller_test.cpp `snapshotNameAndSave` (cancel is the dialog's own) |
 | `app_sound_vibration_test.go` | `TestBakeSoundVibrationFollowsLoudness`, `TestBakeSoundVibrationWithContactKeepsScriptVibration`, `TestBakeSoundVibrationRejects` | todo-later | P3 (Sound Curve: loudness written as the vibration curve). |
 | `app_stroke_filter_test.go` | `TestStrokeFilterSettingsRoundTrip` | covered | tests/app/playback_output_test.cpp `outputChoicesAreRemembered`, `speedLimitFilterShapesWhatIsSent` |
 | `app_suggest_test.go` | `TestSuggestPolarityAndInvertRoundtrip`, `TestSuggestOZoneOnLoadedScript`, `TestApplyRingDownOnLoadedScript`, `TestHonorInvertedSetting`, `TestInvertLoadedScriptExportsSamnCompanion` | todo-later | P4 Editor (Suggest polarity / O-zone, ring-down, honor inverted, invert + export .samn). |
@@ -625,7 +625,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 
 ### 2.19 `frontend (Python/Playwright UI tests)`
 
-148 files, 148 tests: 0 ported, 34 covered, 6 todo-now, 103 todo-later, 5 n/a.
+148 files, 148 tests: 6 ported, 34 covered, 0 todo-now, 103 todo-later, 5 n/a.
 
 | Old file | Test function(s) | Status | Where / why |
 |---|---|---|---|
@@ -648,10 +648,10 @@ One row per old test function (grouped when a whole file shares the same answer)
 | `edition_switch_test.py` | `main` script, 7 checks | n/a | JS DOM: `html[data-edition]` toggling of `[data-suite]` controls; the edition split is an open decision (D-004, D-007). |
 | `eula_gate_test.py` | `main` script, 6 checks | todo-later | P5 (EULA gate on first start). |
 | `expert_smooth_peakdist_zero_test.py` | `main` script, 8 checks | todo-later | P3.3 (Generator page, Create layout/knobs). |
-| `flow_assets_test.py` | `test_flow_assets` | todo-now | the SVG assets exist; `icon_provider_test.cpp` covers only name safety and colouring (see Port now) |
+| `flow_assets_test.py` | `test_flow_assets` | ported | tests/app/shell_qml_test.cpp `bundledVectorAssetsAreSafe` (every bundled SVG: well-formed, `<svg>` root with viewBox, no script, foreignObject, `on*` handler or network `href`/`url()`; every SVG on disk is bundled), `iconNamesInTheQmlSourcesExist`. Left out: `aria-hidden` (Qt images have no accessibility tree) and the fixed 0.7 file list (the lint covers all files). |
 | `flow_fx_test.py` | `test_flow_fx` | n/a | JS DOM smoke of the idle-stage CSS animation contract; the Qt stage is `FlowStage.qml` (covered by the CI screenshot smoke). |
 | `flow_icons_test.py` | `test_flow_icons` | covered | tests/app/icon_provider_test.cpp `colorsAndRenders`, `unknownOrUnsafeNamesGiveNothing` |
-| `flow_wiring_test.py` | `main` script, 17 checks | todo-now | `inspector_qml_test.cpp` does this for the Inspector only; the shell is only covered by the CI screenshot smoke (see Port now) |
+| `flow_wiring_test.py` | `main` script, 17 checks | ported | tests/app/shell_qml_test.cpp `shellLoadsWithoutWarningsAndShowsItsIcons`, `everyModeLoadsWithoutWarnings`, `modeDeckOpensWithMAndPicksWithNumbers` (shell loads in every mode without QML warnings; top bar, deck and views show icons that exist and loaded; M opens, 1-4 pick, Esc closes). Left out: the Flow stage following Play / Pause / Stop (needs a video; `FlowStage.qml` stays with the CI screenshot smoke) and the JS-only checks (`/src/` image paths, page errors). |
 | `gapfill_improve_ui_test.py` | `main` script, 20 checks | todo-later | P3.3 (Review: Fill gaps, Heal rhythm, Repair spans UI). |
 | `gen_editor_test.py` | `main` script, 14 checks | todo-later | P4 (Generator with the editor built in, D-137). |
 | `gen_video_test.py` | `main` script, 15 checks | todo-later | P3.3 (Generator video player). |
@@ -702,8 +702,8 @@ One row per old test function (grouped when a whole file shares the same answer)
 | `pb_bpm_grid_test.py` | `main` script, 7 checks | covered | tests/app/player_controller_test.cpp `bpmGrid` |
 | `pb_chapter_bands_test.py` | `main` script, 12 checks | covered | tests/app/player_controller_test.cpp `chaptersBookmarksHeatmapLanes` (`chapterBands`); tests/core/marks_test.cpp "ChapterRanges: sorted, open ends run on, names filled" |
 | `pb_chapters_test.py` | `main` script, 9 checks | covered | tests/app/player_controller_test.cpp `editMarks`; tests/core/marks_test.cpp |
-| `pb_chart_tooltip_test.py` | `main` script, 3 checks | todo-now | `curve_geometry_test.cpp` tests `FormatTooltipTime` (see Port now) |
-| `pb_clip7776_test.py` | `main` script, 6 checks | todo-now | see Port now |
+| `pb_chart_tooltip_test.py` | `main` script, 3 checks | ported | tests/app/player_controller_test.cpp `heatTooltipShowsTimeAndValue` |
+| `pb_clip7776_test.py` | `main` script, 6 checks | ported | tests/app/player_controller_test.cpp `tjScriptWithoutVideoPlays` (synthetic equivalent of the fixture; found that playback ignored the script's recipe, fixed in #42) |
 | `pb_companion_lanes_test.py` | `main` script, 17 checks | todo-later | P2/P4 (companion axis files shown as lanes). |
 | `pb_contact_vib_probe_test.py` | `main` script, 20 checks | todo-later | P2 (live contact-vibration probe in the Inspector). |
 | `pb_curve_zoom_test.py` | `main` script, 10 checks | covered | tests/app/player_controller_test.cpp `zoomWindow`; tests/core/curve_geometry_test.cpp "view window: zoom as 0.7", "zoom to a range with a margin" |
@@ -728,7 +728,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 | `pb_sound_curve_test.py` | `main` script, 8 checks | todo-later | P3 (Sound Curve: loudness written as the vibration curve). |
 | `pb_speed_highlight_knob_test.py` | `main` script, 8 checks | covered | tests/app/player_controller_test.cpp `speedHighlights` |
 | `pb_stroke_output_test.py` | `main` script, 26 checks | covered | tests/app/playback_output_test.cpp, tests/app/inspector_qml_test.cpp `devicesTabLoadsWithoutWarnings` |
-| `pb_tools_toggle_test.py` | `main` script, 11 checks | todo-now | `inspector_qml_test.cpp` loads the Inspector but does not toggle it (see Port now) |
+| `pb_tools_toggle_test.py` | `main` script, 11 checks | ported | tests/app/shell_qml_test.cpp `libraryAndInspectorCollapseAndTheVideoGrows` (both columns collapse to 44 px and expand again, the video grows and shrinks by the same amount, the choice is remembered by a new shell). Left out: the T key and the info sidebar (neither exists in SamNPlayer 2). |
 | `pb_transport_test.py` | `main` script, 11 checks | covered | tests/app/player_controller_test.cpp `sleepTimer`; tests/app/playback_output_test.cpp `playSpeedShortensTheMoves`. Speed 0.5-2x clamp, +/-10 s, mute: see `player/speed_test.go TestClampSpeed` |
 | `pb_ui_contract_test.py` | `main` script, 14 checks | n/a | JS DOM contract (layout hooks, `data-*` state attributes, CSS theme tokens); Qt has `Theme.h`. |
 | `pb_undo_test.py` | `main` script, 14 checks | todo-later | P4 (Editor edit history). |
@@ -758,7 +758,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 | `settings_script_folders_test.py` | `main` script, 6 checks | covered | tests/app/player_controller_test.cpp `videoWithoutScriptThenFolderAdded` (`addScriptFolder`). The Settings page (list/remove) is P4 |
 | `smoke_all_modes_test.py` | `main` script, 25 checks | covered | CI app smoke test (`SAMN_SCREENSHOT`: start, load, render, quit) |
 | `tools_home_test.py` | `main` script, 22 checks | todo-later | P4 (Tools Home: status rows from real checks). |
-| `tools_nav_test.py` | `main` script, 51 checks | todo-now | the mode deck exists, no test (see Port now) |
+| `tools_nav_test.py` | `main` script, 51 checks | ported | tests/app/shell_qml_test.cpp `modeDeckPillCardsAndCurrentMark`, `modeDeckOpensWithMAndPicksWithNumbers`, `onlyTheChosenModesPageShows` (pill opens the deck, four cards, current card marked, click outside closes, click on a card picks, M, Esc, keys 1-4 only while the deck is open, key 5 does nothing, `SAMN_MODE` hook). Left out: arrow keys, Tab and focus return (the deck has no keyboard focus handling, mouse and shortcuts only), the Tools sub-navigation and Play/Create/Edit view switch (gone in 2.0). |
 | `topbar_device_test.py` | `main` script, 10 checks | todo-later | P2/P4 (top-bar device chip with Connect/Disconnect; listed as open in `AGENT_STATE.md`). |
 | `tr_intensity_knobs_test.py` | `main` script, 6 checks | todo-later | P2 (Training mode). |
 | `tr_timing_knobs_test.py` | `main` script, 7 checks | todo-later | P2 (Training mode). |
@@ -786,7 +786,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 
 ## 4. Port now (work list)
 
-**15 tests** (41 more were ported, see the `Ported` notes) whose code is already in SamNPlayer 2. Grouped by the new module; each line is `old file :: old test` followed by what it checks. Suggested target file in italics.
+**0 tests** (all 56 are ported, see the `Ported` notes) whose code is already in SamNPlayer 2. Grouped by the new module; each line is `old file :: old test` followed by what it checks. Suggested target file in italics.
 
 | New module | Tests to port |
 |---|---:|
@@ -794,12 +794,12 @@ One row per old test function (grouped when a whole file shares the same answer)
 | core: `stroke_filter.h` | 0 |
 | core: `fileio.h` | 0 |
 | core: `settings.h` | 0 |
-| app: `PlaybackOutput` | 5 |
-| app: `PlayerController` | 3 |
+| app: `PlaybackOutput` | 0 |
+| app: `PlayerController` | 0 |
 | app: `DeviceController` | 0 |
-| app: QML shell and assets | 4 |
+| app: QML shell and assets | 0 |
 | repo / CI | 0 |
-| **Total** | **12** |
+| **Total** | **0** |
 
 ### A. Missing tests
 
@@ -864,17 +864,17 @@ One row per old test function (grouped when a whole file shares the same answer)
 
 41. `cmd/gui-wails/settings_store_test.go` :: `TestSettingsStoreNullFile`. A settings file that contains `null` loads as empty and a later `set` works and persists. **Ported:** tests/core/settings_test.cpp "settings: a file holding null loads as empty and accepts a set".
 
-#### app: `PlaybackOutput` (5)
+#### app: `PlaybackOutput` (0 left, 5 ported)
 
 *Target: `tests/app/playback_output_test.cpp`.*
 
-42. `player/axes_test.go` :: `TestDriveAxesSendsEachAxisOnce`. Each extra axis gets one move per target (sorted by name, axes the device does not take are skipped), stroke off stops the extra axes too, the stroke range does not scale them, a pause/reset resends every axis. (`playback_output_test.cpp::extraAxesFollowTheScript` only checks the first move.) [partly in tests/app/playback_output_test.cpp `extraAxesFollowTheScript`]
-43. `player/axes_test.go` :: `TestDriveAxesNeedsMultiAxisDevice`. A device without extra axes (plain linear stroker) gets no axis commands and no error.
-44. `player/speed_test.go` :: `TestChannelLevelsDefaultFullAndClamp`. Default level is full (100), values clamp to 0..100 (7 -> 100, -3 -> 0); `channelOffAndLevelScaleTheOutput` covers only scaling. [partly in tests/app/playback_output_test.cpp `channelOffAndLevelScaleTheOutput`]
-45. `player/stroke_test.go` :: `TestDriveStrokeHonoursSpeedAndMinimum`. A position that is very late still gets the minimum move time (`kMinMoveMs`); the speed half is covered by `playSpeedShortensTheMoves`. [speed half in tests/app/playback_output_test.cpp `playSpeedShortensTheMoves`]
-46. `player/stroke_test.go` :: `TestDriveStrokeOnlyForLinearDevices`. A device without a linear channel (the Mock) gets no positions, and a script without stroke actions sends none.
+42. `player/axes_test.go` :: `TestDriveAxesSendsEachAxisOnce`. Each extra axis gets one move per target (sorted by name, axes the device does not take are skipped), stroke off stops the extra axes too, the stroke range does not scale them, a pause/reset resends every axis. (`playback_output_test.cpp::extraAxesFollowTheScript` only checks the first move.) **Ported:** tests/app/playback_output_test.cpp `extraAxesSendEachAxisOnce`.
+43. `player/axes_test.go` :: `TestDriveAxesNeedsMultiAxisDevice`. A device without extra axes (plain linear stroker) gets no axis commands and no error. **Ported:** tests/app/playback_output_test.cpp `extraAxesNeedAMultiAxisDevice`.
+44. `player/speed_test.go` :: `TestChannelLevelsDefaultFullAndClamp`. Default level is full (100), values clamp to 0..100 (7 -> 100, -3 -> 0); `channelOffAndLevelScaleTheOutput` covers only scaling. **Ported:** tests/app/playback_output_test.cpp `channelLevelsDefaultFullAndClamp` (levels are 0-100 in C++).
+45. `player/stroke_test.go` :: `TestDriveStrokeHonoursSpeedAndMinimum`. A position that is very late still gets the minimum move time (`kMinMoveMs`); the speed half is covered by `playSpeedShortensTheMoves`. **Ported:** tests/app/playback_output_test.cpp `lateStrokePositionStillGetsTheMinimumMove`.
+46. `player/stroke_test.go` :: `TestDriveStrokeOnlyForLinearDevices`. A device without a linear channel (the Mock) gets no positions, and a script without stroke actions sends none. **Ported:** tests/app/playback_output_test.cpp `strokeOnlyForLinearDevices`.
 
-#### app: `PlayerController` (3)
+#### app: `PlayerController` (3, ported)
 
 *Target: `tests/app/player_controller_test.cpp`.*
 
@@ -889,14 +889,14 @@ One row per old test function (grouped when a whole file shares the same answer)
 50. `cmd/gui-wails/app_test.go` :: `TestShutdownStopsActiveSessionDevice`. Closing the app while a device is connected and playing stops and disconnects it (the Mock logs `stop`).
 51. `cmd/gui-wails/app_test.go` :: `TestShutdownWithoutActiveSessionIsSafe`. Destroying a controller that never connected (or already disconnected) is harmless.
 
-#### app: QML shell and assets (4)
+#### app: QML shell and assets (0 left, 4 ported)
 
 *Target: new `tests/app/shell_qml_test.cpp` (like `inspector_qml_test.cpp`) and a small asset lint.*
 
-52. `cmd/gui-wails/frontend/test/flow_assets_test.py` :: `test_flow_assets`. All bundled vector assets are well-formed XML and contain no `<script>`, `on*=` handlers or network references (`href`/`url(http...)`). [the SVG assets exist; `icon_provider_test.cpp` covers only name safety and colouring]
-53. `cmd/gui-wails/frontend/test/flow_wiring_test.py` :: `main`. The shell loads without QML warnings; the top bar, mode deck and views show their icons (no empty icon names); the mode deck opens with M, picks with 1-5, closes with Esc. [`inspector_qml_test.cpp` does this for the Inspector only; the shell is only covered by the CI screenshot smoke]
-54. `cmd/gui-wails/frontend/test/pb_tools_toggle_test.py` :: `main`. The Library and Inspector columns collapse to 44 px and expand again; the video area grows. [`inspector_qml_test.cpp` loads the Inspector but does not toggle it]
-55. `cmd/gui-wails/frontend/test/tools_nav_test.py` :: `main`. The 0.7 main tabs (roving arrow keys, Home/End) are replaced by the mode deck: keys 1-5, M, Esc, arrows move focus, Tab stays inside, focus returns on close, the current card is marked. [the mode deck exists, no test]
+52. `cmd/gui-wails/frontend/test/flow_assets_test.py` :: `test_flow_assets`. All bundled vector assets are well-formed XML and contain no `<script>`, `on*=` handlers or network references (`href`/`url(http...)`). **Ported:** tests/app/shell_qml_test.cpp `bundledVectorAssetsAreSafe`, `iconNamesInTheQmlSourcesExist`.
+53. `cmd/gui-wails/frontend/test/flow_wiring_test.py` :: `main`. The shell loads without QML warnings; the top bar, mode deck and views show their icons (no empty icon names); the mode deck opens with M, picks with 1-5, closes with Esc. **Ported:** tests/app/shell_qml_test.cpp `shellLoadsWithoutWarningsAndShowsItsIcons`, `everyModeLoadsWithoutWarnings`, `modeDeckOpensWithMAndPicksWithNumbers` (the deck has four modes, so keys 1-4).
+54. `cmd/gui-wails/frontend/test/pb_tools_toggle_test.py` :: `main`. The Library and Inspector columns collapse to 44 px and expand again; the video area grows. **Ported:** tests/app/shell_qml_test.cpp `libraryAndInspectorCollapseAndTheVideoGrows`.
+55. `cmd/gui-wails/frontend/test/tools_nav_test.py` :: `main`. The 0.7 main tabs (roving arrow keys, Home/End) are replaced by the mode deck: keys 1-5, M, Esc, arrows move focus, Tab stays inside, focus returns on close, the current card is marked. **Ported:** tests/app/shell_qml_test.cpp `modeDeckPillCardsAndCurrentMark`, `modeDeckOpensWithMAndPicksWithNumbers`, `onlyTheChosenModesPageShows`. Arrow keys, Tab and focus return are not in the deck (no keyboard focus handling), so they are left out.
 
 #### repo / CI (1, ported)
 
