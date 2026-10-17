@@ -62,6 +62,33 @@ GlassCard {
         }
         Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; text: parent.level + "%"; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
     }
+    // A labelled slider with its value (0.7 range + readout).
+    component SliderRow: Row {
+        id: sr
+        property string label
+        property string tip
+        property real from: 0
+        property real to: 1
+        property real value: 0
+        property string valueText
+        property bool active: true
+        signal picked(real v)
+        spacing: 8; height: 26
+        Text {
+            textFormat: Text.PlainText
+            anchors.verticalCenter: parent.verticalCenter; width: 78
+            text: sr.label; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+            HoverHandler { id: srHover }
+            ToolTipText { shown: srHover.hovered && sr.tip !== ""; text: sr.tip }
+        }
+        FlowSlider {
+            anchors.verticalCenter: parent.verticalCenter; width: 112
+            enabled: sr.active; opacity: enabled ? 1 : 0.45
+            from: sr.from; to: sr.to; value: sr.value
+            onMoved: (v) => sr.picked(v)
+        }
+        Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; text: sr.valueText; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
+    }
     component Channel: Item {
         property string name
         property color dot
@@ -324,6 +351,20 @@ GlassCard {
                         onToggled: root.ctrl.output.suctionOn = !root.ctrl.output.suctionOn
                         onLevelPicked: (v) => root.ctrl.output.suctionLevel = v
                     }
+                    // 0.7 Soft-Start (Playback Advanced) and Effects → Reduce peaks.
+                    SliderRow {
+                        label: qsTr("Soft start")
+                        tip: qsTr("At Play, after a pause and after a quiet stretch, vibration and suction ramp up over this time in 10 steps instead of jumping to the script. Default 500 ms.")
+                        from: 0; to: 3000; value: root.ctrl.output.softStartMs
+                        valueText: root.ctrl.output.softStartMs === 0 ? qsTr("Off") : qsTr("%1 ms").arg(root.ctrl.output.softStartMs)
+                        onPicked: (v) => root.ctrl.output.softStartMs = Math.round(v / 100) * 100
+                    }
+                    FlowButton {
+                        text: qsTr("Reduce peaks"); checked: root.ctrl.output.reducePeaks
+                        onClicked: root.ctrl.output.reducePeaks = !root.ctrl.output.reducePeaks
+                        HoverHandler { id: peaksHover }
+                        ToolTipText { shown: peaksHover.hovered; text: qsTr("Softens vibration and suction above 60 %: full strength comes out at 76 %. Also while playing.") }
+                    }
                     Note { text: qsTr("Scales what the script sends; the script file is not changed.") }
                 }
                 // A stroker (The Handy, OSR2 …): safety range and motion filter.
@@ -486,6 +527,59 @@ GlassCard {
                         FlowButton { text: qsTr("Bake offset"); enabled: false }
                     }
                     Note { text: qsTr("Positive: the script comes later. Saved per script. Baking it into the script's times (all channels, bookmarks and chapters in one safe step) comes with the Editor (P4).") }
+                }
+                // Extended-O (0.7 "Playback & Extended-O" and the transport's
+                // Extended-O button; key E).
+                Card {
+                    title: qsTr("Extended-O")
+                    Flow {
+                        width: parent.width; spacing: 8
+                        FlowButton {
+                            objectName: "eoTrigger"
+                            text: root.ctrl.output.extendedOActive ? qsTr("Running…") : qsTr("Extended-O")
+                            primary: true
+                            enabled: root.ctrl.output.canTriggerExtendedO && !root.ctrl.output.extendedOActive
+                            onClicked: root.ctrl.output.triggerExtendedO()
+                            HoverHandler { id: eoHover }
+                            ToolTipText { shown: eoHover.hovered; text: qsTr("Lowers vibration and suction to the minimum for the hold time, then brings them back. The curve keeps its rhythm. While playing (E).") }
+                        }
+                        FlowButton {
+                            text: qsTr("Enabled"); checked: root.ctrl.output.extendedOEnabled
+                            onClicked: root.ctrl.output.extendedOEnabled = !root.ctrl.output.extendedOEnabled
+                        }
+                    }
+                    SliderRow {
+                        label: qsTr("Minimum")
+                        tip: qsTr("Height of the curve while held, as a share of the script (0 % = off). Default 10 %.")
+                        from: 0; to: 1; value: root.ctrl.output.extendedOMin
+                        valueText: root.ctrl.output.extendedOMin === 0 ? qsTr("0 % (off)") : Math.round(root.ctrl.output.extendedOMin * 100) + " %"
+                        onPicked: (v) => root.ctrl.output.extendedOMin = Math.round(v * 20) / 20
+                    }
+                    SliderRow {
+                        label: qsTr("Hold")
+                        tip: qsTr("How long the minimum is held. Default 10 s.")
+                        from: 1; to: 60; value: root.ctrl.output.extendedOHoldS
+                        valueText: qsTr("%1 s").arg(Math.round(root.ctrl.output.extendedOHoldS))
+                        onPicked: (v) => root.ctrl.output.extendedOHoldS = Math.round(v)
+                    }
+                    SliderRow {
+                        label: qsTr("Restore")
+                        tip: qsTr("Ramp time down to the minimum and back up again. 0 switches at once. Default 500 ms.")
+                        from: 0; to: 3000; value: root.ctrl.output.extendedORestoreMs
+                        valueText: root.ctrl.output.extendedORestoreMs === 0 ? qsTr("At once") : qsTr("%1 ms").arg(root.ctrl.output.extendedORestoreMs)
+                        onPicked: (v) => root.ctrl.output.extendedORestoreMs = Math.round(v / 100) * 100
+                    }
+                    FlowButton {
+                        text: qsTr("Auto in marked range"); checked: root.ctrl.autoExtendedO
+                        onClicked: root.ctrl.autoExtendedO = !root.ctrl.autoExtendedO
+                        HoverHandler { id: autoEoHover }
+                        ToolTipText { shown: autoEoHover.hovered; text: qsTr("Triggers Extended-O once when playback reaches the marked range of the heatmap.") }
+                    }
+                    Note {
+                        text: !root.ctrl.output.extendedOEnabled ? qsTr("Switched off.")
+                              : root.ctrl.autoExtendedO && !root.ctrl.hasMarker ? qsTr("Mark a range on the heatmap for the automatic trigger.")
+                              : qsTr("Available while playing. A press while it runs is ignored.")
+                    }
                 }
                 // Script Doctor (0.7 pb-quality): signal quality from the script alone.
                 Card {

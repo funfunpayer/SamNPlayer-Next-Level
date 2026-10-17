@@ -894,6 +894,8 @@ Item {
     Shortcut { sequence: "L"; enabled: !page.deckOpen; onActivated: ctrl.loopEnabled = !ctrl.loopEnabled }
     Shortcut { sequence: "A"; enabled: !page.deckOpen; onActivated: ctrl.setLoopStart(media.position) }
     Shortcut { sequence: "B"; enabled: !page.deckOpen; onActivated: ctrl.setLoopEnd(media.position) }
+    // 0.7 key E: Extended-O (ignored when not playing, off or running).
+    Shortcut { sequence: "E"; enabled: !page.deckOpen; onActivated: ctrl.output.triggerExtendedO() }
     Repeater {
         model: 9
         delegate: Item {

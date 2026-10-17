@@ -84,6 +84,11 @@ class PlayerController : public QObject {
     // 0.7 "Loop selection": repeats the marked range while on.
     Q_PROPERTY(bool loopEnabled READ loopEnabled WRITE setLoopEnabled NOTIFY loopChanged)
     Q_PROPERTY(bool loopActive READ loopActive NOTIFY loopChanged)
+    // 0.7 "Auto Extended-O in marked range": while playing, Extended-O is
+    // triggered once when the playhead enters the marked range; it re-arms
+    // when playing starts or the playhead is before the range. Not saved
+    // (0.7 did not either).
+    Q_PROPERTY(bool autoExtendedO READ autoExtendedO WRITE setAutoExtendedO NOTIFY loopChanged)
     // Live channel values at the playhead, 0-100 (0.7 "Vibration n / Suction n").
     Q_PROPERTY(int strokeNow READ strokeNow NOTIFY playheadMsChanged)
     Q_PROPERTY(int vibrationNow READ vibrationNow NOTIFY playheadMsChanged)
@@ -262,6 +267,8 @@ public:
     bool loopEnabled() const { return loopEnabled_; }
     void setLoopEnabled(bool on);
     bool loopActive() const { return loopEnabled_ && marker_.Valid(); }
+    bool autoExtendedO() const { return autoEo_; }
+    void setAutoExtendedO(bool on);
     int strokeNow() const;
     int vibrationNow() const;
     bool audioLane() const;
@@ -331,6 +338,7 @@ signals:
 private:
     void setVideo(const QString& path);
     void setError(const QString& e);
+    void checkAutoExtendedO(qint64 playheadMs);
     void setView(samn::ViewWindow v);
     void clearScript();
     void pushToViews();
@@ -366,6 +374,8 @@ private:
     bool bpmGrid_ = false;
     std::optional<int64_t> pendingStart_;  // A pressed, B not yet
     bool loopEnabled_ = false;
+    bool autoEo_ = false;
+    bool autoEoFired_ = false;  // fired for this pass through the range
     int sleepMinutes_ = 0;
     qint64 playedMs_ = 0;
     QElapsedTimer playClock_;

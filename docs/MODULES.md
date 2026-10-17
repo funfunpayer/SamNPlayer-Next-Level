@@ -20,6 +20,7 @@ Functions use PascalCase and struct fields use snake_case.
 | `text.h` | `FoldCase`: UTF-8 lower case without ICU (Latin, Greek, Cyrillic, full-width) | Go `strings.ToLower` | ✅ |
 | `playback.h` | Offset, script time, loop, video beside a script, session | Go `app_playback.go` | ✅ |
 | `stroke_filter.h` | Live stroker filter (PCHIP/MAKIMA, speed limit, idle fill) | Go `funscript/stroke_filter.go` | ✅ parity |
+| `output_levels.h` | Reduce peaks, the soft start ramp and the Extended-O scale schedule as functions of time | Go `player/player.go` (ReducePeak, setOutput), `player/sync.go` (softStartWithPositions), `player/extendedo.go` | ✅ parity |
 | `beatbar.h`, `beat_strokes.h` | Cock Hero beat bar → beats → strokes | Go `generator/beatbar.go` | ✅ parity |
 | `curve_geometry.h` | Curve as 0.7 draws it: Catmull-Rom (control points clamped to 0-100), tempo wave, density switch, zoom window. Binary search instead of 0.7's full scans. | 0.7 `playback.js` (smoothCurvePath, drawSpeedWave, zoomByFactor) | ✅ tempo wave equals 0.7 (node reference) |
 | `fileio.h` | `WriteFileAtomic`: temp file, flush, rename. The one writer for marks, `.samn`, settings and the range marker. | Go `writeFileAtomic` | ✅ |
