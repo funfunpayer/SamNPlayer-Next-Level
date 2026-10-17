@@ -210,6 +210,33 @@ private slots:
         QCOMPARE(c.savedTarget("tcode"), "tcp://" + sink.hostport());
     }
 
+    // 0.7 cmd/gui-wails/app_test.go TestShutdownStopsActiveSessionDevice:
+    // closing the app while a device runs stops it (the device gets DSTOP).
+    void shutdownStopsTheConnectedDevice() {
+        TcpLineSink sink;
+        {
+            DeviceController c;
+            c.connectTCode("tcp://" + sink.hostport());
+            QTRY_COMPARE_WITH_TIMEOUT(c.state(), QString("connected"), 5000);
+            c.setPosition(0.8, 200);
+            QTRY_VERIFY(!sink.lines().isEmpty());
+            QVERIFY(!sink.lines().contains("DSTOP"));
+        }  // the app closes: the controller goes away while connected
+        QTRY_VERIFY_WITH_TIMEOUT(sink.lines().contains("DSTOP"), 5000);
+    }
+
+    // TestShutdownWithoutActiveSessionIsSafe: a controller that never
+    // connected, or already disconnected, goes away without trouble.
+    void shutdownWithoutSessionIsSafe() {
+        { DeviceController never; }
+        TcpLineSink sink;
+        DeviceController c;
+        c.connectTCode("tcp://" + sink.hostport());
+        QTRY_COMPARE_WITH_TIMEOUT(c.state(), QString("connected"), 5000);
+        c.disconnectDevice();
+        QTRY_COMPARE(c.state(), QString("disconnected"));
+    }
+
     void tcodeOverUdpDefaultScheme() {
         UdpLineSink sink;
         DeviceController c;
