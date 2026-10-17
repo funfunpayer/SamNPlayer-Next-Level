@@ -10,7 +10,8 @@ ApplicationWindow {
     visible: true
     title: "SamNPlayer 2"
     color: Theme.bgBottom
-    property int mode: 0
+    // Test hook: SAMN_MODE=1..4 opens that mode (the numbers of the mode deck).
+    property int mode: startMode
     readonly property var modeNames: deck.modes.map(m => m.name)
 
     // Background: near-black navy with blue / orange light ribbons in the
@@ -56,7 +57,7 @@ ApplicationWindow {
         PlayerPage { id: player; deckOpen: deck.open; device: deviceCtl }
         // Generator and Editor are one mode: the Generator is the Editor (D-137).
         NotYetPage { mode: qsTr("Generator"); phase: "P3" }
-        NotYetPage { mode: qsTr("Training"); phase: "P4" }
+        TrainingPage { id: training; deckOpen: deck.open; device: deviceCtl; autostart: trainingStart }
         NotYetPage { mode: qsTr("Scene Map"); phase: "P4" }
     }
 
