@@ -2,7 +2,7 @@
 
 **Owner (16 Oct 2026):** the Generator must do everything 0.7's does, with the Editor built in, and the detection must get **better**. C++ has the stronger libraries for that, so detection moves there.
 
-The full list of 0.7's Generator functions is in [`PARITY.md`](PARITY.md) §4 (63 items). This file is the plan to get there and beyond. Decisions: D-133 to D-137 and D-139 in [`DECISIONS.md`](DECISIONS.md). Lessons: [`LESSONS.md`](LESSONS.md) §4 and §11.
+The full list of 0.7's Generator functions is in [`PARITY.md`](PARITY.md) §4 (63 items). This file is the plan to get there and beyond. Decisions: D-133 to D-137 and D-139 to D-141 in [`DECISIONS.md`](DECISIONS.md). Lessons: [`LESSONS.md`](LESSONS.md) §4 and §11.
 
 ## What 0.7 has (the reference)
 
@@ -59,6 +59,28 @@ Some 0.7 results were limited by the stack, not the idea (`LESSONS.md` §12). Th
 ### Do not repeat (measured in 0.7)
 
 KCF / MOSSE instead of CSRT (99 % lost on a small tip box, REJ-12) · fusion or four-zone fusion as the writer (REJ-05, REJ-19) · flow as the default writer (REJ-18) · upscaling or unsharp masking as a fix for hard boxes without an agreement check (REJ-14, REJ-15) · camera estimate on a half-size picture (r 0.94 → 0.71, REJ-24) · periodic template re-anchoring, scale lock, slower learning (REJ-20, REJ-21) · automatic second region by grid pairs or an invented region (REJ-23) · audio as a position source (REJ-26) · a language model as the stroke writer (REJ-30) · the tracker's own lost rate or quality as proxy for agreement (REJ-32). A retry needs a new hypothesis for *why* it should differ, written in the PR.
+
+## Own engine and C++ toolbox (Owner 17 Oct, D-140, D-141)
+
+The detection engine is our own C++: algorithms are free to implement from their published descriptions; only other projects' code carries a licence. Libraries are building blocks, never the engine.
+
+| Part | Built ourselves | Building blocks (licence) | Measured by |
+|---|---|---|---|
+| Video frames | `FrameReader` (PTS, exact seek) | OpenCV videoio (Apache-2.0); FFmpeg libav directly if the timestamps need it (LGPL build, shared) | frame-exact tests (P3.0) |
+| Tracking | the CSRT box loop, scene cuts, camera compensation, appearance memory, guards, hybrid check (D-139), sub-frame peaks, Kalman | OpenCV core/imgproc/video/tracking (Apache-2.0) | Go parity (P3.1–P3.4), then P3.8 |
+| Newer trackers | only as a challenger to CSRT, never a silent swap | OpenCV TrackerNano / TrackerVit (OpenCV 4.7+), ONNX trackers (check each licence) | P3.8 against CSRT on the goldens (REJ-12 is the warning) |
+| Optical flow (checker only, D-139) | the disagreement signal | OpenCV DIS / Farneback; RAFT via ONNX (BSD) | P3.8 |
+| AI inference | the gating, verification and fail-closed rules | ONNX Runtime (MIT; DirectML on any Windows GPU, CUDA, CPU), OpenCV dnn | same boxes as 0.7 on identical frames (GD-17), then P3.8 |
+| Models | own training data and training (0.7 pipeline, GD-18) | models with a permissive licence only; licence of weights checked first | golden win before any default |
+| Audio onsets, tempo, beats | spectral flux, tempogram, beat tracking with dynamic programming, segments (replaces 0.7 `audiocheck` / `audio_segments`) | pocketfft or KissFFT (BSD), libsamplerate (BSD), FFmpeg for decoding | 0.7 audio tests ported (P3.6), then P3.8 |
+| Speech (Speech-Hold) | the hold logic | Silero VAD via ONNX (MIT), whisper.cpp (MIT) | labelled synthetic and Owner clips |
+
+**The engine is a built-in plugin (D-141).** `engine/` (library `samn_engine`, P3.1 on) implements the detector plugin interface and is linked into every build; the Generator page calls it in-process on a worker thread. One interface for every detector:
+- input: media path, time range, marks and options;
+- output: progress, then results (positions, gaps, marks, beats, onsets) in video time;
+- a cancel token and a run sequence id on every result; the run stops when the app quits; a failure is reported, never blocks the UI (GD-25). Because it runs in-process, the engine is held to the core's rules: RAII, no exceptions across the interface, covered by the sanitizer job.
+
+External plugins may use the same interface out of process (JSON lines on stdin/stdout). `vision/` (frame reading, the tracker factory, the self-check) holds the generic building blocks; the tracking logic, parameters and models live in `engine/`. Everything is GPL-3.0-or-later, so GPL code (OpenFunscripter, ScriptPlayer, aubio, Essentia …) may be used anywhere (`LICENSING.md`). A plugin's result is a candidate like any other: it has to beat our engine and 0.7 at the P3.8 gate before the UI offers it by default. The 0.7 `pluginhost` (drop folder plus manifest, stage H1) is the starting point for discovery.
 
 ## Steps (each one a PR with tests; parity first, then improvements)
 
