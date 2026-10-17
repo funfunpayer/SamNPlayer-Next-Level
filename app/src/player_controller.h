@@ -20,6 +20,7 @@
 #include "samn/playlist.h"
 #include "samn/settings.h"
 #include "device_controller.h"
+#include "mapping_settings.h"
 #include "playback_output.h"
 
 namespace samn::ui {
@@ -102,6 +103,19 @@ class PlayerController : public QObject {
     // what goes to it while playing (the stroke filter, safety range ...).
     Q_PROPERTY(samn::ui::DeviceController* device READ device WRITE setDevice NOTIFY deviceChanged)
     Q_PROPERTY(samn::ui::PlaybackOutput* output READ output CONSTANT)
+    // The mapping settings (sync, tick, max speed, smoothing, contact,
+    // Effects presets). A change maps the script again: lanes and device.
+    Q_PROPERTY(samn::ui::MappingSettings* mapping READ mapping CONSTANT)
+    // The open script has contact controls (contact vibration in its recipe,
+    // explicit vibration / suction curves, or a tf / tj profile; 0.7
+    // showContact); sensitivity and curve act now (recipe mode with contact
+    // vibration, 0.7 StartPlayback contactOn).
+    Q_PROPERTY(bool contactControls READ contactControls NOTIFY mappedChanged)
+    Q_PROPERTY(bool contactKnobsLive READ contactKnobsLive NOTIFY mappedChanged)
+    // Strength presets of an Emotion Script (.samn): the names and the one
+    // in use ("" = none). Choosing one saves it in the file (0.7).
+    Q_PROPERTY(QStringList strengthPresets READ strengthPresets NOTIFY mappedChanged)
+    Q_PROPERTY(QString activeStrength READ activeStrength WRITE setActiveStrength NOTIFY mappedChanged)
     // D-132: which lanes show. Without a connected device: what the script
     // carries (the stroke; vibration / suction only when the file has them).
     // With one: the channels that device can use (a stroker: the stroke; a
@@ -286,6 +300,12 @@ public:
     DeviceController* device() const { return device_; }
     void setDevice(DeviceController* device);
     PlaybackOutput* output() { return &output_; }
+    MappingSettings* mapping() { return &mapping_; }
+    bool contactControls() const { return contactControls_; }
+    bool contactKnobsLive() const { return contactKnobsLive_; }
+    QStringList strengthPresets() const;
+    QString activeStrength() const { return QString::fromStdString(activeStrength_); }
+    void setActiveStrength(const QString& name);
     bool showStrokeLane() const;
     bool showVibrationLane() const;
     bool showSuctionLane() const;
@@ -332,6 +352,7 @@ signals:
     void bpmChanged();
     void viewOptionsChanged();
     // For the Library: a script was opened, a video linked, marks edited.
+    void mappedChanged();
     void scriptOpened(const QString& path);
     void videoLinked(const QString& path);
     void scriptEdited(const QString& path);
@@ -346,6 +367,9 @@ private:
     void setView(samn::ViewWindow v);
     void clearScript();
     void pushToViews();
+    // Maps the script with the settings (0.7 StartPlayback): the vibration
+    // and suction lanes and what the device gets. `fresh`: a new script.
+    void remap(bool fresh);
     void loadMarks(const QString& path);
     // Saves one list; on failure the old list comes back and lastError says why.
     template <typename T, typename Save>
@@ -355,6 +379,16 @@ private:
 
     std::unique_ptr<samn::Settings> settings_;
     PlaybackOutput output_;
+    MappingSettings mapping_;
+    // The open script's own mapping (MapOptionsFromScript), profile, recipe
+    // and strength presets (a .samn).
+    samn::MapOptions scriptMap_;
+    std::string profile_;
+    bool recipeHasContact_ = false;
+    bool contactControls_ = false, contactKnobsLive_ = false;
+    bool opening_ = false;  // openScript sets the contact knobs
+    std::vector<samn::StrengthPreset> strength_;
+    std::string activeStrength_;
     QPointer<DeviceController> device_;
     std::vector<samn::Action> stroke_, vibration_, suction_;
     samn::ScriptMarks marks_;

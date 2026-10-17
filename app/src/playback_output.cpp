@@ -23,6 +23,7 @@ constexpr const char* kKeyVibOn = "playback.channel_vibration_on";
 constexpr const char* kKeyVibLevel = "playback.channel_vibration_level";
 constexpr const char* kKeySucOn = "playback.channel_suction_on";
 constexpr const char* kKeySucLevel = "playback.channel_suction_level";
+constexpr const char* kKeyIntensity = "playback.channel_intensity";
 constexpr const char* kKeySoftStart = "playback.soft_start_ms";
 constexpr const char* kKeyReducePeaks = "playback.channel_reduce_peaks";
 constexpr const char* kKeyEoEnabled = "playback.extended_o_enabled";
@@ -96,6 +97,7 @@ void PlaybackOutput::load() {
             const double v = num(k, d);
             return std::isfinite(v) ? v : d;
         };
+        intensity_ = std::clamp(int(std::lround(finite(kKeyIntensity, 100))), 0, 100);
         softStartMs_ = clampSoftStart(int(std::lround(finite(kKeySoftStart, kSoftStartDefaultMs))));
         reducePeaks_ = flag(kKeyReducePeaks, false);
         eoEnabled_ = flag(kKeyEoEnabled, true);
@@ -137,6 +139,13 @@ void PlaybackOutput::setScript(std::vector<samn::Action> stroke, std::vector<sam
     refilter();
     resetTargets();
     lastAt_ = -1;
+}
+
+void PlaybackOutput::setLevels(std::vector<samn::Action> vibration, std::vector<samn::Action> suction) {
+    vibration_ = std::move(vibration);
+    suction_ = std::move(suction);
+    lastVib_ = lastSuc_ = -1;
+    if (sending() && lastAt_ >= 0) sendLevels(lastAt_);
 }
 
 void PlaybackOutput::refilter() {
@@ -210,7 +219,8 @@ void PlaybackOutput::sendLevels(qint64 t) {
     const double scale = extendedOScale() * soft;
     const auto level = [&](const std::vector<samn::Action>& lane, bool on, int pct) {
         if (!on) return 0.0;
-        return samn::OutputLevel(samn::PositionAt(lane, t).value_or(0) / 100.0, reducePeaks_, scale, pct / 100.0);
+        return samn::OutputLevel(samn::PositionAt(lane, t).value_or(0) / 100.0, reducePeaks_, scale,
+                                 pct / 100.0 * intensity_ / 100.0);
     };
     if (device_->capVibration() && !vibration_.empty()) {
         const double v = level(vibration_, vibOn_, vibLevel_);
@@ -397,6 +407,15 @@ void PlaybackOutput::setSuctionLevel(int v) {
     if (v == sucLevel_) return;
     sucLevel_ = v;
     save(kKeySucLevel, v);
+    emit outputChanged();
+}
+
+void PlaybackOutput::setIntensity(int v) {
+    v = std::clamp(v, 0, 100);
+    if (v == intensity_) return;
+    intensity_ = v;
+    save(kKeyIntensity, v);
+    if (sending() && lastAt_ >= 0) sendLevels(lastAt_);
     emit outputChanged();
 }
 

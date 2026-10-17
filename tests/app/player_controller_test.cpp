@@ -13,12 +13,15 @@
 #include <QImage>
 #include <QPainter>
 #include <cmath>
+#include <filesystem>
 #include <memory>
 
 #include "audio_level.h"
 #include "curve_item.h"
 #include "heatmap_item.h"
 #include "player_controller.h"
+#include "samn/playback_mapping.h"
+#include "samn/samn_file.h"
 
 using samn::ui::AudioLevelDecoder;
 using samn::ui::CurveItem;
@@ -40,6 +43,42 @@ QByteArray zigzag(int n = 41, int stepMs = 250) {
         s += QStringLiteral("{\"at\":%1,\"pos\":%2}").arg(i * stepMs).arg(i % 2 ? 0 : 100).toUtf8();
     }
     return s + "]}";
+}
+
+// The 0.7 comparison scripts (core playback_mapping_test): 13 points.
+const char* kRefActions = R"([{"at":0,"pos":20},{"at":200,"pos":40},{"at":400,"pos":70},{"at":600,"pos":90},
+  {"at":800,"pos":55},{"at":1000,"pos":20},{"at":1200,"pos":85},{"at":1400,"pos":30},{"at":1600,"pos":20},
+  {"at":1800,"pos":60},{"at":2000,"pos":95},{"at":2200,"pos":10},{"at":2400,"pos":50}])";
+
+QByteArray tjFunscript() {
+    return QByteArray(R"({"actions":)") + kRefActions + R"(,"metadata":{"profile":"tj","device_recipe":{"sync":"suction_position",
+      "min_suction":0.2,"tick_ms":50,"max_speed":0.5,"smoothing":0.22,"contact_vibration":true,"contact_vibration_span":0.75}}})";
+}
+
+// A tj Emotion Script with the default strength presets.
+void writeTjSamn(const QString& path, const std::string& active) {
+    samn::Document d = samn::LoadFunscriptFile([&] {
+        const QString tmp = path + ".src.funscript";
+        writeFile(tmp, tjFunscript());
+        return std::filesystem::u8path(tmp.toStdString());
+    }());
+    QFile::remove(path + ".src.funscript");
+    d.strength_presets = samn::DefaultStrengthPresets();
+    d.active_strength = active;
+    samn::SaveDocument(std::filesystem::u8path(path.toStdString()), d);
+}
+
+// What the device gets at `ms` (a multiple of the tick) for these choices:
+// the core pipeline, rounded like the lanes.
+std::pair<int, int> expectedAt(const QString& path, const samn::PlaybackChoices& choices, int64_t ms) {
+    samn::Document d = samn::IsSamnPath(path.toStdString()) ? samn::LoadDocument(std::filesystem::u8path(path.toStdString()))
+                                                           : samn::LoadFunscriptFile(std::filesystem::u8path(path.toStdString()));
+    const samn::MapOptions base = samn::MapOptionsFromScript(samn::Document(d).ToFunscript());
+    const auto plan = samn::PlanPlayback(base, d.profile, samn::ChoicesForScript(choices, d.recipe.contact_vibration),
+                                         d.ActivePreset());
+    for (const auto& f : samn::PlaybackFrames(d.general, plan))
+        if (f.at == ms) return {int(std::lround(f.vibration * 100)), int(std::lround(f.suction * 100))};
+    return {-1, -1};
 }
 
 }  // namespace
@@ -597,6 +636,265 @@ private slots:
         QVERIFY2(std::abs(c.suctionNow() - 25) <= 5, qPrintable(QString::number(c.suctionNow())));
         c.setPlaying(false);
         QVERIFY(c.lastError().isEmpty());
+    }
+
+    // 0.7 StartPlayback: the Player's sync mode, tick, max speed and
+    // smoothing over the script's recipe; the lanes are what the device gets
+    // and follow every change at once; every choice is saved.
+    void mappingSettingsShapeTheLanes() {
+        QTemporaryDir d;
+        const QString path = d.filePath("plain.funscript");
+        writeFile(path, QByteArray(R"({"actions":)") + kRefActions + "}");
+        samn::PlaybackChoices ch;  // the defaults: independent, 50 ms, 0.6, 0.3
+        {
+            PlayerController c;
+            QVERIFY(c.openPath(path));
+            QSignalSpy lanes(&c, &PlayerController::lanesChanged);
+            auto* m = c.mapping();
+            QCOMPARE(m->syncMode(), QString("independent"));
+            QCOMPARE(m->tickMs(), 50);
+            QCOMPARE(m->maxSpeed(), 0.6);
+            QCOMPARE(m->smoothing(), 0.3);
+            const auto now = [&](qint64 ms) {
+                c.setVideoPositionMs(ms);
+                return std::pair<int, int>{c.vibrationNow(), c.suctionNow()};
+            };
+            QCOMPARE(now(600), expectedAt(path, ch, 600));
+            m->setSyncMode("synchronized");
+            ch.sync_mode = "synchronized";
+            QVERIFY(lanes.count() > 0);
+            for (qint64 ms : {300, 600, 1200}) QCOMPARE(now(ms), expectedAt(path, ch, ms));
+            m->setSyncMode("vibration_only");
+            QCOMPARE(now(600).second, 0);
+            QVERIFY(now(600).first > 0);
+            m->setSyncMode("synchronized");
+            m->setTickMs(100);
+            m->setMaxSpeed(1.2);
+            m->setSmoothing(0);  // 0 is a value: no smoothing (PS-11)
+            ch.tick_ms = 100;
+            ch.max_speed = 1.2;
+            ch.smoothing = 0;
+            QCOMPARE(now(600), expectedAt(path, ch, 600));
+            QCOMPARE(now(1200), expectedAt(path, ch, 1200));
+            // A stroke script has no contact controls: contact strength does nothing.
+            QVERIFY(!c.contactControls());
+            const auto before = now(1200);
+            m->setContactIntensity(0);
+            QCOMPARE(now(1200), before);
+            m->setSyncMode("sideways");  // unknown: ignored
+            QCOMPARE(m->syncMode(), QString("synchronized"));
+            m->setTickMs(5);
+            QCOMPARE(m->tickMs(), 10);
+            m->setMaxSpeed(9);
+            QCOMPARE(m->maxSpeed(), 2.0);
+        }
+        // Saved and loaded again.
+        PlayerController c;
+        auto* m = c.mapping();
+        QCOMPARE(m->syncMode(), QString("synchronized"));
+        QCOMPARE(m->tickMs(), 10);
+        QCOMPARE(m->maxSpeed(), 2.0);
+        QCOMPARE(m->smoothing(), 0.0);
+        QCOMPARE(m->contactIntensity(), 0.0);
+    }
+
+    // A broken stored value takes the default; a stored 0 stays 0 (PS-11).
+    void brokenMappingSettingsTakeTheDefaults() {
+        writeFile(QString::fromUtf8(qgetenv("SAMN_CONFIG_DIR")) + "/settings.json",
+                  R"({"playback.sync_mode":"sideways","playback.tick_ms":"fast","playback.max_speed":null,)"
+                  R"("playback.smoothing":0,"playback.contact_intensity":0,"playback.effect_presets":"[1,2]"})");
+        PlayerController c;
+        auto* m = c.mapping();
+        QCOMPARE(m->syncMode(), QString("independent"));
+        QCOMPARE(m->tickMs(), 50);
+        QCOMPARE(m->maxSpeed(), 0.6);
+        QCOMPARE(m->smoothing(), 0.0);
+        QCOMPARE(m->contactIntensity(), 0.0);
+        QVERIFY(m->effectPresets().isEmpty());
+    }
+
+    // 0.7 contact controls: strength 0-2 (0 mutes), off, sensitivity and
+    // curve; the knobs act in recipe mode with contact vibration on.
+    void contactControlsFollowTheScript() {
+        QTemporaryDir d;
+        const QString path = d.filePath("tj.funscript");
+        writeFile(path, tjFunscript());
+        samn::PlaybackChoices ch;
+        ch.contact_span = 0.75;
+        ch.contact_curve = std::string("linear");
+        PlayerController c;
+        QVERIFY(c.openPath(path));
+        QVERIFY(c.contactControls());
+        QVERIFY(c.contactKnobsLive());
+        auto* m = c.mapping();
+        QCOMPARE(m->contactSpan(), 0.75);  // from the recipe
+        QCOMPARE(m->contactCurve(), QString("linear"));
+        const auto now = [&](qint64 ms) {
+            c.setVideoPositionMs(ms);
+            return std::pair<int, int>{c.vibrationNow(), c.suctionNow()};
+        };
+        const auto full = now(600);
+        QVERIFY(full.first > 30);
+        QCOMPARE(full, expectedAt(path, ch, 600));
+        m->setContactIntensity(0.5);
+        ch.contact_intensity = 0.5;
+        QCOMPARE(now(600), expectedAt(path, ch, 600));
+        QVERIFY(now(600).first < full.first);
+        m->setContactIntensity(0);  // mutes, suction stays
+        QCOMPARE(now(600), std::make_pair(0, full.second));
+        m->setContactIntensity(1);
+        m->setContactOff(true);
+        QCOMPARE(now(600).first, 0);
+        m->setContactOff(false);
+        QCOMPARE(now(600), full);
+        m->setContactSpan(0.5);
+        m->setContactCurve("peak");
+        ch.contact_intensity = 1;
+        ch.contact_span = 0.5;
+        ch.contact_curve = std::string("peak");
+        QCOMPARE(now(600), expectedAt(path, ch, 600));
+        QVERIFY(now(600).first > full.first);
+        m->setContactIntensity(0.25);
+        // A new script starts from its own recipe; the strength is kept.
+        QVERIFY(c.openPath(path));
+        QCOMPARE(m->contactSpan(), 0.75);
+        QCOMPARE(m->contactCurve(), QString("linear"));
+        QCOMPARE(m->contactIntensity(), 0.25);
+        // A plain script has none; an axes script has the controls but the
+        // knobs do not act (baked curves).
+        const QString plain = d.filePath("plain.funscript");
+        writeFile(plain, QByteArray(R"({"actions":)") + kRefActions + "}");
+        QVERIFY(c.openPath(plain));
+        QVERIFY(!c.contactControls());
+        QVERIFY(!c.contactKnobsLive());
+        samn::Document axes = samn::LoadFunscriptFile(std::filesystem::u8path(path.toStdString()));
+        axes.BakeNeoAxes();
+        const QString axesPath = d.filePath("axes.samn");
+        samn::SaveDocument(std::filesystem::u8path(axesPath.toStdString()), axes);
+        QVERIFY(c.openPath(axesPath));
+        QVERIFY(c.contactControls());
+        QVERIFY(!c.contactKnobsLive());
+    }
+
+    // 0.7 Strength (soft / normal / strong): an Emotion Script's preset
+    // scales vibration and suction; the choice is saved in the script.
+    void strengthPresetIsSavedInTheScript() {
+        QTemporaryDir d;
+        const QString path = d.filePath("feel.samn");
+        writeTjSamn(path, "normal");
+        {
+            PlayerController c;
+            QVERIFY(c.openPath(path));
+            QCOMPARE(c.strengthPresets(), QStringList({"soft", "normal", "strong"}));
+            QCOMPARE(c.activeStrength(), QString("normal"));
+            c.setVideoPositionMs(600);
+            const int normalSuction = c.suctionNow();
+            c.setActiveStrength("soft");
+            QCOMPARE(c.activeStrength(), QString("soft"));
+            QCOMPARE(samn::LoadDocument(std::filesystem::u8path(path.toStdString())).active_strength, std::string("soft"));
+            samn::PlaybackChoices ch;
+            ch.contact_span = 0.75;
+            ch.contact_curve = std::string("linear");
+            const auto soft = expectedAt(path, ch, 600);
+            QCOMPARE(std::make_pair(c.vibrationNow(), c.suctionNow()), soft);
+            QVERIFY(c.suctionNow() < normalSuction);  // suction x 0.85
+        }
+        PlayerController c;
+        QVERIFY(c.openPath(path));
+        QCOMPARE(c.activeStrength(), QString("soft"));
+        c.setActiveStrength("");
+        QCOMPARE(samn::LoadDocument(std::filesystem::u8path(path.toStdString())).active_strength, std::string());
+        // A .funscript has no strength presets.
+        const QString plain = d.filePath("plain.funscript");
+        writeFile(plain, QByteArray(R"({"actions":)") + kRefActions + "}");
+        QVERIFY(c.openPath(plain));
+        QVERIFY(c.strengthPresets().isEmpty());
+        c.setActiveStrength("soft");
+        QCOMPARE(c.activeStrength(), QString());
+    }
+
+    // 0.7 Effects presets (player_layout.js; app_effect_presets_test.go
+    // TestEffectPresetsRoundTrip): save, apply, Default, Custom, delete,
+    // saved as a JSON text under playback.effect_presets.
+    void effectPresetsSaveApplyDelete() {
+        const QString file = QString::fromUtf8(qgetenv("SAMN_CONFIG_DIR")) + "/settings.json";
+        const auto stored = [&] {
+            samn::Settings s(std::filesystem::u8path(file.toStdString()));
+            return s.get(samn::kKeyEffectPresets, nullptr);
+        };
+        {
+            PlayerController c;
+            auto* m = c.mapping();
+            auto* o = c.output();
+            QVERIFY(m->effectPresets().isEmpty());  // a fresh install has none
+            QVERIFY(stored().is_null());
+            m->setSmoothing(0.8);
+            m->setMaxSpeed(0.4);
+            m->setTickMs(80);
+            o->setIntensity(40);
+            o->setSoftStartMs(1500);
+            o->setReducePeaks(true);
+            QVERIFY(!m->saveEffectPreset("  "));
+            QVERIFY(!m->saveEffectPreset("__default"));
+            QVERIFY(m->saveEffectPreset("  Night "));
+            QCOMPARE(m->effectPresets(), QStringList({"Night"}));
+            QCOMPARE(m->effectPreset(), QString("Night"));
+            const auto text = stored();
+            QVERIFY(text.is_string());
+            const auto night = samn::ParseEffectPresets(text.get<std::string>()).at("Night");
+            QCOMPARE(*night.intensity, 40.0);
+            QCOMPARE(*night.smoothing, 0.8);
+            QCOMPARE(*night.max_speed, 0.4);
+            QCOMPARE(*night.tick_ms, 80.0);
+            QCOMPARE(*night.soft_start_ms, 1500.0);
+            QVERIFY(*night.reduce_peaks);
+            // A change by hand makes the selection Custom.
+            o->setIntensity(45);
+            QCOMPARE(m->effectPreset(), QString());
+            // Default: the 0.7 FX_DEFAULTS.
+            QVERIFY(m->applyEffectPreset("__default"));
+            QCOMPARE(m->effectPreset(), QString("__default"));
+            QCOMPARE(m->smoothing(), 0.3);
+            QCOMPARE(m->maxSpeed(), 0.6);
+            QCOMPARE(m->tickMs(), 50);
+            QCOMPARE(o->intensity(), 100);
+            QCOMPARE(o->softStartMs(), 500);
+            QVERIFY(!o->reducePeaks());
+            QVERIFY(m->applyEffectPreset("Night"));
+            QCOMPARE(m->effectPreset(), QString("Night"));
+            QCOMPARE(m->smoothing(), 0.8);
+            QCOMPARE(m->maxSpeed(), 0.4);
+            QCOMPARE(m->tickMs(), 80);
+            QCOMPARE(o->intensity(), 40);
+            QCOMPARE(o->softStartMs(), 1500);
+            QVERIFY(o->reducePeaks());
+            QVERIFY(!m->applyEffectPreset("Nope"));
+            m->setTickMs(90);
+            QCOMPARE(m->effectPreset(), QString());
+        }
+        // A new start reads them back; the applied values were saved too.
+        {
+            PlayerController c;
+            auto* m = c.mapping();
+            QCOMPARE(m->effectPresets(), QStringList({"Night"}));
+            QCOMPARE(m->smoothing(), 0.8);
+            QCOMPARE(c.output()->intensity(), 40);
+            QVERIFY(m->deleteEffectPreset("Night"));
+            QVERIFY(!m->deleteEffectPreset("Night"));
+            QVERIFY(m->effectPresets().isEmpty());
+        }
+        PlayerController c;
+        QVERIFY(c.mapping()->effectPresets().isEmpty());
+        // The text 0.7 wrote loads as it is (no field missing: all apply).
+        {
+            samn::Settings s(std::filesystem::u8path(file.toStdString()));
+            s.set(samn::kKeyEffectPresets,
+                  R"({"Night":{"intensity":40,"smoothing":0.8,"maxSpeed":0.4,"tickMs":80,"softStartMs":1500,"reducePeaks":true}})");
+        }
+        PlayerController c2;
+        QCOMPARE(c2.mapping()->effectPresets(), QStringList({"Night"}));
+        QVERIFY(c2.mapping()->applyEffectPreset("Night"));
+        QCOMPARE(c2.mapping()->tickMs(), 80);
     }
 
     void zoomWindow() {

@@ -787,6 +787,66 @@ private slots:
         o->setPlaying(false);
     }
 
+    // 0.7 Effects "Intensity": the master level on top of both channels; 0 is
+    // silence (PS-11), saved like the channel levels.
+    void masterIntensityScalesBothChannels() {
+        DeviceController dev;
+        {
+            PlayerController p;
+            p.setDevice(&dev);
+            connectMock(dev);
+            Log log(dev);
+            auto* o = p.output();
+            QCOMPARE(o->intensity(), 100);  // full by default
+            o->setSoftStartMs(0);
+            o->setVibrationLevel(50);
+            o->setScript({}, {{0, 100}, {60000, 100}}, {{0, 40}, {60000, 40}});
+            o->setPlaying(true);
+            o->update(1000);
+            QTRY_VERIFY_WITH_TIMEOUT(log.last("vibration") == "[mock] vibration=0.50" && log.last("suction") == "[mock] suction=0.40", kWait);
+            o->setIntensity(50);  // live, without a new position
+            QTRY_VERIFY_WITH_TIMEOUT(log.last("vibration") == "[mock] vibration=0.25" && log.last("suction") == "[mock] suction=0.20", kWait);
+            o->setIntensity(0);
+            QTRY_VERIFY_WITH_TIMEOUT(log.last("vibration") == "[mock] vibration=0.00" && log.last("suction") == "[mock] suction=0.00", kWait);
+            o->setIntensity(150);
+            QCOMPARE(o->intensity(), 100);
+            o->setIntensity(0);
+            o->setPlaying(false);
+            dev.disconnectDevice();
+            QTRY_VERIFY_WITH_TIMEOUT(!dev.connected(), kWait);
+        }
+        PlayerController q;
+        QCOMPARE(q.output()->intensity(), 0);  // a stored 0 stays 0
+    }
+
+    // A mapping setting changes the levels the device gets at once (0.7 sent
+    // them with the next Play; SamN2 maps again while playing), without
+    // a new position and without ending the session.
+    void mappingChangeReachesTheDeviceAtOnce() {
+        const QString script = writeScript(files_.path(), "map.funscript", zigzag(60, 250));
+        DeviceController dev;
+        PlayerController p;
+        p.setDevice(&dev);
+        QVERIFY(p.openScript(script));
+        connectMock(dev);
+        Log log(dev);
+        p.output()->setSoftStartMs(0);
+        p.setPlaying(true);
+        p.setVideoPositionMs(1000);
+        const int full = p.vibrationNow();
+        QVERIFY(full > 50);
+        QTRY_COMPARE_WITH_TIMEOUT(log.last("vibration"), QString::asprintf("[mock] vibration=%.2f", full / 100.0), kWait);
+        p.mapping()->setMaxSpeed(2.0);  // the same stroke is now a third of full speed
+        QVERIFY(p.vibrationNow() < full);
+        QTRY_COMPARE_WITH_TIMEOUT(log.last("vibration"), QString::asprintf("[mock] vibration=%.2f", p.vibrationNow() / 100.0), kWait);
+        p.mapping()->setSyncMode("suction_only");
+        QCOMPARE(p.vibrationNow(), 0);
+        QTRY_COMPARE_WITH_TIMEOUT(log.last("vibration"), QString("[mock] vibration=0.00"), kWait);
+        QVERIFY(dev.sessionActive());
+        QVERIFY(p.output()->playing());
+        p.setPlaying(false);
+    }
+
     // --- Extended-O (0.7 player/extendedo.go) ---
     // 0.7 TestExtendedOScalesAmplitudeKeepsRhythm.
     void extendedOScalesAmplitudeKeepsRhythm() {
