@@ -488,6 +488,33 @@ private slots:
         c.setPlaying(false);
     }
 
+    // 0.7 PS-10: a drop never vanishes silently. Extra videos and
+    // unsupported files are named; a drop with nothing usable says so.
+    void dropsNeverVanishSilently() {
+        QTemporaryDir d;
+        writeFile(d.filePath("A.funscript"), "{\"actions\":[{\"at\":0,\"pos\":0},{\"at\":1000,\"pos\":100}]}");
+        writeFile(d.filePath("one.mp4"), "x");
+        writeFile(d.filePath("two.mp4"), "x");
+        writeFile(d.filePath("notes.txt"), "x");
+        PlayerController c;
+        QVERIFY(!c.openPaths({d.filePath("notes.txt")}));
+        QVERIFY(c.lastError().contains(QStringLiteral("Drop ignored")));
+        QVERIFY(!c.hasScript());
+        // Two videos and a text file: the first video opens, the rest is named.
+        QVERIFY(c.openPaths({d.filePath("one.mp4"), d.filePath("two.mp4"), d.filePath("notes.txt")}));
+        QCOMPARE(c.videoName(), QStringLiteral("one.mp4"));
+        QVERIFY(c.lastError().contains(QStringLiteral("1 more video")));
+        QVERIFY(c.lastError().contains(QStringLiteral("notes.txt")));
+        // A script with a video: both open; a clean drop leaves no message.
+        QVERIFY(c.openPaths({d.filePath("one.mp4"), d.filePath("A.funscript")}));
+        QVERIFY(c.hasScript());
+        QVERIFY(c.lastError().isEmpty());
+        // A script and a stray file: the script opens, the file is named.
+        QVERIFY(c.openPaths({d.filePath("A.funscript"), d.filePath("notes.txt")}));
+        QVERIFY(c.hasScript());
+        QVERIFY(c.lastError().contains(QStringLiteral("notes.txt")));
+    }
+
     void zoomWindow() {
         QTemporaryDir dir;
         const QString script = dir.path() + "/z.funscript";

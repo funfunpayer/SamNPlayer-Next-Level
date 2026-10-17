@@ -2,7 +2,7 @@
 
 **Owner (16 Oct 2026):** the Generator must do everything 0.7's does, with the Editor built in, and the detection must get **better**. C++ has the stronger libraries for that, so detection moves there.
 
-The full list of 0.7's Generator functions is in [`PARITY.md`](PARITY.md) §4 (63 items). This file is the plan to get there and beyond. Decisions: D-133 to D-136 in [`DECISIONS.md`](DECISIONS.md).
+The full list of 0.7's Generator functions is in [`PARITY.md`](PARITY.md) §4 (63 items). This file is the plan to get there and beyond. Decisions: D-133 to D-137 and D-139 in [`DECISIONS.md`](DECISIONS.md). Lessons: [`LESSONS.md`](LESSONS.md) §4 and §11.
 
 ## What 0.7 has (the reference)
 
@@ -34,29 +34,46 @@ The full list of 0.7's Generator functions is in [`PARITY.md`](PARITY.md) §4 (6
 
 ## Better detection (beyond 0.7)
 
-Each item is measured on the golden clips before it becomes a default. The Owner provides the clips; they never enter the repo. A change that does not beat 0.7 on the benchmark stays off.
+Each item is measured on the golden clips before it becomes a default (D-135). The Owner provides the clips; they never enter the repo. A change that does not beat 0.7 on the benchmark stays off. **Revised 17 Oct after `LESSONS.md` (D-139):** the first plan put "run the backends together and fuse them" first; 0.7 measured exactly that and rejected it as an idea, not because of its stack (REJ-05, REJ-19, GD-01). The list below keeps only what the lessons allow.
 
-1. **Run the backends together.** CSRT on the tip, a dense flow field in the box, and an LK point grid run on the same frame, followed by a confidence-weighted fusion. In 0.7 they were alternatives chosen beforehand. One failing source (blur, occlusion) no longer breaks the stroke.
-2. **AI-assisted re-acquisition.** When CSRT and appearance memory lose the tip, the ONNX body-part detector proposes where it went, limited to plausible boxes near the last position. 0.7 could only coast or ask the user.
-3. **Auto tip and contact from AI by default** (opt-in in 0.7, Python only). It is fast in C++ and always a proposal: the user confirms it, as in 0.7.
-4. **Sub-frame timing.** Peaks are refined between frames (parabolic fit on the signal), so strokes on 24/25/30 fps clips land closer to the real turn points. 0.7 snapped to whole frames.
-5. **Kalman smoothing of the tip path** in place of fixed Savitzky-Golay windows on noisy segments. It adapts to speed and is checked against the Quality Doctor score.
-6. **GPU where available.** OpenCV DNN with CUDA or OpenCL when present, and the CPU otherwise. The results are the same, only faster.
+**One box writes the stroke (GD-01).** The tip box tracked by CSRT is the only writer of the curve. Other sources (flow, LK grid, zones, detectors) may *check* or *re-anchor* that box; they never write or blend into the curve. A segment whose range collapses is flagged, not filled with invented amplitude.
+
+1. **Hybrid check instead of fusion (GD-16, REJ-05).** Flow and an LK grid run beside CSRT on the same frame (cheap in C++) as a *disagreement detector*: when they disagree with the box, the frame is marked low-confidence and the re-acquisition below may run. Fusion stayed between its sources (clean 1.000/0.926 → 0.985, occluded 0.293/0.747 → 0.620); a disagreement signal is all it gave.
+2. **AI-assisted re-acquisition, fail closed (GD-10, GD-16, REJ-20).** When CSRT and appearance memory lose the tip, the ONNX body-part detector proposes boxes near the last position; the engine verifies a proposal (appearance against the *original* seed, displacement guard) before it becomes the search anchor. No verified box → the gap stays a gap ("lost" is not "wrong", GD-19). Periodic template re-anchoring was measured worse (10 jumps up to 924 px) and is not repeated.
+3. **Auto tip and contact from AI as proposals (GD-17, GD-18).** Faster in C++, still a proposal the user confirms with Apply; on by default only after a golden win. Licence of code and weights checked first, ONNX boxes compared with the original backend on identical frames.
+4. **Sub-frame peaks.** Peaks refined between frames (parabolic fit) so strokes on 24/25/30 fps clips land closer to the turn points. Measured with the timing method of GD-05/GD-06 (windowed r, aliasing flag), never with a per-clip best offset.
+5. **Kalman smoothing of the tip path** in place of fixed Savitzky-Golay windows on noisy segments; a before/after run on the same clip (GD-13), amplitude statistics compared, not only r (GD-24).
+6. **GPU for the detector only.** OpenCV DNN with CUDA or OpenCL when present; there is no GPU CSRT in OpenCV (REJ-11), so tracking stays on the CPU. Same results, only faster.
+
+### Where C++ changes the picture (retests allowed, through the gate)
+
+Some 0.7 results were limited by the stack, not the idea (`LESSONS.md` §12). These may be re-measured in C++, each against 0.7 on the goldens:
+
+| 0.7 result | Limit came from | What C++ may try |
+|---|---|---|
+| Two CSRT trackers in parallel for distance profiles: no end-to-end gain (REJ-13) | Python threading and hand-off | Two trackers on two threads with no interpreter; measure end to end, not a microbenchmark. |
+| Frame sharpening lost before any shader (REJ-16) | extracting frames from a browser `<video>` | Native frames from the decoder; unsharp masking re-measured against reference agreement, not lost-frame rate (REJ-15, REJ-32). |
+| Flow backend 1.9x faster, not 4x (REJ-18) | the Python/cv2 loop | Speed may improve; its quality finding (0.55 on a busy scene) stands, so flow stays a checker (item 1), not a writer. |
+| CUDA unusable (REJ-11) | pip wheels without CUDA | A CUDA/OpenCL build for DNN; CSRT still CPU. |
+
+### Do not repeat (measured in 0.7)
+
+KCF / MOSSE instead of CSRT (99 % lost on a small tip box, REJ-12) · fusion or four-zone fusion as the writer (REJ-05, REJ-19) · flow as the default writer (REJ-18) · upscaling or unsharp masking as a fix for hard boxes without an agreement check (REJ-14, REJ-15) · camera estimate on a half-size picture (r 0.94 → 0.71, REJ-24) · periodic template re-anchoring, scale lock, slower learning (REJ-20, REJ-21) · automatic second region by grid pairs or an invented region (REJ-23) · audio as a position source (REJ-26) · a language model as the stroke writer (REJ-30) · the tracker's own lost rate or quality as proxy for agreement (REJ-32). A retry needs a new hypothesis for *why* it should differ, written in the PR.
 
 ## Steps (each one a PR with tests; parity first, then improvements)
 
 | Step | Content | Done when |
 |---|---|---|
-| P3.0 | OpenCV in the build (Linux apt `libopencv-dev libopencv-contrib-dev`; Windows vcpkg `opencv4[contrib,dnn,ffmpeg]` with binary cache), `samn/video/FrameReader` | CI green on both systems; frame-exact seek test on a generated test-pattern clip |
-| P3.1 | CSRT single-box track + scene cuts + camera compensation (port of `trackcv/track.go`) | Positions match 0.7's Go path on synthetic clips (generated in the test, moving test patterns) within ±1 position |
-| P3.2 | Post-processing (`posttrack/*`) → actions, auto O-zone | Go tests ported; whole-pipeline output equals 0.7 on the synthetic clips |
-| P3.3 | Generator page: steps 1–5, marking canvas, run with progress and cancel, queue; Review step opens the result in the built-in Editor | Every §4.1–4.6 item that needs no AI works |
-| P3.4 | Two-point / multi-point, appearance memory, guards, rhythm grid, tracking gaps | Go tests ported; equal on the synthetic two-point clips |
-| P3.5 | Backends in C++ (flow, grid LK, region fusion) + fusion (item 1) | Python tests ported as C++ tests; benchmark on golden clips |
-| P3.6 | Quality Doctor, contact, scene map, audio check / segments / tempo | Tests ported; Player BPM "From audio" and Speech-Hold get their data |
-| P3.7 | AI inference via ONNX (auto tip, body parts, contact detector) + re-acquisition (item 2) | Same detections as 0.7's Python on the sample frames, from C++ |
-| P3.8 | Comparison controller (the Owner's "Vergleich Controller"): runs 0.7 and SamNPlayer 2 on the same clips and reports score, peaks, timing differences | A report per clip in `docs/benchmarks/` (numbers only, no media) |
-| P3.9 | Better detection items 3–6, each behind a switch until the benchmark shows it beats 0.7 | Benchmark |
+| P3.0 | OpenCV in the build (Linux apt `libopencv-dev libopencv-contrib-dev`; Windows vcpkg `opencv4[contrib,dnn,ffmpeg]` with binary cache), `samn/video/FrameReader` returning `{frame, pts_us}` (GD-07), one `CreateTracker()` with a startup self-check and a CI test that CSRT runs on both systems, no silent fallback (GD-02); the sanitizer job covers the tracking tests (GD-23); RAII for every tracker and capture | CI green on both systems; frame-exact seek test and a start-offset test on a generated test-pattern clip |
+| P3.1 | CSRT single-box track + scene cuts + camera compensation (port of `trackcv/track.go`) | Positions match 0.7's Go path on synthetic clips (generated in the test, moving test patterns, known ground truth, GD-22) within ±1 position; a 5-minute synthetic clip for drift (GD-11) |
+| P3.2 | Post-processing (`posttrack/*`) → actions, auto O-zone; default detrend for stroke profiles (GD-12); stage order of 0.7 `FUNSCRIPT_ALGOS.md` (GD-13) | Go tests ported; whole-pipeline output equals 0.7 on the synthetic clips |
+| P3.8 (built here, before any default is chosen) | Comparison controller (the Owner's "Vergleich Controller"): runs 0.7 and SamNPlayer 2 on the same clips; absolute timeline, ±1000 ms lag window, boundary-pinned and low-confidence flags, windowed r, aliasing flag, same `n`, manifest with hashes, 3+5-run gate (GD-05, GD-06); quality and agreement as two separate numbers (GD-04) | A report per clip in `docs/benchmarks/` (numbers only, no media); the synthetic known-lag characterization test passes |
+| P3.3 | Generator page: steps 1–5, marking canvas, run with progress from the first frame (GD-21), cancel token and run sequence id on every event, single-instance guard, children killed on quit, "canceled" is not an error (GD-25), queue; overwrite guard; Review step opens the result in the built-in Editor | Every §4.1–4.6 item that needs no AI works; a spy-stage test per option proves it reaches the output (GD-03) |
+| P3.4 | Two-point / multi-point (GD-08), appearance memory and reacquire failing closed (GD-10), guards, rhythm grid opt-in (GD-15), tracking gaps (GD-19) | Go tests ported; equal on the synthetic two-point clips |
+| P3.5 | Backends in C++ (flow, grid LK, region fusion) as checkers for the hybrid check (item 1), not as writers | Python tests ported as C++ tests; benchmark on golden clips |
+| P3.6 | Quality Doctor, contact, scene map, audio check / segments / tempo; metrics as windowed fractions on the detrended signal (GD-14) | Tests ported; Player BPM "From audio" and Speech-Hold get their data |
+| P3.7 | AI inference via ONNX (auto tip, body parts, contact detector) + verified re-acquisition (item 2) | Same detections as 0.7's Python on the sample frames, from C++ |
+| P3.9 | Better detection items 3–6 and the C++ retests, each behind a switch until the benchmark shows it beats 0.7 | Benchmark |
 
 The Generator and the Editor are one mode (Owner 16 Oct, D-137): the same page creates a script and edits it, and a script opened for editing lands there with editing on. The full Editor (dot editing, range tools, Undo, multi-axis, E1–E10) is P4 and is built into that page; P3.3 already edits the Generator's result there.
 
@@ -65,4 +82,5 @@ The Generator and the Editor are one mode (Owner 16 Oct, D-137): the same page c
 - Synthetic test clips are generated in the tests (moving test patterns). No real media in the repo.
 - A generated script never overwrites an existing one without asking (0.7 overwrite guard).
 - AI is a proposal: the user confirms (0.7 and D-129).
-- Measure before choosing a default (0.7 lesson: "gemessen, nicht geraten").
+- Measure before choosing a default (0.7 lesson: "measured, not guessed").
+- Read `LESSONS.md` §4 (GD-01..GD-25) and §11 before touching an area of the Generator; each step above names the lessons it must follow.

@@ -32,6 +32,11 @@ bool isVideo(const QString& path) {
     return std::find(samn::VIDEO_EXTS.begin(), samn::VIDEO_EXTS.end(), suffix) != samn::VIDEO_EXTS.end();
 }
 
+bool isScript(const QString& path) {
+    const std::string suffix = "." + QFileInfo(path).suffix().toLower().toStdString();
+    return std::find(samn::SCRIPT_EXTS.begin(), samn::SCRIPT_EXTS.end(), suffix) != samn::SCRIPT_EXTS.end();
+}
+
 std::string u8(const QString& s) { return s.toUtf8().toStdString(); }
 QString q(const std::string& s) { return QString::fromUtf8(s.c_str(), static_cast<int>(s.size())); }
 
@@ -151,24 +156,52 @@ bool PlayerController::openPath(const QString& pathOrUrl) {
 bool PlayerController::openPaths(const QStringList& pathsOrUrls) {
     std::vector<std::string> scripts;
     QString video;
+    int extraVideos = 0;
+    QStringList unsupported;
     for (const QString& p : pathsOrUrls) {
         const QString local = toLocalPath(p);
         if (isVideo(local)) {
-            if (video.isEmpty()) video = local;
-        } else {
+            if (video.isEmpty())
+                video = local;
+            else
+                ++extraVideos;
+        } else if (isScript(local)) {
             scripts.push_back(u8(local));
+        } else {
+            unsupported << QFileInfo(local).fileName();
         }
     }
-    if (scripts.empty()) return pathsOrUrls.isEmpty() ? false : openPath(pathsOrUrls.front());
-    if (scripts.size() == 1 && video.isEmpty()) return openPath(q(scripts.front()));
-    // A video and a script dropped together open that script with that
-    // video; several scripts become the play list.
-    playlist_.Replace(scripts);
-    emit playlistChanged();
-    variants_.clear();
-    variantIndex_ = -1;
-    emit variantsChanged();
-    return openScript(q(playlist_.Current()->path), video);
+    if (scripts.empty() && video.isEmpty()) {
+        // 0.7: a drop never vanishes silently.
+        if (!pathsOrUrls.isEmpty()) setError(tr("Drop ignored: drop a video or a script (.funscript, .samn)."));
+        return false;
+    }
+    bool ok;
+    if (scripts.empty()) {
+        ok = openPath(video);
+    } else if (scripts.size() == 1 && video.isEmpty()) {
+        ok = openPath(q(scripts.front()));
+    } else {
+        // A video and a script dropped together open that script with that
+        // video; several scripts become the play list.
+        playlist_.Replace(scripts);
+        emit playlistChanged();
+        variants_.clear();
+        variantIndex_ = -1;
+        emit variantsChanged();
+        ok = openScript(q(playlist_.Current()->path), video);
+    }
+    if (!ok) return false;
+    // Say what was left out (0.7 PS-10); the Player opens one video.
+    QStringList left;
+    if (extraVideos > 0)
+        left << (extraVideos == 1 ? tr("1 more video (the Player opens one at a time)")
+                                  : tr("%1 more videos (the Player opens one at a time)").arg(extraVideos));
+    if (!unsupported.isEmpty())
+        left << (unsupported.size() == 1 ? tr("an unsupported file: %1") : tr("unsupported files: %1"))
+                    .arg(unsupported.join(QStringLiteral(", ")));
+    if (!left.isEmpty()) setError(tr("Not opened: %1").arg(left.join(QStringLiteral("; "))));
+    return true;
 }
 
 QVariantList PlayerController::playlist() const {

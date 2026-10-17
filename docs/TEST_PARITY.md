@@ -36,9 +36,9 @@
 
 | | Tests | ported | covered | todo-now | todo-later | n/a |
 |---|---:|---:|---:|---:|---:|---:|
-| **All** | **1141** | 160 | 64 | **6** | 861 | 50 |
-| Go | 821 | 143 | 30 | 4 | 599 | 45 |
-| Python | 320 | 17 | 34 | 2 | 262 | 5 |
+| **All** | **1141** | 166 | 64 | **0** | 861 | 50 |
+| Go | 821 | 147 | 30 | 0 | 599 | 45 |
+| Python | 320 | 19 | 34 | 0 | 262 | 5 |
 
 ### Per old package
 
@@ -57,13 +57,13 @@
 | `legal` | 1 | 2 | 0 | 0 | 0 | 2 | 0 |
 | `logging` | 1 | 1 | 0 | 0 | 0 | 1 | 0 |
 | `cmd/cli` | 7 | 18 | 0 | 0 | 0 | 12 | 6 |
-| `cmd/gui-wails (Go)` | 68 | 188 | 12 | 17 | 4 | 142 | 13 |
+| `cmd/gui-wails (Go)` | 68 | 188 | 16 | 17 | 0 | 142 | 13 |
 | `generator (Go)` | 72 | 237 | 7 | 1 | 0 | 216 | 13 |
 | `generator (Python)` | 56 | 151 | 0 | 0 | 0 | 151 | 0 |
 | `native/tests (Python)` | 4 | 13 | 13 | 0 | 0 | 0 | 0 |
 | `scripts/benchmark-prep (Python)` | 1 | 8 | 0 | 0 | 0 | 8 | 0 |
-| `frontend (Python/Playwright UI tests)` | 148 | 148 | 4 | 34 | 2 | 103 | 5 |
-| **Total** | **431** | **1141** | **160** | **64** | **6** | **861** | **50** |
+| `frontend (Python/Playwright UI tests)` | 148 | 148 | 6 | 34 | 0 | 103 | 5 |
+| **Total** | **431** | **1141** | **166** | **64** | **0** | **861** | **50** |
 
 `generator (Go)` includes the sub-packages `aiscript`, `bodyparts`, `posttrack`, `profilemodel`, `simpletrack`, `strokepreview`, `trackcv`, `trackutil`.
 
@@ -354,7 +354,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 
 ### 2.14 `cmd/gui-wails (Go)`
 
-68 files, 188 tests: 12 ported, 17 covered, 4 todo-now, 142 todo-later, 13 n/a.
+68 files, 188 tests: 16 ported, 17 covered, 0 todo-now, 142 todo-later, 13 n/a.
 
 | Old file | Test function(s) | Status | Where / why |
 |---|---|---|---|
@@ -431,7 +431,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 | `app_script_state_test.go` | `TestLoadedScriptStateNoRace` | n/a | Go data-race test of the loaded-script state. |
 | `app_session_guard_test.go` | `TestStartTrainingKeepsDeviceWhenSessionBusy` | todo-later | P2 (Training). |
 | `app_session_guard_test.go` | `TestStartPlaybackKeepsPlayerWhenSessionBusy` | n/a | Go `App` pointer bookkeeping (`activePlayer` / `activeDevice`); the Qt rule "no connect while a session is active" is covered by `playback_output_test.cpp connectionIsRefusedWhilePlaying`. |
-| `app_snapshot_test.go` | `TestSaveVideoSnapshot` | todo-now | see Port now |
+| `app_snapshot_test.go` | `TestSaveVideoSnapshot` | ported | tests/app/player_controller_test.cpp `snapshotNameAndSave` (cancel is the dialog's own) |
 | `app_sound_vibration_test.go` | `TestBakeSoundVibrationFollowsLoudness`, `TestBakeSoundVibrationWithContactKeepsScriptVibration`, `TestBakeSoundVibrationRejects` | todo-later | P3 (Sound Curve: loudness written as the vibration curve). |
 | `app_stroke_filter_test.go` | `TestStrokeFilterSettingsRoundTrip` | covered | tests/app/playback_output_test.cpp `outputChoicesAreRemembered`, `speedLimitFilterShapesWhatIsSent` |
 | `app_suggest_test.go` | `TestSuggestPolarityAndInvertRoundtrip`, `TestSuggestOZoneOnLoadedScript`, `TestApplyRingDownOnLoadedScript`, `TestHonorInvertedSetting`, `TestInvertLoadedScriptExportsSamnCompanion` | todo-later | P4 Editor (Suggest polarity / O-zone, ring-down, honor inverted, invert + export .samn). |
@@ -439,7 +439,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 | `app_tcode_test.go` | `TestConnectDeviceViaTCodeNeedsAddress` | covered | tests/app/device_controller_test.cpp `tcodeBadAddress` |
 | `app_tcode_test.go` | `TestSetMotorLevelsClampsAndStores` | covered | tests/app/device_controller_test.cpp `motorLevelsAreAccepted` |
 | `app_tcode_test.go` | `TestConnectDeviceViaTCodeSerialNeedsPort` | covered | tests/app/device_controller_test.cpp `tcodeSerialMissingPort` |
-| `app_test.go` | `TestShutdownStopsActiveSessionDevice`, `TestShutdownWithoutActiveSessionIsSafe` | todo-now | see Port now |
+| `app_test.go` | `TestShutdownStopsActiveSessionDevice`, `TestShutdownWithoutActiveSessionIsSafe` | ported | tests/app/device_controller_test.cpp `shutdownStopsTheConnectedDevice`, `shutdownWithoutSessionIsSafe` |
 | `app_thumbnails_test.go` | `TestThumbTimes`, `TestGetVideoThumbnails` | todo-later | P4 (Scene Map thumbnails, scene strip). |
 | `app_training_history_test.go` | `TestSummarizeSessionLogAggregatesCycles`, `TestSummarizeSessionLogSkipsBrokenLinesKeepsRest`, `TestSummarizeSessionLogEmptyFileReturnsNil`, `TestTrainingHistorySortsNewestFirstAndSkipsNonJsonl`, `TestTrainingHistoryNoSessionsDirIsNotAnError`, `TestTrainingHistoryCSVFormatsRows`, `TestTrainingHistoryCSVEmptyHistoryIsJustHeader`, `TestOpenSessionLogSanitizesScriptName` | todo-later | P2 (Training history). |
 | `app_training_intensity_test.go` | `TestResolveTrainingScriptAppliesIntensityFactor`, `TestResolveTrainingScriptNeutralFactorLeavesScriptUnchanged`, `TestResolveTrainingScriptUnknownNameErrors`, `TestTrainingScriptPreviewReflectsIntensityFactor`, `TestScriptPreviewPlateauStartsFromFloor` | todo-later | P2 (Training intensity). |
@@ -448,7 +448,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 | `app_training_video_test.go` | `TestTrainingVideoServedSeparately` | n/a | Wails asset server serving the training video. |
 | `benchmark_pair_suggest_test.go` | `TestSuggestBenchmarkPairBesideVideoHubPair`, `TestSuggestBenchmarkPairBesideVideoGoldenSubdirs`, `TestSuggestBenchmarkPairBesideVideoOnlyStemIsCandidate`, `TestSuggestBenchmarkPairBesideVideoNone`, `TestSuggestBenchmarkPairBesideVideoRequiresPath` | todo-later | P4 (Bench, Suite). |
 | `counting_device_test.go` | (no test function) | n/a | Helper type only (`countingDevice`), no test function. |
-| `identifiers_test.go` | `TestNoPersonalIdentifiersInSource` | todo-now | the rule exists in `docs/AGENT_STATE.md`, the check does not (see Port now) |
+| `identifiers_test.go` | `TestNoPersonalIdentifiersInSource` | ported | ctest `identifiers` (tests/check_identifiers.cmake; also versioned model identifiers, D-120) |
 | `settings_store_test.go` | `TestSettingsStoreKeepsCorruptFileAside` | ported | tests/core/settings_test.cpp "broken settings file is kept aside" |
 | `settings_store_test.go` | `TestSettingsStoreNullFile` | ported | tests/core/settings_test.cpp "settings: a file holding null loads as empty and accepts a set" |
 | `settings_store_test.go` | `TestSettingsStoreSetManyOneWrite` | ported | tests/core/settings_test.cpp "settings: set_many, defaults, atomic write leaves no temp files" |
@@ -625,7 +625,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 
 ### 2.19 `frontend (Python/Playwright UI tests)`
 
-148 files, 148 tests: 4 ported, 34 covered, 2 todo-now, 103 todo-later, 5 n/a.
+148 files, 148 tests: 6 ported, 34 covered, 0 todo-now, 103 todo-later, 5 n/a.
 
 | Old file | Test function(s) | Status | Where / why |
 |---|---|---|---|
@@ -702,8 +702,8 @@ One row per old test function (grouped when a whole file shares the same answer)
 | `pb_bpm_grid_test.py` | `main` script, 7 checks | covered | tests/app/player_controller_test.cpp `bpmGrid` |
 | `pb_chapter_bands_test.py` | `main` script, 12 checks | covered | tests/app/player_controller_test.cpp `chaptersBookmarksHeatmapLanes` (`chapterBands`); tests/core/marks_test.cpp "ChapterRanges: sorted, open ends run on, names filled" |
 | `pb_chapters_test.py` | `main` script, 9 checks | covered | tests/app/player_controller_test.cpp `editMarks`; tests/core/marks_test.cpp |
-| `pb_chart_tooltip_test.py` | `main` script, 3 checks | todo-now | `curve_geometry_test.cpp` tests `FormatTooltipTime` (see Port now) |
-| `pb_clip7776_test.py` | `main` script, 6 checks | todo-now | see Port now |
+| `pb_chart_tooltip_test.py` | `main` script, 3 checks | ported | tests/app/player_controller_test.cpp `heatTooltipShowsTimeAndValue` |
+| `pb_clip7776_test.py` | `main` script, 6 checks | ported | tests/app/player_controller_test.cpp `tjScriptWithoutVideoPlays` (synthetic equivalent of the fixture; found that playback ignored the script's recipe, fixed in #42) |
 | `pb_companion_lanes_test.py` | `main` script, 17 checks | todo-later | P2/P4 (companion axis files shown as lanes). |
 | `pb_contact_vib_probe_test.py` | `main` script, 20 checks | todo-later | P2 (live contact-vibration probe in the Inspector). |
 | `pb_curve_zoom_test.py` | `main` script, 10 checks | covered | tests/app/player_controller_test.cpp `zoomWindow`; tests/core/curve_geometry_test.cpp "view window: zoom as 0.7", "zoom to a range with a margin" |
@@ -786,7 +786,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 
 ## 4. Port now (work list)
 
-**6 tests** (50 more were ported, see the `Ported` notes) whose code is already in SamNPlayer 2. Grouped by the new module; each line is `old file :: old test` followed by what it checks. Suggested target file in italics.
+**0 tests** (all 56 are ported, see the `Ported` notes) whose code is already in SamNPlayer 2. Grouped by the new module; each line is `old file :: old test` followed by what it checks. Suggested target file in italics.
 
 | New module | Tests to port |
 |---|---:|
@@ -795,11 +795,11 @@ One row per old test function (grouped when a whole file shares the same answer)
 | core: `fileio.h` | 0 |
 | core: `settings.h` | 0 |
 | app: `PlaybackOutput` | 0 |
-| app: `PlayerController` | 3 |
-| app: `DeviceController` | 2 |
+| app: `PlayerController` | 0 |
+| app: `DeviceController` | 0 |
 | app: QML shell and assets | 0 |
-| repo / CI | 1 |
-| **Total** | **6** |
+| repo / CI | 0 |
+| **Total** | **0** |
 
 ### A. Missing tests
 
@@ -874,7 +874,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 45. `player/stroke_test.go` :: `TestDriveStrokeHonoursSpeedAndMinimum`. A position that is very late still gets the minimum move time (`kMinMoveMs`); the speed half is covered by `playSpeedShortensTheMoves`. **Ported:** tests/app/playback_output_test.cpp `lateStrokePositionStillGetsTheMinimumMove`.
 46. `player/stroke_test.go` :: `TestDriveStrokeOnlyForLinearDevices`. A device without a linear channel (the Mock) gets no positions, and a script without stroke actions sends none. **Ported:** tests/app/playback_output_test.cpp `strokeOnlyForLinearDevices`.
 
-#### app: `PlayerController` (3)
+#### app: `PlayerController` (3, ported)
 
 *Target: `tests/app/player_controller_test.cpp`.*
 
@@ -882,7 +882,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 48. `cmd/gui-wails/frontend/test/pb_chart_tooltip_test.py` :: `main`. Hovering the heatmap/curve gives a tooltip with time and value; `FormatTooltipTime` itself is tested, the controller wrapper is not. [`curve_geometry_test.cpp` tests `FormatTooltipTime`]
 49. `cmd/gui-wails/frontend/test/pb_clip7776_test.py` :: `main`. Load the real tf/tj funscript fixture without a video and play it: no error, curve and lanes present. (Copy the fixture from the 0.7 repo or generate an equivalent.)
 
-#### app: `DeviceController` (2)
+#### app: `DeviceController` (2, ported)
 
 *Target: `tests/app/device_controller_test.cpp`.*
 
@@ -898,7 +898,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 54. `cmd/gui-wails/frontend/test/pb_tools_toggle_test.py` :: `main`. The Library and Inspector columns collapse to 44 px and expand again; the video area grows. **Ported:** tests/app/shell_qml_test.cpp `libraryAndInspectorCollapseAndTheVideoGrows`.
 55. `cmd/gui-wails/frontend/test/tools_nav_test.py` :: `main`. The 0.7 main tabs (roving arrow keys, Home/End) are replaced by the mode deck: keys 1-5, M, Esc, arrows move focus, Tab stays inside, focus returns on close, the current card is marked. **Ported:** tests/app/shell_qml_test.cpp `modeDeckPillCardsAndCurrentMark`, `modeDeckOpensWithMAndPicksWithNumbers`, `onlyTheChosenModesPageShows`. Arrow keys, Tab and focus return are not in the deck (no keyboard focus handling), so they are left out.
 
-#### repo / CI (1)
+#### repo / CI (1, ported)
 
 *Target: a ctest or CI step.*
 
