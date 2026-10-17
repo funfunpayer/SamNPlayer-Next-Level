@@ -82,3 +82,9 @@ target_link_libraries(samn_app PUBLIC samn_core Qt6::Gui Qt6::Quick Qt6::Qml Qt6
 
 qt_add_executable(samnplayer WIN32 src/main.cpp)
 target_link_libraries(samnplayer PRIVATE samn_app samn_appplugin)
+option(SAMN_RELEASE "Release build: the version shows without -dev" OFF)
+if(SAMN_RELEASE)
+  target_compile_definitions(samnplayer PRIVATE SAMN_VERSION="${PROJECT_VERSION}")
+else()
+  target_compile_definitions(samnplayer PRIVATE SAMN_VERSION="${PROJECT_VERSION}-dev")
+endif()

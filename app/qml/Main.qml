@@ -45,7 +45,10 @@ ApplicationWindow {
         width: parent.width
         modeName: win.modeNames[win.mode]
         modeIcon: deck.modes[win.mode].icon
+        device: deviceCtl
         onModeDeckRequested: deck.open = true
+        onOpenRequested: { win.mode = 0; player.openFile() }
+        onDeviceRequested: { win.mode = 0; player.showDevices() }
     }
 
     StackLayout {
@@ -60,6 +63,33 @@ ApplicationWindow {
         TrainingPage { id: training; deckOpen: deck.open; device: deviceCtl; autostart: trainingStart }
         NotYetPage { mode: qsTr("Scene Map"); phase: "P4" }
     }
+
+    // Drops anywhere in the window open in the Player (0.7 files:dropped,
+    // drop:script); the overlay shows while something hovers.
+    DropArea {
+        id: drop
+        anchors.fill: parent
+        onDropped: (d) => {
+            if (!d.hasUrls) return
+            win.mode = 0
+            player.controller.openPaths(d.urls.map(u => u.toString()))
+        }
+    }
+    Rectangle {
+        objectName: "dropOverlay"
+        anchors.fill: parent
+        visible: drop.containsDrag
+        color: Qt.rgba(0, 20 / 255, 45 / 255, 0.72)
+        border.color: Theme.cyan; border.width: 2
+        Text {
+            textFormat: Text.PlainText
+            anchors.centerIn: parent
+            text: qsTr("Drop a video or script here")
+            color: "white"; font.family: Theme.font; font.pixelSize: 22
+        }
+    }
+    // Ctrl+O from every mode opens in the Player (0.7 top-bar Open).
+    Shortcut { sequence: StandardKey.Open; enabled: !deck.open; onActivated: { win.mode = 0; player.openFile() } }
 
     ModeDeck {
         id: deck
