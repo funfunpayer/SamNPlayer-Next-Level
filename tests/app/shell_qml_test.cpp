@@ -352,6 +352,68 @@ private slots:
     }
 
     // --- item 55: tools_nav_test, the parts the mode deck has ---
+    // 0.7 tools_nav_test.py (roving tabs) for the mode deck: arrows and
+    // Home/End move the focus ring, Tab stays inside, Enter or Space picks,
+    // and focus returns where it was. While the deck is open the Player's
+    // keys (Space, arrows) do not act behind it.
+    void modeDeckKeyboard() {
+        {
+            Shell s;
+            loadShell(s);
+            QVERIFY(s.window);
+            QQuickItem* deck = s.one("ModeDeck");
+            QVERIFY(deck);
+            auto ringAt = [&]() {
+                int at = -1, n = 0;
+                for (QQuickItem* i : descendants(deck))
+                    if (i->objectName() == QLatin1String("focusRing")) {
+                        if (i->isVisible()) at = n;
+                        ++n;
+                    }
+                return at;
+            };
+            QQuickItem* before = s.window->activeFocusItem();
+            QTest::keyClick(s.window, Qt::Key_M);
+            QTRY_VERIFY_WITH_TIMEOUT(s.deckOpen(), kWait);
+            QTRY_VERIFY_WITH_TIMEOUT(deck->hasActiveFocus(), kWait);
+            QCOMPARE(deck->property("focusIndex").toInt(), 0);  // starts on the current mode
+            QTRY_COMPARE_WITH_TIMEOUT(ringAt(), 0, kWait);
+            QTest::keyClick(s.window, Qt::Key_Right);
+            QTest::keyClick(s.window, Qt::Key_Right);
+            QCOMPARE(deck->property("focusIndex").toInt(), 2);
+            QCOMPARE(ringAt(), 2);
+            QTest::keyClick(s.window, Qt::Key_Left);
+            QCOMPARE(deck->property("focusIndex").toInt(), 1);
+            QTest::keyClick(s.window, Qt::Key_End);
+            QCOMPARE(deck->property("focusIndex").toInt(), 3);
+            QTest::keyClick(s.window, Qt::Key_Right);  // wraps
+            QCOMPARE(deck->property("focusIndex").toInt(), 0);
+            QTest::keyClick(s.window, Qt::Key_Home);
+            QTest::keyClick(s.window, Qt::Key_Tab);  // Tab stays inside the deck
+            QCOMPARE(deck->property("focusIndex").toInt(), 1);
+            QVERIFY(deck->hasActiveFocus());
+            QTest::keyClick(s.window, Qt::Key_Backtab);
+            QCOMPARE(deck->property("focusIndex").toInt(), 0);
+            // Space picks while the deck is open (it does not toggle play behind it).
+            QTest::keyClick(s.window, Qt::Key_Down);
+            QTest::keyClick(s.window, Qt::Key_Down);
+            QTest::keyClick(s.window, Qt::Key_Space);
+            QTRY_COMPARE_WITH_TIMEOUT(s.mode(), 2, kWait);
+            QTRY_VERIFY_WITH_TIMEOUT(!s.deckOpen(), kWait);
+            QCOMPARE(s.window->activeFocusItem(), before);  // focus came back
+            // Enter picks too, starting on the current mode (2).
+            QTest::keyClick(s.window, Qt::Key_M);
+            QTRY_VERIFY_WITH_TIMEOUT(s.deckOpen(), kWait);
+            QCOMPARE(deck->property("focusIndex").toInt(), 2);
+            QTest::keyClick(s.window, Qt::Key_Left);
+            QTest::keyClick(s.window, Qt::Key_Left);
+            QTest::keyClick(s.window, Qt::Key_Return);
+            QTRY_COMPARE_WITH_TIMEOUT(s.mode(), 0, kWait);
+            QTRY_VERIFY_WITH_TIMEOUT(!s.deckOpen(), kWait);
+        }
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
+
     void modeDeckPillCardsAndCurrentMark() {
         {
             Shell s;

@@ -50,6 +50,48 @@ private slots:
         qputenv("SAMN_CONFIG_DIR", config_.path().toUtf8());
     }
 
+    // 0.7 TR-02 / GAP-16: Esc interrupts the running cycle from anywhere on
+    // the page (a window shortcut, so no field needs the focus).
+    void escapeInterruptsTheRunningCycle() {
+        QQmlEngine engine;
+        engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
+        engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+        QQmlComponent comp(&engine);
+        comp.setData(R"(
+            import QtQuick
+            import SamN
+            Item {
+                width: 1440; height: 860
+                property alias page: tp
+                DeviceController { id: dev }
+                TrainingPage { id: tp; anchors.fill: parent; device: dev }
+            })",
+                     QUrl("qrc:/test/Wrapper.qml"));
+        QVERIFY2(comp.status() == QQmlComponent::Ready, qPrintable(comp.errorString()));
+        QQuickWindow window;  // declared first: it must outlive the root item
+        window.resize(1440, 860);
+        std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
+        QVERIFY(root);
+        root->setParentItem(window.contentItem());
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto* ctl = root->property("page").value<QQuickItem*>()->property("controller").value<TrainingController*>();
+        QVERIFY(ctl);
+        ctl->setCycles(2);
+        ctl->setRampUpMs(100);
+        ctl->setHoldMs(5000);
+        ctl->setRestMs(100);
+        QTest::keyClick(&window, Qt::Key_Escape);  // idle: nothing to interrupt
+        QVERIFY(ctl->logLines().filter("stopped by you").isEmpty());
+        QVERIFY(ctl->start());
+        QTRY_VERIFY(ctl->vibration() > 0.5);
+        QTest::keyClick(&window, Qt::Key_Escape);
+        QTRY_COMPARE(ctl->logLines().filter("stopped by you").size(), 1);
+        QCOMPARE(ctl->state(), QString("running"));  // the cycle ends, the session goes on
+        ctl->stop();
+        QTRY_COMPARE(ctl->state(), QString("idle"));
+    }
+
     void pageRunsASessionAndTheEditorSavesAProgram() {
         g_messages.clear();
         g_previous = qInstallMessageHandler(capture);
