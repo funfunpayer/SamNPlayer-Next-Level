@@ -1,15 +1,19 @@
 #pragma once
 
+#include <QElapsedTimer>
 #include <QObject>
 #include <QPointer>
 #include <QString>
 #include <QTimer>
 #include <QtQml/qqmlregistration.h>
 #include <cstdint>
+#include <functional>
 #include <map>
+#include <optional>
 #include <vector>
 
 #include "samn/funscript.h"
+#include "samn/output_levels.h"
 #include "samn/settings.h"
 #include "samn/stroke_filter.h"
 
@@ -35,6 +39,20 @@ class DeviceController;
 // "Move home on pause" is on, send the stroker to the bottom of its range in
 // 1.2 s. The emergency stop drops queued levels, stops at once and keeps the
 // output silent until playback starts again.
+// The levels go through Reduce peaks (when on), the channel level, the
+// Extended-O scale and the soft start (0.7 setOutput):
+//  - soft start: after the first position of a start, a pause or a quiet
+//    period the levels ramp from 0 to the script in 10 steps over
+//    softStartMs (0 = off). A pause, a stop or the watchdog inside the ramp
+//    still stops the device at once, with the home move (0.7 PS-04);
+//  - Extended-O: triggerExtendedO() lowers vibration and suction to
+//    extendedOMin of the curve (the curve keeps its rhythm) over the
+//    restore time, holds, and ramps back. A trigger while a cycle runs is
+//    ignored. A minimum of 0 is silence (PS-11). The cycle runs on the wall
+//    clock, also through a pause (0.7); the emergency stop and a new script
+//    end it.
+// A 20 ms timer re-sends the levels while a ramp runs, so the steps do not
+// wait for the next position report.
 // While playing, DeviceController::sessionActive is true.
 class PlaybackOutput : public QObject {
     Q_OBJECT
@@ -58,6 +76,20 @@ class PlaybackOutput : public QObject {
     Q_PROPERTY(int suctionLevel READ suctionLevel WRITE setSuctionLevel NOTIFY outputChanged)
     // Play speed of the video (move durations are divided by it).
     Q_PROPERTY(double speed READ speed WRITE setSpeed NOTIFY outputChanged)
+    // Soft start of the levels in ms (0.7 playback.soft_start_ms): 0 = off,
+    // else up to 3000; default 500.
+    Q_PROPERTY(int softStartMs READ softStartMs WRITE setSoftStartMs NOTIFY outputChanged)
+    // Reduce peaks (0.7 Effects): above 60 % softened, full comes out at 76 %.
+    Q_PROPERTY(bool reducePeaks READ reducePeaks WRITE setReducePeaks NOTIFY outputChanged)
+    // Extended-O (0.7 playback.extended_o_*): on / off, the minimum 0-1
+    // (0 = off, a real value), the hold 1-60 s and the restore ramp 0-3000 ms.
+    Q_PROPERTY(bool extendedOEnabled READ extendedOEnabled WRITE setExtendedOEnabled NOTIFY outputChanged)
+    Q_PROPERTY(double extendedOMin READ extendedOMin WRITE setExtendedOMin NOTIFY outputChanged)
+    Q_PROPERTY(double extendedOHoldS READ extendedOHoldS WRITE setExtendedOHoldS NOTIFY outputChanged)
+    Q_PROPERTY(int extendedORestoreMs READ extendedORestoreMs WRITE setExtendedORestoreMs NOTIFY outputChanged)
+    // A cycle is running; the trigger is available (playing and enabled).
+    Q_PROPERTY(bool extendedOActive READ extendedOActive NOTIFY extendedOChanged)
+    Q_PROPERTY(bool canTriggerExtendedO READ canTriggerExtendedO NOTIFY extendedOChanged)
 public:
     static constexpr int kMinMoveMs = 20;
     static constexpr int kSoftSeekFullStrokeMs = 500;
@@ -67,6 +99,12 @@ public:
     static constexpr int kStaleMs = 1500;
     static constexpr int kMinStrokeSpan = 10;  // percent
     static constexpr int kIdleFillMs = 4000;
+    static constexpr int kSoftStartDefaultMs = 500;
+    static constexpr int kSoftStartMaxMs = 3000;
+    static constexpr int kRampTickMs = 20;
+    static constexpr double kExtendedOHoldMinS = 1;
+    static constexpr double kExtendedOHoldMaxS = 60;
+    static constexpr int kExtendedORestoreMaxMs = 3000;
 
     // settings: where the choices are kept (the 0.7 keys playback.stroke_*);
     // may be null. Not owned.
@@ -86,6 +124,14 @@ public:
     Q_INVOKABLE void emergencyStop();
     // C++ knob (tests): how long without a position counts as a pause.
     void setStaleMs(int ms) { stale_.setInterval(ms); }
+    // C++ knob (tests): the clock (ms) the ramps run on; default monotonic.
+    // Without the ramp timer, tests step the time and call update().
+    void setClock(std::function<qint64()> clock, bool rampTimer = true);
+    // Start an Extended-O cycle with the current settings. False when it is
+    // not available (not playing, switched off) or a cycle already runs.
+    Q_INVOKABLE bool triggerExtendedO();
+    // The Extended-O scale now (1 without a cycle).
+    double extendedOScale();
 
     bool playing() const { return playing_; }
     bool strokeOn() const { return strokeOn_; }
@@ -112,12 +158,27 @@ public:
     void setSuctionLevel(int v);
     double speed() const { return speed_; }
     void setSpeed(double s);
+    int softStartMs() const { return softStartMs_; }
+    void setSoftStartMs(int ms);
+    bool reducePeaks() const { return reducePeaks_; }
+    void setReducePeaks(bool on);
+    bool extendedOEnabled() const { return eoEnabled_; }
+    void setExtendedOEnabled(bool on);
+    double extendedOMin() const { return eo_.minLevel; }
+    void setExtendedOMin(double v);
+    double extendedOHoldS() const { return double(eo_.holdMs) / 1000.0; }
+    void setExtendedOHoldS(double s);
+    int extendedORestoreMs() const { return int(eo_.restoreMs); }
+    void setExtendedORestoreMs(int ms);
+    bool extendedOActive() const { return cycle_.has_value(); }
+    bool canTriggerExtendedO() const { return playing_ && !halted_ && eoEnabled_; }
 
 signals:
     void playingChanged();
     void outputChanged();
     // The emergency stop was pressed: the Player pauses the video.
     void emergencyStopped();
+    void extendedOChanged();
 
 private:
     bool deviceReady() const;
@@ -130,6 +191,11 @@ private:
     void save(const char* key, const nlohmann::json& value);
     void load();
     int moveMs(qint64 dueAt, qint64 now) const;
+    qint64 now() const { return clock_ ? clock_() : mono_.elapsed(); }
+    void rampTick();
+    void updateRampTimer();
+    void endExtendedO();
+    bool sending() const { return playing_ && !halted_ && !quiet_ && deviceReady(); }
 
     samn::Settings* settings_ = nullptr;
     QPointer<DeviceController> device_;
@@ -155,6 +221,25 @@ private:
     qint64 lastAt_ = -1;
     double lastVib_ = -1, lastSuc_ = -1;
     QTimer stale_;
+
+    // Soft start, Reduce peaks, Extended-O.
+    int softStartMs_ = kSoftStartDefaultMs;
+    bool reducePeaks_ = false;
+    bool eoEnabled_ = true;
+    samn::ExtendedOOptions eo_;  // the settings (0.7 defaults)
+    // When the running soft start began (clock ms); none = not ramping.
+    std::optional<qint64> softFrom_;
+    // The running Extended-O cycle; none = full height. "No cycle" is its
+    // own state, so a minimum of 0 can never read as "unset" (PS-11).
+    struct Cycle {
+        qint64 from = 0;
+        samn::ExtendedOOptions opts;
+    };
+    std::optional<Cycle> cycle_;
+    std::function<qint64()> clock_;
+    QElapsedTimer mono_;
+    bool rampTimerOn_ = true;
+    QTimer ramp_;
 };
 
 }  // namespace samn::ui

@@ -23,6 +23,12 @@ constexpr const char* kKeyVibOn = "playback.channel_vibration_on";
 constexpr const char* kKeyVibLevel = "playback.channel_vibration_level";
 constexpr const char* kKeySucOn = "playback.channel_suction_on";
 constexpr const char* kKeySucLevel = "playback.channel_suction_level";
+constexpr const char* kKeySoftStart = "playback.soft_start_ms";
+constexpr const char* kKeyReducePeaks = "playback.channel_reduce_peaks";
+constexpr const char* kKeyEoEnabled = "playback.extended_o_enabled";
+constexpr const char* kKeyEoMin = "playback.extended_o_min";
+constexpr const char* kKeyEoHold = "playback.extended_o_hold_seconds";
+constexpr const char* kKeyEoRestore = "playback.extended_o_restore_ms";
 
 std::vector<samn::Action> sorted(std::vector<samn::Action> a) {
     std::stable_sort(a.begin(), a.end(), [](const samn::Action& x, const samn::Action& y) { return x.at < y.at; });
@@ -31,6 +37,12 @@ std::vector<samn::Action> sorted(std::vector<samn::Action> a) {
 
 // 0: off, else 50-1000 (0.7 clampMaxSpeed).
 int clampSpeedLimit(int v) { return v <= 0 ? 0 : std::clamp(v, 50, 1000); }
+
+int clampSoftStart(int v) { return std::clamp(v, 0, PlaybackOutput::kSoftStartMaxMs); }
+int64_t holdMs(double s) {
+    if (!std::isfinite(s)) s = 10;  // the 0.7 default
+    return std::llround(std::clamp(s, PlaybackOutput::kExtendedOHoldMinS, PlaybackOutput::kExtendedOHoldMaxS) * 1000);
+}
 
 }  // namespace
 
@@ -41,6 +53,9 @@ PlaybackOutput::PlaybackOutput(samn::Settings* settings, QObject* parent) : QObj
         // No position for a while: the video stands (paused, buffering).
         if (playing_ && !halted_) goQuiet(true);
     });
+    mono_.start();
+    ramp_.setInterval(kRampTickMs);
+    connect(&ramp_, &QTimer::timeout, this, &PlaybackOutput::rampTick);
     load();
 }
 
@@ -75,6 +90,19 @@ void PlaybackOutput::load() {
         sucOn_ = flag(kKeySucOn, true);
         vibLevel_ = std::clamp(int(std::lround(num(kKeyVibLevel, 100))), 0, 100);
         sucLevel_ = std::clamp(int(std::lround(num(kKeySucLevel, 100))), 0, 100);
+        // A missing or broken value is "unset" and takes the default; a
+        // stored 0 stays 0 (PS-11).
+        const auto finite = [&](const char* k, double d) {
+            const double v = num(k, d);
+            return std::isfinite(v) ? v : d;
+        };
+        softStartMs_ = clampSoftStart(int(std::lround(finite(kKeySoftStart, kSoftStartDefaultMs))));
+        reducePeaks_ = flag(kKeyReducePeaks, false);
+        eoEnabled_ = flag(kKeyEoEnabled, true);
+        const samn::ExtendedOOptions d;
+        eo_.minLevel = std::clamp(finite(kKeyEoMin, d.minLevel), 0.0, 1.0);
+        eo_.holdMs = holdMs(finite(kKeyEoHold, double(d.holdMs) / 1000.0));
+        eo_.restoreMs = std::clamp<int64_t>(std::llround(finite(kKeyEoRestore, double(d.restoreMs))), 0, kExtendedORestoreMaxMs);
     } catch (const std::exception&) {
         // A broken settings value keeps the defaults.
     }
@@ -99,6 +127,7 @@ void PlaybackOutput::setDevice(DeviceController* device) {
 void PlaybackOutput::setScript(std::vector<samn::Action> stroke, std::vector<samn::Action> vibration,
                                std::vector<samn::Action> suction,
                                std::map<std::string, std::vector<samn::Action>> axes) {
+    endExtendedO();  // a new script is a new session
     stroke_ = sorted(std::move(stroke));
     vibration_ = std::move(vibration);
     suction_ = std::move(suction);
@@ -139,6 +168,7 @@ void PlaybackOutput::setPlaying(bool playing) {
         if (device_) device_->setSessionActive(false);
     }
     emit playingChanged();
+    emit extendedOChanged();
 }
 
 void PlaybackOutput::update(qint64 t) {
@@ -155,16 +185,32 @@ void PlaybackOutput::update(qint64 t) {
         for (auto& [name, a] : axes_) a.next = -1;
     }
     lastAt_ = t;
+    // The first position after a start, a pause or a quiet period: the
+    // levels ramp up (soft start).
+    if (quiet_) {
+        if (softStartMs_ > 0)
+            softFrom_ = now();
+        else
+            softFrom_.reset();
+    }
     quiet_ = false;
     sendLevels(t);
     sendStroke(t);
     sendAxes(t);
+    updateRampTimer();
 }
 
 void PlaybackOutput::sendLevels(qint64 t) {
+    const qint64 n = now();
+    double soft = 1;
+    if (softFrom_) {
+        soft = samn::SoftStartFactor(n - *softFrom_, softStartMs_);
+        if (!samn::SoftStartRunning(n - *softFrom_, softStartMs_)) softFrom_.reset();
+    }
+    const double scale = extendedOScale() * soft;
     const auto level = [&](const std::vector<samn::Action>& lane, bool on, int pct) {
         if (!on) return 0.0;
-        return std::clamp(samn::PositionAt(lane, t).value_or(0) / 100.0, 0.0, 1.0) * pct / 100.0;
+        return samn::OutputLevel(samn::PositionAt(lane, t).value_or(0) / 100.0, reducePeaks_, scale, pct / 100.0);
     };
     if (device_->capVibration() && !vibration_.empty()) {
         const double v = level(vibration_, vibOn_, vibLevel_);
@@ -233,6 +279,10 @@ void PlaybackOutput::goQuiet(bool home) {
     const bool wasQuiet = quiet_;
     quiet_ = true;
     resetTargets();
+    // A running soft start ends here: nothing of the ramp is sent after the
+    // stop, and the ramp state never turns the stop into a no-op (PS-04).
+    softFrom_.reset();
+    updateRampTimer();
     if (wasQuiet || !deviceReady()) return;
     // A stroker halts where it is; "home" then moves it slowly to the bottom.
     device_->stop();
@@ -247,11 +297,15 @@ void PlaybackOutput::emergencyStop() {
     stale_.stop();
     quiet_ = true;
     resetTargets();
+    softFrom_.reset();
+    endExtendedO();
+    ramp_.stop();
     if (device_) {
         device_->emergencyStop();
         device_->setSessionActive(false);
     }
     emit emergencyStopped();
+    emit extendedOChanged();
 }
 
 void PlaybackOutput::setStrokeOn(bool on) {
@@ -349,6 +403,103 @@ void PlaybackOutput::setSuctionLevel(int v) {
 void PlaybackOutput::setSpeed(double s) {
     if (!(s > 0) || s == speed_) return;
     speed_ = s;
+    emit outputChanged();
+}
+
+void PlaybackOutput::setClock(std::function<qint64()> clock, bool rampTimer) {
+    clock_ = std::move(clock);
+    rampTimerOn_ = rampTimer;
+    updateRampTimer();
+}
+
+double PlaybackOutput::extendedOScale() {
+    if (!cycle_) return 1;
+    const qint64 t = now() - cycle_->from;
+    if (t >= samn::ExtendedOTotalMs(cycle_->opts)) {
+        endExtendedO();
+        return 1;
+    }
+    return samn::ExtendedOScale(cycle_->opts, t);
+}
+
+void PlaybackOutput::endExtendedO() {
+    if (!cycle_) return;
+    cycle_.reset();
+    emit extendedOChanged();
+}
+
+bool PlaybackOutput::triggerExtendedO() {
+    if (!canTriggerExtendedO()) return false;
+    extendedOScale();  // ends a cycle whose time is up
+    if (cycle_) return false;  // one at a time: the trigger is ignored (0.7)
+    cycle_ = Cycle{now(), samn::Clamped(eo_)};
+    emit extendedOChanged();
+    if (sending() && lastAt_ >= 0) sendLevels(lastAt_);  // the first step at once
+    updateRampTimer();
+    return true;
+}
+
+void PlaybackOutput::rampTick() {
+    extendedOScale();  // ends a finished cycle, also while paused
+    if (sending() && lastAt_ >= 0) sendLevels(lastAt_);
+    updateRampTimer();
+}
+
+void PlaybackOutput::updateRampTimer() {
+    const bool need = rampTimerOn_ && ((softFrom_ && sending()) || cycle_);
+    if (need && !ramp_.isActive())
+        ramp_.start();
+    else if (!need && ramp_.isActive())
+        ramp_.stop();
+}
+
+void PlaybackOutput::setSoftStartMs(int ms) {
+    ms = clampSoftStart(ms);
+    if (ms == softStartMs_) return;
+    softStartMs_ = ms;
+    save(kKeySoftStart, ms);
+    emit outputChanged();
+}
+
+void PlaybackOutput::setReducePeaks(bool on) {
+    if (on == reducePeaks_) return;
+    reducePeaks_ = on;
+    save(kKeyReducePeaks, on);
+    if (sending() && lastAt_ >= 0) sendLevels(lastAt_);
+    emit outputChanged();
+}
+
+void PlaybackOutput::setExtendedOEnabled(bool on) {
+    if (on == eoEnabled_) return;
+    eoEnabled_ = on;
+    save(kKeyEoEnabled, on);
+    emit outputChanged();
+    emit extendedOChanged();
+}
+
+void PlaybackOutput::setExtendedOMin(double v) {
+    if (!std::isfinite(v)) return;
+    v = std::clamp(v, 0.0, 1.0);
+    if (v == eo_.minLevel) return;
+    eo_.minLevel = v;
+    save(kKeyEoMin, v);
+    emit outputChanged();
+}
+
+void PlaybackOutput::setExtendedOHoldS(double s) {
+    if (!std::isfinite(s)) return;
+    const int64_t ms = holdMs(s);
+    if (ms == eo_.holdMs) return;
+    eo_.holdMs = ms;
+    save(kKeyEoHold, double(ms) / 1000.0);
+    emit outputChanged();
+}
+
+void PlaybackOutput::setExtendedORestoreMs(int ms) {
+    ms = std::clamp(ms, 0, kExtendedORestoreMaxMs);
+    if (ms == eo_.restoreMs) return;
+    eo_.restoreMs = ms;
+    save(kKeyEoRestore, ms);
     emit outputChanged();
 }
 

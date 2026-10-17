@@ -104,6 +104,53 @@ private slots:
         qInstallMessageHandler(g_previous);
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }
+
+    // Playback tab: the Extended-O button follows the playback and starts a
+    // cycle; while it runs the button is disabled (a press would be ignored).
+    void extendedOButtonTriggersWhilePlaying() {
+        g_messages.clear();
+        g_previous = qInstallMessageHandler(capture);
+        {
+            QQmlEngine engine;
+            engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
+            engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+            QQmlComponent comp(&engine);
+            comp.setData(R"(
+                import QtQuick
+                import SamN
+                Item {
+                    width: 360; height: 1100
+                    property alias player: pc
+                    DeviceController { id: dev }
+                    PlayerController { id: pc; device: dev }
+                    InspectorPanel { anchors.fill: parent; ctrl: pc; device: dev; tab: 2 }
+                })",
+                         QUrl("qrc:/test/Wrapper2.qml"));
+            QVERIFY2(comp.status() == QQmlComponent::Ready, qPrintable(comp.errorString()));
+            QQuickWindow window;
+            window.resize(360, 1100);
+            std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
+            QVERIFY(root);
+            root->setParentItem(window.contentItem());
+            window.show();
+            QVERIFY(QTest::qWaitForWindowExposed(&window));
+            auto* player = root->property("player").value<PlayerController*>();
+            QVERIFY(player);
+            auto* button = root->findChild<QQuickItem*>("eoTrigger");
+            QVERIFY(button);
+            QVERIFY(!button->isEnabled());  // not playing
+            player->setPlaying(true);
+            QTRY_VERIFY(button->isEnabled());
+            QVERIFY(QMetaObject::invokeMethod(button, "clicked"));
+            QVERIFY(player->output()->extendedOActive());
+            QTRY_VERIFY(!button->isEnabled());
+            const QString shot = qEnvironmentVariable("SAMN_TEST_SHOT_PLAYBACK");
+            if (!shot.isEmpty()) QVERIFY(window.grabWindow().save(shot));
+            player->setPlaying(false);
+        }
+        qInstallMessageHandler(g_previous);
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
 };
 
 QTEST_MAIN(InspectorQmlTest)

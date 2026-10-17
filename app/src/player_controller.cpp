@@ -756,6 +756,24 @@ void PlayerController::setVideoPositionMs(qint64 videoMs) {
         if (c) c->setPlayheadMs(playheadMs_);
     if (heatmap_) heatmap_->setPlayheadMs(playheadMs_);
     if (ph >= 0) output_.update(ph);
+    checkAutoExtendedO(ph);
+}
+
+void PlayerController::checkAutoExtendedO(qint64 ph) {
+    if (ph < 0 || !marker_.Valid()) return;
+    if (ph < marker_.start_ms) {
+        autoEoFired_ = false;  // before the range: armed again
+        return;
+    }
+    if (!autoEo_ || autoEoFired_ || !output_.playing() || ph > marker_.end_ms) return;
+    autoEoFired_ = true;  // once per pass, also when Extended-O is off (0.7)
+    output_.triggerExtendedO();
+}
+
+void PlayerController::setAutoExtendedO(bool on) {
+    if (on == autoEo_) return;
+    autoEo_ = on;
+    emit loopChanged();
 }
 
 qint64 PlayerController::loopJumpFor(qint64 videoMs) const {
@@ -905,6 +923,7 @@ void PlayerController::reportMediaError(int error, const QString& detail) {
 
 void PlayerController::setPlaying(bool playing) {
     output_.setPlaying(playing);
+    if (playing) autoEoFired_ = false;
     if (playing && mediaError_) setError({});
     if (playing) {
         if (!playClock_.isValid()) playClock_.start();

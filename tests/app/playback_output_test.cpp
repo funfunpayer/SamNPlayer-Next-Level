@@ -8,6 +8,7 @@
 #include <QTemporaryDir>
 #include <QtTest>
 #include <chrono>
+#include <cmath>
 
 #include "device_controller.h"
 #include "fake_servers.h"
@@ -62,6 +63,26 @@ QList<QPair<int, int>> zigzag(int n, int stepMs) {
     for (int i = 0; i < n; ++i) pts.append({i * stepMs, i % 2 ? 100 : 0});
     return pts;
 }
+
+// The Mock device's log lines, collected as they come.
+struct Log {
+    QSignalSpy spy;
+    explicit Log(DeviceController& dev) : spy(&dev, &DeviceController::logMessage) {}
+    QStringList lines(const QString& channel = {}) const {
+        QStringList out;
+        for (const auto& a : spy) {
+            const QString l = a.at(0).toString();
+            if (l.startsWith("[mock]") && (channel.isEmpty() || l.startsWith("[mock] " + channel + "="))) out << l;
+        }
+        return out;
+    }
+    bool has(const QString& line) const { return lines().contains(line); }
+    QString last(const QString& channel) const {
+        const QStringList l = lines(channel);
+        return l.isEmpty() ? QString() : l.last();
+    }
+    int count(const QString& channel) const { return lines(channel).size(); }
+};
 
 }  // namespace
 
@@ -607,6 +628,410 @@ private slots:
         QVERIFY(!p.showStrokeLane());
         QVERIFY(!p.showVibrationLane());
         QVERIFY(!p.showSuctionLane());
+    }
+
+    // --- soft start (PS-04, 0.7 sync.go softStartWithPositions) ---
+    void softStartRampsTheLevels() {
+        DeviceController dev;
+        PlayerController p;
+        p.setDevice(&dev);
+        connectMock(dev);
+        Log log(dev);
+        qint64 clk = 0;
+        auto* o = p.output();
+        o->setClock([&] { return clk; }, false);
+        QCOMPARE(o->softStartMs(), 500);  // the 0.7 default
+        o->setScript({}, {{0, 80}, {60000, 80}}, {{0, 50}, {60000, 50}});
+        o->setPlaying(true);
+        // The first frame: step 1 of 10 at once, for both channels.
+        o->update(1000);
+        QTRY_VERIFY_WITH_TIMEOUT(log.has("[mock] vibration=0.08") && log.has("[mock] suction=0.05"), kWait);
+        QVERIFY(!log.has("[mock] vibration=0.80"));
+        clk = 250;  // step 6
+        o->update(1250);
+        QTRY_VERIFY_WITH_TIMEOUT(log.last("vibration") == "[mock] vibration=0.48", kWait);
+        clk = 500;  // done: the script
+        o->update(1500);
+        QTRY_VERIFY_WITH_TIMEOUT(log.last("vibration") == "[mock] vibration=0.80" && log.last("suction") == "[mock] suction=0.50", kWait);
+        // A seek while playing does not ramp again.
+        clk = 600;
+        o->update(30000);
+        QTest::qWait(150);
+        QCOMPARE(log.last("vibration"), QString("[mock] vibration=0.80"));
+        // After a pause it ramps again.
+        o->setPlaying(false);
+        QTRY_COMPARE_WITH_TIMEOUT(log.last({}), QString("[mock] stop"), kWait);
+        o->setPlaying(true);
+        clk = 5000;
+        o->update(30100);
+        QTRY_COMPARE_WITH_TIMEOUT(log.last("vibration"), QString("[mock] vibration=0.08"), kWait);
+        o->setPlaying(false);
+        // Soft start 0 is off: the full level at once.
+        o->setSoftStartMs(0);
+        QCOMPARE(o->softStartMs(), 0);
+        o->setPlaying(true);
+        o->update(30200);
+        QTRY_COMPARE_WITH_TIMEOUT(log.last("vibration"), QString("[mock] vibration=0.80"), kWait);
+        o->setPlaying(false);
+    }
+
+    void softStartRunsBetweenPositions() {
+        DeviceController dev;
+        PlayerController p;
+        p.setDevice(&dev);
+        connectMock(dev);
+        Log log(dev);
+        auto* o = p.output();
+        o->setSoftStartMs(200);
+        o->setScript({}, {{0, 80}, {60000, 80}}, {});
+        o->setPlaying(true);
+        o->update(1000);  // one position only: the ramp timer finishes the ramp
+        QTRY_COMPARE_WITH_TIMEOUT(log.last("vibration"), QString("[mock] vibration=0.80"), kWait);
+        QVERIFY(log.count("vibration") >= 3);  // in steps, not one jump
+        QCOMPARE(log.lines("vibration").value(0), QString("[mock] vibration=0.08"));
+        o->setPlaying(false);
+    }
+
+    // 0.7 TestSyncIdleDuringSoftStartGoesQuiet: a pause inside the ramp stops
+    // at once, nothing of the ramp follows, and the next start ramps again.
+    void pauseInsideTheSoftStartStopsAtOnce() {
+        DeviceController dev;
+        PlayerController p;
+        p.setDevice(&dev);
+        connectMock(dev);
+        Log log(dev);
+        auto* o = p.output();
+        o->setSoftStartMs(2000);
+        o->setScript({}, {{0, 100}, {60000, 100}}, {{0, 100}, {60000, 100}});
+        o->setPlaying(true);
+        o->update(500);
+        // Mid-ramp.
+        QTRY_VERIFY_WITH_TIMEOUT(log.has("[mock] vibration=0.20"), kWait);
+        QVERIFY(!log.has("[mock] vibration=1.00"));
+        o->setPlaying(false);
+        QTRY_COMPARE_WITH_TIMEOUT(log.last({}), QString("[mock] stop"), kWait);
+        const int n = log.lines().size();
+        QTest::qWait(400);  // longer than two ramp steps
+        QCOMPARE(log.lines().size(), n);
+        // Resume: soft start again, not the full level at once.
+        o->setPlaying(true);
+        o->update(800);
+        QTRY_VERIFY_WITH_TIMEOUT(log.lines().size() > n, kWait);
+        QCOMPARE(log.lines().value(n), QString("[mock] vibration=0.10"));
+        QVERIFY(!log.lines().mid(n).contains("[mock] vibration=1.00"));
+        o->setPlaying(false);
+    }
+
+    // The watchdog (no position for a while) inside the ramp stops too.
+    void watchdogInsideTheSoftStartStops() {
+        DeviceController dev;
+        PlayerController p;
+        p.setDevice(&dev);
+        connectMock(dev);
+        Log log(dev);
+        auto* o = p.output();
+        o->setSoftStartMs(3000);
+        o->setStaleMs(200);
+        o->setScript({}, {{0, 100}, {60000, 100}}, {});
+        o->setPlaying(true);
+        o->update(500);
+        QTRY_COMPARE_WITH_TIMEOUT(log.last({}), QString("[mock] stop"), kWait);
+        const int n = log.lines().size();
+        QTest::qWait(400);
+        QCOMPARE(log.lines().size(), n);
+        QVERIFY(!log.has("[mock] vibration=1.00"));
+        o->setPlaying(false);
+    }
+
+    // 0.7 TestSyncStrokeHomeOnPauseDuringSoftStart: Stop and the home move
+    // also run while the soft start ramps.
+    void homeOnPauseDuringSoftStart() {
+        const QString script = writeScript(files_.path(), "soft.funscript", {{0, 0}, {1000, 100}, {2000, 0}});
+        UdpLineSink sink;
+        DeviceController dev;
+        PlayerController p;
+        p.setDevice(&dev);
+        QVERIFY(p.openScript(script));
+        connectStroker(dev, sink);
+        p.output()->setSoftStartMs(3000);
+        p.output()->setStrokeRange(20, 80, true);
+        p.output()->setHomeOnPause(true);
+        p.setPlaying(true);
+        p.setVideoPositionMs(200);
+        QTRY_VERIFY_WITH_TIMEOUT(!Lines(sink).filter("L0").isEmpty(), kWait);
+        p.setPlaying(false);  // the soft start is still running
+        QTRY_VERIFY_WITH_TIMEOUT(Lines(sink).contains(Move("L0", 0.2, 1200)), kWait);
+        const QStringList l = Lines(sink);
+        QCOMPARE(l[l.indexOf(Move("L0", 0.2, 1200)) - 1], QString("DSTOP"));
+    }
+
+    // --- Reduce peaks (0.7 TestSetOutputReducePeaks) ---
+    void reducePeaksSoftensTheOutput() {
+        DeviceController dev;
+        PlayerController p;
+        p.setDevice(&dev);
+        connectMock(dev);
+        Log log(dev);
+        auto* o = p.output();
+        QVERIFY(!o->reducePeaks());  // off by default
+        o->setSoftStartMs(0);
+        o->setReducePeaks(true);
+        o->setVibrationLevel(50);
+        o->setScript({}, {{0, 100}, {60000, 100}}, {{0, 40}, {60000, 40}});
+        o->setPlaying(true);
+        o->update(1000);
+        // The peak first, then the channel level: 1 -> 0.76 -> x 0.5; 0.4 stays below the knee.
+        QTRY_VERIFY_WITH_TIMEOUT(log.last("vibration") == "[mock] vibration=0.38" && log.last("suction") == "[mock] suction=0.40", kWait);
+        o->setReducePeaks(false);  // takes effect while playing
+        QTRY_COMPARE_WITH_TIMEOUT(log.last("vibration"), QString("[mock] vibration=0.50"), kWait);
+        o->setPlaying(false);
+    }
+
+    // --- Extended-O (0.7 player/extendedo.go) ---
+    // 0.7 TestExtendedOScalesAmplitudeKeepsRhythm.
+    void extendedOScalesAmplitudeKeepsRhythm() {
+        DeviceController dev;
+        PlayerController p;
+        p.setDevice(&dev);
+        connectMock(dev);
+        Log log(dev);
+        qint64 clk = 0;
+        auto* o = p.output();
+        o->setClock([&] { return clk; }, false);
+        o->setSoftStartMs(0);
+        o->setExtendedOMin(0.5);
+        o->setExtendedORestoreMs(0);
+        o->setExtendedOHoldS(1);
+        std::vector<samn::Action> vib;
+        for (int i = 0; i < 100; ++i) vib.push_back({i * 40, i % 2 ? 100 : 0});
+        o->setScript({}, vib, {});
+        QVERIFY(!o->triggerExtendedO());  // not playing: nothing to scale
+        o->setPlaying(true);
+        o->update(40);
+        QTRY_COMPARE_WITH_TIMEOUT(log.last("vibration"), QString("[mock] vibration=1.00"), kWait);
+        QCOMPARE(o->extendedOScale(), 1.0);  // no cycle: full height
+        QVERIFY(o->canTriggerExtendedO());
+        QVERIFY(o->triggerExtendedO());
+        QVERIFY(o->extendedOActive());
+        // The peaks come out at half, the troughs stay 0: the rhythm goes on.
+        QTRY_COMPARE_WITH_TIMEOUT(log.last("vibration"), QString("[mock] vibration=0.50"), kWait);
+        clk = 100;
+        o->update(80);
+        QTRY_COMPARE_WITH_TIMEOUT(log.last("vibration"), QString("[mock] vibration=0.00"), kWait);
+        clk = 200;
+        o->update(120);
+        QTRY_COMPARE_WITH_TIMEOUT(log.last("vibration"), QString("[mock] vibration=0.50"), kWait);
+        // After the hold (restore 0: at once) full height again.
+        clk = 1000;
+        o->update(200);
+        QTRY_COMPARE_WITH_TIMEOUT(log.last("vibration"), QString("[mock] vibration=1.00"), kWait);
+        QVERIFY(!o->extendedOActive());
+        o->setPlaying(false);
+    }
+
+    void extendedORampsDownHoldsAndBack() {
+        DeviceController dev;
+        PlayerController p;
+        p.setDevice(&dev);
+        connectMock(dev);
+        Log log(dev);
+        qint64 clk = 0;
+        auto* o = p.output();
+        o->setClock([&] { return clk; }, false);
+        // The 0.7 defaults.
+        QCOMPARE(o->extendedOMin(), 0.1);
+        QCOMPARE(o->extendedOHoldS(), 10.0);
+        QCOMPARE(o->extendedORestoreMs(), 500);
+        QVERIFY(o->extendedOEnabled());
+        o->setSoftStartMs(0);
+        o->setScript({}, {{0, 100}, {60000, 100}}, {{0, 100}, {60000, 100}});
+        o->setPlaying(true);
+        o->update(1000);
+        QTRY_COMPARE_WITH_TIMEOUT(log.last("vibration"), QString("[mock] vibration=1.00"), kWait);
+        QVERIFY(o->triggerExtendedO());
+        QTRY_COMPARE_WITH_TIMEOUT(log.last("vibration"), QString("[mock] vibration=0.91"), kWait);  // step 1 at once
+        const auto at = [&](qint64 c, qint64 t, const char* want) {
+            clk = c;
+            o->update(t);
+            QTRY_COMPARE_WITH_TIMEOUT(log.last("vibration"), QString(want), kWait);
+            QCOMPARE(log.last("suction"), QString(want).replace("vibration", "suction"));
+        };
+        at(250, 1250, "[mock] vibration=0.46");   // step 6 down
+        at(600, 1600, "[mock] vibration=0.10");   // hold
+        at(10400, 11400, "[mock] vibration=0.10");
+        at(10500, 11500, "[mock] vibration=0.19");  // step 1 back up
+        QVERIFY(o->extendedOActive());
+        at(11000, 12000, "[mock] vibration=1.00");
+        QVERIFY(!o->extendedOActive());
+        o->setPlaying(false);
+    }
+
+    // PS-11 / 0.7 TestExtendedOMinLevelZeroSilences: a minimum of 0 is
+    // silence, never "unset" (0.7 once ran the device at full power).
+    void extendedOMinLevelZeroSilences() {
+        DeviceController dev;
+        PlayerController p;
+        p.setDevice(&dev);
+        connectMock(dev);
+        Log log(dev);
+        qint64 clk = 0;
+        auto* o = p.output();
+        o->setClock([&] { return clk; }, false);
+        o->setSoftStartMs(0);
+        o->setExtendedOMin(0);
+        QCOMPARE(o->extendedOMin(), 0.0);
+        o->setExtendedORestoreMs(0);
+        o->setScript({}, {{0, 80}, {60000, 80}}, {{0, 40}, {60000, 40}});
+        o->setPlaying(true);
+        o->update(1000);
+        QTRY_COMPARE_WITH_TIMEOUT(log.last("vibration"), QString("[mock] vibration=0.80"), kWait);
+        QVERIFY(o->triggerExtendedO());
+        QCOMPARE(o->extendedOScale(), 0.0);
+        clk = 500;
+        o->update(1500);
+        QTRY_VERIFY_WITH_TIMEOUT(log.last("vibration") == "[mock] vibration=0.00" && log.last("suction") == "[mock] suction=0.00", kWait);
+        clk = 5000;
+        o->update(5000);
+        QTest::qWait(150);
+        QCOMPARE(log.last("vibration"), QString("[mock] vibration=0.00"));
+        o->setPlaying(false);
+    }
+
+    void secondTriggerIsIgnored() {
+        qint64 clk = 0;
+        PlaybackOutput o;
+        o.setClock([&] { return clk; }, false);
+        o.setExtendedOMin(0.5);
+        o.setExtendedORestoreMs(0);
+        o.setExtendedOHoldS(2);
+        QSignalSpy changed(&o, &PlaybackOutput::extendedOChanged);
+        o.setPlaying(true);
+        QVERIFY(o.triggerExtendedO());
+        clk = 1500;
+        // A second press while the cycle runs neither restarts nor extends it.
+        QVERIFY(!o.triggerExtendedO());
+        QCOMPARE(o.extendedOScale(), 0.5);
+        clk = 2000;  // the end of the first cycle
+        QCOMPARE(o.extendedOScale(), 1.0);
+        QVERIFY(!o.extendedOActive());
+        QVERIFY(changed.count() >= 2);
+        // After it, a new trigger works again.
+        QVERIFY(o.triggerExtendedO());
+        QCOMPARE(o.extendedOScale(), 0.5);
+        // Switched off: no trigger; the emergency stop ends the cycle.
+        o.emergencyStop();
+        QVERIFY(!o.extendedOActive());
+        QCOMPARE(o.extendedOScale(), 1.0);
+        QVERIFY(!o.canTriggerExtendedO());  // halted until the next start
+        o.setPlaying(false);
+        o.setPlaying(true);
+        o.setExtendedOEnabled(false);
+        QVERIFY(!o.canTriggerExtendedO());
+        QVERIFY(!o.triggerExtendedO());
+        o.setExtendedOEnabled(true);
+        QVERIFY(o.triggerExtendedO());
+        // A new script is a new session: the cycle ends.
+        o.setScript({}, {}, {});
+        QVERIFY(!o.extendedOActive());
+        // A pause does not end it (0.7: the cycle runs on through a pause).
+        QVERIFY(o.triggerExtendedO());
+        o.setPlaying(false);
+        QVERIFY(o.extendedOActive());
+    }
+
+    // 0.7 checkAutoExtendedO: "Auto Extended-O in marked range".
+    void autoExtendedOInMarkedRange() {
+        const QString script = writeScript(files_.path(), "auto.funscript", zigzag(100, 250));
+        PlayerController p;
+        QVERIFY(p.openScript(script));
+        qint64 clk = 0;
+        auto* o = p.output();
+        o->setClock([&] { return clk; }, false);
+        o->setExtendedORestoreMs(0);
+        o->setExtendedOHoldS(1);
+        p.setMarker(5000, 8000);
+        QVERIFY(!p.autoExtendedO());  // off by default (0.7)
+        p.setPlaying(true);
+        p.setVideoPositionMs(6000);
+        QVERIFY(!o->extendedOActive());  // off: nothing
+        p.setAutoExtendedO(true);
+        p.setVideoPositionMs(6100);
+        QVERIFY(o->extendedOActive());  // inside the range while playing
+        clk = 2000;
+        QCOMPARE(o->extendedOScale(), 1.0);  // the cycle is over
+        p.setVideoPositionMs(7000);
+        QVERIFY(!o->extendedOActive());  // once per pass
+        p.setVideoPositionMs(9000);
+        QVERIFY(!o->extendedOActive());
+        // A seek before the range arms it again.
+        p.setVideoPositionMs(1000);
+        p.setVideoPositionMs(5000);
+        QVERIFY(o->extendedOActive());
+        clk = 4000;
+        QCOMPARE(o->extendedOScale(), 1.0);
+        // Paused: positions (seeks) never trigger.
+        p.setPlaying(false);
+        p.setVideoPositionMs(1000);
+        p.setVideoPositionMs(6000);
+        QVERIFY(!o->extendedOActive());
+        // Playing again re-arms it (0.7).
+        p.setPlaying(true);
+        p.setVideoPositionMs(6050);
+        QVERIFY(o->extendedOActive());
+        p.setPlaying(false);
+    }
+
+    void safetyChoicesAreRemembered() {
+        {
+            PlayerController p;
+            auto* o = p.output();
+            o->setSoftStartMs(1200);
+            o->setReducePeaks(true);
+            o->setExtendedOEnabled(false);
+            o->setExtendedOMin(0);  // a real value, not "unset"
+            o->setExtendedOHoldS(25);
+            o->setExtendedORestoreMs(0);
+        }
+        PlayerController q;
+        auto* o = q.output();
+        QCOMPARE(o->softStartMs(), 1200);
+        QVERIFY(o->reducePeaks());
+        QVERIFY(!o->extendedOEnabled());
+        QCOMPARE(o->extendedOMin(), 0.0);
+        QCOMPARE(o->extendedOHoldS(), 25.0);
+        QCOMPARE(o->extendedORestoreMs(), 0);
+        // Clamped to the 0.7 slider ranges.
+        o->setSoftStartMs(99999);
+        QCOMPARE(o->softStartMs(), 3000);
+        o->setSoftStartMs(-4);
+        QCOMPARE(o->softStartMs(), 0);
+        o->setExtendedOMin(3);
+        QCOMPARE(o->extendedOMin(), 1.0);
+        o->setExtendedOMin(-1);
+        QCOMPARE(o->extendedOMin(), 0.0);
+        o->setExtendedOMin(std::nan(""));
+        QCOMPARE(o->extendedOMin(), 0.0);
+        o->setExtendedOHoldS(0);
+        QCOMPARE(o->extendedOHoldS(), 1.0);
+        o->setExtendedOHoldS(500);
+        QCOMPARE(o->extendedOHoldS(), 60.0);
+        o->setExtendedORestoreMs(99999);
+        QCOMPARE(o->extendedORestoreMs(), 3000);
+    }
+
+    // A broken stored value is "unset" and takes the default; 0 stays 0.
+    void brokenSafetySettingsTakeTheDefaults() {
+        QFile f(config_.path() + "/settings.json");
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(R"({"playback.soft_start_ms":"fast","playback.extended_o_min":null,)"
+                R"("playback.extended_o_hold_seconds":true,"playback.extended_o_restore_ms":0})");
+        f.close();
+        PlayerController p;
+        auto* o = p.output();
+        QCOMPARE(o->softStartMs(), 500);
+        QCOMPARE(o->extendedOMin(), 0.1);
+        QCOMPARE(o->extendedOHoldS(), 10.0);
+        QCOMPARE(o->extendedORestoreMs(), 0);
     }
 
     // --- settings ---
