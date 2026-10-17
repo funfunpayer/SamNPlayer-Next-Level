@@ -326,12 +326,21 @@ bool PlayerController::openScript(const QString& pathIn, const QString& videoIn)
         setError(tr("Could not open %1: the script has no points.").arg(QFileInfo(path).fileName()));
         return false;
     }
+    // The script's own recipe (profile, sync, contact vibration, feel,
+    // balance) shapes what the device gets, as 0.7's StartPlayback did with
+    // MapOptionsFromScript; a plain script gets the defaults.
+    samn::MapOptions mapOpts = samn::DefaultMapOptions();
+    try {
+        samn::Document view = doc;
+        mapOpts = samn::MapOptionsFromScript(view.ToFunscript());
+    } catch (const std::exception&) {
+    }
     stroke_ = std::move(doc.general);
     // Vibration and suction lanes: from the file when it has them, else as
-    // the device would get them (mapper, as in 0.7's GetHeatmap/Play).
-    // The lanes use the device tick; the heatmap one bucket per 1/240.
-    const auto laneFrames = samn::ToIntensityCurve(stroke_, samn::DefaultMapOptions())
-                                .value_or(std::vector<samn::Frame>{});
+    // the device would get them (mapper with the script's recipe). The lanes
+    // use the device tick; the heatmap uses the defaults, one bucket per
+    // 1/240 (0.7 GetHeatmap).
+    const auto laneFrames = samn::ToIntensityCurve(stroke_, mapOpts).value_or(std::vector<samn::Frame>{});
     vibrationFromScript_ = !doc.vibration.empty();
     suctionFromScript_ = !doc.suction.empty();
     vibration_ = vibrationFromScript_ ? std::move(doc.vibration) : laneFrom(laneFrames, false);

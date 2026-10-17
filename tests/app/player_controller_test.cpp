@@ -6,6 +6,10 @@
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QtTest>
+#include "samn/curve_geometry.h"
+#include <QRegularExpression>
+#include <QVideoSink>
+#include <QVideoFrame>
 #include <QImage>
 #include <QPainter>
 #include <cmath>
@@ -513,6 +517,86 @@ private slots:
         QVERIFY(c.openPaths({d.filePath("A.funscript"), d.filePath("notes.txt")}));
         QVERIFY(c.hasScript());
         QVERIFY(c.lastError().contains(QStringLiteral("notes.txt")));
+    }
+
+    // 0.7 app_snapshot_test.go TestSaveVideoSnapshot: no frame is an error;
+    // the suggested name is "<video stem>_MM-SS.png"; a name without an
+    // extension gets ".png". (Cancel is the dialog's own; nothing is called.)
+    void snapshotNameAndSave() {
+        QTemporaryDir d;
+        PlayerController c;
+        QVERIFY(!c.saveSnapshot(nullptr, d.filePath("x.png")));
+        QVERIFY(c.lastError().contains(QStringLiteral("no video frame")));
+        writeFile(d.filePath("My Clip.mp4"), "x");
+        QVERIFY(c.openPath(d.filePath("My Clip.mp4")));
+        QCOMPARE(c.snapshotName(83500), QStringLiteral("My Clip_01-23.png"));
+        QCOMPARE(c.snapshotName(-5), QStringLiteral("My Clip_00-00.png"));
+        // A 4x4 test-pattern frame in a video sink is saved at its size.
+        QVideoFrameFormat fmt(QSize(4, 4), QVideoFrameFormat::Format_RGBA8888);
+        QVideoFrame frame(fmt);
+        QVERIFY(frame.map(QVideoFrame::WriteOnly));
+        for (int y = 0; y < 4; ++y) memset(frame.bits(0) + y * frame.bytesPerLine(0), y * 60, 16);
+        frame.unmap();
+        QVideoSink sink;
+        sink.setVideoFrame(frame);
+        QVERIFY(c.saveSnapshot(&sink, d.filePath("frame")));  // no extension on purpose
+        const QImage saved(d.filePath("frame.png"));
+        QCOMPARE(saved.size(), QSize(4, 4));
+        QVERIFY(c.lastError().isEmpty());
+    }
+
+    // pb_chart_tooltip_test.py: hovering the heatmap gives time and value.
+    void heatTooltipShowsTimeAndValue() {
+        PlayerController c;
+        QVERIFY(c.heatTooltip(500).isEmpty());  // no script, no tooltip
+        QTemporaryDir d;
+        writeFile(d.filePath("t.funscript"),
+                  R"({"actions":[{"at":0,"pos":0},{"at":500,"pos":100},{"at":1000,"pos":0},{"at":1500,"pos":100}]})");
+        QVERIFY(c.openPath(d.filePath("t.funscript")));
+        const QString tip = c.heatTooltip(1000);
+        QVERIFY2(tip.startsWith(QString::fromStdString(samn::FormatTooltipTime(1000)) + QStringLiteral(" · ")),
+                 qPrintable(tip));
+        QVERIFY2(QRegularExpression(QStringLiteral(" · \\d{1,3}%$")).match(tip).hasMatch(), qPrintable(tip));
+        QVERIFY(!c.heatTooltip(1e9).isEmpty());  // beyond the end: clamped, not empty
+    }
+
+    // pb_clip7776_test.py: a real-shaped tj script (contact recipe in the
+    // metadata, no video) loads and plays. Synthetic equivalent of the 0.7
+    // fixture: 9 points, tj profile, device_recipe with contact vibration.
+    // This test found that playback ignored the script's recipe.
+    void tjScriptWithoutVideoPlays() {
+        QTemporaryDir d;
+        writeFile(d.filePath("tj.funscript"), R"({"actions":[
+            {"at":0,"pos":84},{"at":208,"pos":84},{"at":666,"pos":90},{"at":1100,"pos":30},
+            {"at":1500,"pos":88},{"at":1950,"pos":25},{"at":2400,"pos":86},{"at":2850,"pos":40},{"at":3291,"pos":23}],
+            "metadata":{"profile":"tj","duration":3291,
+              "device_recipe":{"sync":"suction_position","min_suction":0.2,"tick_ms":50,"max_speed":0.5,
+                               "smoothing":0.22,"contact_vibration":true,"contact_vibration_span":0.75},
+              "quality_score":1,"quality_passed":true}})");
+        PlayerController c;
+        QVERIFY(c.openPath(d.filePath("tj.funscript")));
+        QVERIFY(c.lastError().isEmpty());
+        QVERIFY(c.hasScript());
+        QCOMPARE(c.pointCount(), 9);
+        QCOMPARE(c.scriptDurationMs(), qint64(3291));
+        QVERIFY(c.videoName().isEmpty());
+        QVERIFY(c.showStrokeLane());
+        QVERIFY(!c.showSuctionLane());  // D-132: without a device the lanes show what the file carries
+        // The device gets the script's recipe (0.7 StartPlayback used
+        // MapOptionsFromScript): tj suction follows the position, and
+        // contact vibration buzzes only near the deepest points.
+        c.setPlaying(true);
+        c.setVideoPositionMs(666);  // pos 90, contact
+        QVERIFY2(std::abs(c.suctionNow() - 90) <= 5, qPrintable(QString::number(c.suctionNow())));
+        QVERIFY2(c.vibrationNow() > 50, qPrintable(QString::number(c.vibrationNow())));
+        for (qint64 ms : {1100, 1950}) {  // pos 30 and 25: far from contact
+            c.setVideoPositionMs(ms);
+            QVERIFY2(c.vibrationNow() == 0, qPrintable(QStringLiteral("%1 ms: %2").arg(ms).arg(c.vibrationNow())));
+        }
+        c.setVideoPositionMs(1950);
+        QVERIFY2(std::abs(c.suctionNow() - 25) <= 5, qPrintable(QString::number(c.suctionNow())));
+        c.setPlaying(false);
+        QVERIFY(c.lastError().isEmpty());
     }
 
     void zoomWindow() {
