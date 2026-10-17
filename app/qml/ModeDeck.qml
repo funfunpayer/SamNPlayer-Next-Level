@@ -32,11 +32,13 @@ Item {
         scale: root.open ? 1 : 0.96
         Behavior on scale { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
         Text {
+            textFormat: Text.PlainText
             x: 22; y: 18
             text: qsTr("CHOOSE A MODE"); color: Theme.textDim
             font.family: Theme.fontSoft; font.pixelSize: 12; font.letterSpacing: 3
         }
         Text {
+            textFormat: Text.PlainText
             anchors.right: parent.right; anchors.rightMargin: 22; y: 18
             text: "1–" + root.modes.length + " · ESC"; color: Theme.textMuted; font.pixelSize: 11
         }
@@ -57,7 +59,7 @@ Item {
                         anchors.right: parent.right; anchors.top: parent.top; anchors.margins: 10
                         width: 20; height: 20; radius: 5
                         color: "transparent"; border.color: Theme.cardBorder
-                        Text { anchors.centerIn: parent; text: index + 1; color: Theme.textDim; font.pixelSize: 11 }
+                        Text { textFormat: Text.PlainText; anchors.centerIn: parent; text: index + 1; color: Theme.textDim; font.pixelSize: 11 }
                     }
                     Rectangle {
                         id: badge
@@ -67,11 +69,13 @@ Item {
                         Icon { anchors.centerIn: parent; name: modelData.icon; color: modelData.color; width: 28; height: 28 }
                     }
                     Text {
+                        textFormat: Text.PlainText
                         anchors.horizontalCenter: parent.horizontalCenter; y: 100
                         text: modelData.name; color: "white"
                         font.family: Theme.font; font.pixelSize: 16; font.weight: Font.DemiBold
                     }
                     Text {
+                        textFormat: Text.PlainText
                         anchors.horizontalCenter: parent.horizontalCenter; y: 126
                         horizontalAlignment: Text.AlignHCenter
                         text: modelData.text; color: Theme.textDim

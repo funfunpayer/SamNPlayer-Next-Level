@@ -42,7 +42,7 @@ TEST_CASE("TestDeleteRange") {
         DeleteRange(actions, 0, 300);
         FAIL("should throw");
     } catch (const RangeEditError& e) {
-        CHECK(std::string(e.what()) == "funscript: Löschen würde weniger als 2 Punkte lassen");
+        CHECK(std::string(e.what()) == "funscript: deleting would leave fewer than 2 points");
     }
 }
 
@@ -55,7 +55,7 @@ TEST_CASE("TestCapSpeedRange") {
     CHECK(out[2].at == 1075);  // later actions move right by the same amount
     CHECK(actions[1].at == 50);
 
-    CHECK_THROWS_WITH_AS(CapSpeedRange({{0, 0}}, 0, 10, 400), "funscript: zu wenige Punkte", RangeEditError);
+    CHECK_THROWS_WITH_AS(CapSpeedRange({{0, 0}}, 0, 10, 400), "funscript: too few points", RangeEditError);
     // max_intensity <= 0 means 400
     CHECK(CapSpeedRange(actions, 0, 50, 0)[1].at == out[1].at);
     // segments outside the range stay untouched

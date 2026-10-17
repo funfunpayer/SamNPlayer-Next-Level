@@ -152,7 +152,7 @@ TEST_CASE("LoadProject: Go decoding rules and errors") {
         LoadProject(f);
         FAIL("should throw");
     } catch (const ProjectError& e) {
-        CHECK(std::string(e.what()).rfind("project: ungültiges JSON: ", 0) == 0);
+        CHECK(std::string(e.what()).rfind("project: invalid JSON: ", 0) == 0);
     }
     WriteText(f, "null");
     CHECK(LoadProject(f).version == 1);

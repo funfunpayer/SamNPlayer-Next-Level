@@ -46,7 +46,7 @@ SyncMode ParseSyncMode(const std::string& s) {
     if (s.empty()) return SyncMode::Independent;
     for (int i = 0; i < 6; ++i)
         if (s == kSyncNames[i]) return static_cast<SyncMode>(i);
-    throw std::invalid_argument("funscript: unbekannter sync-mode '" + s + "'");
+    throw std::invalid_argument("funscript: unknown sync mode '" + s + "'");
 }
 
 MapOptions DefaultMapOptions() {

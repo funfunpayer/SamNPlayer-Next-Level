@@ -1203,13 +1203,13 @@ std::string StripLower(const std::string& s) {
 
 void OMarker::Validate() const {
     if (end_ms <= start_ms)
-        throw SamnError("funscript: O-Marker Ende (" + std::to_string(end_ms) + "ms) muss nach dem Start (" +
-                        std::to_string(start_ms) + "ms) liegen");
+        throw SamnError("funscript: O-marker end (" + std::to_string(end_ms) + "ms) must be after the start (" +
+                        std::to_string(start_ms) + "ms)");
     if (kind != OMarkerPrimary && kind != OMarkerSecondary)
-        throw SamnError("funscript: unbekannte O-Marker-Art " + GoQuote(kind) + " (erwartet \"" + OMarkerPrimary +
-                        "\" oder \"" + OMarkerSecondary + "\")");
+        throw SamnError("funscript: unknown O-marker kind " + GoQuote(kind) + " (expected \"" + OMarkerPrimary +
+                        "\" or \"" + OMarkerSecondary + "\")");
     if (intensity < 0 || intensity > 1)
-        throw SamnError("funscript: O-Marker-Intensität " + GoFloat(intensity) + " außerhalb von 0..1");
+        throw SamnError("funscript: O-marker intensity " + GoFloat(intensity) + " outside 0..1");
 }
 
 std::vector<Action> FunscriptView::PlaybackActions() const { return samn::PlaybackActions(actions, inverted); }
@@ -1270,12 +1270,12 @@ bool IsDistanceProfile(const std::string& name) {
 }
 
 std::vector<Action> SanitizeActions(const std::vector<Action>& actions) {
-    if (actions.empty()) throw SamnError("funscript: mindestens ein Punkt wird benötigt");
+    if (actions.empty()) throw SamnError("funscript: at least one point is needed");
     std::vector<Action> out;
     out.reserve(actions.size());
     for (size_t i = 0; i < actions.size(); ++i) {
         if (actions[i].at < 0)
-            throw SamnError("funscript: Punkt " + std::to_string(i) + " hat eine negative Zeit (" +
+            throw SamnError("funscript: point " + std::to_string(i) + " has a negative time (" +
                             std::to_string(actions[i].at) + "ms)");
         out.push_back({actions[i].at, std::max(0, std::min(100, actions[i].pos))});
     }
@@ -1353,15 +1353,15 @@ FunscriptView ParseFunscript(const std::string& data) {
     {
         JV root;
         std::string err;
-        if (!ParseJson(data, root, err)) throw SamnError("funscript: ungültiges JSON: " + err);
+        if (!ParseJson(data, root, err)) throw SamnError("funscript: invalid JSON: " + err);
         try {
             if (root.k != JV::K::Obj) Fail("cannot unmarshal into Script");
             DecodeValue(root, s);
         } catch (const SamnError& e) {
-            throw SamnError(std::string("funscript: ungültiges JSON: ") + e.what());
+            throw SamnError(std::string("funscript: invalid JSON: ") + e.what());
         }
     }
-    if (s.actions.empty()) throw SamnError("funscript: keine actions im Skript gefunden");
+    if (s.actions.empty()) throw SamnError("funscript: no actions found in the script");
     std::vector<Action> kept;
     for (const auto& a : s.actions)
         if (a.at >= 0 && a.at <= MaxActionMs) kept.push_back(a);
@@ -1369,7 +1369,7 @@ FunscriptView ParseFunscript(const std::string& data) {
     if (s.dropped > 0) {
         s.actions = kept;
         if (s.actions.empty())
-            throw SamnError("funscript: keine gültigen actions (alle Zeiten außerhalb 0–" +
+            throw SamnError("funscript: no valid actions (all times outside 0–" +
                             std::to_string(MaxActionMs) + " ms)");
     }
     for (auto& a : s.actions) a.pos = std::max(0, std::min(100, a.pos));
@@ -1383,7 +1383,7 @@ FunscriptView ParseFunscript(const std::string& data) {
 FunscriptView LoadFunscript(const fs::path& path) {
     std::string data;
     if (!ReadAll(path, data))
-        throw SamnError("funscript: Datei konnte nicht gelesen werden: " + path.string());
+        throw SamnError("funscript: cannot read the file: " + path.string());
     return ParseFunscript(data);
 }
 
@@ -1435,7 +1435,7 @@ void SaveOMarkers(const fs::path& path, const std::vector<OMarker>& markers) {
         try {
             markers[i].Validate();
         } catch (const SamnError& e) {
-            throw SamnError("funscript: O-Marker " + std::to_string(i) + ": " + e.what());
+            throw SamnError("funscript: O-marker " + std::to_string(i) + ": " + e.what());
         }
     }
     std::vector<OMarker> sorted = markers;
@@ -1460,10 +1460,10 @@ void SaveOMarkers(const fs::path& path, const std::vector<OMarker>& markers) {
 std::vector<OMarker> LoadOMarkers(const fs::path& path) {
     std::string data;
     if (!ReadAll(path, data))
-        throw SamnError("funscript: Datei konnte nicht gelesen werden: " + path.string());
+        throw SamnError("funscript: cannot read the file: " + path.string());
     JV root;
     std::string err;
-    if (!ParseJson(data, root, err)) throw SamnError("funscript: ungültiges JSON: " + err);
+    if (!ParseJson(data, root, err)) throw SamnError("funscript: invalid JSON: " + err);
     try {
         if (root.k != JV::K::Obj) Fail("not an object");
         // Python: doc.get("metadata") or {}  (exact key, falsy -> empty)
@@ -1477,7 +1477,7 @@ std::vector<OMarker> LoadOMarkers(const fs::path& path) {
                            (m.k == JV::K::Str && m.s.empty()) || (m.k == JV::K::Arr && m.a.empty()) ||
                            (m.k == JV::K::Obj && m.keys.empty());
         if (falsy) return {};
-        if (m.k != JV::K::Obj) Fail("metadata ungültig");
+        if (m.k != JV::K::Obj) Fail("invalid metadata");
         const JV* raw = nullptr;
         for (size_t i = 0; i < m.keys.size(); ++i)
             if (m.keys[i] == "oMarkers") raw = &m.vals[i];
@@ -1486,7 +1486,7 @@ std::vector<OMarker> LoadOMarkers(const fs::path& path) {
         DecodeValue(*raw, out);
         return out;
     } catch (const SamnError& e) {
-        throw SamnError(std::string("funscript: ungültiges JSON: ") + e.what());
+        throw SamnError(std::string("funscript: invalid JSON: ") + e.what());
     }
 }
 

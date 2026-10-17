@@ -19,6 +19,7 @@ Row {
             border.color: on ? Theme.cyan : "transparent"
             Behavior on color { ColorAnimation { duration: Theme.animFast } }
             Text {
+                textFormat: Text.PlainText
                 id: label
                 anchors.centerIn: parent
                 text: modelData

@@ -28,6 +28,7 @@ GlassCard {
         radius: Theme.radiusSmall
         color: Qt.rgba(1, 1, 1, 0.025); border.color: Theme.cardBorder
         Text {
+            textFormat: Text.PlainText
             id: head
             x: 12; y: 10; text: parent.title
             color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold
@@ -35,6 +36,7 @@ GlassCard {
         Column { id: body; x: 12; y: head.y + head.height + 8; width: parent.width - 24; spacing: 8 }
     }
     component Note: Text {
+        textFormat: Text.PlainText
         width: parent ? parent.width : 260
         wrapMode: Text.Wrap
         color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
@@ -51,14 +53,14 @@ GlassCard {
             width: 54; implicitHeight: 28; text: parent.on ? qsTr("On") : qsTr("Off"); checked: parent.on
             onClicked: parent.toggled()
         }
-        Text { anchors.verticalCenter: parent.verticalCenter; width: 62; text: parent.name; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13 }
+        Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; width: 62; text: parent.name; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13 }
         FlowSlider {
             anchors.verticalCenter: parent.verticalCenter; width: 92
             enabled: parent.on; opacity: enabled ? 1 : 0.45
             from: 0; to: 100; value: parent.level
             onMoved: (v) => parent.levelPicked(Math.round(v / 5) * 5)
         }
-        Text { anchors.verticalCenter: parent.verticalCenter; text: parent.level + "%"; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
+        Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; text: parent.level + "%"; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
     }
     component Channel: Item {
         property string name
@@ -66,7 +68,7 @@ GlassCard {
         property int value
         width: parent ? parent.width : 260; height: 26
         Rectangle { y: 9; width: 8; height: 8; radius: 4; color: parent.dot }
-        Text { x: 16; anchors.verticalCenter: parent.verticalCenter; text: parent.name; color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 13 }
+        Text { textFormat: Text.PlainText; x: 16; anchors.verticalCenter: parent.verticalCenter; text: parent.name; color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 13 }
         Rectangle {
             x: 100; anchors.verticalCenter: parent.verticalCenter
             width: parent.width - 150; height: 6; radius: 3; color: Qt.rgba(1, 1, 1, 0.08)
@@ -74,6 +76,7 @@ GlassCard {
                 Behavior on width { NumberAnimation { duration: 90 } } }
         }
         Text {
+            textFormat: Text.PlainText
             anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
             text: root.ctrl.hasScript ? parent.value : "–"; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
         }
@@ -87,6 +90,7 @@ GlassCard {
         MouseArea { id: tg; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.collapsed = !root.collapsed }
     }
     Text {
+        textFormat: Text.PlainText
         visible: !root.collapsed
         x: 16; y: 14; text: qsTr("Inspector")
         color: Theme.textMuted; font.family: Theme.font; font.pixelSize: 11; font.letterSpacing: 1.6; font.capitalization: Font.AllUppercase
@@ -167,6 +171,7 @@ GlassCard {
                                  : devices.dev.connected ? Theme.good : Theme.textMuted
                         }
                         Text {
+                            textFormat: Text.PlainText
                             id: statusLine
                             width: devices.width - 24 - 18
                             wrapMode: Text.Wrap
@@ -207,7 +212,7 @@ GlassCard {
                                 width: chipText.implicitWidth + 16; height: 22; radius: 11
                                 color: Qt.rgba(1, 1, 1, 0.05); border.color: Theme.cardBorder
                                 opacity: modelData.driven ? 1 : 0.55
-                                Text { id: chipText; anchors.centerIn: parent; text: parent.label; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11 }
+                                Text { textFormat: Text.PlainText; id: chipText; anchors.centerIn: parent; text: parent.label; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11 }
                                 HoverHandler { id: chipHover }
                                 ToolTipText { shown: chipHover.hovered && !parent.modelData.driven; text: qsTr("The device has this channel; SamNPlayer does not drive it yet.") }
                             }
@@ -216,14 +221,14 @@ GlassCard {
                             visible: devices.dev.capBattery
                             width: batText.implicitWidth + 16; height: 22; radius: 11
                             color: Qt.rgba(1, 1, 1, 0.05); border.color: Theme.cardBorder
-                            Text { id: batText; anchors.centerIn: parent; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11
+                            Text { textFormat: Text.PlainText; id: batText; anchors.centerIn: parent; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11
                                    text: devices.dev.batteryOk ? qsTr("Battery %1%").arg(devices.dev.batteryPercent) : qsTr("Battery") }
                         }
                         Rectangle {
                             visible: devices.dev.capRaw
                             width: rawText.implicitWidth + 16; height: 22; radius: 11
                             color: Qt.rgba(1, 1, 1, 0.05); border.color: Theme.cardBorder
-                            Text { id: rawText; anchors.centerIn: parent; text: qsTr("Raw values"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11 }
+                            Text { textFormat: Text.PlainText; id: rawText; anchors.centerIn: parent; text: qsTr("Raw values"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11 }
                         }
                     }
                     FlowCombo {
@@ -287,6 +292,7 @@ GlassCard {
                         ToolTipText { shown: estopHover.hovered; text: qsTr("Stops the device at once, drops queued commands and pauses the video.") }
                     }
                     Text {
+                        textFormat: Text.PlainText
                         visible: root.device.lastError !== ""
                         width: parent.width; wrapMode: Text.Wrap
                         text: root.device.lastError
@@ -331,29 +337,29 @@ GlassCard {
                     Row {
                         spacing: 8; height: 26
                         opacity: root.ctrl.output.strokeOn ? 1 : 0.45
-                        Text { anchors.verticalCenter: parent.verticalCenter; width: 52; text: qsTr("Bottom"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13 }
+                        Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; width: 52; text: qsTr("Bottom"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13 }
                         FlowSlider {
                             anchors.verticalCenter: parent.verticalCenter; width: 140; enabled: root.ctrl.output.strokeOn
                             from: 0; to: 90; value: root.ctrl.output.strokeLo
                             onMoved: (v) => root.ctrl.output.setStrokeRange(Math.round(v / 5) * 5, root.ctrl.output.strokeHi, true)
                         }
-                        Text { anchors.verticalCenter: parent.verticalCenter; text: root.ctrl.output.strokeLo + "%"; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
+                        Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; text: root.ctrl.output.strokeLo + "%"; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
                     }
                     Row {
                         spacing: 8; height: 26
                         opacity: root.ctrl.output.strokeOn ? 1 : 0.45
-                        Text { anchors.verticalCenter: parent.verticalCenter; width: 52; text: qsTr("Top"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13 }
+                        Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; width: 52; text: qsTr("Top"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13 }
                         FlowSlider {
                             anchors.verticalCenter: parent.verticalCenter; width: 140; enabled: root.ctrl.output.strokeOn
                             from: 10; to: 100; value: root.ctrl.output.strokeHi
                             onMoved: (v) => root.ctrl.output.setStrokeRange(root.ctrl.output.strokeLo, Math.round(v / 5) * 5, false)
                         }
-                        Text { anchors.verticalCenter: parent.verticalCenter; text: root.ctrl.output.strokeHi + "%"; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
+                        Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; text: root.ctrl.output.strokeHi + "%"; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
                     }
                     Note { text: qsTr("Safety range: the device only moves inside it; the script's full stroke is scaled into it.") }
                     Row {
                         spacing: 8
-                        Text { anchors.verticalCenter: parent.verticalCenter; width: 78; text: qsTr("Motion"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                        Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; width: 78; text: qsTr("Motion"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
                                HoverHandler { id: motionHover }
                                ToolTipText { shown: motionHover.hovered; text: qsTr("The device moves in straight lines between the points it gets. Smooth sends extra points along a soft curve through the script's points; Rounder rounds corners a little more. The script file is not changed.") } }
                         FlowCombo {
@@ -366,7 +372,7 @@ GlassCard {
                     }
                     Row {
                         spacing: 8
-                        Text { anchors.verticalCenter: parent.verticalCenter; width: 78; text: qsTr("Speed limit"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                        Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; width: 78; text: qsTr("Speed limit"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
                                HoverHandler { id: speedHover }
                                ToolTipText { shown: speedHover.hovered; text: qsTr("No move faster than this; a too fast stroke stops short instead of slamming. In script units (0–100) per second.") } }
                         FlowCombo {
@@ -411,7 +417,7 @@ GlassCard {
                             Connections { target: devices; function onResetTests() { testRow.pct = 0 } }
                             visible: modelData.has
                             spacing: 8; height: 26
-                            Text { anchors.verticalCenter: parent.verticalCenter; width: 62; text: testRow.modelData.name; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13 }
+                            Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; width: 62; text: testRow.modelData.name; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13 }
                             FlowSlider {
                                 anchors.verticalCenter: parent.verticalCenter; width: 120
                                 enabled: devices.canTest
@@ -424,6 +430,7 @@ GlassCard {
                                 }
                             }
                             Text {
+                                textFormat: Text.PlainText
                                 anchors.verticalCenter: parent.verticalCenter
                                 color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                                 text: testRow.modelData.steps > 0 ? qsTr("%1 % (level %2)").arg(testRow.pct).arg(Math.round(testRow.pct / 100 * testRow.modelData.steps))
@@ -470,7 +477,7 @@ GlassCard {
                     title: qsTr("Script Tools")
                     Row {
                         spacing: 8
-                        Text { anchors.verticalCenter: parent.verticalCenter; text: qsTr("Script offset"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13 }
+                        Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; text: qsTr("Script offset"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13 }
                         OffsetField { value: root.ctrl.offsetMs; onChanged: (v) => root.ctrl.offsetMs = v }
                     }
                     Row {
@@ -544,10 +551,12 @@ GlassCard {
                                 color: modelData.active ? Qt.rgba(0, 120 / 255, 1, 0.22) : (rowArea.containsMouse ? Qt.rgba(1, 1, 1, 0.05) : "transparent")
                                 border.width: modelData.active ? 1 : 0; border.color: Theme.cyan
                                 Text {
+                                    textFormat: Text.PlainText
                                     x: 10; anchors.verticalCenter: parent.verticalCenter
                                     text: index + 1; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                                 }
                                 Text {
+                                    textFormat: Text.PlainText
                                     x: 32; width: parent.width - 32 - 30; anchors.verticalCenter: parent.verticalCenter
                                     text: modelData.name; elide: Text.ElideRight
                                     color: modelData.active ? "white" : Theme.text; font.family: Theme.fontSoft; font.pixelSize: 13
@@ -603,7 +612,7 @@ GlassCard {
                             HoverHandler { id: hlThHover }
                             ToolTipText { shown: hlThHover.hovered; text: qsTr("Intensity threshold for Speed highlights on the curve (500×|Δpos|/|Δt|). Lower = more red bands.") }
                         }
-                        Text { anchors.verticalCenter: parent.verticalCenter; text: Math.round(root.ctrl.speedHighlightThresh); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
+                        Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; text: Math.round(root.ctrl.speedHighlightThresh); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
                     }
                     Note { text: qsTr("Heatmap: click = seek, drag = mark. Wheel on the curve zooms.") }
                 }
@@ -651,13 +660,13 @@ GlassCard {
                     Row {
                         visible: oKind.currentIndex === 1
                         spacing: 10
-                        Text { anchors.verticalCenter: parent.verticalCenter; text: qsTr("Intensity"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13 }
+                        Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; text: qsTr("Intensity"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13 }
                         FlowSlider {
                             anchors.verticalCenter: parent.verticalCenter; width: 130
                             from: 0; to: 1; value: root.ctrl.oMarkerIntensity
                             onMoved: (v) => root.ctrl.oMarkerIntensity = Math.round(v * 20) / 20
                         }
-                        Text { anchors.verticalCenter: parent.verticalCenter; text: Math.round(root.ctrl.oMarkerIntensity * 100) + "%"; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
+                        Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; text: Math.round(root.ctrl.oMarkerIntensity * 100) + "%"; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
                     }
                     FlowButton {
                         text: qsTr("Apply as O-marker"); enabled: root.ctrl.hasMarker

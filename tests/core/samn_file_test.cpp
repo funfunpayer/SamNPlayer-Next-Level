@@ -622,9 +622,9 @@ TEST_CASE("samn_file: invalid documents") {
         {R"({"general":[]})", "samn: general curve is required"},
         {R"({"version":2,"general":[{"at":0,"pos":1}]})", "samn: unsupported version 2 (want 1)"},
         {R"({"kind":"x","general":[{"at":0,"pos":1}]})", "samn: unexpected kind \"x\""},
-        {R"({"general":[{"at":-1,"pos":1}]})", "negative Zeit"},
+        {R"({"general":[{"at":-1,"pos":1}]})", "negative time"},
         {R"({"general":[{"at":0,"pos":1}],"oMarkers":[{"startMs":5,"endMs":5,"kind":"primary"}]})",
-         "samn: oMarkers[0]: funscript: O-Marker Ende"},
+         "samn: oMarkers[0]: funscript: O-marker end"},
     };
     for (const auto& c : cases) {
         CAPTURE(c.text);

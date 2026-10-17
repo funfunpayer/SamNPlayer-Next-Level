@@ -132,7 +132,7 @@ DiagnosticsReport RunDiagnostics(Device& dev, double connect_latency_ms, const D
         }
     } else {
         report.notes.push_back(
-            "Rohwert-Sweep übersprungen: dieser Transport unterstützt keine Rohwerte (nur die echte BLE-Verbindung und Mock bieten das).");
+            "Raw value sweep skipped: this transport has no raw values (only the real BLE connection and the Mock have them).");
     }
 
     // Phase 2: highest stable update rate (vibration only; raw if available,
@@ -233,10 +233,10 @@ DiagnosticsReport RunDiagnostics(Device& dev, double connect_latency_ms, const D
     }
 
     report.notes.push_back(
-        "Nicht gemessen (ohne Sensor am Gerät nicht objektiv feststellbar): "
-        "tatsächliche physische Anstiegs-/Abfallzeit, gefühlte Intensität, "
-        "gefühlte Kanalüberlagerung. Latenzwerte hier sind Software-Round-Trip-"
-        "Zeiten des Schreibvorgangs, keine physische Reaktionszeit des Geräts.");
+        "Not measured (no objective way without a sensor on the device): "
+        "the real physical rise and fall time, felt intensity, "
+        "felt channel overlap. Latencies here are software round trips "
+        "of the write, not the device's physical reaction time.");
     report.duration_ms =
         std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start).count();
     return report;

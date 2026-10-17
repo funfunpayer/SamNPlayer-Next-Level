@@ -32,25 +32,25 @@ const ordered_json* Field(const ordered_json& obj, const char* name) {
 [[noreturn]] void Bad(const std::string& what) { throw std::invalid_argument(what); }
 
 std::string AsString(const ordered_json& v, const char* key) {
-    if (!v.is_string()) Bad(std::string("Feld ") + key + " ist kein Text");
+    if (!v.is_string()) Bad(std::string("field ") + key + " is not text");
     return v.get<std::string>();
 }
 
 int64_t AsInt(const ordered_json& v, const char* key) {
-    if (!v.is_number_integer()) Bad(std::string("Feld ") + key + " ist keine ganze Zahl");
+    if (!v.is_number_integer()) Bad(std::string("field ") + key + " is not an integer");
     if (v.is_number_unsigned() && v.get<uint64_t>() > static_cast<uint64_t>(INT64_MAX))
-        Bad(std::string("Feld ") + key + " ist zu groß");
+        Bad(std::string("field ") + key + " is too large");
     return v.get<int64_t>();
 }
 
 const ordered_json& AsObject(const ordered_json& v, const char* key) {
-    if (!v.is_object()) Bad(std::string("Feld ") + key + " ist kein Objekt");
+    if (!v.is_object()) Bad(std::string("field ") + key + " is not an object");
     return v;
 }
 
 template <class T, class F>
 std::vector<T> AsArray(const ordered_json& v, const char* key, F&& decode) {
-    if (!v.is_array()) Bad(std::string("Feld ") + key + " ist kein Array");
+    if (!v.is_array()) Bad(std::string("field ") + key + " is not an array");
     std::vector<T> out;
     for (const auto& item : v) {
         T t{};
@@ -152,7 +152,7 @@ Project LoadProject(const std::filesystem::path& path) {
                 });
         }
     } catch (const std::exception& exc) {
-        throw ProjectError(std::string("project: ungültiges JSON: ") + exc.what());
+        throw ProjectError(std::string("project: invalid JSON: ") + exc.what());
     }
     if (p.version == 0) p.version = ProjectVersion;
     return p;
