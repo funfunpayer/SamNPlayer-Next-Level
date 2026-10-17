@@ -58,12 +58,12 @@
 | `logging` | 1 | 1 | 0 | 0 | 0 | 1 | 0 |
 | `cmd/cli` | 7 | 18 | 0 | 0 | 0 | 12 | 6 |
 | `cmd/gui-wails (Go)` | 68 | 188 | 16 | 18 | 0 | 141 | 13 |
-| `generator (Go)` | 72 | 237 | 7 | 1 | 0 | 216 | 13 |
+| `generator (Go)` | 72 | 237 | 29 | 2 | 0 | 192 | 13 |
 | `generator (Python)` | 56 | 151 | 0 | 0 | 0 | 151 | 0 |
 | `native/tests (Python)` | 4 | 13 | 13 | 0 | 0 | 0 | 0 |
 | `scripts/benchmark-prep (Python)` | 1 | 8 | 0 | 0 | 0 | 8 | 0 |
 | `frontend (Python/Playwright UI tests)` | 148 | 148 | 6 | 34 | 0 | 103 | 5 |
-| **Total** | **431** | **1141** | **175** | **65** | **0** | **851** | **50** |
+| **Total** | **431** | **1141** | **197** | **66** | **0** | **827** | **50** |
 
 `generator (Go)` includes the sub-packages `aiscript`, `bodyparts`, `posttrack`, `profilemodel`, `simpletrack`, `strokepreview`, `trackcv`, `trackutil`.
 
@@ -78,8 +78,8 @@
 | `generator/profilemodel` | 1 | 6 | 0 | 0 | 0 | 6 | 0 |
 | `generator/simpletrack` | 5 | 12 | 0 | 0 | 0 | 12 | 0 |
 | `generator/strokepreview` | 3 | 9 | 0 | 0 | 0 | 9 | 0 |
-| `generator/trackcv` | 11 | 57 | 0 | 0 | 0 | 57 | 0 |
-| `generator/trackutil` | 1 | 6 | 0 | 0 | 0 | 6 | 0 |
+| `generator/trackcv` | 11 | 57 | 17 | 1 | 0 | 39 | 0 |
+| `generator/trackutil` | 1 | 6 | 5 | 0 | 0 | 1 | 0 |
 
 ## 2. Where the old tests went, per package
 
@@ -458,7 +458,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 
 ### 2.15 `generator (Go)`
 
-72 files, 237 tests: 7 ported, 1 covered, 0 todo-now, 216 todo-later, 13 n/a.
+72 files, 237 tests: 29 ported, 2 covered, 0 todo-now, 192 todo-later, 13 n/a.
 
 | Old file | Test function(s) | Status | Where / why |
 |---|---|---|---|
@@ -528,19 +528,22 @@ One row per old test function (grouped when a whole file shares the same answer)
 | `strokepreview/hint_test.go` | `TestToHintSuggestsPeakDistance`, `TestToHintWeakSuggestsAudio` | todo-later | P3.6 (stroke preview). |
 | `strokepreview/overlap_test.go` | `TestPeakOverlapMatchesNearbyUps` | todo-later | P3.6 (stroke preview). |
 | `strokepreview/preview_test.go` | `TestAnalyzeSyntheticBounceFindsExtrema`, `TestFrameStatsIgnoresCodecNoise`, `TestClassifyWeakWhenNoMotion`, `TestStrokeHzFromPeaks`, `TestAnalyzeMissingFile`, `TestFindPeaksExportStillWorks` | todo-later | P3.6 (stroke preview). |
-| `trackcv/appearance_memory_test.go` | `TestAppearanceMemoryMatchesOriginalAcceptsTheOriginalRegion`, `TestAppearanceMemoryMatchesOriginalRejectsDriftedRegion`, `TestAppearanceMemoryMatchesOriginalNotDefeatedByShrunkBox`, `TestAppearanceMemoryMatchesOriginalNoTemplatesYetAllowsRemembering`, `TestTrackROIStillWorksWithGatedAppearanceMemory` | todo-later | P3.4 (appearance memory). |
+| `trackcv/appearance_memory_test.go` | `TestAppearanceMemoryMatchesOriginalAcceptsTheOriginalRegion`, `TestAppearanceMemoryMatchesOriginalRejectsDriftedRegion`, `TestAppearanceMemoryMatchesOriginalNotDefeatedByShrunkBox`, `TestAppearanceMemoryMatchesOriginalNoTemplatesYetAllowsRemembering`, `TestTrackROIStillWorksWithGatedAppearanceMemory` | ported | `tests/engine/track_box_test.cpp`: "parts: appearance memory knows the start region and fails closed" (original region, drifted region, shrunk box on / off target, no templates yet), "track: the gated memory does not lose easy material". |
 | `trackcv/contact_points_test.go` | `TestApplyContactPointsGateAndHold`, `TestRhythmGridContactPointsReachFarStroke`, `TestRhythmGridContactPointsNearBoxBitIdentical`, `TestVerifyContactPointsKeepsOnlyWhereEngineMeasuresMore`, `TestVerifyContactPointsAtHonoursStartOffset` | todo-later | P4 (contact points; teacher JSON, verify with the engine). |
 | `trackcv/contact_verify_e2e_test.go` | `TestTrackROIContactVerifyFiltersQuietTeacherPoints` | todo-later | P4 (contact verify, hybrid K=1.5). |
 | `trackcv/contact_verify_edge_test.go` | `TestVerifyContactPointsUsesNearestOverlappingWindow`, `TestVerifyContactPointsClampsThreeByThreeAtImageEdges` | todo-later | P4 (contact verify). |
-| `trackcv/dispguard_test.go` | `TestDispGuardFlagsImplausibleJumpsAtRealClipScale`, `TestDispGuardAllowsLargestGenuineRealClipMotion`, `TestDispGuardIgnoresJitterBelowFloorRegardlessOfRatio`, `TestDispGuardRatioScalesWithFastMotion`, `TestDispGuardAcceptTrimsWindow`, `TestDispGuardColdStartNeverFlags` | todo-later | P3.4 (CSRT jump/drift guards). |
+| `trackcv/dispguard_test.go` | `TestDispGuardFlagsImplausibleJumpsAtRealClipScale`, `TestDispGuardAllowsLargestGenuineRealClipMotion`, `TestDispGuardIgnoresJitterBelowFloorRegardlessOfRatio`, `TestDispGuardRatioScalesWithFastMotion`, `TestDispGuardAcceptTrimsWindow`, `TestDispGuardColdStartNeverFlags` | ported | `tests/engine/track_box_test.cpp`: "parts: the jump guard flags real-clip jumps, not real motion" (all six cases). |
 | `trackcv/multi_recover_test.go` | `TestReacquireRejectsPoisonedDistractorVersusTipSeed`, `TestReacquirePrefersTipWhenVisibleDespiteDistractorTemplate`, `TestTrackTwoPointsHardTipAppearanceMemoryStable`, `TestRecoverOrCoastResetsCoastOnReacquire` | todo-later | P3.4 (re-acquire, coast). |
-| `trackcv/progress_total_test.go` | `TestProgressTotalFramesAfterSeek` | todo-later | P3.1 (progress total after seek). |
+| `trackcv/progress_total_test.go` | `TestProgressTotalFramesAfterSeek` | ported | `tests/engine/track_box_test.cpp`: "parts: progress total after a seek". |
 | `trackcv/rhythm_grid_test.go` | `TestRhythmGridRecoversStrokeDespiteDrift`, `TestRhythmGridKeepsConfirmedTargetWhenTrackerDriftsOntoThigh`, `TestRhythmGridRejectsInPhaseAndAntiPhaseHighAmplitudeThigh`, `TestRhythmGridReseedsConfirmedIdentityAfterSceneCut`, `TestRhythmGridFallsBackToTracker`, `TestRhythmGridBadInputReturnsTracker`, `TestRhythmGridRows`, `TestRhythmGridKeepsOrientationWhereTrackerIsUninformative`, `TestRhythmGridSplitBitIdentical`, `TestNormalizeScores`, `TestScoreWindowsQuickScanNoBox`, `TestRhythmGridExcludeSkipsHighScoringThigh`, `TestRhythmGridExcludeUsesFollowPath`, `TestRhythmGridSourceHintPreference`, `TestRhythmGridMarksNilBitIdentical`, `TestRhythmGridReleasesLockWhenLockedCellGoesQuiet` | todo-later | P3.4 (rhythm grid). |
 | `trackcv/tip_distance_test.go` | `TestTipPartnerDistance_smallTipMatchesCenter`, `TestTipPartnerDistance_largePenisUsesNearEdge`, `TestTipPartnerDistance_overlapIsZero`, `TestFuseTipPartners_excludesLostPartner` | todo-later | P3.4 (tip/partner distance). |
-| `trackcv/track_test.go` | `TestTrackROIBasicAmplitude`, `TestTrackROICameraCompensation`, `TestTrackROISceneCutDetection`, `TestTrackROIAxisSelection`, `TestTrackROIMaxFrames`, `TestMain_videoWriterProducesReadableFile`, `TestTrackROIRhythmGrid` | todo-later | P3.1 (CSRT single-box track, scene cuts, camera compensation); the P3.1 acceptance test. |
+| `trackcv/track_test.go` | `TestTrackROIBasicAmplitude`, `TestTrackROICameraCompensation`, `TestTrackROISceneCutDetection`, `TestTrackROIAxisSelection`, `TestTrackROIMaxFrames` | ported | `tests/engine/track_box_test.cpp`: "track: follows the amplitude on easy material", "track: camera compensation brings the amplitude closer", "track: a hard cut is found and motion continues after it", "track: the axis follows the motion", "track: max frames, start time, progress and cancel". Positions equal 0.7 bit for bit (`docs/benchmarks/P3_1_TRACK_PARITY.md`). |
+| `trackcv/track_test.go` | `TestMain_videoWriterProducesReadableFile` | covered | every clip writer in `tests/engine/synthetic_clips.h` is checked with `REQUIRE` before tracking. |
+| `trackcv/track_test.go` | `TestTrackROIRhythmGrid` | todo-later | P3.4 (rhythm grid). |
 | `trackcv/types_test.go` | `TestSceneMarkRectAt_static`, `TestSceneMarkRectAt_nearestPath`, `TestCameraExcludeRects_usesPath`, `TestMarkShouldFollow`, `TestSceneMarkTimebaseIncludesStartOffset`, `TestSceneMarksShiftedKeepsSentinelAndInput` | todo-later | P3.4 (scene marks geometry). |
 | `tracking_gaps_test.go` | `TestTrackingGapsFromFlags` | todo-later | P3.4 (tracking gaps from flags). |
-| `trackutil/coast_test.go` | `TestCoastBridgesBriefLoss`, `TestCoastExhausts`, `TestCoastHoldsWithoutVelocity`, `TestCoastNoPosition`, `TestCoastResetAfterReacquire`, `TestCoastBudgetReopensAfterObserveOK` | todo-later | P3.4 (coast bridging). |
+| `trackutil/coast_test.go` | `TestCoastBridgesBriefLoss`, `TestCoastExhausts`, `TestCoastHoldsWithoutVelocity`, `TestCoastNoPosition`, `TestCoastBudgetReopensAfterObserveOK` | ported | `tests/engine/track_box_test.cpp`: "parts: coast moves on for 8 frames, then gives up". |
+| `trackutil/coast_test.go` | `TestCoastResetAfterReacquire` | todo-later | P3.4 (`Reset` and `MaxFrames` come with the two-point tracker). |
 | `truncate_test.go` | `TestTruncateActionsMs` | todo-later | P3.2 (`TruncateActionsMs`). |
 
 ### 2.16 `generator (Python)`

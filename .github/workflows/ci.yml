@@ -146,7 +146,7 @@ jobs:
             "-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=undefined"
 
       - name: Build
-        run: cmake --build build --parallel --target core_tests vision_tests
+        run: cmake --build build --parallel --target core_tests vision_tests engine_tests
 
       - name: Core tests under sanitizers
         env:
@@ -155,3 +155,4 @@ jobs:
         run: |
           ./build/tests/core_tests
           ./build/tests/vision_tests
+          ./build/tests/engine_tests
