@@ -20,6 +20,7 @@
 #include "heatmap_item.h"
 #include "samn/mapper.h"
 #include "samn/marks.h"
+#include "samn/playback_mapping.h"
 #include "samn/samn_file.h"
 #include "samn/script_finder.h"
 
@@ -50,8 +51,12 @@ std::vector<samn::Action> laneFrom(const std::vector<samn::Frame>& frames, bool 
 
 }  // namespace
 
-PlayerController::PlayerController(QObject* parent) : QObject(parent), output_(&settings()) {
+PlayerController::PlayerController(QObject* parent)
+    : QObject(parent), output_(&settings()), mapping_(&settings(), &output_) {
     connect(&output_, &PlaybackOutput::emergencyStopped, this, &PlayerController::emergencyStopped);
+    connect(&mapping_, &MappingSettings::mappingChanged, this, [this] {
+        if (!opening_) remap(false);
+    });
     sleepTimer_.setInterval(1000);
     connect(&sleepTimer_, &QTimer::timeout, this, [this] {
         if (sleepMinutes_ <= 0 || !playClock_.isValid()) return;
@@ -329,26 +334,31 @@ bool PlayerController::openScript(const QString& pathIn, const QString& videoIn)
         return false;
     }
     // The script's own recipe (profile, sync, contact vibration, feel,
-    // balance) shapes what the device gets, as 0.7's StartPlayback did with
-    // MapOptionsFromScript; a plain script gets the defaults.
-    samn::MapOptions mapOpts = samn::DefaultMapOptions();
+    // balance) and the Player's settings over it shape what the device
+    // gets, as 0.7's StartPlayback did with MapOptionsFromScript; a plain
+    // script gets the defaults.
+    scriptMap_ = samn::DefaultMapOptions();
     try {
         samn::Document view = doc;
-        mapOpts = samn::MapOptionsFromScript(view.ToFunscript());
+        scriptMap_ = samn::MapOptionsFromScript(view.ToFunscript());
     } catch (const std::exception&) {
     }
+    profile_ = doc.profile;
+    recipeHasContact_ = doc.recipe.contact_vibration;
+    // 0.7 showContact: contact in the recipe, Neo axes, or tf / tj.
+    contactControls_ = recipeHasContact_ || !doc.vibration.empty() || !doc.suction.empty() ||
+                       samn::IsDistanceProfile(doc.profile);
+    strength_ = samn::IsSamnPath(u8(path)) ? doc.strength_presets : std::vector<samn::StrengthPreset>{};
+    activeStrength_ = samn::IsSamnPath(u8(path)) ? doc.active_strength : std::string();
+    opening_ = true;  // the knobs follow the new script; remap(true) below maps it
+    mapping_.resetContactKnobs(doc.recipe.contact_vibration_span, doc.recipe.contact_vibration_curve);
+    opening_ = false;
     stroke_ = std::move(doc.general);
-    // Vibration and suction lanes: from the file when it has them, else as
-    // the device would get them (mapper with the script's recipe). The lanes
-    // use the device tick; the heatmap uses the defaults, one bucket per
-    // 1/240 (0.7 GetHeatmap).
-    const auto laneFrames = samn::ToIntensityCurve(stroke_, mapOpts).value_or(std::vector<samn::Frame>{});
+    // D-132: a lane the file carries shows without a device.
     vibrationFromScript_ = !doc.vibration.empty();
     suctionFromScript_ = !doc.suction.empty();
-    vibration_ = vibrationFromScript_ ? std::move(doc.vibration) : laneFrom(laneFrames, false);
-    suction_ = suctionFromScript_ ? std::move(doc.suction) : laneFrom(laneFrames, true);
-    output_.setScript(stroke_, vibration_, suction_);
-    emit lanesChanged();
+    remap(true);
+    // The heatmap uses the defaults, one bucket per 1/240 (0.7 GetHeatmap).
     auto opts = samn::DefaultMapOptions();
     const int64_t dur = stroke_.back().at;
     opts.tick_ms = std::max<int64_t>(10, dur / kHeatmapBuckets);
@@ -392,6 +402,63 @@ bool PlayerController::openScript(const QString& pathIn, const QString& videoIn)
     setVideoPositionMs(0);
     emit scriptOpened(scriptPath_);
     return true;
+}
+
+void PlayerController::remap(bool fresh) {
+    if (stroke_.empty()) return;
+    std::vector<samn::Frame> frames;
+    samn::PlaybackPlan plan;
+    try {
+        const samn::StrengthPreset* preset = nullptr;
+        for (const auto& p : strength_)
+            if (!activeStrength_.empty() && p.name == activeStrength_) preset = &p;
+        plan = samn::PlanPlayback(scriptMap_, profile_, mapping_.choices(recipeHasContact_), preset);
+        frames = samn::PlaybackFrames(stroke_, plan);
+    } catch (const std::exception& e) {
+        setError(tr("Could not map the script: %1").arg(q(e.what())));
+        return;
+    }
+    // The vibration and suction lanes are what the device gets (0.7 sent
+    // these frames), on the device tick.
+    vibration_ = laneFrom(frames, false);
+    suction_ = laneFrom(frames, true);
+    if (fresh)
+        output_.setScript(stroke_, vibration_, suction_);
+    else
+        output_.setLevels(vibration_, suction_);
+    contactKnobsLive_ = plan.contact_on;
+    emit mappedChanged();
+    emit lanesChanged();
+    if (!fresh) {
+        for (const auto& c : curves_)
+            if (c && c->lane() != QLatin1String("stroke"))
+                c->setActions(c->lane() == QLatin1String("vibration") ? vibration_ : suction_);
+        emit playheadMsChanged();  // the live values at the playhead
+    }
+}
+
+QStringList PlayerController::strengthPresets() const {
+    QStringList out;
+    for (const auto& p : strength_) out << q(p.name);
+    return out;
+}
+
+void PlayerController::setActiveStrength(const QString& nameIn) {
+    const std::string name = u8(nameIn.trimmed());
+    if (name == activeStrength_ || !samn::IsSamnPath(u8(scriptPath_))) return;
+    // 0.7 SetActiveStrength: written into the .samn, so it stays with the script.
+    try {
+        const auto file = std::filesystem::u8path(u8(scriptPath_));
+        samn::Document doc = samn::LoadDocument(file);
+        doc.active_strength = name;
+        samn::SaveDocument(file, doc);
+    } catch (const std::exception& e) {
+        setError(tr("Could not save the strength: %1").arg(q(e.what())));
+        emit mappedChanged();  // the choice shows the one still in use
+        return;
+    }
+    activeStrength_ = name;
+    remap(false);
 }
 
 void PlayerController::loadMarks(const QString& path) {
@@ -695,6 +762,10 @@ void PlayerController::setUiValue(const QString& key, const QVariant& value) {
 double PlayerController::beatPeriodMs() const { return bpmGrid_ && bpm_ > 0 ? 60000.0 / bpm_ : 0.0; }
 
 void PlayerController::clearScript() {
+    strength_.clear();
+    activeStrength_.clear();
+    contactControls_ = contactKnobsLive_ = false;
+    emit mappedChanged();
     stroke_.clear();
     vibration_.clear();
     suction_.clear();

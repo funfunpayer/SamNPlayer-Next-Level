@@ -27,7 +27,7 @@
 
 - A **test** is one `func TestXxx` (Go) or one `def test_xxx` (Python). Python scripts that have no `def test_` (almost all of the frontend and many generator tests are a `main()` with many `check(...)` calls) count as **one test per file**; the number of checks is in the table. Subtests (`t.Run`) are not counted separately.
 - Old suite: **222** Go test files and **209** Python test files (431 files). They hold **821** Go test functions and **320** Python tests (script files counted once). `cmd/gui-wails/counting_device_test.go` has no test function (a helper type), so it is listed as n/a with 0 tests.
-- New suite: `tests/core/*_test.cpp` (doctest, 28 files), `tests/app/*_test.cpp` (Qt Test, 11 files) and `core/python/tests/*.py` (5 files). Evidence for a mapping is one of: a Go name in a comment of the new test, the identical test name, or the same behaviour checked (named in the row).
+- New suite: `tests/core/*_test.cpp` (doctest, 29 files), `tests/app/*_test.cpp` (Qt Test, 11 files) and `core/python/tests/*.py` (5 files). Evidence for a mapping is one of: a Go name in a comment of the new test, the identical test name, or the same behaviour checked (named in the row).
 - Method: the old tree was read with `git show origin/main:<path>`; the new tree with `grep` over `tests/`, `core/` and `app/`. "Ported code" means a function exists in `core/include/samn`, `core/src` or `app/src`.
 
 ## 1. Summary
@@ -36,8 +36,8 @@
 
 | | Tests | ported | covered | todo-now | todo-later | n/a |
 |---|---:|---:|---:|---:|---:|---:|
-| **All** | **1141** | 166 | 64 | **0** | 861 | 50 |
-| Go | 821 | 147 | 30 | 0 | 599 | 45 |
+| **All** | **1141** | 175 | 65 | **0** | 851 | 50 |
+| Go | 821 | 156 | 31 | 0 | 589 | 45 |
 | Python | 320 | 19 | 34 | 0 | 262 | 5 |
 
 ### Per old package
@@ -48,7 +48,7 @@
 | `device` | 7 | 41 | 39 | 2 | 0 | 0 | 0 |
 | `player` | 7 | 61 | 5 | 9 | 0 | 44 | 3 |
 | `samn` | 2 | 5 | 5 | 0 | 0 | 0 | 0 |
-| `sam` | 7 | 37 | 0 | 0 | 0 | 37 | 0 |
+| `sam` | 7 | 37 | 9 | 0 | 0 | 28 | 0 |
 | `videox` | 6 | 26 | 0 | 0 | 0 | 17 | 9 |
 | `update` | 3 | 14 | 0 | 0 | 0 | 14 | 0 |
 | `motionx` | 2 | 10 | 0 | 0 | 0 | 10 | 0 |
@@ -57,13 +57,13 @@
 | `legal` | 1 | 2 | 0 | 0 | 0 | 2 | 0 |
 | `logging` | 1 | 1 | 0 | 0 | 0 | 1 | 0 |
 | `cmd/cli` | 7 | 18 | 0 | 0 | 0 | 12 | 6 |
-| `cmd/gui-wails (Go)` | 68 | 188 | 16 | 17 | 0 | 142 | 13 |
+| `cmd/gui-wails (Go)` | 68 | 188 | 16 | 18 | 0 | 141 | 13 |
 | `generator (Go)` | 72 | 237 | 7 | 1 | 0 | 216 | 13 |
 | `generator (Python)` | 56 | 151 | 0 | 0 | 0 | 151 | 0 |
 | `native/tests (Python)` | 4 | 13 | 13 | 0 | 0 | 0 | 0 |
 | `scripts/benchmark-prep (Python)` | 1 | 8 | 0 | 0 | 0 | 8 | 0 |
 | `frontend (Python/Playwright UI tests)` | 148 | 148 | 6 | 34 | 0 | 103 | 5 |
-| **Total** | **431** | **1141** | **166** | **64** | **0** | **861** | **50** |
+| **Total** | **431** | **1141** | **175** | **65** | **0** | **851** | **50** |
 
 `generator (Go)` includes the sub-packages `aiscript`, `bodyparts`, `posttrack`, `profilemodel`, `simpletrack`, `strokepreview`, `trackcv`, `trackutil`.
 
@@ -261,15 +261,17 @@ One row per old test function (grouped when a whole file shares the same answer)
 
 ### 2.5 `sam`
 
-7 files, 37 tests: 0 ported, 0 covered, 0 todo-now, 37 todo-later, 0 n/a.
+7 files, 37 tests: 9 ported, 0 covered, 0 todo-now, 28 todo-later, 0 n/a.
 
 | Old file | Test function(s) | Status | Where / why |
 |---|---|---|---|
 | `audio_vibration_test.go` | `TestApplyAudioVibrationKeepsSuctionAndShiftsByOffset`, `TestApplyAudioVibrationExtendsToAudioEnd`, `TestApplyAudioVibrationNoEnvelopeIsNoop` | todo-later | P2/P3 (vibration from the video's sound): `ApplyAudioVibration` is not ported; the loudness envelope itself is (`audio_envelope.h`). |
 | `enrich_test.go` | `TestEnrichContactIntensityAndGaps`, `TestEnrichVelocity`, `TestFromFunscriptStillThin`, `TestRoundtripPreservesTrackingGaps` | todo-later | P3 (Generator writes the enriched `.sam` sidecar): `Enrich` is not ported. |
 | `funscript_test.go` | `TestFromFunscriptPreservesTimingAndPosition`, `TestFromFunscriptHonorsInverted`, `TestToFunscriptPreservesTimingAndPosition`, `TestToFunscriptRoundsFractionalPosition`, `TestRoundtripFunscriptSAMFunscript`, `TestRoundtripPreservesProfileAndDeviceRecipe`, `TestRoundtripLargeFunscript` | todo-later | P3 (`.sam` model <-> funscript): the SAM model is not ported. |
-| `playback_test.go` | `TestPlaybackFramesUsesSAMIntensity`, `TestPlaybackFramesFallsBackWithoutContact`, `TestPlaybackFramesHonorsOptsOnlyTrackingGaps`, `TestToDeviceFramesMutesOnConfidenceZero`, `TestHasContactIntensityRejectsThin`, `TestToDeviceFramesNoVibBelowContactThreshold` | todo-later | P3 (play from a `.sam` sidecar): `PlaybackFrames` / `ToDeviceFrames` are not ported. |
-| `runtime_test.go` | `TestRuntimeAdjustIdentity`, `TestRuntimeAdjustScaleAndMute`, `TestRuntimeAdjustBoostClamp`, `TestDensifyMatchesClassicLinear`, `TestDensifySourceAndFrameCount` | todo-later | P2 (Effects: strength/intensity adjust, `AdjustDeviceFrames`) and `Densify`: not ported. |
+| `playback_test.go` | `TestPlaybackFramesUsesSAMIntensity`, `TestPlaybackFramesFallsBackWithoutContact`, `TestPlaybackFramesHonorsOptsOnlyTrackingGaps`, `TestToDeviceFramesNoVibBelowContactThreshold` | ported | tests/core/playback_mapping_test.cpp "Contact path: …" (the four cases name their 0.7 test) |
+| `playback_test.go` | `TestToDeviceFramesMutesOnConfidenceZero`, `TestHasContactIntensityRejectsThin` | todo-later | P3 (play from a `.sam` sidecar): confidence other than tracking gaps and the sidecar choice come with the sidecar. |
+| `runtime_test.go` | `TestRuntimeAdjustIdentity`, `TestRuntimeAdjustScaleAndMute`, `TestRuntimeAdjustBoostClamp` | ported | tests/core/playback_mapping_test.cpp "RuntimeAdjust: the defaults change nothing", "RuntimeAdjust: scale and mute", "RuntimeAdjust: boost clamps to 1" |
+| `runtime_test.go` | `TestDensifyMatchesClassicLinear`, `TestDensifySourceAndFrameCount` | ported | tests/core/playback_mapping_test.cpp "Contact path follows the mapper closely, gaps never leak" (`ContactDeviceFrames` holds Densify; partial: the SAM `Source` label has no counterpart, there is no SAM script object) |
 | `sam_test.go` | `TestParseRequiresVersion`, `TestParseRequiresFrames`, `TestParseRejectsInvalidJSON`, `TestParseSortsFramesByTime`, `TestParseClampsOutOfRangeFields`, `TestParseIgnoresUnknownFutureFields`, `TestDuration`, `TestSaveLoadRoundtrip`, `TestLoadMissingFile`, `TestLoadMalformedFileOnDisk` | todo-later | P3 (`.sam` v0.1 format): `Parse` / `Save` / `Load` of the SAM model are not ported. |
 | `sidecar_test.go` | `TestWriteAndLoadSidecar`, `TestLoadSidecarMissing` | todo-later | P3 (`.sam` sidecar next to the clip): not ported. |
 
@@ -354,7 +356,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 
 ### 2.14 `cmd/gui-wails (Go)`
 
-68 files, 188 tests: 16 ported, 17 covered, 0 todo-now, 142 todo-later, 13 n/a.
+68 files, 188 tests: 16 ported, 18 covered, 0 todo-now, 141 todo-later, 13 n/a.
 
 | Old file | Test function(s) | Status | Where / why |
 |---|---|---|---|
@@ -394,7 +396,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 | `app_edition_suite_test.go` | `TestSuiteBuildFlag` | n/a | Go build-tag / ldflags `Suite` flag. |
 | `app_edition_test.go` | `TestCustomerBuildRefusesStudioTools` | n/a | Go customer-build tag refusing Studio tools. |
 | `app_editor_test.go` | `TestAppScriptActionsRoundtrip` | todo-later | P4 Editor: `ScriptActions` get/save round trip. |
-| `app_effect_presets_test.go` | `TestEffectPresetsRoundTrip` | todo-later | P2 (Effects presets, settings key `playback.effect_presets`). |
+| `app_effect_presets_test.go` | `TestEffectPresetsRoundTrip` | covered | tests/app/player_controller_test.cpp `effectPresetsSaveApplyDelete` (fresh install has none, the 0.7 text loads, saved and read back by a new controller) and tests/core/playback_mapping_test.cpp "Effects presets: the 0.7 text reads and writes back" |
 | `app_feel_test.go` | `TestSaveFeelSettingsOnFunscript` | todo-later | P2 (feel per scene) / P4 UI: the app method and its validation (unknown scene `dance` is refused) are not ported; the recipe part is in list A via `TestSaveFeelRecipeRoundTrip`. |
 | `app_feel_test.go` | `TestSaveFeelSettingsRebakesEmotionScript` | ported | tests/core/samn_file_test.cpp "samn_file: a new feel changes the baked vibration axis" (adapted to `Document::ApplyFeelRecipe` + `BakeNeoAxes`) |
 | `app_free_e2e_opencv_test.go` | `TestFreeChainGenerateSavePlay` | todo-later | P3.3 (end-to-end Create: generate, save, play); needs OpenCV. |

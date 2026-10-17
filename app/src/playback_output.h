@@ -27,8 +27,9 @@ class DeviceController;
 // The Player reports the playhead (script time) at every video position
 // update (about 4 to 10 times a second, as the 0.7 timeupdate); each report
 // sends:
-//  - vibration and suction at the playhead (the mapper's curves, 0-100) times
-//    the channel level, or 0 when the channel is switched off;
+//  - vibration and suction at the playhead (the mapped curves, 0-100) times
+//    the channel level and the master intensity, or 0 when the channel is
+//    switched off;
 //  - for a stroker, the NEXT stroke action as "move there in the time until it
 //    is due" (min 20 ms), through the stroke filter and the safety range;
 //  - the same for the extra TCode axes the script carries.
@@ -39,8 +40,8 @@ class DeviceController;
 // "Move home on pause" is on, send the stroker to the bottom of its range in
 // 1.2 s. The emergency stop drops queued levels, stops at once and keeps the
 // output silent until playback starts again.
-// The levels go through Reduce peaks (when on), the channel level, the
-// Extended-O scale and the soft start (0.7 setOutput):
+// The levels go through Reduce peaks (when on), the channel level times the
+// master intensity, the Extended-O scale and the soft start (0.7 setOutput):
 //  - soft start: after the first position of a start, a pause or a quiet
 //    period the levels ramp from 0 to the script in 10 steps over
 //    softStartMs (0 = off). A pause, a stop or the watchdog inside the ramp
@@ -74,6 +75,9 @@ class PlaybackOutput : public QObject {
     Q_PROPERTY(int vibrationLevel READ vibrationLevel WRITE setVibrationLevel NOTIFY outputChanged)
     Q_PROPERTY(bool suctionOn READ suctionOn WRITE setSuctionOn NOTIFY outputChanged)
     Q_PROPERTY(int suctionLevel READ suctionLevel WRITE setSuctionLevel NOTIFY outputChanged)
+    // Master intensity 0-100 on top of the channel levels (0.7 Effects
+    // "Intensity"; 0 is silence, a real value).
+    Q_PROPERTY(int intensity READ intensity WRITE setIntensity NOTIFY outputChanged)
     // Play speed of the video (move durations are divided by it).
     Q_PROPERTY(double speed READ speed WRITE setSpeed NOTIFY outputChanged)
     // Soft start of the levels in ms (0.7 playback.soft_start_ms): 0 = off,
@@ -116,6 +120,10 @@ public:
     void setScript(std::vector<samn::Action> stroke, std::vector<samn::Action> vibration,
                    std::vector<samn::Action> suction,
                    std::map<std::string, std::vector<samn::Action>> axes = {});
+    // New vibration / suction curves for the same script (a mapping setting
+    // changed): they replace the old ones at once, also while playing; the
+    // stroke, the soft start and an Extended-O cycle go on.
+    void setLevels(std::vector<samn::Action> vibration, std::vector<samn::Action> suction);
     // The video starts or stops playing (pause, stop, end).
     void setPlaying(bool playing);
     // The playhead in script time, reported while the video plays.
@@ -156,6 +164,8 @@ public:
     void setSuctionOn(bool on);
     int suctionLevel() const { return sucLevel_; }
     void setSuctionLevel(int v);
+    int intensity() const { return intensity_; }
+    void setIntensity(int v);
     double speed() const { return speed_; }
     void setSpeed(double s);
     int softStartMs() const { return softStartMs_; }
@@ -210,6 +220,7 @@ private:
     int lo_ = 0, hi_ = 100;
     bool vibOn_ = true, sucOn_ = true;
     int vibLevel_ = 100, sucLevel_ = 100;
+    int intensity_ = 100;
     double speed_ = 1.0;
 
     bool playing_ = false;
