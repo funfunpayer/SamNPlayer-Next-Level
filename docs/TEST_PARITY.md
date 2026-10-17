@@ -36,8 +36,8 @@
 
 | | Tests | ported | covered | todo-now | todo-later | n/a |
 |---|---:|---:|---:|---:|---:|---:|
-| **All** | **1141** | 175 | 65 | **0** | 851 | 50 |
-| Go | 821 | 156 | 31 | 0 | 589 | 45 |
+| **All** | **1141** | 207 | 66 | **0** | 818 | 50 |
+| Go | 821 | 188 | 32 | 0 | 556 | 45 |
 | Python | 320 | 19 | 34 | 0 | 262 | 5 |
 
 ### Per old package
@@ -51,19 +51,19 @@
 | `sam` | 7 | 37 | 9 | 0 | 0 | 28 | 0 |
 | `videox` | 6 | 26 | 0 | 0 | 0 | 17 | 9 |
 | `update` | 3 | 14 | 0 | 0 | 0 | 14 | 0 |
-| `motionx` | 2 | 10 | 0 | 0 | 0 | 10 | 0 |
+| `motionx` | 2 | 10 | 4 | 0 | 0 | 6 | 0 |
 | `pluginhost` | 2 | 10 | 0 | 0 | 0 | 10 | 0 |
 | `edition` | 1 | 1 | 0 | 0 | 0 | 0 | 1 |
 | `legal` | 1 | 2 | 0 | 0 | 0 | 2 | 0 |
 | `logging` | 1 | 1 | 0 | 0 | 0 | 1 | 0 |
 | `cmd/cli` | 7 | 18 | 0 | 0 | 0 | 12 | 6 |
 | `cmd/gui-wails (Go)` | 68 | 188 | 16 | 18 | 0 | 141 | 13 |
-| `generator (Go)` | 72 | 237 | 29 | 2 | 0 | 192 | 13 |
+| `generator (Go)` | 72 | 237 | 35 | 2 | 0 | 187 | 13 |
 | `generator (Python)` | 56 | 151 | 0 | 0 | 0 | 151 | 0 |
 | `native/tests (Python)` | 4 | 13 | 13 | 0 | 0 | 0 | 0 |
 | `scripts/benchmark-prep (Python)` | 1 | 8 | 0 | 0 | 0 | 8 | 0 |
 | `frontend (Python/Playwright UI tests)` | 148 | 148 | 6 | 34 | 0 | 103 | 5 |
-| **Total** | **431** | **1141** | **197** | **66** | **0** | **827** | **50** |
+| **Total** | **431** | **1141** | **207** | **66** | **0** | **818** | **50** |
 
 `generator (Go)` includes the sub-packages `aiscript`, `bodyparts`, `posttrack`, `profilemodel`, `simpletrack`, `strokepreview`, `trackcv`, `trackutil`.
 
@@ -74,7 +74,7 @@
 | `generator/(top level)` | 44 | 122 | 7 | 1 | 0 | 101 | 13 |
 | `generator/aiscript` | 3 | 12 | 0 | 0 | 0 | 12 | 0 |
 | `generator/bodyparts` | 1 | 4 | 0 | 0 | 0 | 4 | 0 |
-| `generator/posttrack` | 3 | 9 | 0 | 0 | 0 | 9 | 0 |
+| `generator/posttrack` | 3 | 9 | 6 | 0 | 0 | 3 | 0 |
 | `generator/profilemodel` | 1 | 6 | 0 | 0 | 0 | 6 | 0 |
 | `generator/simpletrack` | 5 | 12 | 0 | 0 | 0 | 12 | 0 |
 | `generator/strokepreview` | 3 | 9 | 0 | 0 | 0 | 9 | 0 |
@@ -300,12 +300,13 @@ One row per old test function (grouped when a whole file shares the same answer)
 
 ### 2.8 `motionx`
 
-2 files, 10 tests: 0 ported, 0 covered, 0 todo-now, 10 todo-later, 0 n/a.
+2 files, 10 tests: 4 ported, 0 covered, 0 todo-now, 6 todo-later, 0 n/a.
 
 | Old file | Test function(s) | Status | Where / why |
 |---|---|---|---|
 | `chapters_test.go` | `TestChaptersMapsStates`, `TestChaptersNil` | todo-later | P4 (Analysis, Scene Map): `motionx` chapters-from-states is not ported. |
-| `motionx_test.go` | `TestSimplifyKeepsEndpoints`, `TestSimplifyRespectsTolerance`, `TestSimplifyStraightLineCollapses`, `TestSimplifyDeepCurveDoesNotRecurse`, `TestDedup`, `TestClassifyStaticCurve`, `TestClassifyStartStop`, `TestClassifySegmentsAreContiguousAndLongEnough` | todo-later | P4 (Analysis, Scene Map): `Simplify`, `Dedup`, `Classify` are not ported. |
+| `motionx_test.go` | `TestSimplifyKeepsEndpoints`, `TestSimplifyRespectsTolerance`, `TestSimplifyStraightLineCollapses`, `TestSimplifyDeepCurveDoesNotRecurse` | ported | `tests/core/simplify_test.cpp` (`samn::SimplifyIndices`, used by the post-processing RDP step). |
+| `motionx_test.go` | `TestDedup`, `TestClassifyStaticCurve`, `TestClassifyStartStop`, `TestClassifySegmentsAreContiguousAndLongEnough` | todo-later | P4 (Analysis, Scene Map): `Dedup`, `Classify` are not ported. |
 
 ### 2.9 `pluginhost`
 
@@ -458,7 +459,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 
 ### 2.15 `generator (Go)`
 
-72 files, 237 tests: 29 ported, 2 covered, 0 todo-now, 192 todo-later, 13 n/a.
+72 files, 237 tests: 35 ported, 2 covered, 0 todo-now, 187 todo-later, 13 n/a.
 
 | Old file | Test function(s) | Status | Where / why |
 |---|---|---|---|
@@ -503,9 +504,9 @@ One row per old test function (grouped when a whole file shares the same answer)
 | `native_two_point_test.go` | `TestGenerateNativeTwoPointSimple` | todo-later | P3.4 (two-point tracking). |
 | `native_write_test.go` | `TestWriteFileAtomicReplacesExistingFile` | ported | tests/core/fileio_test.cpp "fileio: atomic write creates, replaces and leaves no temp file" |
 | `native_write_test.go` | `TestWriteFileAtomicCleansTempAfterRenameFailure` | ported | tests/core/fileio_test.cpp "fileio: a failed rename leaves the destination and the folder clean" (shared with funscript/atomic_write_test.go) |
-| `posttrack/convert_test.go` | `TestPositionsToActionsMatchesPythonGoldens`, `TestLimitSpeedMatchesPythonGolden`, `TestProminenceReducesDampedRinging`, `TestPercentileBeatsMinMaxOnOutlier` | todo-later | P3.2 (post-processing; Go goldens from the Python port). |
-| `posttrack/filters_test.go` | `TestRollingDetrendRemovesSlowDrift`, `TestBandpassAttenuatesDCAndHighFreq` | todo-later | P3.2 (post-processing filters). |
-| `posttrack/preview_test.go` | `TestPreviewStatsDefaultKnobs`, `TestPreviewStatsProminenceReducesPeaks`, `TestPreviewStatsWideSmoothCalmerHint` | todo-later | P3.2 (post-processing preview stats). |
+| `posttrack/convert_test.go` | `TestPositionsToActionsMatchesPythonGoldens`, `TestLimitSpeedMatchesPythonGolden`, `TestProminenceReducesDampedRinging`, `TestPercentileBeatsMinMaxOnOutlier` | ported | `tests/engine/post_track_test.cpp`: "post: every golden gives the same actions and dense curve as 0.7" (13 goldens, actions exact, dense curve within 0.05; the goldens file is `tests/engine/testdata/posttrack_goldens.json`), "post: the speed limit equals 0.7", "post: prominence quiets damped ringing", "post: percentile normalisation beats min/max on an outlier". |
+| `posttrack/filters_test.go` | `TestRollingDetrendRemovesSlowDrift`, `TestBandpassAttenuatesDCAndHighFreq` | ported | `tests/engine/post_track_test.cpp`: "post: detrend removes slow drift and keeps the stroke", "post: bandpass removes DC and keeps the stroke band". |
+| `posttrack/preview_test.go` | `TestPreviewStatsDefaultKnobs`, `TestPreviewStatsProminenceReducesPeaks`, `TestPreviewStatsWideSmoothCalmerHint` | todo-later | P3.3 (the Expert preview belongs to the Generator page). |
 | `profilemodel/model_test.go` | `TestAppendTrainLoadAndSuggest`, `TestSuggestRejectsUnknownAndAmbiguousSignatures`, `TestOldProfileLabelsRemainTrainable`, `TestAppendLabelRejectsInvalidInput`, `TestCorruptModelDoesNotBlockRetraining`, `TestAppendLabelSerializesConcurrentWriters` | todo-later | P4 (AI profile model). |
 | `roi_still_classreg_test.go` | `TestEnsureClassIDsRegistersCanonicalLabels` | todo-later | P4 (AI Train: ROI class registry). |
 | `roi_still_test.go` | `TestStillTrainingGetsValSplit`, `TestEnsureRoiDatasetSplitsHealsEmptyVal`, `TestPrepareRoiDatasetForTrainingEmpty`, `TestPrepareRoiDatasetForTrainingHealsThenOK` | todo-later | P4 (AI Train: YOLO dataset splits). |
