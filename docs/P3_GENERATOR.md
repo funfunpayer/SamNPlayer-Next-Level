@@ -75,12 +75,12 @@ The detection engine is our own C++: algorithms are free to implement from their
 | Audio onsets, tempo, beats | spectral flux, tempogram, beat tracking with dynamic programming, segments (replaces 0.7 `audiocheck` / `audio_segments`) | pocketfft or KissFFT (BSD), libsamplerate (BSD), FFmpeg for decoding | 0.7 audio tests ported (P3.6), then P3.8 |
 | Speech (Speech-Hold) | the hold logic | Silero VAD via ONNX (MIT), whisper.cpp (MIT) | labelled synthetic and Owner clips |
 
-**The engine is its own program (D-141).** The open core (GPL-3.0-or-later) and the closed engine never link together. The Generator page starts the engine (`engine/`, P3.1 on) as a separate process and talks to it over one narrow contract, the same one every detector plugin uses:
-- input: media path, time range, marks and options (JSON on stdin);
-- output: JSON lines on stdout: progress, then results (positions, gaps, marks, beats, onsets) in video time;
-- a cancel token, a run sequence id on every line, children killed when the app quits; a failure never blocks the app (GD-25).
+**The engine is a built-in plugin (D-141).** `engine/` (library `samn_engine`, P3.1 on) implements the detector plugin interface and is linked into every build; the Generator page calls it in-process on a worker thread. One interface for every detector:
+- input: media path, time range, marks and options;
+- output: progress, then results (positions, gaps, marks, beats, onsets) in video time;
+- a cancel token and a run sequence id on every result; the run stops when the app quits; a failure is reported, never blocks the UI (GD-25). Because it runs in-process, the engine is held to the core's rules: RAII, no exceptions across the interface, covered by the sanitizer job.
 
-`vision/` (frame reading, the tracker factory, the self-check) is a generic building block of the open core; the tuned tracking logic, parameters and models belong to the engine. GPL code (OpenFunscripter, ScriptPlayer, aubio, Essentia …) may be used in the core and in GPL plugins, never in the engine (`LICENSING.md`). A plugin's result is a candidate like any other: it has to beat our engine and 0.7 at the P3.8 gate before the UI offers it by default. The 0.7 `pluginhost` (drop folder plus manifest, stage H1) is the starting point for discovery.
+External plugins may use the same interface out of process (JSON lines on stdin/stdout). `vision/` (frame reading, the tracker factory, the self-check) holds the generic building blocks; the tracking logic, parameters and models live in `engine/`. Everything is GPL-3.0-or-later, so GPL code (OpenFunscripter, ScriptPlayer, aubio, Essentia …) may be used anywhere (`LICENSING.md`). A plugin's result is a candidate like any other: it has to beat our engine and 0.7 at the P3.8 gate before the UI offers it by default. The 0.7 `pluginhost` (drop folder plus manifest, stage H1) is the starting point for discovery.
 
 ## Steps (each one a PR with tests; parity first, then improvements)
 

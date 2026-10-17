@@ -25,9 +25,9 @@ The Owner's master document (17 Oct 2026), ordered. It is **alive**: the Owner e
 - **One core** (Player, settings, plugin system); everything else is a module around it.
 
 ## 5. Licence (decided 17 Oct: D-141)
-- Goal: open source where that gains the most, without showing every secret and experience we collected.
-- **Open core under GPL-3.0-or-later** (Player, Editor, settings, plugin system, formats, devices); GPL code (for example OpenFunscripter) may be used there.
-- **Closed detection engine** (generator logic, tuned parameters, models) as a separate program behind the plugin interface. See [`LICENSING.md`](../LICENSING.md).
+- Goal (manifest): fully open-source capable, without showing every secret and experience we collected.
+- First choice C (open core, closed engine as a separate program) was replaced the same day: the Owner wants detection as a plugin fully inside the app, with no disadvantage, "otherwise rather everything open". A closed plugin inside a GPL program is not allowed, so **everything is open under GPL-3.0-or-later**, the engine included. GPL code (for example OpenFunscripter) may be used anywhere.
+- What stays private is data and notes, not code: media, golden clips, private benchmark recordings. See [`LICENSING.md`](../LICENSING.md).
 
 ## 6. Working together
 - **Ask the Owner on decisions**, and look at each from at least three directions. Use existing knowledge.

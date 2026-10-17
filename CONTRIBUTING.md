@@ -74,8 +74,8 @@ When sources disagree, the code and reproducible tests win. The 0.7 code
 
 ## Licence of code (D-141, `LICENSING.md`)
 
-15. **Open core, closed engine.** The core (`app/`, `core/`, `vision/`, `tests/`) is GPL-3.0-or-later. The detection engine (`engine/`) is proprietary and only talks to the core over the plugin process contract; never link one into the other.
-16. **Copied code keeps its origin.** Code taken from GPL-3.0(-or-later), GPL-2.0-or-later, LGPL or AGPL-3.0 projects may go into the core only, with its copyright and licence header, and a line in `THIRD_PARTY.md`. GPL-2.0-only, BSL, "source available" and proprietary code never enter. The engine contains only our own code and permissively licensed parts.
+15. **Everything is GPL-3.0-or-later.** Core and detection engine (`engine/`, a built-in plugin) alike.
+16. **Copied code keeps its origin.** Code taken from GPL-3.0(-or-later), GPL-2.0-or-later, LGPL or AGPL-3.0 projects may go in, with its copyright and licence header, and a line in `THIRD_PARTY.md`. GPL-2.0-only, BSL, "source available" and proprietary code never enter.
 17. **Write small things ourselves** rather than adding a dependency (manifest §4); every new dependency is named in `THIRD_PARTY.md` with its licence.
 
 ## Workflow
