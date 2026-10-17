@@ -882,29 +882,29 @@ Item {
     }
 
     // Keys as 0.7 (Player, not while typing).
-    Shortcut { sequence: "Space"; onActivated: page.togglePlay() }
-    Shortcut { sequence: "Left"; onActivated: page.seekBy(-5000) }
-    Shortcut { sequence: "Right"; onActivated: page.seekBy(5000) }
-    Shortcut { sequence: "Shift+Left"; onActivated: page.seekBy(-1000) }
-    Shortcut { sequence: "Shift+Right"; onActivated: page.seekBy(1000) }
-    Shortcut { sequence: ","; onActivated: page.seekBy(-200) }
-    Shortcut { sequence: "."; onActivated: page.seekBy(200) }
-    Shortcut { sequences: ["+", "="]; onActivated: ctrl.offsetMs = ctrl.offsetMs + 10 }
-    Shortcut { sequence: "-"; onActivated: ctrl.offsetMs = ctrl.offsetMs - 10 }
-    Shortcut { sequence: "L"; onActivated: ctrl.loopEnabled = !ctrl.loopEnabled }
-    Shortcut { sequence: "A"; onActivated: ctrl.setLoopStart(media.position) }
-    Shortcut { sequence: "B"; onActivated: ctrl.setLoopEnd(media.position) }
+    Shortcut { sequence: "Space"; enabled: !page.deckOpen; onActivated: page.togglePlay() }
+    Shortcut { sequence: "Left"; enabled: !page.deckOpen; onActivated: page.seekBy(-5000) }
+    Shortcut { sequence: "Right"; enabled: !page.deckOpen; onActivated: page.seekBy(5000) }
+    Shortcut { sequence: "Shift+Left"; enabled: !page.deckOpen; onActivated: page.seekBy(-1000) }
+    Shortcut { sequence: "Shift+Right"; enabled: !page.deckOpen; onActivated: page.seekBy(1000) }
+    Shortcut { sequence: ","; enabled: !page.deckOpen; onActivated: page.seekBy(-200) }
+    Shortcut { sequence: "."; enabled: !page.deckOpen; onActivated: page.seekBy(200) }
+    Shortcut { sequences: ["+", "="]; enabled: !page.deckOpen; onActivated: ctrl.offsetMs = ctrl.offsetMs + 10 }
+    Shortcut { sequence: "-"; enabled: !page.deckOpen; onActivated: ctrl.offsetMs = ctrl.offsetMs - 10 }
+    Shortcut { sequence: "L"; enabled: !page.deckOpen; onActivated: ctrl.loopEnabled = !ctrl.loopEnabled }
+    Shortcut { sequence: "A"; enabled: !page.deckOpen; onActivated: ctrl.setLoopStart(media.position) }
+    Shortcut { sequence: "B"; enabled: !page.deckOpen; onActivated: ctrl.setLoopEnd(media.position) }
     Repeater {
         model: 9
         delegate: Item {
             required property int index
             Shortcut {
                 sequence: String(index + 1)
-                enabled: !deckOpen
+                enabled: !page.deckOpen
                 onActivated: page.seekTo(ctrl.jumpTenthVideoMs(index + 1))
             }
         }
     }
-    Shortcut { sequence: StandardKey.Open; onActivated: page.openFile() }
-    Shortcut { sequence: "Esc"; enabled: page.fullStage; onActivated: page.fullStage = false }
+    Shortcut { sequence: StandardKey.Open; enabled: !page.deckOpen; onActivated: page.openFile() }
+    Shortcut { sequence: "Esc"; enabled: page.fullStage && !page.deckOpen; onActivated: page.fullStage = false }
 }
