@@ -15,6 +15,8 @@
 #include <QXmlStreamReader>
 #include <QtQml/QQmlExtensionPlugin>
 #include <QtTest>
+
+#include "device_controller.h"
 #include <memory>
 
 #include "icon_provider.h"
@@ -411,6 +413,53 @@ private slots:
             QTRY_COMPARE_WITH_TIMEOUT(s.mode(), 0, kWait);
             QTRY_VERIFY_WITH_TIMEOUT(!s.deckOpen(), kWait);
         }
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
+
+    // 0.7 top bar: the device chip (LED, name, battery, Connect /
+    // Disconnect; a click opens the device controls) and the version.
+    void topBarDeviceChipAndVersion() {
+        QCoreApplication::setApplicationVersion(QStringLiteral("9.8.7-dev"));
+        {
+            Shell s;
+            loadShell(s);
+            QVERIFY(s.window);
+            auto byName = [&](const char* name) -> QQuickItem* {
+                for (QQuickItem* i : descendants(s.root()))
+                    if (i->objectName() == QLatin1String(name)) return i;
+                return nullptr;
+            };
+            QQuickItem* label = byName("deviceChipLabel");
+            QQuickItem* button = byName("deviceChipButton");
+            QVERIFY(label && button && byName("versionLabel"));
+            QCOMPARE(byName("versionLabel")->property("text").toString(), QStringLiteral("v9.8.7-dev"));
+            QCOMPARE(label->property("text").toString(), QStringLiteral("Not connected"));
+            QCOMPARE(button->property("text").toString(), QStringLiteral("Connect"));
+
+            auto* dev = s.window->findChild<samn::ui::DeviceController*>();
+            QVERIFY(dev);
+            dev->connectMock();
+            QTRY_VERIFY_WITH_TIMEOUT(label->property("text").toString().startsWith(QStringLiteral("Mock device")), kWait);
+            QCOMPARE(button->property("text").toString(), QStringLiteral("Disconnect"));
+
+            // A click on the chip opens the Player with the Inspector on Devices.
+            QQuickItem* inspector = s.one("InspectorPanel");
+            inspector->setProperty("collapsed", true);
+            inspector->setProperty("tab", 2);
+            s.window->setProperty("mode", 2);
+            QTRY_COMPARE(s.mode(), 2);
+            QQuickItem* chip = byName("deviceChip");
+            QTest::mouseClick(s.window, Qt::LeftButton, Qt::NoModifier, chip->mapToScene(QPointF(14, chip->height() / 2)).toPoint());
+            QTRY_COMPARE_WITH_TIMEOUT(s.mode(), 0, kWait);
+            QVERIFY(!inspector->property("collapsed").toBool());
+            QCOMPARE(inspector->property("tab").toInt(), 0);
+
+            // The button disconnects.
+            QTest::mouseClick(s.window, Qt::LeftButton, Qt::NoModifier,
+                              button->mapToScene(QPointF(button->width() / 2, button->height() / 2)).toPoint());
+            QTRY_COMPARE_WITH_TIMEOUT(label->property("text").toString(), QStringLiteral("Not connected"), kWait);
+        }
+        QCoreApplication::setApplicationVersion(QString());
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }
 
