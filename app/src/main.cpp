@@ -25,6 +25,11 @@ int main(int argc, char** argv) {
     QStringList startupPaths;
     for (int i = 1; i < argc; ++i) startupPaths << QString::fromLocal8Bit(argv[i]);
     engine.rootContext()->setContextProperty("startupPaths", startupPaths);
+    // Test hooks (synthetic data only): SAMN_MODE=1..4 starts in that mode, SAMN_TRAINING_START=<program
+    // name | custom> starts a Training on the Mock device at once.
+    const int mode = qEnvironmentVariableIntValue("SAMN_MODE");
+    engine.rootContext()->setContextProperty("startMode", mode >= 1 && mode <= 4 ? mode - 1 : 0);
+    engine.rootContext()->setContextProperty("trainingStart", qEnvironmentVariable("SAMN_TRAINING_START"));
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &app, [] { QCoreApplication::exit(1); },
                      Qt::QueuedConnection);
     // Resource path instead of loadFromModule (Qt 6.5+) so Qt 6.4 works too.

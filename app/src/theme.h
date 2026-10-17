@@ -32,6 +32,8 @@ private:
     SAMN_COLOR(textMuted, "#6f8399")
     SAMN_COLOR(laneVibration, "#00d9f4")
     SAMN_COLOR(laneSuction, "#b896e8")
+    SAMN_COLOR(trainVibration, "#03d8f2")  // the Training rings and curves (0.7 training_rings.js)
+    SAMN_COLOR(trainSuction, "#ff982e")
     SAMN_COLOR(danger, "#ff6b7a")
     SAMN_COLOR(good, "#3ddc97")
 #undef SAMN_COLOR

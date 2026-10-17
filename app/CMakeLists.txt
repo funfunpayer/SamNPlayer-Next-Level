@@ -23,6 +23,8 @@ qt_add_qml_module(samn_app
     src/library_controller.h src/library_controller.cpp
     src/icon_provider.h src/icon_provider.cpp
     src/device_controller.h src/device_controller.cpp
+    src/training_controller.h src/training_controller.cpp
+    src/training_curve_item.h src/training_curve_item.cpp
     src/device_io/waiter.h
     src/device_io/qt_transport.h
     src/device_io/socket_line_transport.h src/device_io/socket_line_transport.cpp
@@ -37,6 +39,12 @@ qt_add_qml_module(samn_app
     qml/PlayButton.qml
     qml/PlayerPage.qml
     qml/NotYetPage.qml
+    qml/TrainingPage.qml
+    qml/TrainingRing.qml
+    qml/TrainingEditor.qml
+    qml/FlowToggle.qml
+    qml/SettingRow.qml
+    qml/NumField.qml
     qml/FlowButton.qml
     qml/IconButton.qml
     qml/FlowSlider.qml
