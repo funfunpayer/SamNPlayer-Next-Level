@@ -1,13 +1,49 @@
 import QtQuick
+import QtQuick.Window
 import SamN
 
 // "Choose a mode": one card per mode, keys 1-4, Esc closes. Fades and scales in.
 // Generator and Editor are one mode (Owner 16 Oct, D-137).
-Item {
+// Keyboard as the 0.7 tabs: arrows and Home/End move the focus ring, Tab
+// stays inside, Enter or Space picks; focus returns where it was on close.
+FocusScope {
     id: root
     property int current: 0
     property bool open: false
+    // The card with the focus ring (keyboard cursor; the mouse moves it too).
+    property int focusIndex: 0
+    property Item returnFocus: null
     signal chosen(int index)
+    Accessible.role: Accessible.Dialog
+    Accessible.name: qsTr("Choose a mode")
+
+    onOpenChanged: {
+        if (open) {
+            returnFocus = Window.activeFocusItem
+            focusIndex = current
+            forceActiveFocus()
+        } else {
+            focus = false  // a hidden deck must not keep the keys
+            if (returnFocus) returnFocus.forceActiveFocus()
+            returnFocus = null
+        }
+    }
+    function move(step) { focusIndex = (focusIndex + step + modes.length) % modes.length }
+    function pick(i) { chosen(i); open = false }
+    Keys.enabled: open
+    Keys.onLeftPressed: move(-1)
+    Keys.onUpPressed: move(-1)
+    Keys.onRightPressed: move(1)
+    Keys.onDownPressed: move(1)
+    Keys.onTabPressed: move(1)
+    Keys.onBacktabPressed: move(-1)
+    Keys.onPressed: (event) => {
+        if (event.key === Qt.Key_Home) { focusIndex = 0; event.accepted = true }
+        else if (event.key === Qt.Key_End) { focusIndex = modes.length - 1; event.accepted = true }
+        else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+            pick(focusIndex); event.accepted = true
+        }
+    }
     readonly property var modes: [
         { name: qsTr("Player"), text: qsTr("Play scripts with video\nand your device"), color: Theme.cyan, icon: "player" },
         { name: qsTr("Generator"), text: qsTr("Create a script from a\nvideo and edit it"), color: Theme.orange, icon: "create" },
@@ -40,7 +76,7 @@ Item {
         Text {
             textFormat: Text.PlainText
             anchors.right: parent.right; anchors.rightMargin: 22; y: 18
-            text: "1–" + root.modes.length + " · ESC"; color: Theme.textMuted; font.pixelSize: 11
+            text: "1–" + root.modes.length + " · ← → · ENTER · ESC"; color: Theme.textMuted; font.pixelSize: 11
         }
         Row {
             x: 18; y: 48
@@ -55,6 +91,18 @@ Item {
                     border.width: index === root.current ? 1.5 : 1
                     border.color: index === root.current ? Theme.cyan : Theme.cardBorder
                     Behavior on color { ColorAnimation { duration: Theme.animFast } }
+                    Accessible.role: Accessible.Button
+                    Accessible.name: modelData.name
+                    Accessible.description: modelData.text
+                    // Focus ring of the keyboard cursor, outside the card's own border.
+                    Rectangle {
+                        objectName: "focusRing"
+                        anchors.fill: parent; anchors.margins: -4
+                        radius: parent.radius + 4
+                        color: "transparent"
+                        border.width: 2; border.color: Qt.rgba(1, 1, 1, 0.7)
+                        visible: root.open && index === root.focusIndex
+                    }
                     Rectangle {
                         anchors.right: parent.right; anchors.top: parent.top; anchors.margins: 10
                         width: 20; height: 20; radius: 5
@@ -85,7 +133,8 @@ Item {
                         id: cardArea
                         anchors.fill: parent; hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: { root.chosen(index); root.open = false }
+                        onEntered: root.focusIndex = index
+                        onClicked: root.pick(index)
                     }
                 }
             }
