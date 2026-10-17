@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 16 Oct 2026, Claude, branch `claude/samn2-device-ui`.
+**Last update:** 17 Oct 2026, Claude, branch `claude/samn2-sanitizers`.
 
 ## Rules
 
@@ -56,14 +56,21 @@
   - Tests: `playback_output_test` (20, Mock device and a UDP sink for TCode), `inspector_qml_test` (loads the Inspector without QML warnings; screenshots with `SAMN_TEST_SHOT`).
   - Open: soft start of the levels, peak reduce, Extended-O, companion axis files into the player, the "Short test pulse", raw value test and diagnostics UI, the device shell graphic, the top-bar chip, connecting by itself at Play, the Tools / Device page.
 
-## Next (P1, in order)
+- **Player additions** (#24, #25, #28–#31): chapter bands and "+" scene markers, Save / Load project and Heatmap PNG, play list (Add, Next, Auto-advance, Shuffle, Repeat), Script Doctor, silk waves and the breathing Play halo.
+- **Old-repo knowledge** (#32, #34): CONTRIBUTING with the old and the Owner's rules; `LESSONS.md` (141 lessons, 32 rejected ideas, 27 gaps by risk), `TEST_PARITY.md` (all 1141 old tests mapped), `VERSIONS_AND_PLANS.md` (55 versions; removed on purpose vs. lost).
+- **Old tests ported** (#33, #36, #39): stroke filter, beat strokes, beat bar, fileio, settings, 35 recipe / feel / contact tests, shutdown, identifier scan (ctest `identifiers`).
+- **Gap fixes** (#35, #38): seek before load, names as plain text, English core errors, media errors in the error bar, multi-drop never silent.
+- **Training** (#37): the 0.7 Training plus the level programs, Go parity of engine and write sequences, rings follow the device.
 
-1. `docs/PARITY.md`: the full 0.7 inventory (every function, file:line), the checklist for "exact copy". A first attempt stopped at a usage limit; redo it.
-3. BPM grid, O-marker bands, feel segment bands, speed highlights, scene strip, chapter bands; O-markers, bookmarks and chapters panels (add from selection).
-4. Audio Analysis card and audio segments, auto sync (audio), playback speed, `.samn` export, recent files, soft seek.
-5. Core cleanups from `MODULES.md`: names, Unicode case folding, one Python module.
+## Next (in order; the work list is `LESSONS.md` § Gaps and `TEST_PARITY.md` § Port now)
 
-Owner reminders (16 Oct): the Generator has the Editor built in; detection should become better than 0.7 (C++ libraries); curves stay real curves with the audio curve; everything planned in the old roadmap comes along.
+1. Close the remaining `todo-now` tests: PlaybackOutput (5) and QML shell (4) are being ported on `claude/samn2-test-gaps-4`; PlayerController (3: snapshot name, heat tooltip, real tf/tj fixture) next.
+2. Gaps by risk: GAP-06 sanitizer job (`claude/samn2-sanitizers`), GAP-05 device safety tests, GAP-12 Script Doctor input facts, then the rest of the table.
+3. Finish the Player: Alt+B panels toggle, shortcuts, companion axis files, `PARITY.md` §3 and the "missing" list in `VERSIONS_AND_PLANS.md`.
+4. Generator = Editor (P3, D-137): update `P3_GENERATOR.md` with the lessons (rejected approaches, fail closed, tip coast, cancellable runs, benchmark gate first) and the C++ options (OpenCV, ONNX), measured against 0.7 (D-135).
+5. Scene Map, Settings / Tools, handbook; bug hunt; release.
+
+Owner reminders (16–17 Oct): the Generator is the Editor; detection better than 0.7 but measured against it; curves stay real curves (audio too); every function of 0.7 and all earlier versions and plans comes along, what was removed on purpose stays out (and why is in `VERSIONS_AND_PLANS.md`).
 
 ## Waiting on the Owner
 

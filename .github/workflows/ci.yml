@@ -97,3 +97,28 @@ jobs:
           exe=build/app/samnplayer; [ -f build/app/Release/samnplayer.exe ] && exe=build/app/Release/samnplayer.exe
           SAMN_SCREENSHOT=smoke.png SAMN_SCREENSHOT_DELAY_MS=2500 timeout 60 "$exe" smoke.funscript
           test -s smoke.png
+
+  # Memory and undefined-behaviour checks of the core (no Qt). 0.7's native
+  # layer had a heap-corrupting argument and a double free that only showed
+  # far from their cause (LESSONS GD-23); this job catches such bugs early.
+  sanitizers:
+    name: Sanitizers (core, ASan + UBSan)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DSAMN_BUILD_APP=OFF -DSAMN_BUILD_PYTHON=OFF \
+            "-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=undefined"
+
+      - name: Build
+        run: cmake --build build --parallel --target core_tests
+
+      - name: Core tests under sanitizers
+        env:
+          ASAN_OPTIONS: detect_leaks=1:abort_on_error=1
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+        run: ./build/tests/core_tests
