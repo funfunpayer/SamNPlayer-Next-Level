@@ -6,6 +6,7 @@ Item {
     property string mode
     property string phase
     Text {
+        textFormat: Text.PlainText
         anchors.centerIn: parent
         width: Math.min(parent.width - 48, 560)
         horizontalAlignment: Text.AlignHCenter

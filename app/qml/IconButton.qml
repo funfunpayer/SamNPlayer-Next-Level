@@ -13,7 +13,7 @@ Rectangle {
     color: area.containsMouse ? Qt.rgba(1, 1, 1, 0.07) : "transparent"
     border.color: Theme.cardBorder; border.width: 1
     Behavior on color { ColorAnimation { duration: Theme.animFast } }
-    Text { id: label; anchors.centerIn: parent; color: Theme.text; font.pixelSize: 17; visible: root.icon === "" }
+    Text { textFormat: Text.PlainText; id: label; anchors.centerIn: parent; color: Theme.text; font.pixelSize: 17; visible: root.icon === "" }
     Icon { anchors.centerIn: parent; name: root.icon; width: Math.round(root.height * 0.46); height: width; visible: root.icon !== "" }
     MouseArea {
         id: area

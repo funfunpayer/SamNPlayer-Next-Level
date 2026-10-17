@@ -17,7 +17,7 @@ Item {
         spacing: (height - 3 * 12) / 2
         Repeater {
             model: ["100", "50", "0"]
-            Text { required property string modelData; text: modelData; color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 9 }
+            Text { textFormat: Text.PlainText; required property string modelData; text: modelData; color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 9 }
         }
     }
     Rectangle {
@@ -42,6 +42,7 @@ Item {
         }
     }
     Text {
+        textFormat: Text.PlainText
         anchors.horizontalCenter: parent.horizontalCenter; anchors.bottom: parent.bottom; anchors.bottomMargin: 8
         text: root.value < 0 ? "—" : root.value
         color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold

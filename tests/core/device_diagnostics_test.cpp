@@ -79,7 +79,7 @@ TEST_CASE("device/diagnostics: raw sweep skipped without RawCapable") {  // Go: 
     }
     bool note = false;
     for (const auto& n : report.notes)
-        if (n.find("Rohwert-Sweep übersprungen") != std::string::npos) note = true;
+        if (n.find("Raw value sweep skipped") != std::string::npos) note = true;
     CHECK(note);
     // Update-rate phase then used the regular 0-1 channel.
     CHECK(inner.commands.size() > 0);

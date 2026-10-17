@@ -17,14 +17,14 @@ std::vector<Action> DeleteRange(const std::vector<Action>& actions, int64_t star
     out.reserve(actions.size());
     for (const Action& a : actions)
         if (a.at < start || a.at > end) out.push_back(a);
-    if (out.size() < 2) throw RangeEditError("funscript: Löschen würde weniger als 2 Punkte lassen");
+    if (out.size() < 2) throw RangeEditError("funscript: deleting would leave fewer than 2 points");
     return out;
 }
 
 std::vector<Action> CapSpeedRange(const std::vector<Action>& actions, int64_t start, int64_t end,
                                   double max_intensity) {
     if (max_intensity <= 0) max_intensity = DefaultMaxIntensity;
-    if (actions.size() < 2) throw RangeEditError("funscript: zu wenige Punkte");
+    if (actions.size() < 2) throw RangeEditError("funscript: too few points");
     if (end < start) std::swap(start, end);
     std::vector<Action> out = actions;
     // Overlap uses the original timestamps: after the first stretch the shifted

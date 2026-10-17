@@ -52,7 +52,7 @@ std::string ProjectToJson(const Project& p);
 void SaveProject(const std::filesystem::path& path, const Project& p);
 
 // Throws ProjectError when the file cannot be read or is not valid project
-// JSON ("project: ungültiges JSON: ..."). Missing keys keep their defaults,
+// JSON ("project: invalid JSON: ..."). Missing keys keep their defaults,
 // key names match case-insensitively (Go), a version of 0 becomes ProjectVersion.
 Project LoadProject(const std::filesystem::path& path);
 

@@ -1,5 +1,7 @@
 #include "player_controller.h"
 
+#include <QMediaPlayer>
+
 #include <QDateTime>
 #include <QDir>
 #include <QFileInfo>
@@ -141,8 +143,8 @@ bool PlayerController::openPath(const QString& pathOrUrl) {
         return true;
     }
     clearScript();
+    setError({});  // before setVideo: the player may report a broken video at once
     setVideo(path);
-    setError({});
     return true;
 }
 
@@ -584,8 +586,8 @@ bool PlayerController::attachVideo(const QString& pathOrUrl) {
         return false;
     }
     if (scriptPath_.isEmpty()) return openPath(path);
+    setError({});  // before setVideo: the player may report a broken video at once
     setVideo(path);
-    setError({});
     return true;
 }
 
@@ -678,6 +680,7 @@ void PlayerController::setVideo(const QString& path) {
 }
 
 void PlayerController::setError(const QString& e) {
+    mediaError_ = false;
     if (e == lastError_) return;
     lastError_ = e;
     emit lastErrorChanged();
@@ -841,8 +844,26 @@ void PlayerController::setSleepMinutes(int minutes) {
     emit sleepChanged();
 }
 
+void PlayerController::reportMediaError(int error, const QString& detail) {
+    QString kind;
+    switch (error) {
+    case QMediaPlayer::NoError: return;
+    case QMediaPlayer::ResourceError: kind = tr("file missing or unreadable"); break;
+    case QMediaPlayer::FormatError: kind = tr("format not supported"); break;
+    case QMediaPlayer::NetworkError: kind = tr("network error"); break;
+    case QMediaPlayer::AccessDeniedError: kind = tr("access denied"); break;
+    default: kind = tr("playback error"); break;
+    }
+    QString msg = tr("Video cannot be played (%1)").arg(kind);
+    if (!videoName().isEmpty()) msg += QStringLiteral(": ") + videoName();
+    if (!detail.isEmpty()) msg += QStringLiteral(" ") + QChar(0x2014) + QStringLiteral(" ") + detail;
+    setError(msg);
+    mediaError_ = true;
+}
+
 void PlayerController::setPlaying(bool playing) {
     output_.setPlaying(playing);
+    if (playing && mediaError_) setError({});
     if (playing) {
         if (!playClock_.isValid()) playClock_.start();
         if (!sleepTimer_.isActive()) sleepTimer_.start();

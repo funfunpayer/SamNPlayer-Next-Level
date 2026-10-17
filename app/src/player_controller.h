@@ -160,6 +160,10 @@ public:
     Q_INVOKABLE qint64 jumpTenthVideoMs(int n) const;
     // The player reports play / pause for the sleep timer.
     Q_INVOKABLE void setPlaying(bool playing);
+    // The video player reports a failure (QMediaPlayer::Error and its
+    // text): the error bar names the class and the file (0.7 0.5.41).
+    // The message goes away once the video plays.
+    Q_INVOKABLE void reportMediaError(int error, const QString& detail);
     // Tooltip text for the heatmap at a script time: "12.3s · 45%".
     Q_INVOKABLE QString heatTooltip(double ms) const;
     // Bookmarks: at the playhead (video time); name default "Bookmark", 80 chars.
@@ -344,6 +348,7 @@ private:
     QVariantList variants_;
     int variantIndex_ = -1;
     QString scriptPath_, videoPath_, lastError_;
+    bool mediaError_ = false;  // lastError_ came from reportMediaError
     bool loadPlaylistCurrent();
     samn::Playlist playlist_;
     std::mt19937 rng_{std::random_device{}()};

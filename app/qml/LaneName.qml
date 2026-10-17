@@ -22,6 +22,7 @@ Item {
         visible: root.name !== ""
     }
     Text {
+        textFormat: Text.PlainText
         x: 28; anchors.verticalCenter: parent.verticalCenter
         width: parent.width - 30; elide: Text.ElideRight
         text: root.name

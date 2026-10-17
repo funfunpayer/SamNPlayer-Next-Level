@@ -36,6 +36,7 @@ Rectangle {
         x: (root.width - label.implicitWidth - 22) / 2
     }
     Text {
+        textFormat: Text.PlainText
         id: label
         anchors.verticalCenter: parent.verticalCenter
         x: root.icon !== "" ? lead.x + 22 : (root.width - implicitWidth) / 2

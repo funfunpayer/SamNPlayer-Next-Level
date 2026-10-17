@@ -272,24 +272,24 @@ Doc ReadDoc(const std::filesystem::path& path) {
     std::error_code ec;
     if (!f || std::filesystem::is_directory(path, ec)) {
         int e = errno;
-        throw MarksError("funscript: Datei konnte nicht gelesen werden: " +
-                         (e ? std::generic_category().message(e) : std::string("kein Zugriff")) + ": " + path.string());
+        throw MarksError("funscript: cannot read the file: " +
+                         (e ? std::generic_category().message(e) : std::string("access denied")) + ": " + path.string());
     }
     std::string data((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
-    if (f.bad()) throw MarksError("funscript: Datei konnte nicht gelesen werden: " + path.string());
+    if (f.bad()) throw MarksError("funscript: cannot read the file: " + path.string());
     std::string text = SanitizeUtf8(data);
     json parsed;
     try {
         parsed = Loads(text);
     } catch (const json::exception& exc) {
-        throw MarksError(std::string("funscript: ungültiges JSON: ") + exc.what());
+        throw MarksError(std::string("funscript: invalid JSON: ") + exc.what());
     }
     Doc d;
     if (parsed.is_null()) {  // Go: nil map
         d.is_null = true;
         return d;
     }
-    if (!parsed.is_object()) throw MarksError("funscript: ungültiges JSON: kein Objekt");
+    if (!parsed.is_object()) throw MarksError("funscript: invalid JSON: not an object");
     d.fields = SplitObject(text);
     return d;
 }
@@ -298,11 +298,11 @@ RawMap MetadataOf(const Doc& doc) {
     auto it = doc.fields.find("metadata");
     if (doc.is_null || it == doc.fields.end() || it->second == "null") return {};
     try {
-        if (!Loads(it->second).is_object()) throw std::invalid_argument("kein Objekt");
+        if (!Loads(it->second).is_object()) throw std::invalid_argument("not an object");
     } catch (const json::exception& exc) {
-        throw MarksError(std::string("funscript: metadata ungültig: ") + exc.what());
+        throw MarksError(std::string("funscript: invalid metadata: ") + exc.what());
     } catch (const std::invalid_argument& exc) {
-        throw MarksError(std::string("funscript: metadata ungültig: ") + exc.what());
+        throw MarksError(std::string("funscript: invalid metadata: ") + exc.what());
     }
     return SplitObject(it->second);
 }
@@ -327,7 +327,7 @@ std::map<std::string, ordered_json> Fields(const ordered_json& item,
                                            const std::map<std::string, std::string>& names) {
     std::map<std::string, ordered_json> out;
     if (item.is_null()) return out;
-    if (!item.is_object()) throw std::invalid_argument("kein Objekt");
+    if (!item.is_object()) throw std::invalid_argument("not an object");
     for (auto it = item.begin(); it != item.end(); ++it) {
         auto n = names.find(AsciiLower(it.key()));
         if (n != names.end()) out[n->second] = it.value();
@@ -338,7 +338,7 @@ std::map<std::string, ordered_json> Fields(const ordered_json& item,
 std::string NameOf(const std::map<std::string, ordered_json>& f) {
     auto it = f.find("name");
     if (it == f.end() || it->second.is_null()) return "";
-    if (!it->second.is_string()) throw std::invalid_argument("name ist kein Text");
+    if (!it->second.is_string()) throw std::invalid_argument("name is not text");
     return it->second.get<std::string>();
 }
 
@@ -351,12 +351,12 @@ int64_t TimeOf(const std::map<std::string, ordered_json>& f, const char* key) {
 ordered_json LoadArray(const std::string& raw, const std::string& what) {
     try {
         ordered_json v = ordered_json::parse(raw);
-        if (!v.is_array()) throw std::invalid_argument("kein Array");
+        if (!v.is_array()) throw std::invalid_argument("not an array");
         return v;
     } catch (const json::exception& exc) {
-        throw MarksError("funscript: " + what + " ungültig: " + exc.what());
+        throw MarksError("funscript: " + what + " invalid: " + exc.what());
     } catch (const std::invalid_argument& exc) {
-        throw MarksError("funscript: " + what + " ungültig: " + exc.what());
+        throw MarksError("funscript: " + what + " invalid: " + exc.what());
     }
 }
 
@@ -370,9 +370,9 @@ std::vector<T> LoadMarks(const std::filesystem::path& path, const char* key, F&&
         for (const auto& item : LoadArray(it->second, key)) out.push_back(decode(item));
     } catch (const MarksError& exc) {
         if (std::strncmp(exc.what(), "funscript:", 10) == 0) throw;
-        throw MarksError(std::string("funscript: ") + key + " ungültig: " + exc.what());
+        throw MarksError(std::string("funscript: ") + key + " invalid: " + exc.what());
     } catch (const std::invalid_argument& exc) {
-        throw MarksError(std::string("funscript: ") + key + " ungültig: " + exc.what());
+        throw MarksError(std::string("funscript: ") + key + " invalid: " + exc.what());
     }
     return out;
 }
@@ -422,14 +422,14 @@ int64_t FlexTimeMs(const json& value) {
         auto v = ParseFloat(s);
         if (!v) {
             auto ms = ParseClockMs(s);
-            if (!ms) throw MarksError("ungültige Zeitangabe: " + ReprForError(value));
+            if (!ms) throw MarksError("invalid time: " + ReprForError(value));
             return *ms;
         }
         return NormalizeTimeToMs(*v);
     }
-    if (!value.is_number()) throw MarksError("ungültige Zeitangabe: " + ReprForError(value));
+    if (!value.is_number()) throw MarksError("invalid time: " + ReprForError(value));
     double f = value.get<double>();
-    if (std::isinf(f)) throw MarksError("Zeitangabe außerhalb des Bereichs: " + ReprForError(value));
+    if (std::isinf(f)) throw MarksError("time out of range: " + ReprForError(value));
     return NormalizeTimeToMs(f);
 }
 
@@ -494,7 +494,7 @@ std::string GoIndent(const std::string& in) {
 void PatchMetadataKey(const std::filesystem::path& path, const std::string& key, const std::string& encoded,
                       bool indented) {
     Doc doc = ReadDoc(path);
-    if (doc.is_null) throw MarksError("funscript: ungültiges JSON: kein Objekt");
+    if (doc.is_null) throw MarksError("funscript: invalid JSON: not an object");
     RawMap meta = MetadataOf(doc);
     meta[key] = encoded;
     doc.fields["metadata"] = MarshalObject(meta);
@@ -503,7 +503,7 @@ void PatchMetadataKey(const std::filesystem::path& path, const std::string& key,
     try {
         WriteFileAtomic(path, out);
     } catch (const std::exception& exc) {
-        throw MarksError(std::string("funscript: Datei konnte nicht geschrieben werden: ") + exc.what());
+        throw MarksError(std::string("funscript: cannot write the file: ") + exc.what());
     }
 }
 

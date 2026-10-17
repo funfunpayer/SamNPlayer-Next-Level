@@ -95,10 +95,10 @@ Script Parse(const std::string& json_str) {
     try {
         doc = json::parse(json_str);
     } catch (const std::exception& e) {
-        throw std::runtime_error(std::string("funscript: ungültiges JSON: ") + e.what());
+        throw std::runtime_error(std::string("funscript: invalid JSON: ") + e.what());
     }
     if (!doc.is_object()) {
-        throw std::runtime_error("funscript: ungültiges JSON: not an object");
+        throw std::runtime_error("funscript: invalid JSON: not an object");
     }
 
     Script s;
@@ -107,11 +107,11 @@ Script Parse(const std::string& json_str) {
     }
 
     if (!doc.contains("actions") || !doc["actions"].is_array()) {
-        throw std::runtime_error("funscript: keine actions im Skript gefunden");
+        throw std::runtime_error("funscript: no actions found in the script");
     }
     const auto& arr = doc["actions"];
     if (arr.empty()) {
-        throw std::runtime_error("funscript: keine actions im Skript gefunden");
+        throw std::runtime_error("funscript: no actions found in the script");
     }
 
     std::vector<Action> kept;
@@ -124,7 +124,7 @@ Script Parse(const std::string& json_str) {
             if (item.contains("at")) at = round_number(item["at"]);
             if (item.contains("pos")) pos = static_cast<int>(round_number(item["pos"]));
         } catch (...) {
-            throw std::runtime_error("funscript: ungültiges JSON: bad action number");
+            throw std::runtime_error("funscript: invalid JSON: bad action number");
         }
         if (at >= 0 && at <= MaxActionMs) {
             if (pos < 0) pos = 0;
@@ -135,7 +135,7 @@ Script Parse(const std::string& json_str) {
         }
     }
     if (kept.empty()) {
-        throw std::runtime_error("funscript: keine gültigen actions (alle Zeiten außerhalb 0–" + std::to_string(MaxActionMs) + " ms)");
+        throw std::runtime_error("funscript: no valid actions (all times outside 0–" + std::to_string(MaxActionMs) + " ms)");
     }
     std::stable_sort(kept.begin(), kept.end(), [](const Action& a, const Action& b) { return a.at < b.at; });
     s.actions = std::move(kept);

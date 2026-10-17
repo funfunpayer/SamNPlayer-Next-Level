@@ -15,6 +15,7 @@ ListView {
     spacing: 4
     boundsBehavior: Flickable.StopAtBounds
     Text {
+        textFormat: Text.PlainText
         visible: root.count === 0
         text: root.emptyText
         color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
@@ -28,6 +29,7 @@ ListView {
         color: hover.hovered ? Qt.rgba(1, 1, 1, 0.05) : Qt.rgba(1, 1, 1, 0.02)
         HoverHandler { id: hover }
         Text {
+            textFormat: Text.PlainText
             visible: !row.editing
             anchors.left: parent.left; anchors.leftMargin: 12; anchors.verticalCenter: parent.verticalCenter
             anchors.right: buttons.left; anchors.rightMargin: 8

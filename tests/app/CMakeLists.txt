@@ -16,3 +16,9 @@ target_link_libraries(inspector_qml_test PRIVATE samn_app samn_appplugin Qt6::Te
 target_include_directories(inspector_qml_test PRIVATE ${CMAKE_SOURCE_DIR}/tests/core)
 add_test(NAME inspector_qml_test COMMAND inspector_qml_test)
 set_tests_properties(inspector_qml_test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+add_executable(player_page_qml_test player_page_qml_test.cpp)
+target_link_libraries(player_page_qml_test PRIVATE samn_app samn_appplugin Qt6::Test)
+target_compile_definitions(player_page_qml_test PRIVATE SAMN_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data")
+add_test(NAME player_page_qml_test COMMAND player_page_qml_test)
+set_tests_properties(player_page_qml_test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_MEDIA_BACKEND=ffmpeg")

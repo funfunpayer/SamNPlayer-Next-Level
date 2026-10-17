@@ -18,6 +18,7 @@ GlassCard {
     clip: true
 
     component Title: Text {
+        textFormat: Text.PlainText
         color: Theme.textMuted
         font.family: Theme.font; font.pixelSize: 11; font.letterSpacing: 1.6; font.capitalization: Font.AllUppercase
         topPadding: 10; bottomPadding: 4
@@ -35,11 +36,13 @@ GlassCard {
         border.color: primary ? Theme.cardBorder : "transparent"
         Icon { x: 9; anchors.verticalCenter: parent.verticalCenter; name: it.icon; width: 17; height: 17; color: Theme.cyan }
         Text {
+            textFormat: Text.PlainText
             id: label
             x: 34; anchors.verticalCenter: parent.verticalCenter; width: parent.width - 70; elide: Text.ElideRight
             color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 13
         }
         Text {
+            textFormat: Text.PlainText
             anchors.right: parent.right; anchors.rightMargin: 10; anchors.verticalCenter: parent.verticalCenter
             text: it.count; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
         }
@@ -51,6 +54,7 @@ GlassCard {
         property string emptyText: qsTr("Nothing yet")
         width: parent ? parent.width : 200
         Text {
+            textFormat: Text.PlainText
             visible: files.model.length === 0
             leftPadding: 34; text: files.emptyText
             color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
@@ -62,12 +66,14 @@ GlassCard {
                 width: files.width; height: 28; radius: 8
                 color: fa.containsMouse ? Qt.rgba(1, 1, 1, 0.05) : "transparent"
                 Text {
+                    textFormat: Text.PlainText
                     x: 34; width: parent.width - 60; anchors.verticalCenter: parent.verticalCenter
                     text: modelData.name; elide: Text.ElideMiddle
                     color: !modelData.exists ? Theme.textMuted : modelData.path === root.currentPath ? Theme.cyan : Theme.textDim
                     font.family: Theme.fontSoft; font.pixelSize: 12; font.strikeout: !modelData.exists
                 }
                 Text {
+                    textFormat: Text.PlainText
                     anchors.right: parent.right; anchors.rightMargin: 8; anchors.verticalCenter: parent.verticalCenter
                     text: root.library.isFavorite(modelData.path) ? "★" : "☆"
                     color: Theme.orange; font.pixelSize: 13
@@ -130,8 +136,8 @@ GlassCard {
                 Column {
                     anchors.centerIn: parent; spacing: 2
                     Icon { anchors.horizontalCenter: parent.horizontalCenter; name: "download"; width: 20; height: 20; color: Theme.cyan }
-                    Text { anchors.horizontalCenter: parent.horizontalCenter; text: qsTr("Drag files here"); color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 13 }
-                    Text { anchors.horizontalCenter: parent.horizontalCenter; text: qsTr("Video or script → Player"); color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 11 }
+                    Text { textFormat: Text.PlainText; anchors.horizontalCenter: parent.horizontalCenter; text: qsTr("Drag files here"); color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 13 }
+                    Text { textFormat: Text.PlainText; anchors.horizontalCenter: parent.horizontalCenter; text: qsTr("Video or script → Player"); color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 11 }
                 }
             }
         }

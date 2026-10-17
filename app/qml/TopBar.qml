@@ -23,12 +23,14 @@ Item {
         Column {
             anchors.verticalCenter: parent.verticalCenter
             Text {
+                textFormat: Text.PlainText
                 text: "SamNPlayer"
                 font.family: Theme.font; font.pixelSize: 34; font.weight: Font.DemiBold
                 font.letterSpacing: -0.6
                 color: Theme.orange
             }
             Text {
+                textFormat: Text.PlainText
                 text: qsTr("GENERATE  ·  PLAY  ·  TRAIN")
                 font.family: Theme.fontSoft; font.pixelSize: 11; font.letterSpacing: 3.7
                 color: "#b9cde0"
@@ -71,11 +73,12 @@ Item {
             }
             Column {
                 anchors.verticalCenter: parent.verticalCenter
-                Text { text: qsTr("MODE"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 10; font.letterSpacing: 2.5 }
-                Text { text: root.modeName; color: "white"; font.family: Theme.font; font.pixelSize: 17; font.weight: Font.DemiBold }
+                Text { textFormat: Text.PlainText; text: qsTr("MODE"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 10; font.letterSpacing: 2.5 }
+                Text { textFormat: Text.PlainText; text: root.modeName; color: "white"; font.family: Theme.font; font.pixelSize: 17; font.weight: Font.DemiBold }
             }
         }
         Text {
+            textFormat: Text.PlainText
             anchors.right: parent.right; anchors.rightMargin: 20
             anchors.verticalCenter: parent.verticalCenter
             text: ""; color: Theme.text; font.pixelSize: 18
@@ -90,6 +93,7 @@ Item {
     }
 
     Text {
+        textFormat: Text.PlainText
         anchors.right: parent.right; anchors.rightMargin: 24
         anchors.verticalCenter: parent.verticalCenter
         text: "v2.0 dev"

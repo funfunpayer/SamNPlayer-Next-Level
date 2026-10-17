@@ -12,6 +12,7 @@ Row {
         width: 92; height: 32; radius: 10
         color: Qt.rgba(1, 1, 1, 0.03); border.color: Theme.cardBorder
         Text {
+            textFormat: Text.PlainText
             anchors.centerIn: parent
             text: (root.value > 0 ? "+" : "") + root.value + " ms"
             color: root.value === 0 ? Theme.textDim : Theme.text

@@ -38,22 +38,35 @@ Item {
 
     MediaPlayer {
         id: media
+        objectName: "media"
         source: ctrl.videoUrl
         videoOutput: videoOut
-        onDurationChanged: ctrl.setVideoDurationMs(duration)
+        onDurationChanged: ctrl.setVideoDurationMs(media.duration)
         audioOutput: AudioOutput { id: audio; volume: volume.value; muted: page.muted }
         playbackRate: page.speed
         onPlaybackStateChanged: ctrl.setPlaying(playbackState === MediaPlayer.PlayingState)
+        // errorChanged, not errorOccurred: the FFmpeg backend of Qt 6.4 sets
+        // the error without emitting errorOccurred.
+        onErrorChanged: if (media.error !== MediaPlayer.NoError) ctrl.reportMediaError(media.error, media.errorString)
         // Play list: at the end of the video, Auto-advance opens the next
         // script and it starts once its video is loaded (0.7).
         property bool playWhenLoaded: false
+        // A seek before the video is loaded (a project's saved position)
+        // waits here; clamped to a duration of 0 it would land at 0.
+        property real pendingSeekMs: -1
+        onSourceChanged: pendingSeekMs = -1
         onMediaStatusChanged: {
+            if (mediaStatus === MediaPlayer.LoadedMedia && pendingSeekMs >= 0) {
+                const ms = pendingSeekMs
+                pendingSeekMs = -1
+                page.seekTo(ms)
+            }
             if (mediaStatus === MediaPlayer.EndOfMedia && ctrl.playlistFinished()) playWhenLoaded = ctrl.videoName !== ""
             else if (mediaStatus === MediaPlayer.LoadedMedia && playWhenLoaded) { playWhenLoaded = false; media.play() }
         }
         onPositionChanged: {
-            ctrl.setVideoPositionMs(position)
-            const jump = ctrl.loopJumpFor(position)
+            ctrl.setVideoPositionMs(media.position)
+            const jump = ctrl.loopJumpFor(media.position)
             if (jump >= 0) media.position = jump
         }
     }
@@ -110,7 +123,11 @@ Item {
     function openFile() { openDialog.open() }
     function togglePlay() { media.playbackState === MediaPlayer.PlayingState ? media.pause() : media.play() }
     function seekBy(ms) { media.position = Math.max(0, Math.min(media.duration, media.position + ms)) }
-    function seekTo(ms) { if (ms >= 0) media.position = Math.max(0, Math.min(media.duration, ms)) }
+    function seekTo(ms) {
+        if (ms < 0) return
+        if (media.duration <= 0 || media.mediaStatus === MediaPlayer.LoadingMedia) media.pendingSeekMs = ms
+        else media.position = Math.max(0, Math.min(media.duration, ms))
+    }
     function showTip(item, x, y, text) {
         if (text === "") { chartTip.visible = false; return }
         const p = item.mapToItem(page, x, y)
@@ -166,6 +183,7 @@ Item {
             visible: !page.fullStage
             width: parent.width; height: 40
             Text {
+                textFormat: Text.PlainText
                 anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
                 anchors.right: variantBox.visible ? variantBox.left : videoBar.visible ? videoBar.left : openBtn.left
                 anchors.rightMargin: 12
@@ -235,6 +253,7 @@ Item {
             color: Qt.rgba(1, 0.35, 0.3, 0.12); border.color: Qt.rgba(1, 0.4, 0.35, 0.5)
             Behavior on height { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
             Text {
+                textFormat: Text.PlainText
                 id: errText
                 anchors.verticalCenter: parent.verticalCenter; x: 14; width: parent.width - 28
                 text: ctrl.lastError; wrapMode: Text.Wrap
@@ -256,6 +275,7 @@ Item {
                 onClicked: page.openFile()
             }
             Text {
+                textFormat: Text.PlainText
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: qsTr("Open…"); color: emptyOpen.containsMouse ? "white" : Theme.text
                 font.family: Theme.font; font.pixelSize: 20; font.weight: Font.DemiBold
@@ -307,6 +327,7 @@ Item {
                     spacing: 10
                     Image { source: "assets/empty-video.svg"; width: 120; height: 90; sourceSize: Qt.size(240, 180); anchors.horizontalCenter: parent.horizontalCenter; opacity: 0.8 }
                     Text {
+                        textFormat: Text.PlainText
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: ctrl.hasScript ? qsTr("No video beside this script") : qsTr("Drop a video or script here, or press Open…")
                         color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 14
@@ -325,11 +346,13 @@ Item {
                         spacing: 12
                         Image { source: "assets/empty-script.svg"; width: 64; height: 64; sourceSize: Qt.size(128, 128); anchors.horizontalCenter: parent.horizontalCenter }
                         Text {
+                            textFormat: Text.PlainText
                             width: parent.width; horizontalAlignment: Text.AlignHCenter
                             text: qsTr("No script found for this video"); color: Theme.text
                             font.family: Theme.font; font.pixelSize: 17; font.weight: Font.DemiBold
                         }
                         Text {
+                            textFormat: Text.PlainText
                             width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap
                             text: ctrl.scriptFolders.length
                                   ? qsTr("Searched beside the video and in %n script folder(s).", "", ctrl.scriptFolders.length)
@@ -346,6 +369,7 @@ Item {
                             text: qsTr("Create script"); enabled: false
                         }
                         Text {
+                            textFormat: Text.PlainText
                             width: parent.width; horizontalAlignment: Text.AlignHCenter
                             text: qsTr("Creating scripts comes with the Generator (P3).")
                             color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
@@ -353,6 +377,7 @@ Item {
                     }
                 }
                 Text {
+                    textFormat: Text.PlainText
                     anchors.left: parent.left; anchors.bottom: parent.bottom; anchors.margins: 14
                     text: ctrl.formatTime(media.position) + " / " + ctrl.formatTime(media.duration)
                     color: "white"; font.family: Theme.fontSoft; font.pixelSize: 13
@@ -394,6 +419,7 @@ Item {
                 }
                 // Live channel values at the playhead (0.7 stat row).
                 Text {
+                    textFormat: Text.PlainText
                     x: 18; y: 34
                     visible: ctrl.hasScript
                     text: qsTr("Vibration %1   ·   Suction %2").arg(ctrl.vibrationNow).arg(ctrl.suctionNow)
@@ -477,7 +503,7 @@ Item {
             Row {
                 id: offsetRow
                 anchors.right: parent.right; anchors.rightMargin: 16; y: 8; spacing: 8
-                Text { anchors.verticalCenter: parent.verticalCenter; text: qsTr("Offset"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13 }
+                Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; text: qsTr("Offset"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13 }
                 OffsetField { value: ctrl.offsetMs; onChanged: (v) => ctrl.offsetMs = v }
             }
             // Lane names left of the lanes (0.7 v1), one per visible row.
@@ -538,6 +564,7 @@ Item {
                         onClicked: (m) => page.seekTo(Math.round(curve.msAtX(m.x)) + ctrl.offsetMs)
                     }
                     Text {
+                        textFormat: Text.PlainText
                         anchors.centerIn: parent
                         visible: curve.empty
                         text: qsTr("No script loaded"); color: Theme.textMuted; font.family: Theme.fontSoft
@@ -608,6 +635,7 @@ Item {
                             color: chapterStrip.colors[modelData.index % 5]
                             border.width: 1; border.color: current ? "white" : "transparent"
                             Text {
+                                textFormat: Text.PlainText
                                 anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 4
                                 verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
                                 text: modelData.name; color: parent.current ? "white" : "#e9f4ff"
@@ -631,6 +659,7 @@ Item {
                         }
                     }
                     Text {
+                        textFormat: Text.PlainText
                         anchors.left: parent.left; anchors.leftMargin: 8; anchors.verticalCenter: parent.verticalCenter
                         visible: ctrl.chapterBands.length === 0
                         text: qsTr("No chapters yet — + adds a scene marker at the playhead.")
@@ -692,6 +721,7 @@ Item {
                     height: 34; spacing: 10
                     visible: ctrl.hasScript
                     Text {
+                        textFormat: Text.PlainText
                         anchors.verticalCenter: parent.verticalCenter
                         text: ctrl.markerLabel
                         color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
@@ -709,6 +739,7 @@ Item {
                     // Zoom (0.7 zoom row): wheel on the curve, buttons around the playhead.
                     IconButton { anchors.verticalCenter: parent.verticalCenter; width: 28; height: 28; icon: "minus"; tip: qsTr("Zoom out"); onClicked: ctrl.zoomBy(1 / 1.6) }
                     Text {
+                        textFormat: Text.PlainText
                         anchors.verticalCenter: parent.verticalCenter
                         text: ctrl.zoomLabel; color: ctrl.zoomed ? Theme.cyan : Theme.textDim
                         font.family: Theme.fontSoft; font.pixelSize: 12
@@ -731,6 +762,7 @@ Item {
                         onClicked: if (ctrl.addChapterFromSelection(chapterName.text)) chapterName.text = ""
                     }
                     Text {
+                        textFormat: Text.PlainText
                         anchors.verticalCenter: parent.verticalCenter
                         text: ctrl.markerLabel
                         color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
@@ -775,6 +807,7 @@ Item {
                 visible: bottomTabs.current === 3
                 x: 16; y: 46; width: parent.width - 32; height: parent.height - 58
                 Text {
+                    textFormat: Text.PlainText
                     anchors.centerIn: parent
                     text: qsTr("Scene Map (scenes, thumbnails, rhythm) comes with the Scene Map mode in P4.")
                     color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 13
@@ -788,6 +821,7 @@ Item {
                     id: bpmRow
                     spacing: 10
                     Text {
+                        textFormat: Text.PlainText
                         anchors.verticalCenter: parent.verticalCenter
                         text: ctrl.bpm > 0 ? qsTr("%1 BPM").arg(ctrl.bpm) : qsTr("— BPM")
                         color: Theme.text; font.family: Theme.font; font.pixelSize: 14
@@ -801,6 +835,7 @@ Item {
                         onClicked: ctrl.bpmGrid = !ctrl.bpmGrid
                     }
                     Text {
+                        textFormat: Text.PlainText
                         anchors.verticalCenter: parent.verticalCenter
                         text: qsTr("Beat detection from the sound comes with the audio tempo port (P3).")
                         color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
@@ -820,6 +855,7 @@ Item {
                     }
                 }
                 Text {
+                    textFormat: Text.PlainText
                     anchors.centerIn: wholeAudio
                     visible: wholeAudio.empty
                     text: wholeAudio.loading ? qsTr("Reading the sound…") : qsTr("Link a video to see its sound.")
@@ -836,7 +872,7 @@ Item {
         visible: false; z: 100
         width: tipText.implicitWidth + 16; height: tipText.implicitHeight + 10
         radius: 8; color: "#e60a1a2e"; border.color: Theme.cardBorder
-        Text { id: tipText; anchors.centerIn: parent; color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 12 }
+        Text { textFormat: Text.PlainText; id: tipText; anchors.centerIn: parent; color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 12 }
     }
 
     // Drop a video or a script anywhere on the page.
