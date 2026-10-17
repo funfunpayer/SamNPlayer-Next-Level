@@ -109,6 +109,33 @@ private:
         QMetaObject::invokeMethod(page, "seekTo", Q_ARG(QVariant, 4500));
         QCOMPARE(clock->property("position").toLongLong(), qint64(4500));
         QTRY_COMPARE(ctrl->playheadMs(), qint64(4500));
+        // Stop: back to 0 and not playing; Previous without a list: to the start.
+        QMetaObject::invokeMethod(page, "togglePlay");
+        QTRY_VERIFY(page->property("playing").toBool());
+        QMetaObject::invokeMethod(page, "stop");
+        QTRY_VERIFY(!page->property("playing").toBool());
+        QCOMPARE(clock->property("position").toLongLong(), qint64(0));
+        QMetaObject::invokeMethod(page, "seekTo", Q_ARG(QVariant, 3000));
+        QMetaObject::invokeMethod(page, "previous");
+        QCOMPARE(clock->property("position").toLongLong(), qint64(0));
+        // Previous in a list: the script before, playing on from its start.
+        const QString second = dir.filePath(QStringLiteral("second.funscript"));
+        QVERIFY(QFile::copy(script, second));
+        QVERIFY(ctrl->openPaths({script, second}));
+        QVERIFY(ctrl->pickPlaylist(1));
+        QCOMPARE(ctrl->scriptName(), QStringLiteral("second.funscript"));
+        QMetaObject::invokeMethod(page, "togglePlay");
+        QTRY_VERIFY_WITH_TIMEOUT(clock->property("position").toLongLong() >= 200, 3000);
+        QMetaObject::invokeMethod(page, "previous");
+        QCOMPARE(ctrl->scriptName(), QStringLiteral("alone.funscript"));
+        QTRY_VERIFY(page->property("playing").toBool());
+        QVERIFY(clock->property("position").toLongLong() < 200);  // the new script from its start
+        // The volume is remembered, in steps of 0.05 (0.7 pb.volume).
+        auto* vol = page->findChild<QObject*>(QStringLiteral("volume"));
+        QVERIFY(vol);
+        QMetaObject::invokeMethod(page, "setVolume", Q_ARG(QVariant, 0.33));
+        QCOMPARE(vol->property("value").toDouble(), 0.35);
+        QCOMPARE(ctrl->uiValue(QStringLiteral("player.volume"), 0.8).toDouble(), 0.35);
         // A video makes the video the player again.
         QVERIFY(ctrl->openPath(QStringLiteral(SAMN_TEST_DATA "/testpattern_4s.mp4")));
         QVERIFY(!page->property("scriptOnly").toBool());

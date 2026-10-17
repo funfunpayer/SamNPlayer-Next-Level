@@ -56,6 +56,7 @@ class PlayerController : public QObject {
     Q_PROPERTY(int playlistIndex READ playlistIndex NOTIFY playlistChanged)
     Q_PROPERTY(bool playlistVisible READ playlistVisible NOTIFY playlistChanged)
     Q_PROPERTY(bool playlistHasNext READ playlistHasNext NOTIFY playlistChanged)
+    Q_PROPERTY(bool playlistHasPrevious READ playlistHasPrevious NOTIFY playlistChanged)
     Q_PROPERTY(bool playlistAuto READ playlistAuto WRITE setPlaylistAuto NOTIFY playlistChanged)
     Q_PROPERTY(bool playlistShuffle READ playlistShuffle WRITE setPlaylistShuffle NOTIFY playlistChanged)
     Q_PROPERTY(bool playlistRepeat READ playlistRepeat WRITE setPlaylistRepeat NOTIFY playlistChanged)
@@ -141,6 +142,8 @@ public:
     Q_INVOKABLE bool removeFromPlaylist(int index);
     Q_INVOKABLE bool pickPlaylist(int index);
     Q_INVOKABLE bool playlistNext();
+    // Previous: loads the item before (false on the first one).
+    Q_INVOKABLE bool playlistPrevious();
     // The video ended: true when Auto-advance opened the next script (the
     // page then starts playing it).
     Q_INVOKABLE bool playlistFinished();
@@ -300,6 +303,7 @@ public:
     int playlistIndex() const { return int(playlist_.Index()); }
     bool playlistVisible() const { return playlist_.Visible(); }
     bool playlistHasNext() const { return playlist_.HasNext(); }
+    bool playlistHasPrevious() const { return playlist_.HasPrevious(); }
     bool playlistAuto() const { return playlist_.Auto(); }
     bool playlistShuffle() const { return playlist_.Shuffle(); }
     bool playlistRepeat() const { return playlist_.Repeat(); }

@@ -149,6 +149,25 @@ Item {
     function openFile() { openDialog.open() }
     readonly property bool playing: player.playbackState === MediaPlayer.PlayingState
     function togglePlay() { playing ? player.pause() : player.play() }
+    function setVolume(v) {
+        volume.value = Math.max(0, Math.min(1, Math.round(v * 20) / 20))  // steps of 0.05 (0.7)
+        ctrl.setUiValue("player.volume", volume.value)
+    }
+    function stop() { player.stop(); if (!scriptOnly) media.position = 0 }
+    function previous() {
+        const wasPlaying = playing
+        if (ctrl.playlistHasPrevious) {
+            player.stop()
+        }
+        if (ctrl.playlistPrevious()) {
+            if (wasPlaying) {
+                if (ctrl.videoName !== "") media.playWhenLoaded = true
+                else Qt.callLater(clock.play)
+            }
+        } else {
+            seekTo(0)
+        }
+    }
     function seekBy(ms) { player.position = Math.max(0, Math.min(player.duration, player.position + ms)) }
     function seekTo(ms) {
         if (ms < 0) return
@@ -455,6 +474,7 @@ Item {
                 }
                 // Left (0.7 transport): sleep timer, loop selection, speed.
                 Row {
+                    id: leftControls
                     anchors.left: parent.left; anchors.leftMargin: 18
                     y: 66; spacing: 8
                     FlowCombo {
@@ -476,34 +496,56 @@ Item {
                         onActivated: (i) => page.speed = rates[i]
                     }
                 }
+                // Centred in the gap between the side controls, so nothing
+                // overlaps on a narrow card.
                 Row {
                     id: transportRow
-                    anchors.horizontalCenter: parent.horizontalCenter
+                    readonly property real gapLeft: leftControls.x + leftControls.width
+                    x: gapLeft + Math.max(0, (rightControls.x - gapLeft - width) / 2)
                     y: 54
-                    spacing: 18
+                    spacing: 12
+                    // Previous: the item before in the list (playing on if it
+                    // played), else back to the start (0.7).
+                    IconButton {
+                        objectName: "previousButton"
+                        width: 36; height: 36
+                        icon: "skipBack"; tip: qsTr("Previous item, or back to the start")
+                        enabled: ctrl.hasScript || ctrl.videoName !== ""
+                        anchors.verticalCenter: parent.verticalCenter
+                        onClicked: page.previous()
+                    }
                     IconButton { icon: "back10"; tip: qsTr("Back 10 s"); onClicked: page.seekBy(-10000); anchors.verticalCenter: parent.verticalCenter }
                     PlayButton {
                         playing: page.playing
                         onClicked: page.togglePlay()
                     }
                     IconButton { icon: "forward10"; tip: qsTr("Forward 10 s"); onClicked: page.seekBy(10000); anchors.verticalCenter: parent.verticalCenter }
-                }
-                IconButton {
-                    icon: "skipForward"; tip: qsTr("Next item in the list")
-                    // Beside the centred row, so Play stays in the middle.
-                    visible: ctrl.playlistHasNext
-                    anchors.left: transportRow.right; anchors.leftMargin: 18
-                    anchors.verticalCenter: transportRow.verticalCenter
-                    onClicked: {
-                        const wasPlaying = page.playing
-                        page.player.stop()
-                        if (ctrl.playlistNext() && wasPlaying) {
-                            if (ctrl.videoName !== "") media.playWhenLoaded = true
-                            else Qt.callLater(clock.play)
+                    // Stop: the device stops and the playhead goes back to 0.
+                    IconButton {
+                        objectName: "stopButton"
+                        width: 36; height: 36
+                        icon: "stop"; tip: qsTr("Stop")
+                        enabled: page.playing || page.player.position > 0
+                        anchors.verticalCenter: parent.verticalCenter
+                        onClicked: page.stop()
+                    }
+                    IconButton {
+                        width: 36; height: 36
+                        icon: "skipForward"; tip: qsTr("Next item in the list")
+                        visible: ctrl.playlistHasNext
+                        anchors.verticalCenter: parent.verticalCenter
+                        onClicked: {
+                            const wasPlaying = page.playing
+                            page.player.stop()
+                            if (ctrl.playlistNext() && wasPlaying) {
+                                if (ctrl.videoName !== "") media.playWhenLoaded = true
+                                else Qt.callLater(clock.play)
+                            }
                         }
                     }
                 }
                 Row {
+                    id: rightControls
                     anchors.right: parent.right; anchors.rightMargin: 18
                     y: 74; spacing: 10
                     IconButton {
@@ -511,7 +553,12 @@ Item {
                         anchors.verticalCenter: parent.verticalCenter
                         onClicked: page.muted = !page.muted
                     }
-                    FlowSlider { id: volume; from: 0; to: 1; value: 0.8; width: 110; anchors.verticalCenter: parent.verticalCenter; onMoved: (v) => value = v }
+                    FlowSlider {
+                        id: volume; objectName: "volume"
+                        from: 0; to: 1; width: 110; anchors.verticalCenter: parent.verticalCenter
+                        value: ctrl.uiValue("player.volume", 0.8)  // remembered (0.7 pb.volume)
+                        onMoved: (v) => page.setVolume(v)
+                    }
                 }
             }
         }

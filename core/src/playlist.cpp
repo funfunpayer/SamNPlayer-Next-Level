@@ -72,6 +72,12 @@ bool Playlist::Advance(std::mt19937& rng) {
 
 bool Playlist::AdvanceOnFinish(std::mt19937& rng) { return auto_ && Advance(rng); }
 
+bool Playlist::Back() {
+    if (!HasPrevious()) return false;
+    --index_;
+    return true;
+}
+
 void Playlist::SetShuffle(bool on, std::mt19937& rng) {
     shuffle_ = on;
     if (!on || items_.size() < 2) return;

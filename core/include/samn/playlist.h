@@ -39,6 +39,10 @@ public:
     bool AdvanceOnFinish(std::mt19937& rng);
     // "Next" visible: 2+ items and not at the end, unless Repeat.
     bool HasNext() const;
+    // Previous (0.7 #pb-prev): the item before, never wrapping; false on the
+    // first item (the Player then goes back to the start instead).
+    bool Back();
+    bool HasPrevious() const { return items_.size() >= 2 && index_ > 0; }
 
     // Shuffle on: the active item first, the rest in random order (0.7
     // reshufflePlaylistKeepingCurrent). Off keeps the current order.
