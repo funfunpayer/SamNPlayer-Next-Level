@@ -27,7 +27,7 @@
 
 - A **test** is one `func TestXxx` (Go) or one `def test_xxx` (Python). Python scripts that have no `def test_` (almost all of the frontend and many generator tests are a `main()` with many `check(...)` calls) count as **one test per file**; the number of checks is in the table. Subtests (`t.Run`) are not counted separately.
 - Old suite: **222** Go test files and **209** Python test files (431 files). They hold **821** Go test functions and **320** Python tests (script files counted once). `cmd/gui-wails/counting_device_test.go` has no test function (a helper type), so it is listed as n/a with 0 tests.
-- New suite: `tests/core/*_test.cpp` (doctest, 23 files), `tests/app/*_test.cpp` (Qt Test, 7 files) and `core/python/tests/*.py` (5 files). Evidence for a mapping is one of: a Go name in a comment of the new test, the identical test name, or the same behaviour checked (named in the row).
+- New suite: `tests/core/*_test.cpp` (doctest, 28 files), `tests/app/*_test.cpp` (Qt Test, 7 files) and `core/python/tests/*.py` (5 files). Evidence for a mapping is one of: a Go name in a comment of the new test, the identical test name, or the same behaviour checked (named in the row).
 - Method: the old tree was read with `git show origin/main:<path>`; the new tree with `grep` over `tests/`, `core/` and `app/`. "Ported code" means a function exists in `core/include/samn`, `core/src` or `app/src`.
 
 ## 1. Summary
@@ -36,15 +36,15 @@
 
 | | Tests | ported | covered | todo-now | todo-later | n/a |
 |---|---:|---:|---:|---:|---:|---:|
-| **All** | **1141** | 110 | 64 | **56** | 861 | 50 |
-| Go | 821 | 97 | 30 | 50 | 599 | 45 |
+| **All** | **1141** | 151 | 64 | **15** | 861 | 50 |
+| Go | 821 | 138 | 30 | 9 | 599 | 45 |
 | Python | 320 | 13 | 34 | 6 | 262 | 5 |
 
 ### Per old package
 
 | Old package | Files | Tests | ported | covered | todo-now | todo-later | n/a |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| `funscript` | 36 | 170 | 40 | 1 | 35 | 94 | 0 |
+| `funscript` | 36 | 170 | 75 | 1 | 0 | 94 | 0 |
 | `device` | 7 | 41 | 39 | 2 | 0 | 0 | 0 |
 | `player` | 7 | 61 | 0 | 9 | 5 | 44 | 3 |
 | `samn` | 2 | 5 | 5 | 0 | 0 | 0 | 0 |
@@ -57,13 +57,13 @@
 | `legal` | 1 | 2 | 0 | 0 | 0 | 2 | 0 |
 | `logging` | 1 | 1 | 0 | 0 | 0 | 1 | 0 |
 | `cmd/cli` | 7 | 18 | 0 | 0 | 0 | 12 | 6 |
-| `cmd/gui-wails (Go)` | 68 | 188 | 7 | 17 | 9 | 142 | 13 |
-| `generator (Go)` | 72 | 237 | 6 | 1 | 1 | 216 | 13 |
+| `cmd/gui-wails (Go)` | 68 | 188 | 12 | 17 | 4 | 142 | 13 |
+| `generator (Go)` | 72 | 237 | 7 | 1 | 0 | 216 | 13 |
 | `generator (Python)` | 56 | 151 | 0 | 0 | 0 | 151 | 0 |
 | `native/tests (Python)` | 4 | 13 | 13 | 0 | 0 | 0 | 0 |
 | `scripts/benchmark-prep (Python)` | 1 | 8 | 0 | 0 | 0 | 8 | 0 |
 | `frontend (Python/Playwright UI tests)` | 148 | 148 | 0 | 34 | 6 | 103 | 5 |
-| **Total** | **431** | **1141** | **110** | **64** | **56** | **861** | **50** |
+| **Total** | **431** | **1141** | **151** | **64** | **15** | **861** | **50** |
 
 `generator (Go)` includes the sub-packages `aiscript`, `bodyparts`, `posttrack`, `profilemodel`, `simpletrack`, `strokepreview`, `trackcv`, `trackutil`.
 
@@ -71,7 +71,7 @@
 
 | Sub-package | Files | Tests | ported | covered | todo-now | todo-later | n/a |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| `generator/(top level)` | 44 | 122 | 6 | 1 | 1 | 101 | 13 |
+| `generator/(top level)` | 44 | 122 | 7 | 1 | 0 | 101 | 13 |
 | `generator/aiscript` | 3 | 12 | 0 | 0 | 0 | 12 | 0 |
 | `generator/bodyparts` | 1 | 4 | 0 | 0 | 0 | 4 | 0 |
 | `generator/posttrack` | 3 | 9 | 0 | 0 | 0 | 9 | 0 |
@@ -87,15 +87,15 @@ One row per old test function (grouped when a whole file shares the same answer)
 
 ### 2.1 `funscript`
 
-36 files, 170 tests: 40 ported, 1 covered, 35 todo-now, 94 todo-later, 0 n/a.
+36 files, 170 tests: 75 ported, 1 covered, 0 todo-now, 94 todo-later, 0 n/a.
 
 | Old file | Test function(s) | Status | Where / why |
 |---|---|---|---|
 | `actions_test.go` | `TestSaveActionsRoundtrip`, `TestSaveActionsClampsPosition`, `TestSaveActionsRejectsEmptyAndNegativeTime`, `TestSaveActionsPreservesUnknownFields`, `TestSaveActionsPreservesForeignCreatorNoNativePipeline` | todo-later | P4 Editor: `SaveActions` / `SaveAxisActions` (write edited points back into a .funscript, keep unknown metadata) is not ported; only `.samn` saving (`SaveDocument`) and the marks writers exist. |
 | `atomic_write_test.go` | `TestWriteFileAtomicReplacesExistingFile` | ported | tests/core/fileio_test.cpp "fileio: atomic write creates, replaces and leaves no temp file" |
-| `atomic_write_test.go` | `TestWriteFileAtomicCleansTempAfterRenameFailure` | todo-now | see Port now |
+| `atomic_write_test.go` | `TestWriteFileAtomicCleansTempAfterRenameFailure` | ported | tests/core/fileio_test.cpp "fileio: a failed rename leaves the destination and the folder clean" |
 | `audio_chapters_test.go` | `TestChaptersFromAudioSegments`, `TestChaptersFromAudioSegmentsNil` | todo-later | P3.6 (audio segments): `ChaptersFromAudioSegments` is not ported. |
-| `axes_test.go` | `TestBakeAxesAndExplicitPlayback`, `TestRecipeModeIgnoresAxes` | todo-now | see Port now |
+| `axes_test.go` | `TestBakeAxesAndExplicitPlayback`, `TestRecipeModeIgnoresAxes` | ported | tests/core/recipe_test.cpp "axes: bake from the recipe and play from explicit axes", "axes: recipe mode ignores the stored axes" |
 | `axes_test.go` | `TestSaveAxisActionsAndPlaybackSource` | todo-later | P4 Editor: `SaveAxisActions` / `SavePlaybackSource` (write `samn_axes` into a .funscript) are not ported. |
 | `backend_hint_test.go` | `TestSuggestBackendAlwaysCSRT` | todo-later | P3.5 (backends): `SuggestBackend` is not ported. |
 | `beat_strokes_test.go` | `TestBeatStrokesDownOnEveryBeat` | ported | core/python/tests/test_beat_strokes_parity.py::test_down_on_every_beat |
@@ -104,16 +104,16 @@ One row per old test function (grouped when a whole file shares the same answer)
 | `compare_dataset_test.go` | `TestCompareDatasetPairsAndReport`, `TestCompareDatasetSkipsFungenBinary` | todo-later | P3.8 (comparison controller / benchmark): dataset comparison is not ported. |
 | `contact_marks_test.go` | `TestContactMarksHasAreas` | todo-later | P3.6 (contact marks): `ContactMarks.HasAreas` is not ported (the struct exists in `samn_file.h`, no helper). |
 | `contact_preview_test.go` | `TestPreviewContactVibrationSpanEarlier`, `TestPreviewContactVibrationImpulseQuieter` | todo-later | P3.3 (Generator preview): `PreviewContactVibration` is not ported. |
-| `contact_recipe_test.go` | `TestDefaultSyncForProfile`, `TestSaveContactRecipeStrokeEmptySyncStaysIndependent`, `TestSaveContactRecipeTjEmptySyncUsesSuctionPosition`, `TestSaveContactRecipeRoundtrip` | todo-now | see Port now |
+| `contact_recipe_test.go` | `TestDefaultSyncForProfile`, `TestSaveContactRecipeStrokeEmptySyncStaysIndependent`, `TestSaveContactRecipeTjEmptySyncUsesSuctionPosition`, `TestSaveContactRecipeRoundtrip` | ported | tests/core/recipe_test.cpp "recipe: profile names and default sync" (`TestDefaultSyncForProfile`); tests/core/samn_file_test.cpp "samn_file: contact settings fill an empty stroke sync with independent", "...fill an empty tj sync with suction_position", "samn_file: contact recipe round trip, switching off clears span and curve" (adapted to `Document::ApplyContactRecipe`) |
 | `dense_quality_test.go` | `TestEvaluateDenseQualityReconstruction`, `TestEvaluateDenseQualityTrackerLost`, `TestEvaluateDenseQualityMotionRange`, `TestSpectralConcentrationSineVsNoise` | todo-later | P3.6 (Quality Doctor): `EvaluateDenseQuality` / `SpectralConcentration` are not ported. |
-| `feel_scene_test.go` | `TestNormalizeSceneFeelAliases`, `TestSceneFeelOffKeepsOldMapping`, `TestSceneSuctionShapes`, `TestOralSceneRaisesSuction`, `TestVibrationFollowsSuction`, `TestBalance`, `TestSaveFeelRecipeRoundTrip` | todo-now | see Port now |
+| `feel_scene_test.go` | `TestNormalizeSceneFeelAliases`, `TestSceneFeelOffKeepsOldMapping`, `TestSceneSuctionShapes`, `TestOralSceneRaisesSuction`, `TestVibrationFollowsSuction`, `TestBalance`, `TestSaveFeelRecipeRoundTrip` | ported | tests/core/recipe_test.cpp "feel: scene names and aliases", "feel: scene feel off keeps the old mapping", "feel: suction shapes per scene", "feel: oral scene raises suction", "feel: vibration follows suction", "feel: balance"; tests/core/samn_file_test.cpp "samn_file: feel settings round trip into the map options" (`TestSaveFeelRecipeRoundTrip`, adapted to `Document::ApplyFeelRecipe`). `NormalizeSceneFeel` is now declared in `samn_file.h`. |
 | `feel_spatial_mapper_test.go` | `TestSpatialFeelBoostsShallowStroke`, `TestPreferSpatialAttenuatesDepthAwayFromMark`, `TestPreferSpatialKeepsSpatialPeak`, `TestPreferSpatialShortensEnvelopeOnHit` | todo-later | P3.6 (contact marks + trajectory): the spatial geometry (`SpatialContactIntensity`) is not ported, so `MapOptionsFromScript` never sets `spatial_contact`. The mapper half (depth x `SpatialDepthWeight`, envelope 0.18) exists and can be tested with the `spatial_contact` hook. |
 | `feel_spatial_test.go` | `TestProximityInsideCore`, `TestProximityOutsideMargin`, `TestSpatialContactIntensityUsesTrajectory`, `TestSpatialIgnoresTipBoxOnly` | todo-later | P3.6 (contact marks + trajectory): `Proximity` / `SpatialContactIntensity` are not ported. |
-| `funscript_test.go` | `TestParseQualityMetadata` | todo-now | see Port now |
+| `funscript_test.go` | `TestParseQualityMetadata` | ported | tests/core/samn_file_test.cpp "samn_file: quality score and verdict are separate fields" |
 | `funscript_test.go` | `TestParseDropsCorruptTimes` | ported | core/python/tests/test_funscript_parity.py::test_corrupt_times |
 | `improve_test.go` | `TestTrimActionsMiddle`, `TestFillGapsInsertsPoints`, `TestFillGapsAudioHzStep`, `TestImproveScriptAutoSecondPass`, `TestImproveScriptNoDensifySlowStroke`, `TestImproveScriptTrimAndFill`, `TestHealTrackingGapsStripsInteriorAndBridges`, `TestHealTrackingGapsKeepsBoundaryAnchors`, `TestHealTrackingGapsDoesNotDensifyOutside`, `TestHealTrackingGapsMergesOverlappingAndInverts`, `TestHealTrackingGapsRefusesWhenWouldDestroyScript`, `TestImproveScriptHealTrackingGaps`, `TestImproveScriptHealPlusFillKeepsHealPointsCount`, `TestStampTrackingGapsClears` | todo-later | P3.3 (Review: trim, fill gaps, heal tracking gaps): `ImproveScript`, `TrimActions`, `FillGaps`, `HealTrackingGaps`, `StampTrackingGaps` are not ported. |
 | `inverted_playback_test.go` | `TestParseTopLevelInverted` | ported | core/python/tests/test_funscript_parity.py::test_inverted (and `FunscriptView::inverted` in samn_file_test.cpp) |
-| `inverted_playback_test.go` | `TestPlaybackActionsFlipsWhenInverted`, `TestPlaybackActionsPassthroughWhenNotInverted`, `TestToIntensityCurveHonorsInverted` | todo-now | see Port now |
+| `inverted_playback_test.go` | `TestPlaybackActionsFlipsWhenInverted`, `TestPlaybackActionsPassthroughWhenNotInverted`, `TestToIntensityCurveHonorsInverted` | ported | tests/core/recipe_test.cpp "inverted: playback actions flip when inverted", "inverted: playback actions pass through when not inverted", "inverted: the intensity curve honours the inverted flag" |
 | `inverted_playback_test.go` | `TestWriteInvertedClearsAndSetsFlag` | todo-later | P4 Editor (Invert / honor_inverted): `WriteInverted` is not ported. |
 | `mapper_test.go` | `TestMapperStandstill` | ported | tests/core/mapper_test.cpp "mapper: standstill" |
 | `mapper_test.go` | `TestMapperFastStrokeReachesFull` | ported | tests/core/mapper_test.cpp "mapper: fast stroke reaches full" |
@@ -146,7 +146,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 | `project_test.go` | `TestScaleRangePosFadeSoftEdges` | ported | tests/core/range_edit_test.cpp "TestScaleRangePosFadeSoftEdges" |
 | `project_test.go` | `TestCapSpeedRangeCapsAllInRangeSegments` | ported | tests/core/range_edit_test.cpp "TestCapSpeedRangeCapsAllInRangeSegments" |
 | `project_test.go` | `TestExportHeatmapPNG` | ported | tests/core/heatmap_image_test.cpp "TestExportHeatmapPNG" |
-| `recipe_test.go` | `TestNormalizeProfile`, `TestRecipeTJSuctionOnlyNoVibration`, `TestRecipeTJSuctionNoDoubleFloor`, `TestRecipeTJContactVibrationOffByDefault`, `TestRecipeTJContactVibrationTracksPosition`, `TestRecipeTJContactVibrationBriefGraze`, `TestRecipeTJContactVibrationNeedsSpan`, `TestRecipeTJContactVibrationSpanEarlier`, `TestRecipeTJContactVibrationCurves`, `TestApplyContactCurveImpulsePeaks`, `TestRecipeTJContactVibrationMutedInTrackingGap`, `TestRecipeTJContactGapWinsOverEnvelopeAndSmoothing`, `TestRecipeStandardContactVibrationTracksPosition`, `TestRecipeTFEqualsTJ` | todo-now | see Port now |
+| `recipe_test.go` | `TestNormalizeProfile`, `TestRecipeTJSuctionOnlyNoVibration`, `TestRecipeTJSuctionNoDoubleFloor`, `TestRecipeTJContactVibrationOffByDefault`, `TestRecipeTJContactVibrationTracksPosition`, `TestRecipeTJContactVibrationBriefGraze`, `TestRecipeTJContactVibrationNeedsSpan`, `TestRecipeTJContactVibrationSpanEarlier`, `TestRecipeTJContactVibrationCurves`, `TestApplyContactCurveImpulsePeaks`, `TestRecipeTJContactVibrationMutedInTrackingGap`, `TestRecipeTJContactGapWinsOverEnvelopeAndSmoothing`, `TestRecipeStandardContactVibrationTracksPosition`, `TestRecipeTFEqualsTJ` | ported | tests/core/recipe_test.cpp (14 cases named "recipe: ..."; `TestNormalizeProfile` is "recipe: profile names and default sync", without the `IsStrokeProfile` / `AllowsContactSettings` checks, which have no C++ counterpart yet) |
 | `rhythm_bridge_test.go` | `TestRhythmBridgeRestoresRegularStrokes`, `TestRhythmBridgeReadsDenseScripts`, `TestRhythmBridgeLeavesSpanWithoutRhythm`, `TestImproveHealRhythmIsOptIn`, `TestImproveRepairSpansFallsBackToLine` | todo-later | P3.3 / P3.4 (Review: heal rhythm, repair spans; rhythm grid): the rhythm bridge is not ported. |
 | `ringdown_test.go` | `TestRingDownEndsAtZeroAndKeepsPrefix`, `TestRingDownClampsCycles` | todo-later | P4 Editor (Apply ring-down): `RingDown` is not ported. |
 | `scene_map_test.go` | `TestEncodeDecodeSceneMapScore` | todo-later | P4 Scene Map: `EncodeSceneMapScore` / `DecodeSceneMapScore` are not ported (`score_b64` is kept as an opaque string). |
@@ -159,11 +159,11 @@ One row per old test function (grouped when a whole file shares the same answer)
 | `speed_highlight_test.go` | `TestSpeedHighlightsFindsFastSegment` | ported | tests/core/curve_geometry_test.cpp "SpeedHighlights finds a fast segment" |
 | `speed_highlight_test.go` | `TestSpeedHighlightsRespectsThreshold` | ported | tests/core/curve_geometry_test.cpp "SpeedHighlights respects the threshold" |
 | `speed_highlight_test.go` | `TestSpeedHighlightsEmpty` | ported | tests/core/curve_geometry_test.cpp "SpeedHighlights: empty, single point, equal times, rounding" |
-| `stroke_filter_test.go` | `TestStrokeFilterOffChangesNothing` | ported | core/python/tests/test_stroke_filter_parity.py::test_off_changes_nothing |
-| `stroke_filter_test.go` | `TestStrokeFilterSmoothKeepsPointsAndStaysInRange` | ported | core/python/tests/test_stroke_filter_parity.py::test_smooth_keeps_points (partial: the last check of the Go test is missing, see list B) |
-| `stroke_filter_test.go` | `TestPCHIPNoOvershoot`, `TestNormalizeSmooth`, `TestStrokeFilterSortsAndDedupes` | todo-now | see Port now |
-| `stroke_filter_test.go` | `TestStrokeFilterSpeedLimit` | ported | core/python/tests/test_stroke_filter_parity.py::test_speed_limit (partial: catch-up point and per-step limit missing, see list B) |
-| `stroke_filter_test.go` | `TestStrokeFilterIdleFill` | ported | core/python/tests/test_stroke_filter_parity.py::test_idle_fill (partial: "short gap is not filled" missing, see list B) |
+| `stroke_filter_test.go` | `TestStrokeFilterOffChangesNothing` | ported | tests/core/stroke_filter_test.cpp "Stroke filter off changes nothing and leaves the input alone" and core/python/tests/test_stroke_filter_parity.py::test_off_changes_nothing |
+| `stroke_filter_test.go` | `TestStrokeFilterSmoothKeepsPointsAndStaysInRange` | ported | tests/core/stroke_filter_test.cpp (all checks of the Go test) and core/python/tests/test_stroke_filter_parity.py::test_smooth_keeps_points |
+| `stroke_filter_test.go` | `TestPCHIPNoOvershoot`, `TestNormalizeSmooth`, `TestStrokeFilterSortsAndDedupes` | ported | tests/core/stroke_filter_test.cpp "PCHIP does not overshoot monotone data", "NormalizeSmooth", "Unsorted input is sorted and the last duplicate time kept" |
+| `stroke_filter_test.go` | `TestStrokeFilterSpeedLimit` | ported | tests/core/stroke_filter_test.cpp (all checks of the Go test) and core/python/tests/test_stroke_filter_parity.py::test_speed_limit |
+| `stroke_filter_test.go` | `TestStrokeFilterIdleFill` | ported | tests/core/stroke_filter_test.cpp (all checks of the Go test) and core/python/tests/test_stroke_filter_parity.py::test_idle_fill |
 
 ### 2.2 `device`
 
@@ -354,7 +354,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 
 ### 2.14 `cmd/gui-wails (Go)`
 
-68 files, 188 tests: 7 ported, 17 covered, 9 todo-now, 142 todo-later, 13 n/a.
+68 files, 188 tests: 12 ported, 17 covered, 4 todo-now, 142 todo-later, 13 n/a.
 
 | Old file | Test function(s) | Status | Where / why |
 |---|---|---|---|
@@ -377,8 +377,8 @@ One row per old test function (grouped when a whole file shares the same answer)
 | `app_chapters_marks_test.go` | `TestGetSaveScriptChapterMarksFunscript` | covered | tests/core/omarker_test.cpp "script marks: .funscript metadata and .samn document", tests/core/marks_test.cpp (chapters); tests/app/player_controller_test.cpp `editMarks`, `chaptersBookmarksHeatmapLanes` |
 | `app_companion_test.go` | `TestGetScriptAxisActionsReadsCompanionFiles`, `TestCompanionAxesForPlayback`, `TestCreateScriptAxis` | todo-later | P2/P4 (companion axis files into the player): not ported. |
 | `app_contact_preview_test.go` | `TestPreviewContactVibrationWiresThrough` | todo-later | P3.3 (Generator preview). |
-| `app_contact_settings_test.go` | `TestSaveContactSettingsPersistsRecipe` | todo-now | same behaviour as funscript/contact_recipe_test.go `TestSaveContactRecipeRoundtrip` (see Port now) |
-| `app_contact_settings_test.go` | `TestSaveContactSettingsStrokeProfile`, `TestSaveContactSettingsStrokeEmptySyncFillsIndependent` | todo-now | see Port now |
+| `app_contact_settings_test.go` | `TestSaveContactSettingsPersistsRecipe` | ported | tests/core/samn_file_test.cpp "samn_file: contact settings are stored in the tj recipe" (adapted to `Document::ApplyContactRecipe`) |
+| `app_contact_settings_test.go` | `TestSaveContactSettingsStrokeProfile`, `TestSaveContactSettingsStrokeEmptySyncFillsIndependent` | ported | tests/core/samn_file_test.cpp "samn_file: contact settings keep sync independent on a stroke profile", "samn_file: contact settings fill an empty stroke sync with independent" |
 | `app_create_video_test.go` | `TestProbeCreateVideoHeader` | todo-later | P3.0/P3.3 (Create video header probe). |
 | `app_curve_test.go` | `TestGetScriptCurveKeepsExtremes` | n/a | Down-samples the curve payload for the JS canvas; the C++ `CurveItem` draws from the actions with its own level of detail (`curve_geometry_test.cpp` density switch). |
 | `app_curve_test.go` | `TestGetScriptCurveShortScriptUnchanged` | n/a | Payload down-sampling for the JS canvas; no equivalent. |
@@ -396,7 +396,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 | `app_editor_test.go` | `TestAppScriptActionsRoundtrip` | todo-later | P4 Editor: `ScriptActions` get/save round trip. |
 | `app_effect_presets_test.go` | `TestEffectPresetsRoundTrip` | todo-later | P2 (Effects presets, settings key `playback.effect_presets`). |
 | `app_feel_test.go` | `TestSaveFeelSettingsOnFunscript` | todo-later | P2 (feel per scene) / P4 UI: the app method and its validation (unknown scene `dance` is refused) are not ported; the recipe part is in list A via `TestSaveFeelRecipeRoundTrip`. |
-| `app_feel_test.go` | `TestSaveFeelSettingsRebakesEmotionScript` | todo-now | see Port now |
+| `app_feel_test.go` | `TestSaveFeelSettingsRebakesEmotionScript` | ported | tests/core/samn_file_test.cpp "samn_file: a new feel changes the baked vibration axis" (adapted to `Document::ApplyFeelRecipe` + `BakeNeoAxes`) |
 | `app_free_e2e_opencv_test.go` | `TestFreeChainGenerateSavePlay` | todo-later | P3.3 (end-to-end Create: generate, save, play); needs OpenCV. |
 | `app_free_e2e_test.go` | `TestFreeChainImportSaveReloadPlayExport` | covered | tests/core/samn_file_test.cpp "samn_file: round trip funscript <-> samn", "export is byte identical to Go", "Go file reads and rewrites identically"; tests/app/player_controller_test.cpp |
 | `app_free_e2e_test.go` | `TestFreeChainStopMidRunThenPlayAgain` | covered | tests/app/playback_output_test.cpp `emergencyStopDropsQueuedLevelsAndStaysSilent` ("Playing again works") |
@@ -450,13 +450,13 @@ One row per old test function (grouped when a whole file shares the same answer)
 | `counting_device_test.go` | (no test function) | n/a | Helper type only (`countingDevice`), no test function. |
 | `identifiers_test.go` | `TestNoPersonalIdentifiersInSource` | todo-now | the rule exists in `docs/AGENT_STATE.md`, the check does not (see Port now) |
 | `settings_store_test.go` | `TestSettingsStoreKeepsCorruptFileAside` | ported | tests/core/settings_test.cpp "broken settings file is kept aside" |
-| `settings_store_test.go` | `TestSettingsStoreNullFile` | todo-now | see Port now |
+| `settings_store_test.go` | `TestSettingsStoreNullFile` | ported | tests/core/settings_test.cpp "settings: a file holding null loads as empty and accepts a set" |
 | `settings_store_test.go` | `TestSettingsStoreSetManyOneWrite` | ported | tests/core/settings_test.cpp "settings: set_many, defaults, atomic write leaves no temp files" |
 | `settings_store_test.go` | `TestSettingsStoreSaveLeavesNoTempFiles` | ported | tests/core/settings_test.cpp "settings: set_many, defaults, atomic write leaves no temp files" (file count == 1) |
 
 ### 2.15 `generator (Go)`
 
-72 files, 237 tests: 6 ported, 1 covered, 1 todo-now, 216 todo-later, 13 n/a.
+72 files, 237 tests: 7 ported, 1 covered, 0 todo-now, 216 todo-later, 13 n/a.
 
 | Old file | Test function(s) | Status | Where / why |
 |---|---|---|---|
@@ -500,7 +500,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 | `native_test.go` | `TestNativePipelineEligible`, `TestNativePipelineSkipReason` | todo-later | P3.3 (native pipeline eligibility and skip reasons). |
 | `native_two_point_test.go` | `TestGenerateNativeTwoPointSimple` | todo-later | P3.4 (two-point tracking). |
 | `native_write_test.go` | `TestWriteFileAtomicReplacesExistingFile` | ported | tests/core/fileio_test.cpp "fileio: atomic write creates, replaces and leaves no temp file" |
-| `native_write_test.go` | `TestWriteFileAtomicCleansTempAfterRenameFailure` | todo-now | duplicate of funscript/atomic_write_test.go (see Port now) |
+| `native_write_test.go` | `TestWriteFileAtomicCleansTempAfterRenameFailure` | ported | tests/core/fileio_test.cpp "fileio: a failed rename leaves the destination and the folder clean" (shared with funscript/atomic_write_test.go) |
 | `posttrack/convert_test.go` | `TestPositionsToActionsMatchesPythonGoldens`, `TestLimitSpeedMatchesPythonGolden`, `TestProminenceReducesDampedRinging`, `TestPercentileBeatsMinMaxOnOutlier` | todo-later | P3.2 (post-processing; Go goldens from the Python port). |
 | `posttrack/filters_test.go` | `TestRollingDetrendRemovesSlowDrift`, `TestBandpassAttenuatesDCAndHighFreq` | todo-later | P3.2 (post-processing filters). |
 | `posttrack/preview_test.go` | `TestPreviewStatsDefaultKnobs`, `TestPreviewStatsProminenceReducesPeaks`, `TestPreviewStatsWideSmoothCalmerHint` | todo-later | P3.2 (post-processing preview stats). |
@@ -786,20 +786,20 @@ One row per old test function (grouped when a whole file shares the same answer)
 
 ## 4. Port now (work list)
 
-**56 tests** whose code is already in SamNPlayer 2. Grouped by the new module; each line is `old file :: old test` followed by what it checks. Suggested target file in italics.
+**15 tests** (41 more were ported, see the `Ported` notes) whose code is already in SamNPlayer 2. Grouped by the new module; each line is `old file :: old test` followed by what it checks. Suggested target file in italics.
 
 | New module | Tests to port |
 |---|---:|
-| core: `mapper.h` and `samn_file.h` (recipes, profiles, scene feel, contact settings, funscript metadata) | 35 |
-| core: `stroke_filter.h` | 3 |
-| core: `fileio.h` | 2 |
-| core: `settings.h` | 1 |
+| core: `mapper.h` and `samn_file.h` (recipes, profiles, scene feel, contact settings, funscript metadata) | 0 |
+| core: `stroke_filter.h` | 0 |
+| core: `fileio.h` | 0 |
+| core: `settings.h` | 0 |
 | app: `PlaybackOutput` | 5 |
 | app: `PlayerController` | 3 |
 | app: `DeviceController` | 2 |
 | app: QML shell and assets | 4 |
 | repo / CI | 1 |
-| **Total** | **56** |
+| **Total** | **15** |
 
 ### A. Missing tests
 
@@ -807,62 +807,62 @@ One row per old test function (grouped when a whole file shares the same answer)
 
 *Target: new `tests/core/recipe_test.cpp` (recipes, profiles, contact curves, scene feel, balance, inverted) and additions to `samn_file_test.cpp` (`ApplyContactRecipe`, `ApplyFeelRecipe`, quality metadata).*
 
-1. `cmd/gui-wails/app_contact_settings_test.go` :: `TestSaveContactSettingsPersistsRecipe`. Adapt to `.samn`: contact on, span 0.5, curve soft are stored in the recipe of a tj document. [same behaviour as funscript/contact_recipe_test.go `TestSaveContactRecipeRoundtrip`]
-2. `cmd/gui-wails/app_contact_settings_test.go` :: `TestSaveContactSettingsStrokeProfile`. A stroke-profile document keeps `sync=independent` after contact settings are applied (span 0.55, curve peak).
-3. `cmd/gui-wails/app_contact_settings_test.go` :: `TestSaveContactSettingsStrokeEmptySyncFillsIndependent`. A stroke-profile recipe with empty sync gets `independent` (never `suction_position`).
-4. `cmd/gui-wails/app_feel_test.go` :: `TestSaveFeelSettingsRebakesEmotionScript`. After the feel changes (oral, follow-suction) re-baking the Neo 2 axes of a `.samn` gives a different vibration axis than before.
-5. `funscript/axes_test.go` :: `TestBakeAxesAndExplicitPlayback`. Bake vibration/suction axes from a recipe (suction high at contact, vibration > 0 with span 0.5); a script with `playback_source=axes` and `samn_axes` yields `use_explicit_axes`.
-6. `funscript/axes_test.go` :: `TestRecipeModeIgnoresAxes`. With `playback_source=recipe` the stored `samn_axes` are ignored (`use_explicit_axes` stays false).
-7. `funscript/contact_recipe_test.go` :: `TestDefaultSyncForProfile`. Distance profiles (tf/tj) default to `suction_position`, stroke profiles to `independent`.
-8. `funscript/contact_recipe_test.go` :: `TestSaveContactRecipeStrokeEmptySyncStaysIndependent`. Adapt to `.samn`: applying contact settings to a stroke-profile recipe with empty sync fills `independent`, never `suction_position`.
-9. `funscript/contact_recipe_test.go` :: `TestSaveContactRecipeTjEmptySyncUsesSuctionPosition`. Adapt to `.samn`: a tj recipe with empty sync gets `suction_position` when contact settings are applied.
-10. `funscript/contact_recipe_test.go` :: `TestSaveContactRecipeRoundtrip`. Contact on/span/curve are stored (span via `EffectiveContactSpan`, curve normalised), switching off clears span and curve, the rest of the recipe stays.
-11. `funscript/feel_scene_test.go` :: `TestNormalizeSceneFeelAliases`. Aliases map to the four feels (`oral`, `Blowjob`->oral, `penetration`->intercourse, `titjob`->breast, `handjob`->hand); empty and unknown (`dance`) names give none. `NormalizeSceneFeel` is not in a header yet: expose it or test through `Document::ApplyFeelRecipe`.
-12. `funscript/feel_scene_test.go` :: `TestSceneFeelOffKeepsOldMapping`. With no scene feel, follow-suction off and balance 0 the frames equal the plain mapping frame for frame.
-13. `funscript/feel_scene_test.go` :: `TestSceneSuctionShapes`. Oral keeps a seal (>= 0.29) at the shallowest point; every feel pulls harder when deeper; hand weighs speed over depth, breast depth over speed; no feel returns nullopt.
-14. `funscript/feel_scene_test.go` :: `TestOralSceneRaisesSuction`. The oral feel raises the mean suction of a stroke script above the plain mapping.
-15. `funscript/feel_scene_test.go` :: `TestVibrationFollowsSuction`. With follow-suction on, every frame's vibration equals its suction (smoothing 0, intercourse feel).
-16. `funscript/feel_scene_test.go` :: `TestBalance`. Balance +1 gives vibration 0 and suction > 0, -1 the reverse; 0.5 halves the mean vibration and leaves suction; `BalanceScales(NaN)` is neutral (1, 1).
-17. `funscript/feel_scene_test.go` :: `TestSaveFeelRecipeRoundTrip`. Adapt to `.samn`: scene feel (`blowjob` is stored as oral), follow-suction and balance 0.4 are stored and `MapOptionsFromScript` reads them back; other metadata (creator) is kept.
-18. `funscript/funscript_test.go` :: `TestParseQualityMetadata`. `quality_score` and `quality_passed` are read as separate fields (passed=false with a score of 0.63 stays false; old scripts without `quality_passed` give nullopt; no metadata gives both empty).
-19. `funscript/inverted_playback_test.go` :: `TestPlaybackActionsFlipsWhenInverted`. With `inverted=true` every position becomes 100-pos (clamped), times unchanged, input not modified.
-20. `funscript/inverted_playback_test.go` :: `TestPlaybackActionsPassthroughWhenNotInverted`. With `inverted=false` the actions come back unchanged.
-21. `funscript/inverted_playback_test.go` :: `TestToIntensityCurveHonorsInverted`. A script with `inverted=true` and flipped data (100, 0, 100) produces exactly the frames of the plain script (0, 100, 0).
-22. `funscript/recipe_test.go` :: `TestNormalizeProfile`. `TF` normalises to `tj`; tf/tj are distance profiles, `standard` is not; default sync per profile family. (`IsStrokeProfile` / `AllowsContactSettings` have no C++ counterpart yet.)
-23. `funscript/recipe_test.go` :: `TestRecipeTJSuctionOnlyNoVibration`. tj recipe: no vibration at all, suction follows position (max >= 0.7, floor about 0.20 from the 20-90 clamp, max about 0.90).
-24. `funscript/recipe_test.go` :: `TestRecipeTJSuctionNoDoubleFloor`. tj recipe: pos 20 maps to about 0.20 suction and pos 90 to about 0.90 (no second floor lift); recipe `min_suction` stays 0.20.
-25. `funscript/recipe_test.go` :: `TestRecipeTJContactVibrationOffByDefault`. tj recipe without contact vibration stays silent even at deep contact.
-26. `funscript/recipe_test.go` :: `TestRecipeTJContactVibrationTracksPosition`. tj + contact vibration: 0 far from contact, > 0.5 during sustained contact near the script's own maximum, never above 1.
-27. `funscript/recipe_test.go` :: `TestRecipeTJContactVibrationBriefGraze`. A brief graze reaches the same peak (>= 0.9) as a sustained contact but stays above 0.5 over fewer frames.
-28. `funscript/recipe_test.go` :: `TestRecipeTJContactVibrationNeedsSpan`. A script with almost no position range (50-52) never buzzes.
-29. `funscript/recipe_test.go` :: `TestRecipeTJContactVibrationSpanEarlier`. At mid position 55 the default span 0.75 is still silent; span 0.45 already vibrates (>= 0.05).
-30. `funscript/recipe_test.go` :: `TestRecipeTJContactVibrationCurves`. At the same position soft < linear < peak; impulse stays <= 0.05 mid-window.
-31. `funscript/recipe_test.go` :: `TestApplyContactCurveImpulsePeaks`. Impulse is 0 at t=0.5, rises sharply near the peak (0.9 is > 0 and below 1.0), ~1 at t=1; `NormalizeContactCurve("events")` gives impulse.
-32. `funscript/recipe_test.go` :: `TestRecipeTJContactVibrationMutedInTrackingGap`. Vibration is 0 inside a tracking gap (650-850 ms) even while the held position is in the contact zone, and > 0.5 just outside it.
-33. `funscript/recipe_test.go` :: `TestRecipeTJContactGapWinsOverEnvelopeAndSmoothing`. Envelope and smoothing never carry the previous vibration into a tracking gap (350-650 ms stay 0).
-34. `funscript/recipe_test.go` :: `TestRecipeStandardContactVibrationTracksPosition`. Stroke profile (independent) with contact: deep flat window is high, far flat window is low.
-35. `funscript/recipe_test.go` :: `TestRecipeTFEqualsTJ`. `RecipeFor("tf")` and `RecipeFor("tj")` have the same sync (`suction_position`) and `min_suction`.
+1. `cmd/gui-wails/app_contact_settings_test.go` :: `TestSaveContactSettingsPersistsRecipe`. Adapt to `.samn`: contact on, span 0.5, curve soft are stored in the recipe of a tj document. [same behaviour as funscript/contact_recipe_test.go `TestSaveContactRecipeRoundtrip`] **Ported:** tests/core/samn_file_test.cpp "contact settings are stored in the tj recipe".
+2. `cmd/gui-wails/app_contact_settings_test.go` :: `TestSaveContactSettingsStrokeProfile`. A stroke-profile document keeps `sync=independent` after contact settings are applied (span 0.55, curve peak). **Ported:** tests/core/samn_file_test.cpp "contact settings keep sync independent on a stroke profile".
+3. `cmd/gui-wails/app_contact_settings_test.go` :: `TestSaveContactSettingsStrokeEmptySyncFillsIndependent`. A stroke-profile recipe with empty sync gets `independent` (never `suction_position`). **Ported:** tests/core/samn_file_test.cpp "contact settings fill an empty stroke sync with independent".
+4. `cmd/gui-wails/app_feel_test.go` :: `TestSaveFeelSettingsRebakesEmotionScript`. After the feel changes (oral, follow-suction) re-baking the Neo 2 axes of a `.samn` gives a different vibration axis than before. **Ported:** tests/core/samn_file_test.cpp "a new feel changes the baked vibration axis".
+5. `funscript/axes_test.go` :: `TestBakeAxesAndExplicitPlayback`. Bake vibration/suction axes from a recipe (suction high at contact, vibration > 0 with span 0.5); a script with `playback_source=axes` and `samn_axes` yields `use_explicit_axes`. **Ported:** tests/core/recipe_test.cpp "axes: bake from the recipe and play from explicit axes".
+6. `funscript/axes_test.go` :: `TestRecipeModeIgnoresAxes`. With `playback_source=recipe` the stored `samn_axes` are ignored (`use_explicit_axes` stays false). **Ported:** tests/core/recipe_test.cpp "axes: recipe mode ignores the stored axes".
+7. `funscript/contact_recipe_test.go` :: `TestDefaultSyncForProfile`. Distance profiles (tf/tj) default to `suction_position`, stroke profiles to `independent`. **Ported:** tests/core/recipe_test.cpp "recipe: profile names and default sync".
+8. `funscript/contact_recipe_test.go` :: `TestSaveContactRecipeStrokeEmptySyncStaysIndependent`. Adapt to `.samn`: applying contact settings to a stroke-profile recipe with empty sync fills `independent`, never `suction_position`. **Ported:** tests/core/samn_file_test.cpp "contact settings fill an empty stroke sync with independent".
+9. `funscript/contact_recipe_test.go` :: `TestSaveContactRecipeTjEmptySyncUsesSuctionPosition`. Adapt to `.samn`: a tj recipe with empty sync gets `suction_position` when contact settings are applied. **Ported:** tests/core/samn_file_test.cpp "contact settings fill an empty tj sync with suction_position".
+10. `funscript/contact_recipe_test.go` :: `TestSaveContactRecipeRoundtrip`. Contact on/span/curve are stored (span via `EffectiveContactSpan`, curve normalised), switching off clears span and curve, the rest of the recipe stays. **Ported:** tests/core/samn_file_test.cpp "contact recipe round trip, switching off clears span and curve".
+11. `funscript/feel_scene_test.go` :: `TestNormalizeSceneFeelAliases`. Aliases map to the four feels (`oral`, `Blowjob`->oral, `penetration`->intercourse, `titjob`->breast, `handjob`->hand); empty and unknown (`dance`) names give none. `NormalizeSceneFeel` is not in a header yet: expose it or test through `Document::ApplyFeelRecipe`. **Ported:** tests/core/recipe_test.cpp "feel: scene names and aliases".
+12. `funscript/feel_scene_test.go` :: `TestSceneFeelOffKeepsOldMapping`. With no scene feel, follow-suction off and balance 0 the frames equal the plain mapping frame for frame. **Ported:** tests/core/recipe_test.cpp "feel: scene feel off keeps the old mapping".
+13. `funscript/feel_scene_test.go` :: `TestSceneSuctionShapes`. Oral keeps a seal (>= 0.29) at the shallowest point; every feel pulls harder when deeper; hand weighs speed over depth, breast depth over speed; no feel returns nullopt. **Ported:** tests/core/recipe_test.cpp "feel: suction shapes per scene".
+14. `funscript/feel_scene_test.go` :: `TestOralSceneRaisesSuction`. The oral feel raises the mean suction of a stroke script above the plain mapping. **Ported:** tests/core/recipe_test.cpp "feel: oral scene raises suction".
+15. `funscript/feel_scene_test.go` :: `TestVibrationFollowsSuction`. With follow-suction on, every frame's vibration equals its suction (smoothing 0, intercourse feel). **Ported:** tests/core/recipe_test.cpp "feel: vibration follows suction".
+16. `funscript/feel_scene_test.go` :: `TestBalance`. Balance +1 gives vibration 0 and suction > 0, -1 the reverse; 0.5 halves the mean vibration and leaves suction; `BalanceScales(NaN)` is neutral (1, 1). **Ported:** tests/core/recipe_test.cpp "feel: balance".
+17. `funscript/feel_scene_test.go` :: `TestSaveFeelRecipeRoundTrip`. Adapt to `.samn`: scene feel (`blowjob` is stored as oral), follow-suction and balance 0.4 are stored and `MapOptionsFromScript` reads them back; other metadata (creator) is kept. **Ported:** tests/core/samn_file_test.cpp "feel settings round trip into the map options".
+18. `funscript/funscript_test.go` :: `TestParseQualityMetadata`. `quality_score` and `quality_passed` are read as separate fields (passed=false with a score of 0.63 stays false; old scripts without `quality_passed` give nullopt; no metadata gives both empty). **Ported:** tests/core/samn_file_test.cpp "quality score and verdict are separate fields".
+19. `funscript/inverted_playback_test.go` :: `TestPlaybackActionsFlipsWhenInverted`. With `inverted=true` every position becomes 100-pos (clamped), times unchanged, input not modified. **Ported:** tests/core/recipe_test.cpp "inverted: playback actions flip when inverted".
+20. `funscript/inverted_playback_test.go` :: `TestPlaybackActionsPassthroughWhenNotInverted`. With `inverted=false` the actions come back unchanged. **Ported:** tests/core/recipe_test.cpp "inverted: playback actions pass through when not inverted".
+21. `funscript/inverted_playback_test.go` :: `TestToIntensityCurveHonorsInverted`. A script with `inverted=true` and flipped data (100, 0, 100) produces exactly the frames of the plain script (0, 100, 0). **Ported:** tests/core/recipe_test.cpp "inverted: the intensity curve honours the inverted flag".
+22. `funscript/recipe_test.go` :: `TestNormalizeProfile`. `TF` normalises to `tj`; tf/tj are distance profiles, `standard` is not; default sync per profile family. (`IsStrokeProfile` / `AllowsContactSettings` have no C++ counterpart yet.) **Ported:** tests/core/recipe_test.cpp "recipe: profile names and default sync".
+23. `funscript/recipe_test.go` :: `TestRecipeTJSuctionOnlyNoVibration`. tj recipe: no vibration at all, suction follows position (max >= 0.7, floor about 0.20 from the 20-90 clamp, max about 0.90). **Ported:** tests/core/recipe_test.cpp "recipe: tj is suction only, no vibration".
+24. `funscript/recipe_test.go` :: `TestRecipeTJSuctionNoDoubleFloor`. tj recipe: pos 20 maps to about 0.20 suction and pos 90 to about 0.90 (no second floor lift); recipe `min_suction` stays 0.20. **Ported:** tests/core/recipe_test.cpp "recipe: tj suction has no double floor".
+25. `funscript/recipe_test.go` :: `TestRecipeTJContactVibrationOffByDefault`. tj recipe without contact vibration stays silent even at deep contact. **Ported:** tests/core/recipe_test.cpp "recipe: tj contact vibration is off by default".
+26. `funscript/recipe_test.go` :: `TestRecipeTJContactVibrationTracksPosition`. tj + contact vibration: 0 far from contact, > 0.5 during sustained contact near the script's own maximum, never above 1. **Ported:** tests/core/recipe_test.cpp "recipe: tj contact vibration tracks the position".
+27. `funscript/recipe_test.go` :: `TestRecipeTJContactVibrationBriefGraze`. A brief graze reaches the same peak (>= 0.9) as a sustained contact but stays above 0.5 over fewer frames. **Ported:** tests/core/recipe_test.cpp "recipe: tj contact vibration, brief graze".
+28. `funscript/recipe_test.go` :: `TestRecipeTJContactVibrationNeedsSpan`. A script with almost no position range (50-52) never buzzes. **Ported:** tests/core/recipe_test.cpp "recipe: tj contact vibration needs a position span".
+29. `funscript/recipe_test.go` :: `TestRecipeTJContactVibrationSpanEarlier`. At mid position 55 the default span 0.75 is still silent; span 0.45 already vibrates (>= 0.05). **Ported:** tests/core/recipe_test.cpp "recipe: tj contact vibration, a smaller span starts earlier".
+30. `funscript/recipe_test.go` :: `TestRecipeTJContactVibrationCurves`. At the same position soft < linear < peak; impulse stays <= 0.05 mid-window. **Ported:** tests/core/recipe_test.cpp "recipe: tj contact vibration curves".
+31. `funscript/recipe_test.go` :: `TestApplyContactCurveImpulsePeaks`. Impulse is 0 at t=0.5, rises sharply near the peak (0.9 is > 0 and below 1.0), ~1 at t=1; `NormalizeContactCurve("events")` gives impulse. **Ported:** tests/core/recipe_test.cpp "recipe: impulse curve peaks".
+32. `funscript/recipe_test.go` :: `TestRecipeTJContactVibrationMutedInTrackingGap`. Vibration is 0 inside a tracking gap (650-850 ms) even while the held position is in the contact zone, and > 0.5 just outside it. **Ported:** tests/core/recipe_test.cpp "recipe: tj contact vibration is muted in a tracking gap".
+33. `funscript/recipe_test.go` :: `TestRecipeTJContactGapWinsOverEnvelopeAndSmoothing`. Envelope and smoothing never carry the previous vibration into a tracking gap (350-650 ms stay 0). **Ported:** tests/core/recipe_test.cpp "recipe: tracking gap wins over envelope and smoothing".
+34. `funscript/recipe_test.go` :: `TestRecipeStandardContactVibrationTracksPosition`. Stroke profile (independent) with contact: deep flat window is high, far flat window is low. **Ported:** tests/core/recipe_test.cpp "recipe: stroke profile contact vibration tracks the position".
+35. `funscript/recipe_test.go` :: `TestRecipeTFEqualsTJ`. `RecipeFor("tf")` and `RecipeFor("tj")` have the same sync (`suction_position`) and `min_suction`. **Ported:** tests/core/recipe_test.cpp "recipe: tf equals tj".
 
 #### core: `stroke_filter.h` (3)
 
 *Target: new `tests/core/stroke_filter_test.cpp`.*
 
-36. `funscript/stroke_filter_test.go` :: `TestPCHIPNoOvershoot`. PCHIP on monotone data (0, 10, 90, 100; step 25 ms) stays monotone (no overshoot).
-37. `funscript/stroke_filter_test.go` :: `TestNormalizeSmooth`. `pchip` and `makima` are accepted, an unknown name (`cubic`) means smoothing off. `NormalizeSmooth` is internal to `stroke_filter.cpp`: test through `ApplyStrokeFilter`.
-38. `funscript/stroke_filter_test.go` :: `TestStrokeFilterSortsAndDedupes`. Unsorted input with a duplicate time is sorted and the last duplicate wins (3 points: 0, 500/80, 1000/100), times strictly increase.
+36. `funscript/stroke_filter_test.go` :: `TestPCHIPNoOvershoot`. PCHIP on monotone data (0, 10, 90, 100; step 25 ms) stays monotone (no overshoot). **Ported:** tests/core/stroke_filter_test.cpp "PCHIP does not overshoot monotone data".
+37. `funscript/stroke_filter_test.go` :: `TestNormalizeSmooth`. `pchip` and `makima` are accepted, an unknown name (`cubic`) means smoothing off. `NormalizeSmooth` is internal to `stroke_filter.cpp`: test through `ApplyStrokeFilter`. **Ported:** tests/core/stroke_filter_test.cpp "NormalizeSmooth".
+38. `funscript/stroke_filter_test.go` :: `TestStrokeFilterSortsAndDedupes`. Unsorted input with a duplicate time is sorted and the last duplicate wins (3 points: 0, 500/80, 1000/100), times strictly increase. **Ported:** tests/core/stroke_filter_test.cpp "Unsorted input is sorted and the last duplicate time kept".
 
 #### core: `fileio.h` (2)
 
 *Target: `tests/core/fileio_test.cpp`.*
 
-39. `funscript/atomic_write_test.go` :: `TestWriteFileAtomicCleansTempAfterRenameFailure`. When the rename fails (destination is a non-empty directory) the write throws, the destination is unchanged and no `.tmp` file is left behind.
-40. `generator/native_write_test.go` :: `TestWriteFileAtomicCleansTempAfterRenameFailure`. Same as funscript/atomic_write_test.go: a failed rename leaves the destination and the folder clean. [duplicate of funscript/atomic_write_test.go]
+39. `funscript/atomic_write_test.go` :: `TestWriteFileAtomicCleansTempAfterRenameFailure`. When the rename fails (destination is a non-empty directory) the write throws, the destination is unchanged and no `.tmp` file is left behind. **Ported:** tests/core/fileio_test.cpp "fileio: a failed rename leaves the destination and the folder clean".
+40. `generator/native_write_test.go` :: `TestWriteFileAtomicCleansTempAfterRenameFailure`. Same as funscript/atomic_write_test.go: a failed rename leaves the destination and the folder clean. [duplicate of funscript/atomic_write_test.go] **Ported:** tests/core/fileio_test.cpp "fileio: a failed rename leaves the destination and the folder clean".
 
 #### core: `settings.h` (1)
 
 *Target: `tests/core/settings_test.cpp`.*
 
-41. `cmd/gui-wails/settings_store_test.go` :: `TestSettingsStoreNullFile`. A settings file that contains `null` loads as empty and a later `set` works and persists.
+41. `cmd/gui-wails/settings_store_test.go` :: `TestSettingsStoreNullFile`. A settings file that contains `null` loads as empty and a later `set` works and persists. **Ported:** tests/core/settings_test.cpp "settings: a file holding null loads as empty and accepts a set".
 
 #### app: `PlaybackOutput` (5)
 
@@ -908,10 +908,10 @@ One row per old test function (grouped when a whole file shares the same answer)
 
 These old tests count as `ported` above, but a part of their checks is missing. Add the assertions to the existing test.
 
-1. `funscript/stroke_filter_test.go :: TestStrokeFilterSmoothKeepsPointsAndStaysInRange` (`core/python/tests/test_stroke_filter_parity.py::test_smooth_keeps_points`): at 600 ms the smoothed curve is still above the straight line (> 80), i.e. the curve is rounded after the top, for both pchip and makima.
-2. `funscript/stroke_filter_test.go :: TestStrokeFilterSpeedLimit` (`test_speed_limit`): the point after the limited one catches up, and no step of the output is faster than the limit.
-3. `funscript/stroke_filter_test.go :: TestStrokeFilterIdleFill` (`test_idle_fill`): a short gap (a two-point script, 0 to 1000 ms) is left alone, and the wave points of a long pause stay strictly inside the pause and within the wave amplitude.
-4. `funscript/stroke_filter_test.go :: TestStrokeFilterOffChangesNothing` (`test_off_changes_nothing`): also assert that the input is not modified.
+1. `funscript/stroke_filter_test.go :: TestStrokeFilterSmoothKeepsPointsAndStaysInRange` (`core/python/tests/test_stroke_filter_parity.py::test_smooth_keeps_points`): at 600 ms the smoothed curve is still above the straight line (> 80), i.e. the curve is rounded after the top, for both pchip and makima. **Ported:** tests/core/stroke_filter_test.cpp.
+2. `funscript/stroke_filter_test.go :: TestStrokeFilterSpeedLimit` (`test_speed_limit`): the point after the limited one catches up, and no step of the output is faster than the limit. **Ported:** tests/core/stroke_filter_test.cpp.
+3. `funscript/stroke_filter_test.go :: TestStrokeFilterIdleFill` (`test_idle_fill`): a short gap (a two-point script, 0 to 1000 ms) is left alone, and the wave points of a long pause stay strictly inside the pause and within the wave amplitude. **Ported:** tests/core/stroke_filter_test.cpp.
+4. `funscript/stroke_filter_test.go :: TestStrokeFilterOffChangesNothing` (`test_off_changes_nothing`): also assert that the input is not modified. **Ported:** tests/core/stroke_filter_test.cpp.
 5. `device`/`app` equivalents of `player/axes_test.go :: TestDriveAxesSendsEachAxisOnce` are listed in A (the existing `extraAxesFollowTheScript` checks only the first move).
 
 ## 5. Not listed here
