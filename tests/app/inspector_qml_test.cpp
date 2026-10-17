@@ -2,6 +2,7 @@
 // device and a stroker's controls. Window grabbed to a PNG when
 // SAMN_TEST_SHOT names a file (visual check with synthetic data only).
 #include <QFile>
+#include <filesystem>
 #include <QGuiApplication>
 #include <QQmlComponent>
 #include <QQmlEngine>
@@ -15,6 +16,7 @@
 #include "fake_servers.h"
 #include "icon_provider.h"
 #include "player_controller.h"
+#include "samn/samn_file.h"
 
 Q_IMPORT_QML_PLUGIN(SamNPlugin)
 
@@ -147,6 +149,104 @@ private slots:
             const QString shot = qEnvironmentVariable("SAMN_TEST_SHOT_PLAYBACK");
             if (!shot.isEmpty()) QVERIFY(window.grabWindow().save(shot));
             player->setPlaying(false);
+        }
+        qInstallMessageHandler(g_previous);
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
+
+    // Playback tab: the Effects card (presets, Intensity, Smoothing, Max
+    // speed, Tick, Sync mode) and the contact and strength controls of an
+    // Emotion Script drive the controller; no QML warnings.
+    void playbackTabMappingControls() {
+        QTemporaryDir files;
+        const QString src = files.filePath("tj.funscript");
+        {
+            QFile f(src);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(R"({"actions":[{"at":0,"pos":20},{"at":400,"pos":90},{"at":800,"pos":15},{"at":1200,"pos":95},{"at":1600,"pos":30}],
+                "metadata":{"profile":"tj","device_recipe":{"sync":"suction_position","contact_vibration":true,"contact_vibration_span":0.75}}})");
+        }
+        samn::Document doc = samn::LoadFunscriptFile(std::filesystem::u8path(src.toStdString()));
+        doc.strength_presets = samn::DefaultStrengthPresets();
+        doc.active_strength = "normal";
+        const QString path = files.filePath("feel.samn");
+        samn::SaveDocument(std::filesystem::u8path(path.toStdString()), doc);
+
+        g_messages.clear();
+        g_previous = qInstallMessageHandler(capture);
+        {
+            QQmlEngine engine;
+            engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
+            engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+            QQmlComponent comp(&engine);
+            comp.setData(R"(
+                import QtQuick
+                import SamN
+                Item {
+                    width: 360; height: 1700
+                    property alias player: pc
+                    DeviceController { id: dev }
+                    PlayerController { id: pc; device: dev }
+                    InspectorPanel { anchors.fill: parent; ctrl: pc; device: dev; tab: 2 }
+                })",
+                         QUrl("qrc:/test/Wrapper3.qml"));
+            QVERIFY2(comp.status() == QQmlComponent::Ready, qPrintable(comp.errorString()));
+            QQuickWindow window;
+            window.resize(360, 1700);
+            std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
+            QVERIFY(root);
+            root->setParentItem(window.contentItem());
+            window.show();
+            QVERIFY(QTest::qWaitForWindowExposed(&window));
+            auto* player = root->property("player").value<PlayerController*>();
+            QVERIFY(player);
+            QVERIFY(player->openPath(path));
+            auto* m = player->mapping();
+            const auto item = [&](const char* name) {
+                auto* it = root->findChild<QQuickItem*>(name);
+                if (!it) qWarning("no %s", name);
+                return it;
+            };
+            for (const char* n : {"fxPreset", "fxName", "fxSave", "fxDelete", "syncMode", "contactOff", "contactCurve", "strengthPreset"}) {
+                QVERIFY2(item(n) && item(n)->isVisible(), n);
+            }
+            // Sync mode: the combo's choice reaches the controller.
+            QVERIFY(QMetaObject::invokeMethod(item("syncMode"), "activated", Q_ARG(int, 5)));
+            QCOMPARE(m->syncMode(), QString("suction_position"));
+            QTRY_COMPARE(item("syncMode")->property("currentIndex").toInt(), 5);
+            // Contact vibration off, the curve and the strength preset.
+            QVERIFY(QMetaObject::invokeMethod(item("contactOff"), "clicked"));
+            QVERIFY(m->contactOff());
+            QVERIFY(QMetaObject::invokeMethod(item("contactOff"), "clicked"));
+            QVERIFY(!m->contactOff());
+            QVERIFY(item("contactCurve")->isEnabled());  // recipe mode with contact vibration
+            QVERIFY(QMetaObject::invokeMethod(item("contactCurve"), "activated", Q_ARG(int, 2)));
+            QCOMPARE(m->contactCurve(), QString("peak"));
+            QCOMPARE(item("strengthPreset")->property("currentIndex").toInt(), 2);  // —, soft, normal
+            QVERIFY(QMetaObject::invokeMethod(item("strengthPreset"), "activated", Q_ARG(int, 3)));
+            QCOMPARE(player->activeStrength(), QString("strong"));
+            // Effects preset: name, Save, select, Delete.
+            QVERIFY(!item("fxSave")->isEnabled());
+            QVERIFY(!item("fxDelete")->isEnabled());
+            item("fxName")->setProperty("text", "Calm");
+            QTRY_VERIFY(item("fxSave")->isEnabled());
+            QVERIFY(QMetaObject::invokeMethod(item("fxSave"), "clicked"));
+            QCOMPARE(m->effectPresets(), QStringList({"Calm"}));
+            QCOMPARE(item("fxName")->property("text").toString(), QString());
+            QTRY_COMPARE(item("fxPreset")->property("currentIndex").toInt(), 2);  // Custom, Default, Calm
+            QVERIFY(item("fxDelete")->isEnabled());
+            QVERIFY(QMetaObject::invokeMethod(item("fxPreset"), "activated", Q_ARG(int, 1)));
+            QCOMPARE(m->effectPreset(), QString("__default"));
+            QCOMPARE(m->syncMode(), QString("suction_position"));  // not part of a preset (0.7)
+            QTRY_VERIFY(!item("fxDelete")->isEnabled());
+            QVERIFY(QMetaObject::invokeMethod(item("fxPreset"), "activated", Q_ARG(int, 2)));
+            QCOMPARE(m->effectPreset(), QString("Calm"));
+            QTest::qWait(100);
+            const QString shot = qEnvironmentVariable("SAMN_TEST_SHOT_EFFECTS");
+            if (!shot.isEmpty()) QVERIFY(window.grabWindow().save(shot));
+            QVERIFY(QMetaObject::invokeMethod(item("fxDelete"), "clicked"));
+            QVERIFY(m->effectPresets().isEmpty());
+            QTRY_COMPARE(item("fxPreset")->property("currentIndex").toInt(), 0);
         }
         qInstallMessageHandler(g_previous);
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));

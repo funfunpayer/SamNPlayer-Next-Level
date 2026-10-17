@@ -85,7 +85,8 @@ GlassCard {
             anchors.verticalCenter: parent.verticalCenter; width: 112
             enabled: sr.active; opacity: enabled ? 1 : 0.45
             from: sr.from; to: sr.to; value: sr.value
-            onMoved: (v) => sr.picked(v)
+            // The knob follows the model again (a preset may change it later).
+            onMoved: (v) => { sr.picked(v); value = Qt.binding(() => sr.value) }
         }
         Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; text: sr.valueText; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
     }
@@ -527,6 +528,168 @@ GlassCard {
                         FlowButton { text: qsTr("Bake offset"); enabled: false }
                     }
                     Note { text: qsTr("Positive: the script comes later. Saved per script. Baking it into the script's times (all channels, bookmarks and chapters in one safe step) comes with the Editor (P4).") }
+                }
+                // Effects (0.7 Player Inspector → Effects and "Playback &
+                // Extended-O"): the presets, Intensity and the mapping
+                // settings. A change maps the script again at once.
+                Card {
+                    id: fx
+                    title: qsTr("Effects")
+                    readonly property var mapping: root.ctrl.mapping
+                    readonly property var names: mapping.effectPresets
+                    readonly property bool savedSelected: names.indexOf(mapping.effectPreset) >= 0
+                    Row {
+                        spacing: 8
+                        Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; width: 78; text: qsTr("Preset"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13 }
+                        FlowCombo {
+                            objectName: "fxPreset"
+                            width: fx.width - 24 - 86
+                            model: [qsTr("Custom"), qsTr("Default")].concat(fx.names)
+                            currentIndex: fx.mapping.effectPreset === "" ? 0
+                                        : fx.mapping.effectPreset === "__default" ? 1
+                                        : 2 + fx.names.indexOf(fx.mapping.effectPreset)
+                            onActivated: (i) => fx.mapping.applyEffectPreset(i === 0 ? "" : i === 1 ? "__default" : fx.names[i - 2])
+                            HoverHandler { id: fxHover }
+                            ToolTipText { shown: fxHover.hovered; text: qsTr("Saved effect settings: Intensity, Smoothing, Max speed, Tick, Soft start and Reduce peaks. Default brings back the standard values.") }
+                        }
+                    }
+                    Row {
+                        spacing: 8
+                        FlowTextField {
+                            id: fxName
+                            objectName: "fxName"
+                            width: fx.width - 24 - fxSave.width - fxDelete.width - 16; implicitHeight: 34
+                            placeholder: qsTr("Preset name")
+                            maxLength: 40
+                            onAccepted: fxSave.clicked()
+                        }
+                        FlowButton {
+                            id: fxSave
+                            objectName: "fxSave"
+                            text: qsTr("Save"); implicitHeight: 34
+                            enabled: fxName.text.trim() !== "" && fxName.text.trim() !== "__default"
+                            onClicked: if (enabled && fx.mapping.saveEffectPreset(fxName.text)) fxName.text = ""
+                            HoverHandler { id: fxSaveHover }
+                            ToolTipText { shown: fxSaveHover.hovered; text: qsTr("Save the current effect settings under this name (the same name replaces it).") }
+                        }
+                        FlowButton {
+                            id: fxDelete
+                            objectName: "fxDelete"
+                            text: qsTr("Delete"); implicitHeight: 34
+                            enabled: fx.savedSelected
+                            onClicked: fx.mapping.deleteEffectPreset(fx.mapping.effectPreset)
+                            HoverHandler { id: fxDeleteHover }
+                            ToolTipText { shown: fxDeleteHover.hovered; text: qsTr("Delete the selected preset") }
+                        }
+                    }
+                    SliderRow {
+                        label: qsTr("Intensity")
+                        tip: qsTr("Overall output of vibration and suction, on top of the channel levels. Live.")
+                        from: 0; to: 100; value: root.ctrl.output.intensity
+                        valueText: root.ctrl.output.intensity + " %"
+                        onPicked: (v) => root.ctrl.output.intensity = Math.round(v)
+                    }
+                    SliderRow {
+                        objectName: "fxSmoothing"
+                        label: qsTr("Smoothing")
+                        tip: qsTr("Live curve smoothing toward the next sample (0–1). Default 0.3. Playback feel only.")
+                        from: 0; to: 1; value: fx.mapping.smoothing
+                        valueText: fx.mapping.smoothing.toFixed(2)
+                        onPicked: (v) => fx.mapping.smoothing = Math.round(v * 20) / 20
+                    }
+                    SliderRow {
+                        label: qsTr("Max speed")
+                        tip: qsTr("The stroke speed (position change per millisecond, 0–100 scale) that gives full strength. Default 0.6. Playback feel only.")
+                        from: 0.1; to: 2; value: fx.mapping.maxSpeed
+                        valueText: fx.mapping.maxSpeed.toFixed(1)
+                        onPicked: (v) => fx.mapping.maxSpeed = Math.round(v * 10) / 10
+                    }
+                    SliderRow {
+                        label: qsTr("Tick")
+                        tip: qsTr("Device command interval. Lower = denser stream. Default 50 ms. Playback feel only.")
+                        from: 10; to: 200; value: fx.mapping.tickMs
+                        valueText: qsTr("%1 ms").arg(fx.mapping.tickMs)
+                        onPicked: (v) => fx.mapping.tickMs = Math.round(v / 10) * 10
+                    }
+                    Row {
+                        spacing: 8
+                        Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; width: 78; text: qsTr("Sync mode"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                               HoverHandler { id: syncHover }
+                               ToolTipText { shown: syncHover.hovered; text: qsTr("How vibration and suction follow the stroke. Applies to stroke scripts; a Tf / Tj script keeps its own unless you choose another than Independent; scripts with their own vibration and suction curves keep theirs.") } }
+                        FlowCombo {
+                            objectName: "syncMode"
+                            width: fx.width - 24 - 86
+                            model: [qsTr("Independent"), qsTr("Synchronized"), qsTr("Alternating"), qsTr("Vibration only"),
+                                    qsTr("Suction only"), qsTr("Suction from position")]
+                            currentIndex: Math.max(0, fx.mapping.syncModes.indexOf(fx.mapping.syncMode))
+                            onActivated: (i) => fx.mapping.syncMode = fx.mapping.syncModes[i]
+                        }
+                    }
+                    Note { text: qsTr("Soft start and Reduce peaks are under Devices → Output; presets keep them too. The lanes and the device follow at once; the script file is not changed.") }
+                }
+                // Contact vibration and the strength presets (0.7 Player
+                // "Contact vibration" block and the Strength choice).
+                Card {
+                    id: contact
+                    title: qsTr("Contact vibration & strength")
+                    visible: root.ctrl.contactControls || root.ctrl.strengthPresets.length > 0
+                    readonly property var mapping: root.ctrl.mapping
+                    FlowButton {
+                        objectName: "contactOff"
+                        visible: root.ctrl.contactControls
+                        text: qsTr("Contact vibration off"); checked: contact.mapping.contactOff
+                        onClicked: contact.mapping.contactOff = !contact.mapping.contactOff
+                        HoverHandler { id: offHover }
+                        ToolTipText { shown: offHover.hovered; text: qsTr("Turns off the contact vibration the script carries, without changing the file.") }
+                    }
+                    SliderRow {
+                        visible: root.ctrl.contactControls
+                        label: qsTr("Strength")
+                        tip: qsTr("Live scaling of the contact vibration without rewriting the file. 1 = as created, 0 = off, up to 2 = stronger.")
+                        from: 0; to: 2; value: contact.mapping.contactIntensity
+                        valueText: contact.mapping.contactIntensity === 0 ? qsTr("0 (off)") : contact.mapping.contactIntensity.toFixed(2)
+                        onPicked: (v) => contact.mapping.contactIntensity = Math.round(v * 20) / 20
+                    }
+                    SliderRow {
+                        visible: root.ctrl.contactControls
+                        active: root.ctrl.contactKnobsLive
+                        label: qsTr("Sensitivity")
+                        tip: qsTr("Lower = the vibration starts earlier in the stroke. Starts from the script's recipe; not saved.")
+                        from: 0.4; to: 0.95; value: contact.mapping.contactSpan
+                        valueText: contact.mapping.contactSpan.toFixed(2)
+                        onPicked: (v) => contact.mapping.contactSpan = Math.round(v * 20) / 20
+                    }
+                    Row {
+                        visible: root.ctrl.contactControls
+                        spacing: 8
+                        Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; width: 78; text: qsTr("Curve"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13 }
+                        FlowCombo {
+                            objectName: "contactCurve"
+                            width: contact.width - 24 - 86
+                            enabled: root.ctrl.contactKnobsLive; opacity: enabled ? 1 : 0.45
+                            model: [qsTr("Linear"), qsTr("Soft (contact-like)"), qsTr("Peak"), qsTr("Impulse (peaks only)")]
+                            currentIndex: Math.max(0, contact.mapping.contactCurves.indexOf(contact.mapping.contactCurve))
+                            onActivated: (i) => contact.mapping.contactCurve = contact.mapping.contactCurves[i]
+                        }
+                    }
+                    Note {
+                        visible: root.ctrl.contactControls && !root.ctrl.contactKnobsLive
+                        text: qsTr("Sensitivity and curve act when the script plays from its recipe with contact vibration on.")
+                    }
+                    Row {
+                        visible: root.ctrl.strengthPresets.length > 0
+                        spacing: 8
+                        Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; width: 78; text: qsTr("Preset"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                               HoverHandler { id: strengthHover }
+                               ToolTipText { shown: strengthHover.hovered; text: qsTr("Soft / normal / strong feel of this Emotion Script. Saved in the script.") } }
+                        FlowCombo {
+                            objectName: "strengthPreset"
+                            width: contact.width - 24 - 86
+                            model: ["—"].concat(root.ctrl.strengthPresets)
+                            currentIndex: root.ctrl.activeStrength === "" ? 0 : 1 + root.ctrl.strengthPresets.indexOf(root.ctrl.activeStrength)
+                            onActivated: (i) => root.ctrl.activeStrength = i === 0 ? "" : root.ctrl.strengthPresets[i - 1]
+                        }
+                    }
                 }
                 // Extended-O (0.7 "Playback & Extended-O" and the transport's
                 // Extended-O button; key E).
