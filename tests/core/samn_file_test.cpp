@@ -652,3 +652,205 @@ TEST_CASE("samn_file: prefer_samn_companion") {  // cmd/gui-wails preferSamnComp
     CHECK(PreferSamnCompanion(samn) == samn);
     CHECK(PreferSamnCompanion("") == "");
 }
+
+// --- 0.7 contact / feel settings and quality metadata ------------------------
+// Go keeps these in the recipe of a .funscript (SaveContactRecipe,
+// SaveFeelRecipe, cmd/gui-wails SaveContactSettings / SaveFeelSettings). In
+// SamNPlayer 2 they live in the recipe of a .samn Document.
+
+namespace {
+
+Document RecipeDoc(const std::string& profile) {
+    Document d;
+    d.profile = profile;
+    d.general = {{0, 20}, {800, 90}};
+    return d;
+}
+
+}  // namespace
+
+TEST_CASE("samn_file: contact settings are stored in the tj recipe") {
+    // 0.7 cmd/gui-wails TestSaveContactSettingsPersistsRecipe
+    Document d = RecipeDoc("tj");
+    d.recipe.sync = "suction_position";
+    d.recipe.min_suction = 0.2;
+    d.recipe.tick_ms = 50;
+    d.recipe.max_speed = 0.5;
+    d.recipe.smoothing = 0.22;
+    d.recipe.contact_vibration = true;
+    d.recipe.contact_vibration_span = 0.75;
+    d.recipe.contact_vibration_curve = "linear";
+    d.ApplyContactRecipe(true, 0.5, "soft");
+    const DeviceRecipe& dr = d.recipe;
+    CHECK(dr.contact_vibration);
+    CHECK(dr.contact_vibration_span == 0.5);
+    CHECK(dr.contact_vibration_curve == "soft");
+    // The recipe survives a save and load.
+    Document back = ParseDocument(MarshalDocument(d));
+    CHECK(back.recipe.contact_vibration);
+    CHECK(back.recipe.contact_vibration_span == 0.5);
+    CHECK(back.recipe.contact_vibration_curve == "soft");
+}
+
+TEST_CASE("samn_file: contact settings keep sync independent on a stroke profile") {
+    // 0.7 cmd/gui-wails TestSaveContactSettingsStrokeProfile
+    Document d = RecipeDoc("standard");
+    d.recipe.sync = "independent";
+    d.recipe.min_suction = 0.1;
+    d.recipe.tick_ms = 50;
+    d.recipe.max_speed = 0.5;
+    d.recipe.smoothing = 0.3;
+    d.recipe.contact_vibration = true;
+    d.recipe.contact_vibration_span = 0.75;
+    d.recipe.contact_vibration_curve = "soft";
+    d.ApplyContactRecipe(true, 0.55, "peak");
+    CHECK(d.recipe.contact_vibration);
+    CHECK(d.recipe.contact_vibration_span == 0.55);
+    CHECK(d.recipe.contact_vibration_curve == "peak");
+    CHECK(d.recipe.sync == "independent");
+}
+
+TEST_CASE("samn_file: contact settings fill an empty stroke sync with independent") {
+    // 0.7 cmd/gui-wails TestSaveContactSettingsStrokeEmptySyncFillsIndependent and
+    // funscript TestSaveContactRecipeStrokeEmptySyncStaysIndependent
+    Document d = RecipeDoc("standard");
+    d.recipe.min_suction = 0.1;
+    d.recipe.tick_ms = 50;
+    REQUIRE(d.recipe.sync.empty());
+    d.ApplyContactRecipe(true, 0.4, "linear");
+    CHECK_MESSAGE(d.recipe.sync == "independent", "stroke empty sync became \"", d.recipe.sync, "\"");
+    CHECK(d.recipe.contact_vibration);
+    CHECK(d.recipe.contact_vibration_span == 0.4);
+
+    Document e = RecipeDoc("standard");
+    e.recipe.min_suction = 0.1;
+    e.recipe.tick_ms = 50;
+    e.ApplyContactRecipe(true, 0.5, "soft");
+    CHECK(e.recipe.sync == "independent");
+    CHECK(e.recipe.sync != "suction_position");
+    CHECK(e.recipe.contact_vibration);
+}
+
+TEST_CASE("samn_file: contact settings fill an empty tj sync with suction_position") {
+    // 0.7 funscript TestSaveContactRecipeTjEmptySyncUsesSuctionPosition
+    Document d = RecipeDoc("tj");
+    d.recipe.min_suction = 0.2;
+    REQUIRE(d.recipe.sync.empty());
+    d.ApplyContactRecipe(true, 0.5, "soft");
+    CHECK(d.recipe.sync == "suction_position");
+}
+
+TEST_CASE("samn_file: contact recipe round trip, switching off clears span and curve") {
+    // 0.7 funscript TestSaveContactRecipeRoundtrip
+    Document d = RecipeDoc("tj");
+    d.general = {{0, 20}, {1000, 90}};
+    d.recipe.sync = "suction_position";
+    d.recipe.min_suction = 0.2;
+    d.recipe.tick_ms = 50;
+    d.recipe.max_speed = 0.5;
+    d.recipe.smoothing = 0.22;
+    d.ApplyContactRecipe(true, 0.55, "soft");
+    Document got = ParseDocument(MarshalDocument(d));
+    CHECK(got.recipe.contact_vibration);
+    CHECK(got.recipe.contact_vibration_span == 0.55);
+    CHECK(got.recipe.contact_vibration_curve == ContactCurveSoft);
+    CHECK_MESSAGE(got.recipe.sync == "suction_position", "sync lost: ", got.recipe.sync);
+    CHECK(got.recipe.min_suction == 0.2);
+    CHECK(got.recipe.max_speed == 0.5);
+    CHECK(got.recipe.smoothing == 0.22);
+    CHECK(got.general.size() == 2);
+
+    // The span goes through EffectiveContactSpan, the curve is normalised.
+    d.ApplyContactRecipe(true, 2.0, "weicher");
+    CHECK(d.recipe.contact_vibration_span == EffectiveContactSpan(2.0));
+    CHECK(d.recipe.contact_vibration_span == DefaultContactVibrationSpan);
+    CHECK(d.recipe.contact_vibration_curve == ContactCurveSoft);
+    d.ApplyContactRecipe(true, 0.1, "no such curve");
+    CHECK(d.recipe.contact_vibration_span == 0.4);
+    CHECK(d.recipe.contact_vibration_curve == ContactCurveLinear);
+
+    // Off: span and curve are cleared, the rest of the recipe stays.
+    d.ApplyContactRecipe(true, 0.55, "soft");
+    d.ApplyContactRecipe(false, 0.55, "soft");
+    CHECK_FALSE(d.recipe.contact_vibration);
+    CHECK(d.recipe.contact_vibration_span == 0);
+    CHECK(d.recipe.contact_vibration_curve.empty());
+    CHECK(d.recipe.sync == "suction_position");
+    CHECK(d.recipe.min_suction == 0.2);
+    CHECK(d.recipe.tick_ms == 50);
+    CHECK(d.recipe.max_speed == 0.5);
+    CHECK(d.recipe.smoothing == 0.22);
+}
+
+TEST_CASE("samn_file: feel settings round trip into the map options") {
+    // 0.7 funscript TestSaveFeelRecipeRoundTrip
+    std::string json = R"({"actions":[)";
+    for (int i = 0; i <= 40; ++i) {
+        if (i) json += ",";
+        json += R"({"at":)" + std::to_string(i * 400) + R"(,"pos":)" + std::to_string(i % 2 == 1 ? 90 : 10) + "}";
+    }
+    json += R"(],"metadata":{"creator":"x"}})";
+    Document d = FromFunscript(ParseFunscript(json));
+    d.ApplyFeelRecipe("blowjob", true, 0.4);
+    CHECK(d.recipe.scene_feel == SceneFeelOral);
+
+    Document back = ParseDocument(MarshalDocument(d));
+    FunscriptView s = back.ToFunscript();
+    const MapOptions o = MapOptionsFromScript(s);
+    CHECK(o.scene_feel == SceneFeelOral);
+    CHECK(o.vibration_follows_suction);
+    CHECK(std::fabs(o.balance - 0.4) <= 1e-9);
+    CHECK_MESSAGE(s.metadata.creator == "x", "other metadata lost");
+    CHECK(back.creator == "x");
+
+    // Unknown names clear the feel, balance is clamped.
+    back.ApplyFeelRecipe("dance", false, 7);
+    CHECK(back.recipe.scene_feel.empty());
+    CHECK_FALSE(back.recipe.vibration_follows_suction);
+    CHECK(back.recipe.feel_balance == 1);
+}
+
+TEST_CASE("samn_file: a new feel changes the baked vibration axis") {
+    // 0.7 cmd/gui-wails TestSaveFeelSettingsRebakesEmotionScript
+    Document d = FromFunscript(ParseFunscript(
+        R"({"actions":[{"at":0,"pos":10},{"at":400,"pos":90},{"at":800,"pos":10},{"at":1200,"pos":90}]})"));
+    d.BakeNeoAxes();
+    const std::vector<Action> before = d.vibration;
+    REQUIRE(!before.empty());
+    REQUIRE(!d.suction.empty());
+
+    d.ApplyFeelRecipe("oral", true, 0);
+    d.BakeNeoAxes();
+    REQUIRE(!d.vibration.empty());
+    bool same = before.size() == d.vibration.size();
+    for (size_t i = 0; same && i < before.size(); ++i)
+        same = before[i].at == d.vibration[i].at && before[i].pos == d.vibration[i].pos;
+    CHECK_MESSAGE(!same, "baked vibration did not change with the feel");
+}
+
+TEST_CASE("samn_file: quality score and verdict are separate fields") {  // TestParseQualityMetadata
+    const std::string head = R"({"actions":[{"at":0,"pos":0},{"at":100,"pos":90}])";
+    struct Case {
+        const char* name;
+        std::string json;
+        std::optional<double> score;
+        std::optional<bool> passed;
+    };
+    const std::vector<Case> cases{
+        {"failed despite a score above 0.5", head + R"(,"metadata":{"quality_score":0.63,"quality_passed":false}})",
+         0.63, false},
+        {"passed", head + R"(,"metadata":{"quality_score":1.0,"quality_passed":true}})", 1.0, true},
+        {"old script without quality_passed", head + R"(,"metadata":{"quality_score":0.8}})", 0.8, std::nullopt},
+        {"no quality metadata", head + "}", std::nullopt, std::nullopt},
+    };
+    for (const auto& c : cases) {
+        CAPTURE(c.name);
+        FunscriptView s = ParseFunscript(c.json);
+        CHECK(s.metadata.quality_score == c.score);
+        CHECK(s.metadata.quality_passed == c.passed);
+        // The same fields reach a .samn document.
+        Document d = FromFunscript(s);
+        CHECK(d.quality_score == c.score);
+        CHECK(d.quality_passed == c.passed);
+    }
+}

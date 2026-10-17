@@ -1166,6 +1166,8 @@ std::string GoExt(const std::string& path) {
     return "";
 }
 
+}  // namespace
+
 std::string NormalizeSceneFeel(const std::string& name) {
     std::string n = AsciiLower(name);
     const auto b = n.find_first_not_of(" \t\n\r\f\v");
@@ -1181,6 +1183,8 @@ std::string NormalizeSceneFeel(const std::string& name) {
     if (in({"hand", "handjob", "hj"})) return "hand";
     return "";
 }
+
+namespace {
 
 std::vector<SceneFeelRange> NormalizeSceneRanges(const std::vector<SceneFeelRange>& rs) {
     std::vector<SceneFeelRange> out;

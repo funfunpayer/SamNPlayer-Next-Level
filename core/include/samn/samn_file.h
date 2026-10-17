@@ -281,6 +281,8 @@ std::string PreferSamnCompanion(const std::string& path);
 // ---------------------------------------------------------------------------
 std::string NormalizePlaybackSource(const std::string& s);
 std::string NormalizeProfile(const std::string& name);
+// Go: NormalizeSceneFeel. Aliases map to oral/intercourse/breast/hand; anything else gives "".
+std::string NormalizeSceneFeel(const std::string& name);
 bool IsDistanceProfile(const std::string& name);
 // Clamp pos 0-100, reject negative time, sort by time. Throws SamnError.
 std::vector<Action> SanitizeActions(const std::vector<Action>& actions);
