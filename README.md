@@ -32,3 +32,7 @@ ctest --test-dir build
 ```
 
 How we work: [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
+## Licence
+
+Open source under GPL-3.0-or-later ([`LICENSE`](LICENSE)), the detection engine included as a built-in plugin. Details in [`LICENSING.md`](LICENSING.md), third-party code in [`THIRD_PARTY.md`](THIRD_PARTY.md), goals in [`docs/MANIFEST.md`](docs/MANIFEST.md).
