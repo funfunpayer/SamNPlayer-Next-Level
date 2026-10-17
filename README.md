@@ -32,3 +32,7 @@ ctest --test-dir build
 ```
 
 How we work: [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
+## Licence
+
+Open core under GPL-3.0-or-later ([`LICENSE`](LICENSE)); the detection engine is a separate, closed program. Details in [`LICENSING.md`](LICENSING.md), third-party code in [`THIRD_PARTY.md`](THIRD_PARTY.md), goals in [`docs/MANIFEST.md`](docs/MANIFEST.md).

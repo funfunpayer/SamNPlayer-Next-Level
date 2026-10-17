@@ -14,6 +14,7 @@ old repo's `CONTRIBUTING.md` and add the Owner's rules for SamNPlayer 2.
 | `docs/DECISIONS.md` | Every decision with its reason (D-xxx). Never restart a decision from zero. |
 | `docs/ROADMAP.md` | What was planned beyond 0.7; it comes along too. |
 | `docs/MODULES.md` | Where each piece lives. |
+| `docs/MANIFEST.md` | The Owner's master document: goals, priorities, licence, how we work. Read it first. |
 | `docs/AGENT_STATE.md` | Current state and the next steps. |
 | `docs/P3_GENERATOR.md` | The Generator (which is the Editor, D-137). |
 | `docs/LESSONS.md` | What 0.7 learned, per area, with a rule each; tested-and-rejected ideas; gaps. |
@@ -70,6 +71,12 @@ When sources disagree, the code and reproducible tests win. The 0.7 code
 14. **Old tests come with the code.** When a module is ported, its 0.7
     tests are ported in the same PR, and its rows in `docs/TEST_PARITY.md`
     are updated. A port is not done while a row says `todo-now`.
+
+## Licence of code (D-141, `LICENSING.md`)
+
+15. **Open core, closed engine.** The core (`app/`, `core/`, `vision/`, `tests/`) is GPL-3.0-or-later. The detection engine (`engine/`) is proprietary and only talks to the core over the plugin process contract; never link one into the other.
+16. **Copied code keeps its origin.** Code taken from GPL-3.0(-or-later), GPL-2.0-or-later, LGPL or AGPL-3.0 projects may go into the core only, with its copyright and licence header, and a line in `THIRD_PARTY.md`. GPL-2.0-only, BSL, "source available" and proprietary code never enter. The engine contains only our own code and permissively licensed parts.
+17. **Write small things ourselves** rather than adding a dependency (manifest §4); every new dependency is named in `THIRD_PARTY.md` with its licence.
 
 ## Workflow
 
