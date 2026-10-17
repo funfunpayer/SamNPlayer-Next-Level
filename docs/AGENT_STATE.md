@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 17 Oct 2026, Claude, branch `claude/samn2-sanitizers`.
+**Last update:** 17 Oct 2026 (late), Claude, branch `claude/samn2-engine-track` (PR #54).
 
 ## Rules
 
@@ -17,7 +17,7 @@
 - **Never:**
   - adult media in the repo or in screenshots; test patterns only;
   - model identifiers in code, docs or commit messages;
-  - copied GPL, BSL or EULA code;
+  - GPL-2.0-only, BSL, EULA or proprietary code (GPL-3-compatible code is fine with its header kept and a `THIRD_PARTY.md` line, D-141);
   - placeholders that pretend to work;
   - tests that "SKIP" with exit 0 in CI.
 - **Releases:** the Owner pushes tags.
@@ -63,18 +63,23 @@
 - **Gap fixes** (#35, #38): seek before load, names as plain text, English core errors, media errors in the error bar, multi-drop never silent.
 - **Training** (#37): the 0.7 Training plus the level programs, Go parity of engine and write sequences, rings follow the device.
 
-## Next (in order; the work list is `LESSONS.md` § Gaps and `TEST_PARITY.md` § Port now)
+- **Player round, 17 Oct** (#40–#52): script-only playback with `ScriptClock` (#49), Previous / Stop / volume, the mode deck with keyboard focus, top-bar device chip and Open, window-wide drop overlay and Ctrl+O, media errors via `errorChanged`, output levels (#46), sanitizer job (ASan + UBSan), and the playback mapping settings with Effects presets, equal to 0.7's `StartPlayback` on 48 cases (#52).
+- **Licence** (#53, D-141): everything GPL-3.0-or-later; the detection engine is a built-in plugin, not a separate program and not closed. `LICENSING.md`, `THIRD_PARTY.md`; the Owner's manifest is `docs/MANIFEST.md` (master document).
+- **Detection engine, P3.0–P3.2 and P3.8** (#54): `vision/` (FrameReader with PTS, one CSRT factory, self-check); `engine/` (`samn_engine`): `TrackBox` bit-identical to 0.7 on 32 600 frames, the signal chain (post-processing, profiles, default detrend) giving the same actions as 0.7's `GenerateNativeCSRT` on 13 runs, and the comparison controller `samn_compare` (Motion Fidelity in core, SHA-256 manifest, windows and flags). Numbers in `docs/benchmarks/`. Core also got RDP (`simplify.h`) and O-zone suggestions (`ozone.h`).
 
-1. Close the remaining `todo-now` tests: PlaybackOutput (5) and QML shell (4) are being ported on `claude/samn2-test-gaps-4`; PlayerController (3: snapshot name, heat tooltip, real tf/tj fixture) next.
-2. Gaps by risk: GAP-06 sanitizer job (`claude/samn2-sanitizers`), GAP-05 device safety tests, GAP-12 Script Doctor input facts, then the rest of the table.
-3. Finish the Player: Alt+B panels toggle, shortcuts, companion axis files, `PARITY.md` §3 and the "missing" list in `VERSIONS_AND_PLANS.md`.
-4. Generator = Editor (P3, D-137): update `P3_GENERATOR.md` with the lessons (rejected approaches, fail closed, tip coast, cancellable runs, benchmark gate first) and the C++ options (OpenCV, ONNX), measured against 0.7 (D-135).
-5. Scene Map, Settings / Tools, handbook; bug hunt; release.
+## Next (in order; the work list is `LESSONS.md` § Gaps, `TEST_PARITY.md` and `P3_GENERATOR.md`)
+
+1. Merge #54 when CI is green (Windows may rebuild vcpkg once, about 90 min).
+2. **P3.3 Generator page = Editor** (D-137): steps 1–5, marking canvas, run on a worker thread with progress, cancel and run ids, the engine behind the detector plugin interface, writing `.funscript` / `.samn` with 0.7's metadata.
+3. **P3.6** Quality Doctor on the dense curve, the signal auto-retry and the stroke preview (feeds the adaptive detrend); then the controller reports Quality as its second number (GD-04).
+4. **P3.4** two-point / multi-point, rhythm grid, follow marks; **P3.9** improvements, each measured with `samn_compare` (first lever: memory templates of the subject, not the box, GD-10).
+5. Player finish (`PARITY.md` §1–3), donation pages (manifest), devices for Svakom and other toys, Scene Map, Settings / Tools; bug hunt; release.
 
 Owner reminders (16–17 Oct): the Generator is the Editor; detection better than 0.7 but measured against it; curves stay real curves (audio too); every function of 0.7 and all earlier versions and plans comes along, what was removed on purpose stays out (and why is in `VERSIONS_AND_PLANS.md`).
 
 ## Waiting on the Owner
 
 - The four open questions in `DECISIONS.md` § Resolutions: Suite-only features; SamNPlayer 2 as the one free app plus repo visibility; AI drafts of the curve; the role of C#.
-- Golden clips for the generator (P3). They stay out of the repo.
+- Golden clips for the generator (P3): run `samn_compare` locally with a manifest (video, box, reference, 0.7 output). They stay out of the repo.
+- Before the repo goes public: the checklist in `LICENSING.md`.
 - The v0.7.0 tag in the old repo.
