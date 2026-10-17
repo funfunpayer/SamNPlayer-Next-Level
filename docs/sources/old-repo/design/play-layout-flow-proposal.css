@@ -1,0 +1,75 @@
+/* SamNPlayer Play Layout v2 proposal — Flow brand (cyan/orange).
+   NOT imported until Claude confirms #477 ownership and assets are in place.
+   Builds on data-pb-* hooks from docs/PLAY_UI_CONTRACT.md.
+   Airy, not boxed: spacing and low-contrast separators only.
+*/
+
+#tab-playback {
+  /* Map Flow tokens onto existing theme vars for Play */
+  --bg: var(--flow-bg, #06121f);
+  --surface: var(--flow-surface, #0a1b2b);
+  --surface-2: var(--flow-surface-raised, #10263a);
+  --text: var(--flow-text, #e9f7ff);
+  --text-dim: var(--flow-text-muted, #9db8ca);
+  --accent: var(--flow-cyan, #00d9f4);
+  --accent-hover: var(--flow-cyan-hover, #65efff);
+  --teal: var(--flow-orange, #ff8a23); /* secondary accent for highlights */
+  --border: var(--flow-border-subtle, rgb(104 180 212 / 12%));
+  --border-soft: var(--flow-border-subtle, rgb(104 180 212 / 12%));
+  --focus-ring: var(--flow-focus-ring, 0 0 0 3px rgb(0 217 244 / 38%));
+  --radius: var(--flow-radius-md, 14px);
+  --radius-sm: var(--flow-radius-sm, 8px);
+  /* Axis colours: keep distinguishable */
+  --axis-stroke: var(--flow-axis-stroke, #ff8a23);
+  --axis-vibration: var(--flow-axis-suction, #00bfe9);
+  --axis-suction: var(--flow-axis-thrust, #ad66f2);
+  --pb-playhead: #ffffff;
+  --pb-grid: rgb(233 247 255 / 10%);
+}
+
+/* Airy empty state */
+#tab-playback[data-pb-state="empty"] #pb-empty {
+  background: transparent;
+  border: 0;
+  display: grid;
+  place-items: center;
+  min-height: 40vh;
+  color: var(--text-dim);
+}
+
+/* Dominant video area */
+#tab-playback .pb-media {
+  padding: var(--flow-space-4, 16px);
+  gap: var(--flow-space-3, 12px);
+}
+#tab-playback #pb-video-stage {
+  border-radius: var(--flow-radius-lg, 22px);
+  overflow: hidden;
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+/* Collapsible tools — subtle */
+#tab-playback[data-pb-tools="folded"] #pb-tools {
+  width: 0;
+  padding: 0;
+  overflow: hidden;
+  opacity: 0;
+}
+#tab-playback #pb-tools {
+  transition: width .2s ease, opacity .2s ease;
+  background: transparent;
+  border-left: 1px solid var(--border);
+}
+
+/* Timeline airy */
+#tab-playback .pb-timeline {
+  margin-top: var(--flow-space-2, 8px);
+  padding: var(--flow-space-2, 8px) 0;
+  background: transparent;
+  border-radius: var(--flow-radius-md, 14px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #tab-playback #pb-tools { transition: none; }
+}

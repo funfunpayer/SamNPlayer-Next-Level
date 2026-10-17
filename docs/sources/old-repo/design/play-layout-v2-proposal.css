@@ -1,0 +1,103 @@
+/* PlayLayout v2 proposal — Flow brand (cyan/orange), airy not boxed.
+   Based on docs/PLAY_UI_CONTRACT.md and docs/BRAND_FLOW_UI_DIRECTION_2026-10.md.
+   Isolated; do not import until Claude reviews #477 and assets are ready.
+   Targets #tab-playback and .pb-* using data-pb-* attributes. No ID changes.
+*/
+
+#tab-playback {
+  /* Map Flow tokens onto existing Play / theme variables for this panel only */
+  --bg: var(--flow-bg, #06121f);
+  --surface: var(--flow-surface, #0a1b2b);
+  --surface-2: var(--flow-surface-raised, #10263a);
+  --text: var(--flow-text, #e9f7ff);
+  --text-dim: var(--flow-text-muted, #9db8ca);
+  --accent: var(--flow-cyan, #00d9f4);
+  --accent-hover: var(--flow-cyan-hover, #65efff);
+  --teal: var(--flow-orange, #ff8a23);
+  --axis-stroke: var(--flow-axis-stroke, #ff8a23);
+  --axis-vibration: var(--flow-orange, #ff8a23);
+  --axis-suction: var(--flow-axis-thrust, #ad66f2);
+  --pb-playhead: #ffffff;
+  --pb-grid: rgb(233 247 255 / 10%);
+  --border: var(--flow-border-subtle, rgb(104 180 212 / 12%));
+  --radius: var(--flow-radius-lg, 22px);
+  --radius-sm: var(--flow-radius-md, 14px);
+  background: var(--flow-bg);
+  color: var(--flow-text);
+}
+
+/* Airy layout: implied divisions via spacing, low-contrast separators */
+#tab-playback .pb-loaded {
+  display: grid;
+  grid-template-areas:
+    "media tools"
+    "timeline tools";
+  grid-template-columns: 1fr minmax(280px, 340px);
+  grid-template-rows: 1fr auto;
+  gap: var(--flow-space-4, 16px);
+  min-height: 0;
+}
+
+#tab-playback [data-pb-region="media"] { grid-area: media; }
+#tab-playback [data-pb-region="timeline"] { grid-area: timeline; }
+#tab-playback [data-pb-region="tools"] { grid-area: tools; }
+
+/* Video dominant */
+#tab-playback .pb-video-stage {
+  border-radius: var(--flow-radius-lg);
+  overflow: hidden;
+  background: #000;
+  box-shadow: 0 8px 32px rgb(0 0 0 / 40%);
+}
+
+/* Empty state: branded abstract waves/logo, no implied video */
+#tab-playback [data-pb-state="empty"] .pb-empty {
+  background:
+    radial-gradient(ellipse at 30% 20%, rgb(0 217 244 / 8%), transparent 50%),
+    radial-gradient(ellipse at 70% 80%, rgb(255 138 35 / 6%), transparent 50%),
+    var(--flow-bg);
+  border: 1px solid var(--flow-border-subtle);
+  border-radius: var(--flow-radius-lg);
+  min-height: 50vh;
+}
+
+/* Collapsible tools (already supported via data-pb-tools) */
+#tab-playback[data-pb-tools="folded"] .pb-loaded {
+  grid-template-columns: 1fr 0;
+}
+#tab-playback[data-pb-tools="folded"] [data-pb-region="tools"] {
+  opacity: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* Subtle motion */
+.flow-transition {
+  transition: opacity 0.2s ease, transform 0.2s ease, grid-template-columns 0.2s ease;
+}
+
+/* Focus and contrast */
+#tab-playback :focus-visible {
+  outline: none;
+  box-shadow: var(--flow-focus-ring);
+}
+
+/* Axis colors distinct: stroke orange, vibration cyan-adjacent, suction violet */
+#tab-playback .pb-axis-chip[data-axis="general"] { --axis-c: var(--axis-stroke); }
+#tab-playback .pb-axis-chip[data-axis="vibration"] { --axis-c: var(--axis-vibration); }
+#tab-playback .pb-axis-chip[data-axis="suction"] { --axis-c: var(--axis-suction); }
+
+/* Responsive: 1366×768 and below stack tools */
+@media (max-width: 1366px) {
+  #tab-playback .pb-loaded {
+    grid-template-areas:
+      "media"
+      "timeline"
+      "tools";
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flow-transition { transition: none !important; }
+}

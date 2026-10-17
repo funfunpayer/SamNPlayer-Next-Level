@@ -825,3 +825,17 @@ Source: `funfunpayer/SamNPlayer` `main` up to #553, plus open branches. Everythi
 - [ ] Training rings closer to the mockup: glow gauges, silk between rings, centre name / % / wave (#550, P4 Training)
 - [ ] Training categories, level programs, body cues, session recap (branch `cursor/training-levels-recap-8d66`, not merged in the old repo yet; P4 Training)
 - [x] Generator with editor (0.7 #540, `gen_editor.js`) → SamN2: one mode, the Generator is the Editor (D-137)
+
+### 9.1 Branch sweep of the old repo (99 branches, 16 Oct 2026)
+
+All 99 remote branches were checked against `main` (full history, content
+diff per branch, manual checks where main renamed things). 91 are merged or
+superseded; these carry content that is not on the old `main`:
+
+- [ ] Training categories, level programs, body cues, phase names in the stepper, category filter, session recap — `cursor/training-levels-recap-8d66` (finished, with Go tests; never merged) → P4 Training (in work)
+- [ ] Hide / show the side panels: "Panels" / "Hide panels" in the top bar and Alt+B (ignored while typing), remembered (`flow_workspace.js` on `chatgpt/flow-gui-foundation-20261011`)
+- [ ] Generator rules locked in the recognition lane (`docs/sources/old-repo/SESSION_SUMMARY_2026-10-15_recognition-playheat.md`): Everyday Create stays tip-CSRT; partner mark = optional contact vibration, never a second stroke writer; no silent tracker fallbacks (fail closed); tip coast = a brief tracker loss velocity-coasts before hold; every recognition run is cancellable and stale results are dropped (sequence numbers) → P3
+- [ ] Handbook text for "Vibration from video audio only", "BPM From audio" and the BPM grid default (`codex/docs-play-audio-offset`) → with the handbook (§12)
+- Reference only, copied to `docs/sources/old-repo/`: the 0.8 GUI handoff (`HANDOFF_2026-10-16_GUI_FROM_08.md`), the V1 acceptance checklist (`V1_ACCEPTANCE.md`) and the Flow design proposals (`design/`). Use them when building the screens.
+- Not ported on purpose: the seven-day community preview (`featurepreview/`, closed PR #515; D-006). Stale release notes for v0.5.45 (`codex/docs-confirmed-release-status`).
+
