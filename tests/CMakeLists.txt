@@ -11,6 +11,9 @@ if(MSVC)
 endif()
 add_test(NAME core_tests COMMAND core_tests)
 
+# No personal name, old project name or model identifier in the sources.
+add_test(NAME identifiers COMMAND ${CMAKE_COMMAND} -DROOT=${PROJECT_SOURCE_DIR} -P ${CMAKE_CURRENT_SOURCE_DIR}/check_identifiers.cmake)
+
 if(SAMN_BUILD_APP)
   add_subdirectory(app)
 endif()

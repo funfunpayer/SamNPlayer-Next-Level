@@ -36,8 +36,8 @@
 
 | | Tests | ported | covered | todo-now | todo-later | n/a |
 |---|---:|---:|---:|---:|---:|---:|
-| **All** | **1141** | 151 | 64 | **15** | 861 | 50 |
-| Go | 821 | 138 | 30 | 9 | 599 | 45 |
+| **All** | **1141** | 154 | 64 | **12** | 861 | 50 |
+| Go | 821 | 141 | 30 | 6 | 599 | 45 |
 | Python | 320 | 13 | 34 | 6 | 262 | 5 |
 
 ### Per old package
@@ -57,13 +57,13 @@
 | `legal` | 1 | 2 | 0 | 0 | 0 | 2 | 0 |
 | `logging` | 1 | 1 | 0 | 0 | 0 | 1 | 0 |
 | `cmd/cli` | 7 | 18 | 0 | 0 | 0 | 12 | 6 |
-| `cmd/gui-wails (Go)` | 68 | 188 | 12 | 17 | 4 | 142 | 13 |
+| `cmd/gui-wails (Go)` | 68 | 188 | 15 | 17 | 1 | 142 | 13 |
 | `generator (Go)` | 72 | 237 | 7 | 1 | 0 | 216 | 13 |
 | `generator (Python)` | 56 | 151 | 0 | 0 | 0 | 151 | 0 |
 | `native/tests (Python)` | 4 | 13 | 13 | 0 | 0 | 0 | 0 |
 | `scripts/benchmark-prep (Python)` | 1 | 8 | 0 | 0 | 0 | 8 | 0 |
 | `frontend (Python/Playwright UI tests)` | 148 | 148 | 0 | 34 | 6 | 103 | 5 |
-| **Total** | **431** | **1141** | **151** | **64** | **15** | **861** | **50** |
+| **Total** | **431** | **1141** | **154** | **64** | **12** | **861** | **50** |
 
 `generator (Go)` includes the sub-packages `aiscript`, `bodyparts`, `posttrack`, `profilemodel`, `simpletrack`, `strokepreview`, `trackcv`, `trackutil`.
 
@@ -354,7 +354,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 
 ### 2.14 `cmd/gui-wails (Go)`
 
-68 files, 188 tests: 12 ported, 17 covered, 4 todo-now, 142 todo-later, 13 n/a.
+68 files, 188 tests: 15 ported, 17 covered, 1 todo-now, 142 todo-later, 13 n/a.
 
 | Old file | Test function(s) | Status | Where / why |
 |---|---|---|---|
@@ -439,7 +439,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 | `app_tcode_test.go` | `TestConnectDeviceViaTCodeNeedsAddress` | covered | tests/app/device_controller_test.cpp `tcodeBadAddress` |
 | `app_tcode_test.go` | `TestSetMotorLevelsClampsAndStores` | covered | tests/app/device_controller_test.cpp `motorLevelsAreAccepted` |
 | `app_tcode_test.go` | `TestConnectDeviceViaTCodeSerialNeedsPort` | covered | tests/app/device_controller_test.cpp `tcodeSerialMissingPort` |
-| `app_test.go` | `TestShutdownStopsActiveSessionDevice`, `TestShutdownWithoutActiveSessionIsSafe` | todo-now | see Port now |
+| `app_test.go` | `TestShutdownStopsActiveSessionDevice`, `TestShutdownWithoutActiveSessionIsSafe` | ported | tests/app/device_controller_test.cpp `shutdownStopsTheConnectedDevice`, `shutdownWithoutSessionIsSafe` |
 | `app_thumbnails_test.go` | `TestThumbTimes`, `TestGetVideoThumbnails` | todo-later | P4 (Scene Map thumbnails, scene strip). |
 | `app_training_history_test.go` | `TestSummarizeSessionLogAggregatesCycles`, `TestSummarizeSessionLogSkipsBrokenLinesKeepsRest`, `TestSummarizeSessionLogEmptyFileReturnsNil`, `TestTrainingHistorySortsNewestFirstAndSkipsNonJsonl`, `TestTrainingHistoryNoSessionsDirIsNotAnError`, `TestTrainingHistoryCSVFormatsRows`, `TestTrainingHistoryCSVEmptyHistoryIsJustHeader`, `TestOpenSessionLogSanitizesScriptName` | todo-later | P2 (Training history). |
 | `app_training_intensity_test.go` | `TestResolveTrainingScriptAppliesIntensityFactor`, `TestResolveTrainingScriptNeutralFactorLeavesScriptUnchanged`, `TestResolveTrainingScriptUnknownNameErrors`, `TestTrainingScriptPreviewReflectsIntensityFactor`, `TestScriptPreviewPlateauStartsFromFloor` | todo-later | P2 (Training intensity). |
@@ -448,7 +448,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 | `app_training_video_test.go` | `TestTrainingVideoServedSeparately` | n/a | Wails asset server serving the training video. |
 | `benchmark_pair_suggest_test.go` | `TestSuggestBenchmarkPairBesideVideoHubPair`, `TestSuggestBenchmarkPairBesideVideoGoldenSubdirs`, `TestSuggestBenchmarkPairBesideVideoOnlyStemIsCandidate`, `TestSuggestBenchmarkPairBesideVideoNone`, `TestSuggestBenchmarkPairBesideVideoRequiresPath` | todo-later | P4 (Bench, Suite). |
 | `counting_device_test.go` | (no test function) | n/a | Helper type only (`countingDevice`), no test function. |
-| `identifiers_test.go` | `TestNoPersonalIdentifiersInSource` | todo-now | the rule exists in `docs/AGENT_STATE.md`, the check does not (see Port now) |
+| `identifiers_test.go` | `TestNoPersonalIdentifiersInSource` | ported | ctest `identifiers` (tests/check_identifiers.cmake; also versioned model identifiers, D-120) |
 | `settings_store_test.go` | `TestSettingsStoreKeepsCorruptFileAside` | ported | tests/core/settings_test.cpp "broken settings file is kept aside" |
 | `settings_store_test.go` | `TestSettingsStoreNullFile` | ported | tests/core/settings_test.cpp "settings: a file holding null loads as empty and accepts a set" |
 | `settings_store_test.go` | `TestSettingsStoreSetManyOneWrite` | ported | tests/core/settings_test.cpp "settings: set_many, defaults, atomic write leaves no temp files" |
@@ -796,10 +796,10 @@ One row per old test function (grouped when a whole file shares the same answer)
 | core: `settings.h` | 0 |
 | app: `PlaybackOutput` | 5 |
 | app: `PlayerController` | 3 |
-| app: `DeviceController` | 2 |
+| app: `DeviceController` | 0 |
 | app: QML shell and assets | 4 |
-| repo / CI | 1 |
-| **Total** | **15** |
+| repo / CI | 0 |
+| **Total** | **12** |
 
 ### A. Missing tests
 
@@ -882,7 +882,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 48. `cmd/gui-wails/frontend/test/pb_chart_tooltip_test.py` :: `main`. Hovering the heatmap/curve gives a tooltip with time and value; `FormatTooltipTime` itself is tested, the controller wrapper is not. [`curve_geometry_test.cpp` tests `FormatTooltipTime`]
 49. `cmd/gui-wails/frontend/test/pb_clip7776_test.py` :: `main`. Load the real tf/tj funscript fixture without a video and play it: no error, curve and lanes present. (Copy the fixture from the 0.7 repo or generate an equivalent.)
 
-#### app: `DeviceController` (2)
+#### app: `DeviceController` (2, ported)
 
 *Target: `tests/app/device_controller_test.cpp`.*
 
@@ -898,7 +898,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 54. `cmd/gui-wails/frontend/test/pb_tools_toggle_test.py` :: `main`. The Library and Inspector columns collapse to 44 px and expand again; the video area grows. [`inspector_qml_test.cpp` loads the Inspector but does not toggle it]
 55. `cmd/gui-wails/frontend/test/tools_nav_test.py` :: `main`. The 0.7 main tabs (roving arrow keys, Home/End) are replaced by the mode deck: keys 1-5, M, Esc, arrows move focus, Tab stays inside, focus returns on close, the current card is marked. [the mode deck exists, no test]
 
-#### repo / CI (1)
+#### repo / CI (1, ported)
 
 *Target: a ctest or CI step.*
 
