@@ -39,6 +39,17 @@ Functions use PascalCase and struct fields use snake_case.
 **Open cleanups:**
 - `script_finder`/`settings`/`playback` use snake_case function names; rename them to PascalCase.
 
+## vision/ (C++17 + OpenCV, no Qt): `samn_vision`
+
+Frames and tracking for the Generator (P3, D-133). Built when `SAMN_BUILD_VISION` is on (default); Linux uses the system OpenCV with contrib, Windows CI uses vcpkg (`ci/vcpkg/vcpkg.json`). Not linked into the app yet (P3.3).
+
+| File | What |
+|---|---|
+| `include/samn/vision/frame_reader.h` | `FrameReader`: FFmpeg backend only, every frame with `index` and `pts_us` (video time), frame-exact `SeekMs`. |
+| `include/samn/vision/tracker.h` | `CreateTracker(kCsrt)`, the one tracker factory (no fallback, GD-02); `VisionSelfCheck()`, `OpenCvVersion()`. |
+
+Tests: `tests/vision/*_test.cpp` (`vision_tests`, doctest; generated test-pattern clips, no media).
+
 ## app/ (Qt 6): `samn_app` + `samnplayer`
 
 | File | What |

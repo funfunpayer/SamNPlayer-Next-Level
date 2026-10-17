@@ -1,0 +1,12 @@
+{
+  "name": "samnplayer-vision",
+  "version-string": "0",
+  "description": "Windows CI dependencies of samn_vision (D-133). Linux uses the system packages.",
+  "dependencies": [
+    {
+      "name": "opencv4",
+      "default-features": false,
+      "features": ["contrib", "dnn", "ffmpeg", "jpeg", "png"]
+    }
+  ]
+}
