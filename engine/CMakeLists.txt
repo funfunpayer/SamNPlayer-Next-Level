@@ -9,3 +9,7 @@ if(MSVC)
 else()
   target_compile_options(samn_engine PRIVATE -Wall -Wextra)
 endif()
+
+# The comparison controller on the command line (P3.8).
+add_executable(samn_compare tools/samn_compare.cpp)
+target_link_libraries(samn_compare PRIVATE samn_engine)

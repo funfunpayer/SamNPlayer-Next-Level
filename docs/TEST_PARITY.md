@@ -36,15 +36,15 @@
 
 | | Tests | ported | covered | todo-now | todo-later | n/a |
 |---|---:|---:|---:|---:|---:|---:|
-| **All** | **1141** | 218 | 66 | **0** | 807 | 50 |
-| Go | 821 | 199 | 32 | 0 | 545 | 45 |
+| **All** | **1141** | 229 | 66 | **0** | 794 | 52 |
+| Go | 821 | 210 | 32 | 0 | 532 | 47 |
 | Python | 320 | 19 | 34 | 0 | 262 | 5 |
 
 ### Per old package
 
 | Old package | Files | Tests | ported | covered | todo-now | todo-later | n/a |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| `funscript` | 36 | 170 | 84 | 1 | 0 | 85 | 0 |
+| `funscript` | 36 | 170 | 95 | 1 | 0 | 72 | 2 |
 | `device` | 7 | 41 | 39 | 2 | 0 | 0 | 0 |
 | `player` | 7 | 61 | 5 | 9 | 0 | 44 | 3 |
 | `samn` | 2 | 5 | 5 | 0 | 0 | 0 | 0 |
@@ -63,7 +63,7 @@
 | `native/tests (Python)` | 4 | 13 | 13 | 0 | 0 | 0 | 0 |
 | `scripts/benchmark-prep (Python)` | 1 | 8 | 0 | 0 | 0 | 8 | 0 |
 | `frontend (Python/Playwright UI tests)` | 148 | 148 | 6 | 34 | 0 | 103 | 5 |
-| **Total** | **431** | **1141** | **218** | **66** | **0** | **807** | **50** |
+| **Total** | **431** | **1141** | **229** | **66** | **0** | **794** | **52** |
 
 `generator (Go)` includes the sub-packages `aiscript`, `bodyparts`, `posttrack`, `profilemodel`, `simpletrack`, `strokepreview`, `trackcv`, `trackutil`.
 
@@ -87,7 +87,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 
 ### 2.1 `funscript`
 
-36 files, 170 tests: 84 ported, 1 covered, 0 todo-now, 85 todo-later, 0 n/a.
+36 files, 170 tests: 95 ported, 1 covered, 0 todo-now, 72 todo-later, 2 n/a.
 
 | Old file | Test function(s) | Status | Where / why |
 |---|---|---|---|
@@ -101,7 +101,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 | `beat_strokes_test.go` | `TestBeatStrokesDownOnEveryBeat` | ported | core/python/tests/test_beat_strokes_parity.py::test_down_on_every_beat |
 | `beat_strokes_test.go` | `TestBeatStrokesSpeedLimitAndHold` | ported | core/python/tests/test_beat_strokes_parity.py::test_speed_limit_and_hold |
 | `companion_test.go` | `TestCompanionPath`, `TestLoadCompanionAxis`, `TestSaveCompanionAxisKeepsFieldsAndInversion`, `TestCreateCompanionAxis` | todo-later | P4 (companion axis files editable) and P2 (loading `<script>.<axis>.funscript` into the player): `CompanionPath`, `LoadCompanionAxis`, `SaveCompanionAxis`, `CreateCompanionAxis` are not ported. `PlaybackOutput::setScript` already takes axis tracks. |
-| `compare_dataset_test.go` | `TestCompareDatasetPairsAndReport`, `TestCompareDatasetSkipsFungenBinary` | todo-later | P3.8 (comparison controller / benchmark): dataset comparison is not ported. |
+| `compare_dataset_test.go` | `TestCompareDatasetPairsAndReport`, `TestCompareDatasetSkipsFungenBinary` | n/a | Replaced by design: the P3.8 controller takes an explicit manifest with content hashes (`samn_compare`, `engine/include/samn/engine/compare.h`, tests `tests/engine/compare_test.cpp`) instead of pairing FunGen exports by file name, which GD-05 names as a source of wrong pairs. |
 | `contact_marks_test.go` | `TestContactMarksHasAreas` | todo-later | P3.6 (contact marks): `ContactMarks.HasAreas` is not ported (the struct exists in `samn_file.h`, no helper). |
 | `contact_preview_test.go` | `TestPreviewContactVibrationSpanEarlier`, `TestPreviewContactVibrationImpulseQuieter` | todo-later | P3.3 (Generator preview): `PreviewContactVibration` is not ported. |
 | `contact_recipe_test.go` | `TestDefaultSyncForProfile`, `TestSaveContactRecipeStrokeEmptySyncStaysIndependent`, `TestSaveContactRecipeTjEmptySyncUsesSuctionPosition`, `TestSaveContactRecipeRoundtrip` | ported | tests/core/recipe_test.cpp "recipe: profile names and default sync" (`TestDefaultSyncForProfile`); tests/core/samn_file_test.cpp "samn_file: contact settings fill an empty stroke sync with independent", "...fill an empty tj sync with suction_position", "samn_file: contact recipe round trip, switching off clears span and curve" (adapted to `Document::ApplyContactRecipe`) |
@@ -133,7 +133,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 | `parse_compat_test.go` | `TestParseOFSStyleMetadata` | ported | core/python/tests/test_funscript_parity.py::test_duration_ofs; tests/core/funscript_test.cpp "funscript parse: actions, clock-string duration" |
 | `parse_compat_test.go` | `TestParseFloatActions` | ported | core/python/tests/test_funscript_parity.py::test_float_actions |
 | `parse_compat_test.go` | `TestLoadChaptersAndBookmarksTimestampStrings` | ported | tests/core/marks_test.cpp "marks: load chapters and bookmarks timestamp strings" |
-| `phase_test.go` | `TestBestLagCorrelationShiftedSine`, `TestBestLagCorrelationInverted`, `TestBestLagCorrelationConstantUndefined`, `TestBestLagCorrelationIrregular`, `TestBestLagCorrelationLowConfidence`, `TestDiagnosePhaseTimingVsShape`, `TestWindowedBestLagCorrelationConstantLag`, `TestWindowedBestLagCorrelationDriftingLag`, `TestPeriodicityAliasingCharacterization`, `TestAliasingRiskFlag_doesNotChangeReportedLag`, `TestDominantPeriodMsRequiresGenuineLocalPeak` | todo-later | P3.6 (timing/phase diagnostics used by Quality Doctor and the benchmark): `BestLagCorrelation`, `DiagnosePhase`, `DominantPeriodMs` are not ported. |
+| `phase_test.go` | `TestBestLagCorrelationShiftedSine`, `TestBestLagCorrelationInverted`, `TestBestLagCorrelationConstantUndefined`, `TestBestLagCorrelationIrregular`, `TestBestLagCorrelationLowConfidence`, `TestDiagnosePhaseTimingVsShape`, `TestWindowedBestLagCorrelationConstantLag`, `TestWindowedBestLagCorrelationDriftingLag`, `TestPeriodicityAliasingCharacterization`, `TestAliasingRiskFlag_doesNotChangeReportedLag`, `TestDominantPeriodMsRequiresGenuineLocalPeak` | ported | `tests/core/motion_fidelity_test.cpp` (`samn/motion_fidelity.h`); the aliasing characterisation is strict here (deterministic: lag -860 = -300 - 2 x 280, windows swing and flip). |
 | `pipeline_hint_test.go` | `TestSuggestPipelineTwoROIUsesStroke`, `TestSuggestPipelineSmallUsesCSRTGo`, `TestSuggestPipelineLargeUsesCSRT` | todo-later | P3.5 (backends): `SuggestPipeline` is not ported. |
 | `polarity_test.go` | `TestSuggestPolarityLowFirstHalf`, `TestSuggestPolarityHighFirstHalf`, `TestSuggestPolarityTooFewPoints` | todo-later | P3.3 (Review) / P4 Editor (Suggest polarity): `SuggestPolarity` is not ported. |
 | `project_test.go` | `TestBookmarksRoundTrip` | ported | tests/core/marks_test.cpp "marks: bookmarks round trip" |
