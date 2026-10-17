@@ -149,6 +149,10 @@ Item {
     function openFile() { openDialog.open() }
     readonly property bool playing: player.playbackState === MediaPlayer.PlayingState
     function togglePlay() { playing ? player.pause() : player.play() }
+    function setVolume(v) {
+        volume.value = Math.max(0, Math.min(1, Math.round(v * 20) / 20))  // steps of 0.05 (0.7)
+        ctrl.setUiValue("player.volume", volume.value)
+    }
     function stop() { player.stop(); if (!scriptOnly) media.position = 0 }
     function previous() {
         const wasPlaying = playing
@@ -549,7 +553,12 @@ Item {
                         anchors.verticalCenter: parent.verticalCenter
                         onClicked: page.muted = !page.muted
                     }
-                    FlowSlider { id: volume; from: 0; to: 1; value: 0.8; width: 110; anchors.verticalCenter: parent.verticalCenter; onMoved: (v) => value = v }
+                    FlowSlider {
+                        id: volume; objectName: "volume"
+                        from: 0; to: 1; width: 110; anchors.verticalCenter: parent.verticalCenter
+                        value: ctrl.uiValue("player.volume", 0.8)  // remembered (0.7 pb.volume)
+                        onMoved: (v) => page.setVolume(v)
+                    }
                 }
             }
         }

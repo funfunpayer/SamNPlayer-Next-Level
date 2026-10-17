@@ -130,6 +130,12 @@ private:
         QCOMPARE(ctrl->scriptName(), QStringLiteral("alone.funscript"));
         QTRY_VERIFY(page->property("playing").toBool());
         QVERIFY(clock->property("position").toLongLong() < 200);  // the new script from its start
+        // The volume is remembered, in steps of 0.05 (0.7 pb.volume).
+        auto* vol = page->findChild<QObject*>(QStringLiteral("volume"));
+        QVERIFY(vol);
+        QMetaObject::invokeMethod(page, "setVolume", Q_ARG(QVariant, 0.33));
+        QCOMPARE(vol->property("value").toDouble(), 0.35);
+        QCOMPARE(ctrl->uiValue(QStringLiteral("player.volume"), 0.8).toDouble(), 0.35);
         // A video makes the video the player again.
         QVERIFY(ctrl->openPath(QStringLiteral(SAMN_TEST_DATA "/testpattern_4s.mp4")));
         QVERIFY(!page->property("scriptOnly").toBool());
