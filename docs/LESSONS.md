@@ -68,7 +68,7 @@ Adult-media rule: this file uses neutral technical terms only ("tip", "partner r
 - **Learned:** removing the active item must reload and highlight correctly; the video's end advances the list only if the stop was not the user's; a failed device connect or a decode error must not auto-advance.
 - **Source:** `CL` 0.5.5 "Fixed" (Playlist); `docs/PLAYER_CODECS.md` "Qualitaetshinweise" (no auto-advance after a decode error).
 - **Rule:** auto-advance only on a natural end of a playable item.
-- **Status:** todo (P2): `core/include/samn/playlist.h` and `playlist_test.cpp` cover "remove keeps the active item" and next/repeat; the "connect failure / decode error does not advance" part needs the device connect at Play (P2) and a media error handler (PS-09).
+- **Status:** todo (P2): `core/include/samn/playlist.h`, `playlist_test.cpp` and `player_controller_test.cpp` `playlist` cover add, remove keeps the active item, next, repeat, shuffle and a multi-drop list; the "connect failure / decode error does not advance" part is missing: nothing stops auto-advance after a media error (`PlayerPage.qml` advances on `EndOfMedia`) and no test pins it. Needs the device connect at Play (P2) and PS-09's error handler.
 
 ### PS-08 Swapping the video after the first load
 - **Learned:** in 0.7 a second video chosen with "Video..." left the player on the first file because the WebView cached the URL; fixed with a cache-busting epoch.
@@ -98,7 +98,7 @@ Adult-media rule: this file uses neutral technical terms only ("tip", "partner r
 - **Learned:** vibration/suction meters could show `NaN%` when frame events carried non-finite numbers.
 - **Source:** `CL` 0.5.45 "Fixed" ("Play/sidebar: vib/suction meters could show NaN%").
 - **Rule:** coerce NaN/inf to 0 where a value leaves the core.
-- **Status:** covered (`device_protocol_test.cpp` "ScaleToRange ... NaN is 0"; `playback_output.cpp` `std::isfinite` on settings).
+- **Status:** covered (`device_protocol_test.cpp` "ScaleToRange rounds half away from zero, clamps, NaN is 0"; `playback_output.cpp` `std::isfinite` on settings).
 
 ### PS-13 Timeline layers share one time scale and are crisp on HiDPI
 - **Learned:** the scene strip and chapter bands were 30 px narrower than the curve, so markers and curve did not share a time scale (0.7.0); curves drawn as a 1x bitmap were blurry on HiDPI (0.5.22).
@@ -168,13 +168,13 @@ Adult-media rule: this file uses neutral technical terms only ("tip", "partner r
 - **Learned:** the Script Doctor "unsorted timestamps" check was dead code because it ran after the sort. It now inspects the original order, and `generator.ScriptQuality` reads file order instead of `Load`/`Parse` so spliced scripts are still flagged. The stroke filter sorts and de-duplicates its input.
 - **Source:** `CL` 0.5.0 (17 Sep) "Script Doctor unsorted-timestamp check", Unreleased "Stroke filter input".
 - **Rule:** the quality check sees the file as written.
-- **Status:** todo (P3.6). `core/src/funscript.cpp` `Parse` stable-sorts silently and returns only `dropped`, so a later Script Doctor could not see disorder. Expose a `was_sorted`/`duplicates` count from `Parse`. The stroke filter side is covered (`stroke_filter.cpp` sort + `dedupeActionTimes`).
+- **Status:** covered (`core/include/samn/script_quality.h` `ScriptQualityOfFile` reads the file order and flags unsorted and duplicate times before any sort, #30; `tests/core/script_quality_test.cpp` "out of range, unsorted, duplicates, gaps", "Script quality of a file keeps the file order; .samn general; errors"; the stroke filter side is `stroke_filter.cpp` sort + `dedupeActionTimes`). `Parse` itself still sorts silently, which is fine because the Doctor does not use it.
 
 ### FF-09 Device-compatibility limits come from the community, not from us
 - **Learned:** 100 ms minimum action spacing (the transmission threshold of the launchcontrol project), 900 ms for the slowest useful full stroke, position range 5-95, and intensity `500 x |dpos| / |dt|` (the funscript-utils definition, also used in OpenFunscripter, Funscript.io, XBVR). Minimum spacing was only reported at first; on noisy signals up to 45 % of actions were under 100 ms apart, so it is enforced during generation.
 - **Source:** `HANDOFF` "Device compatibility", "Minimum spacing"; D-045.
 - **Rule:** adopt the published metrics; enforce, do not only report.
-- **Status:** todo (P3.6). No device-compat or script-quality module exists in `core/` yet (grep finds none).
+- **Status:** covered (`core/include/samn/script_quality.h` `kMinActionIntervalMs` = 100, `kSlowestFullStrokeMs` = 900, `kUsablePositionMin`/`Max` = 5/95, `DeviceCompatMetrics` with `500 x |dpos| / dt` intensity, `EvaluateDeviceCompat`; `script_quality_test.cpp` "Device compat: actions too close are flagged", "a clean script has no warnings"). Missing: no test asserts the 900 ms slow-stroke count, the 5-95 range count or the intensity value, and the limits are reported by the Script Doctor card (`InspectorPanel.qml`), not enforced on output (todo, P2/P3.6).
 
 ### FF-10 Round trips need real data and must not truncate
 - **Learned:** a `.sam` round trip silently dropped `Profile` and `DeviceRecipe`, so a distance-profile script fell back to hub-style mapping on real hardware, with no error. Found only by round-tripping a real excerpt. `ToFunscript` also truncated positions instead of rounding.
@@ -192,7 +192,7 @@ Adult-media rule: this file uses neutral technical terms only ("tip", "partner r
 - **Learned:** a training script name went into the session-log file name as typed, so `/` (and on Windows `:` or `?`) could not be created and the session was not logged. `scriptFileSlug` strips to `[a-z0-9-]`, so "My Routine!" and "My Routine?" collapsed to one file and the second save silently overwrote the first; saves now compare the stored name. Detector label paths rebuilt by splitting on `/` lost the leading `/` on Unix and drive letters on Windows.
 - **Source:** `CL` 0.5.42 "Training: sessions of custom scripts missing from the history", 0.5.22 "Custom training script names could silently collide", 0.5.36 "AI Train review boxes missing"; `HANDOFF` "Script editor".
 - **Rule:** one `SafeFileStem()` helper (path traversal, Windows reserved characters, collisions checked against the stored name); never rebuild a path by splitting strings; use `std::filesystem`/`QDir`.
-- **Status:** todo (P2/P4) when Training scripts and AI Train are ported. `core/src/script_finder.cpp` already handles tolerant names and Unicode folding.
+- **Status:** partly covered: Training script file names are slugged and collisions are detected (`core/src/training_store.cpp`; `training_test.cpp` "script file slugs are safe file names", "custom scripts: save, edit in place, collisions, list, find, delete"); `core/src/script_finder.cpp` handles tolerant names and Unicode folding. Still todo (P4): AI Train label and thumbnail paths.
 
 ### FF-13 A generated script never overwrites an existing one unasked
 - **Learned:** Create refused to overwrite only when a `.funscript` existed; a companion `.samn` was missed (0.5.10). An early "script exists" error could clear a newer running Create (0.5.45).
@@ -250,19 +250,19 @@ Adult-media rule: this file uses neutral technical terms only ("tip", "partner r
 - **Learned:** with actions already clamped to 20-90 at generation and `MinSuction = 0.20`, applying a runtime `liftFloor` remapped resting suction 0.20 -> 0.36 and peak 0.90 -> 0.92. The generation-time clamp is the floor. Recipe metadata still reports `min_suction: 0.20`. Locked by `TestRecipeTJSuctionNoDoubleFloor` (pos 20 -> about 0.20, pos 90 -> about 0.90). A feel check on hardware is still open.
 - **Source:** `FTT` "Tf/Tj suction double-floor"; `CL` 0.5.0 (17 Sep); `docs/TF_TJ.md` "Neo 2".
 - **Rule:** in `SuctionPosition` mode suction is `pos/100` with no further floor.
-- **Status:** todo (P2). The behaviour is in `core/src/mapper.cpp` (`LiftFloor` is skipped for `SuctionPosition`), but no test in `tests/core/mapper_test.cpp` pins it. Port the test.
+- **Status:** covered (`core/src/mapper.cpp` skips `LiftFloor` for `SuctionPosition`; `tests/core/recipe_test.cpp` "recipe: tj suction has no double floor", #36).
 
 ### DV-08 Contact vibration is derived from the script itself
 - **Learned:** "contact" is the top slice (default top quarter, span 0.75) of the script's own `pos` range, so duration and strength follow the clip; no fixed threshold. A script with under 5 points of `pos` variation disables the effect. Tracking-gap windows force vibration to 0 (a held last distance would buzz forever); `Confidence ~ 0` mutes vibration; envelope/smoothing must not bleed into gaps; the envelope smoothing (default 0.45) damps tracker jitter on the vibration channel only. Curves: linear, soft (t squared), peak (square root), impulse. A 50 ms graze and a 300 ms contact reach the same peak (>= 0.9) but the graze stays above 0.5 for far fewer frames.
 - **Source:** `NEXT` priority 5; `CL` 0.5.4 (Fixed), 0.5.35 (`impulse` argparse); `docs/SAMN_FORMAT.md`.
 - **Rule:** derive from the script's own range; fail quiet (0) when unsure; additive and gated (off by default for older recipes).
-- **Status:** todo (P2). Implemented in `core/src/mapper.cpp` (`contact_vib_at`, `in_gap`, `ContactVibrationMinSpan`), but `tests/core/` has no case for contact vibration, gaps, the low-span guard or the brief graze. Port the Go cases.
+- **Status:** covered (`core/src/mapper.cpp` `contact_vib_at`, `in_gap`, `ContactVibrationMinSpan`; `tests/core/recipe_test.cpp` "recipe: tj contact vibration is off by default", "...tracks the position", "...brief graze", "...needs a position span", "...is muted in a tracking gap", "tracking gap wins over envelope and smoothing"; `player_controller_test.cpp` `tjScriptWithoutVideoPlays` for the device path, #36 and #42).
 
 ### DV-09 Who owns the connection
 - **Learned:** playback/training used to demand a manual disconnect of the Device-tab connection even though BLE allows one connection; they now reuse it, and disconnecting while a session uses it is rejected. A TOCTOU gap in the test-connect guard and an `activeDevice` data race were fixed. `shutdown()` stopped only the test connection, not the active session's device. A rejected second session start overwrote the live session's player/device (0.5.10).
 - **Source:** `CL` 0.4.1, 0.3.0, 0.5.10 "Fixed".
 - **Rule:** one owner of the connection at a time; the controller says why an action is refused; quitting the app stops the device first.
-- **Status:** covered (`tests/app/device_controller_test.cpp` `sessionActiveBlocksConnectAndTests`, `secondConnectIsRefused`, `destroyingWhileConnectingReturnsPromptly`; `DeviceWorker::Shutdown` destroys the session with a stop). The "app closes while playing" path has no test.
+- **Status:** covered (`tests/app/device_controller_test.cpp` `sessionActiveBlocksConnectAndTests`, `secondConnectIsRefused`, `destroyingWhileConnectingReturnsPromptly`, `shutdownStopsTheConnectedDevice`, `shutdownWithoutSessionIsSafe` (#39); `DeviceWorker::Shutdown` destroys the session with a stop).
 
 ### DV-10 Stop, emergency stop and precedence
 - **Learned:** Emergency stop, Disconnect, Pause, Stop and device caps work in every build and win over AI, batch and previews. `Stop()` always writes both channels and remembers them. Pause "home" moves a stroker slowly to the bottom; after an emergency stop no home move happens.
@@ -298,13 +298,13 @@ Adult-media rule: this file uses neutral technical terms only ("tip", "partner r
 - **Learned:** rows, lanes and Training channels hide what the device lacks; a stroker with neither vibration nor suction cannot start a training that would do nothing. The old mockup's "Axis 1/2/3" does not apply to the Sam Neo 2, whose channels are Stroke, Vibration and Suction.
 - **Source:** `CL` 0.7.0 "Training follows the device"; `docs/PLAY_UI_CONTRACT.md` section 6; D-035, D-132.
 - **Rule:** show real channels only; without a device show what the script carries.
-- **Status:** covered for lanes (`playback_output_test.cpp` `lanesFollowTheDevice`, `noScriptNoLanes`); todo (P2) for Training channels.
+- **Status:** covered (`playback_output_test.cpp` `lanesFollowTheDevice`, `noScriptNoLanes`; Training: `training_controller_test.cpp` `withoutADeviceBothChannelsStay`, `aOneMotorDeviceLeavesOneChannel`, `aStrokerBlocksStartUnlessMock`; `training_qml_test.cpp` counts visible rings).
 
 ### DV-16 Mock tests are not hardware tests
 - **Learned:** changes to the device layer should include a hardware test, and mock-only testing must be said so. Mock suites with 0, 1, 2 and 6 axes are the agreed stand-in; physical approval is the Owner's job.
 - **Source:** `CONTRIB` workflow step 5; D-044; `docs/FREE_RELEASE_QA_AND_CLEANUP_2026-10-12.md` G5.
 - **Rule:** every device PR states "mock only" or "hardware tested on ...".
-- **Status:** todo (P2): `MockDevice` and `MockTransport` exist (`device/mock.h`); the capability-set mock suite (0/1/2/6 axes) does not.
+- **Status:** partly covered: `MockDevice` and `MockTransport` exist (`device/mock.h`) and `CONTRIBUTING.md` rule 10 says mock-only tests are marked as such. Still todo (P2): the capability-set mock suite (0/1/2/6 axes); `device_capabilities_test.cpp` covers capability parsing only.
 
 ---
 
@@ -500,49 +500,49 @@ Two things share this name: the device **Training** mode (stop-start, plateau, s
 - **Learned:** one technique plus one curve could not express "light vibration ramping up and down, then suction alone with light vibration". The model is an ordered list of phases, each with an optional vibration and suction curve (`start/peak/end level`, ramp up/hold/ramp down); a missing curve keeps the level the previous phase left. Stop-Start and Plateau became the two single-phase built-ins. A curve stored under the wrong channel field raced the real curve for the same physical channel; `NormalizeTrainingScript` closes it and runs unconditionally (editor and built-ins alike).
 - **Source:** `docs/TRAINING_MODE_RESEARCH.md` "Follow-up design", "Implementation status"; `COORD` lane G handoff 22 Sep.
 - **Rule:** normalize before save and before run; do not trust a field that can disagree with its slot.
-- **Status:** todo (P2).
+- **Status:** covered (`core/include/samn/training.h` `Script` / `Phase` / `ChannelCurve`: optional curve per channel, an absent curve keeps the level; `training_test.cpp` "an untouched channel keeps its level into the next phase, then winds down", "built-in scripts are valid, described, categorised and level 1-3", "invalid requests are refused before the device is touched"; `validate_script` runs before a run, #37). Slots are typed, so a curve cannot sit in the wrong channel field and there is no separate `NormalizeTrainingScript`.
 
 ### TR-02 Arousal feedback is one factor applied to every active channel
 - **Learned:** with two channels, "both get weaker" is no longer automatic. Compute the factors once per cycle (asymmetric: dampen hard on the way up, ease gently on the way down) and apply them to every active channel and to the shared rest. A report of 9 or more also interrupts the current cycle (done in the GUI layer, not inside the player, to avoid racing `drain()` at cycle start). A session ceiling (3 h) ends a mistyped session with a log line, not an error; Escape stops a cycle from anywhere in the tab.
 - **Source:** `docs/TRAINING_MODE_RESEARCH.md` proposals B, C, D; `CL` 0.5.22 "Feedback scales StartLevel".
 - **Rule:** a test asserts a high report weakens both channels and lengthens the shared rest; flat or descending curves must not resume above the damped peak.
-- **Status:** todo (P2).
+- **Status:** partly covered (#37): `training_test.cpp` "feedback weakens both channels and lengthens the shared rest", "arousal adjusts peak, hold and rest asymmetrically", "scaled_curve keeps start and end proportional to the damped peak"; `training_controller_test.cpp` `feedbackIsValidatedAndHighValuesInterrupt` (9 or more interrupts, done in the controller), `theSafetyLimitEndsALongSession` (3 h ceiling). Still todo (P2): Escape stopping a cycle from anywhere in the tab (`TrainingPage.qml` has no Escape shortcut).
 
 ### TR-03 Interrupt must always cut, in every state
 - **Learned:** "Interrupt now" was ignored or mishandled in several states: during the ramp down (Stop-start) or the ramp to the plateau the level froze for the whole pause; in a script, a press during a pause with a channel still on was never seen (`waitOrDone`) and was dropped by the next repeat's `drain()`; one early interrupt switched off the closing wind-down of the whole session (a sticky flag); a stop during a suction-only phase did not zero a vibration level carried from an earlier phase ("nil curve = preserve previous" must still clear on interrupt).
 - **Source:** `CL` 0.5.42 "Training: 'Interrupt now' ignored in the pause", "Training scripts: the ending was abrupt", 0.5.22 "Training Interrupt clears carried channels"; `COORD` 29 Sep "Bug hunt, training mode".
 - **Rule:** one stop path that every wait honours; state tables tested for each (technique x state x interrupt).
-- **Status:** todo (P2).
+- **Status:** covered (#37): `training_test.cpp` "stop_cycle interrupts the hold, zeroes, and the session continues", "...interrupts the ramp up without reaching the peak", "an Interrupt during the ramp down cuts to 0 and waits the full rest", "stop_cycle in a script zeroes both channels, also a carried one", "after an Interrupt the closing ramp is skipped", "an earlier Interrupt does not switch off the closing ramp of later repeats", "an Interrupt during an elevated rest ends the cycle at once"; `training_controller_test.cpp` `interruptEndsTheCycleAndTheSessionGoesOn`.
 
 ### TR-04 How a session ends, and where a plateau climbs from
 - **Learned:** a script that finished with a channel above 0 sat there until the abrupt device stop; now both channels ramp to 0 over 2 s on a natural end, never after a user interrupt (which already cuts). Plateau (Owner, 29 Sep): each cycle climbs from the actual level (the plateau floor), not from 0; in scripts this is an opt-in `startFromCurrent` on the built-in plateau vibration curve only, other scripts keep their written jumps.
 - **Source:** `CL` 0.5.27 "Fixed"; `COORD` decision log 23 Sep, 29 Sep "Plateau climbs from the plateau".
 - **Rule:** explicit per-curve flag instead of a global behaviour change.
-- **Status:** todo (P2).
+- **Status:** covered (#37): `core/src/training.cpp` `Stage::Closing` winds elevated channels to 0 over 2 s on a natural end only; `training_test.cpp` "an untouched channel keeps its level into the next phase, then winds down", "plateau: the next cycle climbs from the plateau, not from 0", "start_from_current climbs from the plateau and survives scaling" (`ChannelCurve::start_from_current` is the per-curve flag).
 
 ### TR-05 Real-hardware feedback changed the built-in scripts
 - **Learned:** four built-ins (`stop-start`, `plateau`, `vibration-massage`, `variable`) never touched suction at all (not a design choice, the Owner said); every built-in now has a light suction layer from the start. A 20 s static hold at 0.7 suction was too much and became 6 s at 0.6. Training had only ever run against the mock. Numeric levels ("light" = 0.2) are starting guesses until the device is measured; a learned intensity model must not be built before that measurement.
 - **Source:** `CL` 0.5.27 "Training scripts: suction no longer missing or stuck"; `COORD` decision log 23 Sep "Training suction fixes"; `docs/TRAINING_MODE_RESEARCH.md` proposal F.
 - **Rule:** tests assert every built-in has a suction layer; hardware feedback from the Owner outranks design intent.
-- **Status:** todo (P2).
+- **Status:** covered (#37): `training_test.cpp` "no built-in holds suction long at a high level; every built-in drives suction", "built-in scripts are valid, described, categorised and level 1-3". The numeric levels are still starting guesses until the Owner hardware test (DV-06).
 
 ### TR-06 Concurrency inside a session
 - **Learned:** `runPhaseRepeat` returned on the first channel error without draining or cancelling the sibling, so one channel's goroutine could keep writing after `Stop()`; late `levels` events after `done` revived the meter ring; a start that finished before its promise resolved had to leave the session stopped; a rejected second start must not overwrite the live session; the session log was opened before `tryStartSession` succeeded (an empty file and an open handle after a rejected start).
 - **Source:** `CL` 0.5.22, 0.5.23, 0.5.10; `COORD` 29 Sep "Bug hunt, training GUI".
 - **Rule:** a shared stop token for both channel workers and a join of both before returning; open logs after the session is accepted; ignore events whose session id is not current.
-- **Status:** todo (P2).
+- **Status:** covered (#37): the engine is a single-threaded state machine driven by `advance(dt)`, so there are no sibling workers to join and no shared stop token is needed; `TrainingController::finishSession` drops the session and zeroes the meter, `beginSession` opens the log only after the start is accepted; tests `startIsIgnoredWhileActiveAndStopWhenIdleIsSilent`, `unknownProgramDoesNotStart`, `aConnectThatNeverAnswersEndsWithAnError`, `pauseHoldsTheDeviceAtZeroAndResumeContinues`.
 
 ### TR-07 History feeds the next session only with visible, reversible consent
 - **Learned:** the session history (cycles, mean peak, early stops, mean arousal) first only displayed. The nudge now is explicit: difficulty tier Gentle x0.8 / Standard x1 / Intense x1.2 and a history factor (ease-off after early stops x0.85, clean streak x1.1), combined and clamped to [0.55, 1.35], applied to the real run and the plan preview alike; an opt-out checkbox (default on). Tiers are a scale factor, not three copies of each script.
 - **Source:** `docs/TRAINING_MODE_RESEARCH.md` proposal A; `HANDOFF` "Training history".
 - **Rule:** preview shows the curve that will actually run.
-- **Status:** todo (P2).
+- **Status:** covered (#37): `training_test.cpp` "history adjustment: ease off after an early stop, nudge up after clean sessions", "combined intensity is tier x history, clamped 0.55-1.35, 1 for Custom"; `training_controller_test.cpp` `tierScalesTheProgramAndNamesIt`, `historyNudgesTheNextSessionAndExportsCsv`; the opt-out is the `autoAdjust` toggle in `TrainingPage.qml`; the plan preview uses the scaled script.
 
 ### TR-08 Pause is a real pause; training follows the device
 - **Learned:** Play/Pause in Training sends both channels to 0 at once and the session clock stands still; Resume restores the levels. The stage shows a ring only for channels the device has, and a device with neither vibration nor suction cannot start (the mock can). The live meter comes from the levels actually written to the device, not from the plan.
 - **Source:** `CL` 0.7.0 "Changed" (Training); 0.5.22 "Live intensity for ring + clip".
 - **Rule:** meters show what was sent.
-- **Status:** todo (P2).
+- **Status:** covered (#37): `training_test.cpp` "pause holds both channels at 0, the clock stands still, resume restores the level", "on_levels reports every write, and 0 while paused"; `training_controller_test.cpp` `pauseHoldsTheDeviceAtZeroAndResumeContinues`, `aOneMotorDeviceLeavesOneChannel`, `aStrokerBlocksStartUnlessMock`; the meter is fed by `session_->on_levels` in `TrainingController::beginSession`.
 
 ### TR-09 Ideas that were deliberately not built
 - **Learned:** random jitter of cycle timing (clinical protocols are regular; it would hide the cause of a history change; an explicit opt-in "Variable" preset is a different thing), merging Training with video playback (it is a content-independent control loop), biofeedback hardware as an arousal input (no evidence it beats self-report; a second Bluetooth peripheral).
@@ -576,7 +576,7 @@ Two things share this name: the device **Training** mode (stop-start, plateau, s
 - **Learned:** the 0.7 Play page was split between "core" (data, drawing, device logic, tests) and "layout" (look) with a written contract of regions, state attributes, theme tokens and ids; layout work relied only on what the contract lists and tests pinned it. Fixed DOM order = tab order.
 - **Source:** `docs/PLAY_UI_CONTRACT.md` sections 1-5; `docs/QA_CHECK_2026-10-11.md` section 3.
 - **Rule:** no logic in QML; controllers expose everything; a layout change never edits a controller.
-- **Status:** covered (rule in `docs/MODULES.md` "Rules", `docs/PLAN.md` principle 4; QML load test `tests/app/inspector_qml_test.cpp`). Pages beyond the Inspector have no load test yet.
+- **Status:** covered (rule in `docs/MODULES.md` "Rules", `docs/PLAN.md` principle 4; QML load tests `tests/app/inspector_qml_test.cpp`, `player_page_qml_test.cpp`, `training_qml_test.cpp`, `shell_qml_test.cpp` `everyModeLoadsWithoutWarnings`).
 
 ### UI-02 Only real functions
 - **Learned:** an audit found 333 controls all wired but 12 backend bindings never called by the GUI (superseded or internal); the Owner's mockup contained controls with no backend (axis 1-3 for a device with none, a frequency knob, picture-in-picture, a frameless window) that were mapped as "exists / exists under another name / needs work / not supported" and not shown as working. "GUI load rule": a shipped feature must appear in the UI and every list shows real data.
@@ -642,7 +642,7 @@ Two things share this name: the device **Training** mode (stop-start, plateau, s
 - **Learned:** nested groups so a static rotation and an animated transform do not replace each other; one shared full-circle track for two overlapping values; alpha blending (reduced opacity on the top layer), not a screen blend that washes two pastel colours to white; colour families per value; amplitude driven by the live value, not by swapping classes; perspective on the parent plus rotation on the child for a real 3D tilt; the local channel (vibration) animates its own element, the whole-object channel (suction) animates the shared wrapper.
 - **Source:** `HANDOFF` "Reusable GUI pattern: the training-tab intensity ring".
 - **Rule:** reuse for the Training page; do not re-derive.
-- **Status:** todo (P2/P4).
+- **Status:** covered (#37): `app/qml/TrainingRing.qml` (one glowing ring per channel, level arc, live state, redrawn on level change) used by `TrainingPage.qml`; `training_qml_test.cpp` counts the visible rings. The CSS tricks of the lesson (nested groups, 3D tilt) do not apply to a QML `Shape`.
 
 ### UI-13 Screenshots and design references are test patterns only
 - **Learned:** the Owner's mockup contained sexualized imagery and was therefore not committed (the acceptance rule: no unsafe mockup media); screenshots come from the real build with test patterns.
@@ -991,24 +991,24 @@ Lessons that matter and are not yet covered in SamNPlayer 2, ordered by risk (us
 | GAP-02 | UI-05 plain text | None of the 95 `Text` items sets `textFormat`; file, chapter and bookmark names that look like tags render as rich text. Set `Text.PlainText`, test with `a<b>c.funscript`. Exists today. **Done (#35).** |
 | GAP-03 | UI-04 language | Core error texts are German and reach the error bar (`funscript.cpp`, `marks.cpp`, `project.cpp`; `project_test.cpp` pins one). Translate, update the test, add a scan of user-visible strings. Exists today. **Done (#35).** |
 | GAP-04 | PS-09 media errors | No `MediaPlayer` error handler: a decode failure is silent. Show the error class; clear it on a successful play. **Done (#35).** |
-| GAP-05 | PS-04, PS-11, DV-07, DV-08 device safety (P2) | Before the Owner hardware test: soft start with a pause-in-ramp test; Extended-O with minimum 0 stored as a reduction; a test for "no second floor" in `SuctionPosition`; tests for contact vibration (off by default, gaps force 0, low-span guard, brief graze). The code paths exist in `mapper.cpp` but are untested. |
+| GAP-05 | PS-04, PS-11, DV-07, DV-08 device safety (P2) | Before the Owner hardware test: soft start with a pause-in-ramp test; Extended-O with minimum 0 stored as a reduction; a test for "no second floor" in `SuctionPosition`; tests for contact vibration (off by default, gaps force 0, low-span guard, brief graze). **Part done (#36):** the DV-07 and DV-08 tests are in `recipe_test.cpp` (no double floor, contact vibration off by default, gaps, span guard, brief graze). **Left:** PS-04 soft start with the pause-in-ramp test, PS-11 Extended-O (both being built). |
 | GAP-06 | GD-23 native memory safety (P3.0) | Add an ASan/UBSan CI job and RAII ownership before the OpenCV port; the 0.7 cgo layer had a heap-corrupting argument and a double free that only an option-matrix test caught. `-Wall -Wextra` is only on `samn_core`. **Started: core sanitizer job in CI; extend to the OpenCV layer in P3.0.** |
 | GAP-07 | GD-02 tracker availability (P3.0/P3.1) | One `CreateTracker()`, a CI self-check that CSRT and an ONNX model run on Linux and Windows (vcpkg `opencv4[contrib,...]`), hard error instead of any fallback. |
 | GAP-08 | GD-03 options reach the output (P3) | A spy-stage test per generator option; one shared definition of enumerations used by UI, controller and core. |
 | GAP-09 | GD-07 timebase (P3.0) | `FrameReader` returns PTS; every public time is video time; tests with a start offset greater than 0 for marks, gaps, maps and progress. |
 | GAP-10 | GD-05, GD-06, PF-02, PR-06 benchmark (P3.8) | Build the comparison controller and the gate (absolute timeline, lag window 1000 ms, boundary-pinned and low-confidence flags, windowed r, aliasing flag, 3+5 runs, manifest with hashes) before any default is chosen. |
 | GAP-11 | GD-11, GD-12, GD-15 drift defenses (P3.2/P3.4) | Port the detrend default, the displacement guard and the original-seeded appearance-memory gate with their tests; keep the rhythm grid opt-in with the release-factor test pinned from both sides. |
-| GAP-12 | FF-08, FF-09 script quality (P3.6) | `Parse` sorts silently and loses the "was unsorted" fact; expose it, then port Script Doctor and the device-compatibility metrics (100 ms spacing, 900 ms, 5-95, `500 x abs(dpos)/abs(dt)`). Nothing of this is in `core/`. |
+| GAP-12 | FF-08, FF-09 script quality (P3.6) | Port Script Doctor and the device-compatibility metrics (100 ms spacing, 900 ms, 5-95, `500 x abs(dpos)/abs(dt)`). **Done (#30):** `core/src/script_quality.cpp` reads the file order, flags unsorted and duplicate times, and has the device-compat metrics (100 ms, 900 ms, 5-95, `500 x abs(dpos)/abs(dt)`); tests in `script_quality_test.cpp`. **Left:** assertions for the 900 ms, 5-95 and intensity values. |
 | GAP-13 | FF-01 corpus (P1) | Add the 758-script sweep (load, curve, heatmap, chapters, frames) behind an environment variable. |
 | GAP-14 | PS-10 multi-drop (P1/P3) | `openPaths` ignores extra videos and unsupported files without a word; report the ignored count; several videos go to the Create queue. **Done for the Player; the Create queue stays P3.** |
 | GAP-15 | GD-25, BC-09 job runner (P3.3) | One job runner: cancel token, run sequence id on every event, single-instance guard, kill children at quit, `CREATE_NO_WINDOW` launch helper with timeout. |
-| GAP-16 | TR-02, TR-03, TR-06 training (P2) | Port Training with the interrupt state table, the both-channel arousal test and the shared stop token; the 0.7 bugs were all in these seams. |
+| GAP-16 | TR-02, TR-03, TR-06 training (P2) | Port Training with the interrupt state table, the both-channel arousal test and the shared stop token; the 0.7 bugs were all in these seams. **Mostly done (#37):** the engine, the interrupt state table, the both-channel arousal test and the session seams are in `training_test.cpp` and `training_controller_test.cpp`; there is no shared stop token because the engine is a single-threaded state machine. **Left:** Escape to stop a cycle from anywhere in the tab. |
 | GAP-17 | BC-05, BC-06, BC-07 release (P5) | Single version source read by the app, tag = version check, publish allow-list, exact-asset-name updater with visible errors and a "no asset = no update" test. |
 | GAP-18 | BC-04, UI-09 installed layout (P5) | Smoke test on the installed layout (plugins, QML modules, images), not only the build tree. |
 | GAP-19 | UI-08, UI-07 accessibility and motion (P4/P5) | Focus handling and `Accessible` on all `Flow*` controls; a reduced-motion setting and a test switch for animations (D-092). |
 | GAP-20 | FF-07 settings aside name | `settings.broken.json` is overwritten by a second corruption; use a timestamped name as 0.7 does. |
 | GAP-21 | FF-11 unknown `.samn` fields (P4) | `.samn` drops unknown fields like Go; the v2 axes work must keep them. |
-| GAP-22 | DV-14, DV-16 companion axes and mock suites (P2) | Companion axis files into the player; 0/1/2/6-axis mock device suites; state "mock only" in device PRs. |
+| GAP-22 | DV-14, DV-16 companion axes and mock suites (P2) | Companion axis files into the player; 0/1/2/6-axis mock device suites; state "mock only" in device PRs. **Part done:** `CONTRIBUTING.md` rule 10 says mock-only tests are marked as such. **Left:** the other two. |
 | GAP-23 | DV-06 evidence tags (P2) | Use OFFICIAL / PROTOCOL / COMMUNITY / MEASURED / HYPOTHESIS in device docs and the future device profile. |
 | GAP-24 | PF-05, PF-09 caches and bounds (P3) | Cache keys with algorithm version and all options; a bound on every queue and buffer. |
 | GAP-25 | BC-10 path leakage (P5) | Add `-ffile-prefix-map` / `/pathmap` to release builds. |
@@ -1019,4 +1019,4 @@ Lessons that matter and are not yet covered in SamNPlayer 2, ordered by risk (us
 
 ## Counts
 
-Lesson entries per area: Player & sync 15, File formats 14, Devices 16, Generator / detection / tracking 25, Audio 4, Training 12, GUI / look 13, Build / CI / Windows 13, Performance 9, Process 14, Removed on purpose 6 (plus the stack-origin index): 141 entries. Status: covered 46, todo 93, n/a 2. Tested and rejected: 32 rows. Gaps: 27.
+Lesson entries per area: Player & sync 15, File formats 14, Devices 16, Generator / detection / tracking 25, Audio 4, Training 12, GUI / look 13, Build / CI / Windows 13, Performance 9, Process 14, Removed on purpose 6 (plus the stack-origin index): 141 entries. Status: covered 63, partly covered 4 (GD-23, FF-12, DV-16, TR-02; the missing part is named in each line), todo 72, n/a 2. Tested and rejected: 32 rows. Gaps: 27.
