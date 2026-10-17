@@ -49,7 +49,72 @@ private slots:
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }
 
+    // 0.7 "Feel without film": a script without a video plays on its own
+    // clock; Play, Pause, seek and the playhead work as with a video.
+    void scriptWithoutVideoPlaysOnItsClock() {
+        g_messages.clear();
+        g_previous = qInstallMessageHandler(capture);
+        runScriptOnly();
+        qInstallMessageHandler(g_previous);
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
+
 private:
+    void runScriptOnly() {
+        QQmlEngine engine;
+        engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
+        engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+        QQmlComponent comp(&engine);
+        comp.setData(R"(
+            import QtQuick
+            import SamN
+            Item {
+                width: 1000; height: 700
+                property alias page: pp
+                DeviceController { id: dev }
+                PlayerPage { id: pp; anchors.fill: parent; device: dev }
+            })",
+                     QUrl("qrc:/test/Wrapper.qml"));
+        QVERIFY2(comp.status() == QQmlComponent::Ready, qPrintable(comp.errorString()));
+        QQuickWindow window;  // declared first: it must outlive the root item
+        window.resize(1000, 700);
+        std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
+        QVERIFY(root);
+        root->setParentItem(window.contentItem());
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto* page = root->property("page").value<QQuickItem*>();
+        auto* ctrl = page->property("controller").value<PlayerController*>();
+        auto* clock = page->findChild<QObject*>(QStringLiteral("scriptClock"));
+        QVERIFY(page && ctrl && clock);
+
+        QTemporaryDir dir;
+        const QString script = dir.filePath(QStringLiteral("alone.funscript"));
+        QFile f(script);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(R"({"actions":[{"at":0,"pos":0},{"at":2000,"pos":100},{"at":4000,"pos":0},{"at":6000,"pos":100}]})");
+        f.close();
+        QVERIFY(ctrl->openPath(script));
+        QVERIFY(page->property("scriptOnly").toBool());
+        QCOMPARE(clock->property("duration").toLongLong(), qint64(6000));
+
+        QMetaObject::invokeMethod(page, "togglePlay");
+        QTRY_VERIFY(page->property("playing").toBool());
+        QTRY_VERIFY_WITH_TIMEOUT(ctrl->playheadMs() >= 200, 3000);  // the playhead moves
+        QMetaObject::invokeMethod(page, "togglePlay");
+        QTRY_VERIFY(!page->property("playing").toBool());
+        const qint64 held = clock->property("position").toLongLong();
+        QTest::qWait(150);
+        QCOMPARE(clock->property("position").toLongLong(), held);  // pause holds
+        QMetaObject::invokeMethod(page, "seekTo", Q_ARG(QVariant, 4500));
+        QCOMPARE(clock->property("position").toLongLong(), qint64(4500));
+        QTRY_COMPARE(ctrl->playheadMs(), qint64(4500));
+        // A video makes the video the player again.
+        QVERIFY(ctrl->openPath(QStringLiteral(SAMN_TEST_DATA "/testpattern_4s.mp4")));
+        QVERIFY(!page->property("scriptOnly").toBool());
+        QCOMPARE(clock->property("duration").toLongLong(), qint64(0));
+    }
+
     void run() {
         QQmlEngine engine;
         engine.addImportPath(QStringLiteral("qrc:/qt/qml"));  // Qt 6.4 does not add it
