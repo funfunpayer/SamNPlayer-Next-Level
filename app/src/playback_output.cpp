@@ -60,7 +60,7 @@ void PlaybackOutput::load() {
             return v.is_boolean() ? v.get<bool>() : d;
         };
         const std::string s = str(kKeySmooth);
-        filter_.smooth = (s == "pchip" || s == "makima") ? s : "";
+        filter_.smooth = samn::NormalizeSmooth(s);
         const double ms = num(kKeyMaxSpeed, 0);
         filter_.maxSpeed = std::isfinite(ms) ? clampSpeedLimit(int(std::lround(ms))) : 0;
         filter_.idleFillMs = flag(kKeyIdleFill, false) ? kIdleFillMs : 0;
@@ -282,7 +282,7 @@ void PlaybackOutput::setStrokeRange(int lo, int hi, bool movedLo) {
 }
 
 void PlaybackOutput::setSmooth(const QString& s) {
-    const std::string v = (s == "pchip" || s == "makima") ? s.toStdString() : std::string();
+    const std::string v = samn::NormalizeSmooth(s.toStdString());
     if (v == filter_.smooth) return;
     filter_.smooth = v;
     save(kKeySmooth, v);
