@@ -6,6 +6,7 @@ project(SamNPlayer2 VERSION 2.0.0 LANGUAGES CXX)
 option(SAMN_BUILD_APP "Build the Qt application" ON)
 option(SAMN_BUILD_PYTHON "Build the Python bindings of core (pybind11)" ON)
 option(SAMN_BUILD_TESTS "Build the C++ tests" ON)
+option(SAMN_BUILD_VISION "Build samn_vision (OpenCV: frames and tracking for the Generator)" ON)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -20,6 +21,9 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(nlohmann_json)
 
 add_subdirectory(core)
+if(SAMN_BUILD_VISION)
+  add_subdirectory(vision)
+endif()
 if(SAMN_BUILD_APP)
   add_subdirectory(app)
 endif()
