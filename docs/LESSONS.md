@@ -56,7 +56,7 @@ Adult-media rule: this file uses neutral technical terms only ("tip", "partner r
 - **Learned:** a jump issued while the video was loading only moved the curve (0.7.0). Also, `seeked` must push the position to the device at once while playing, instead of waiting for the next time update (0.5.41).
 - **Source:** `CL` 0.7.0 "Fixed" ("Player: a jump while the video is still loading..."); 0.5.41 "Play seek / script sync".
 - **Rule:** a seek request before the media is ready is queued and applied on `LoadedMedia`.
-- **Status:** todo (P1). `app/qml/PlayerPage.qml` `seekTo()` clamps to `media.duration`, which is 0 before the media has loaded, so the seek that follows "Load project" (line ~101) or a restored position becomes 0. Add a pending-seek and a test.
+- **Status:** covered (#35): `PlayerPage.qml` `seekTo()` queues a seek until `LoadedMedia`; test `player_page_qml_test` `seekBeforeLoadLandsAfterLoad`.
 
 ### PS-06 Number keys 1-9 jump to n x 10 % of the script
 - **Learned:** the old formula was (n-1)/9: key 1 jumped to 0 %, key 9 only to 88.9 %.
@@ -80,13 +80,13 @@ Adult-media rule: this file uses neutral technical terms only ("tip", "partner r
 - **Learned:** a failed `LoadFunscript` was a silent rejection; video decode errors now name the media error class and clear when the video plays (0.5.41). The same pattern hid the update-check failure (an empty `.catch`) and a chapters load error that `documentFromLoaded` swallowed.
 - **Source:** `CL` 0.5.41 "Play load errors"; `HANDOFF` "Fixed bugs affecting users" (update check).
 - **Rule:** every failure ends in a visible, specific message; nothing is swallowed.
-- **Status:** todo (P1). Script errors are covered (`PlayerPage.qml` `errorBar`, test `brokenFilesAreReported`), but `PlayerPage.qml` has no handler for `MediaPlayer` errors (no `onErrorOccurred`), so a decode failure shows nothing.
+- **Status:** covered (#35): `PlayerPage.qml` `onErrorChanged` → `PlayerController::reportMediaError` names the class and the file, cleared on play; tests `mediaErrorsAreReportedAndClearOnPlay`, `player_page_qml_test` (broken file).
 
 ### PS-10 Dropped files must never vanish silently
 - **Learned:** dropping several videos kept the first and discarded the rest with no sign (a dead `drop:videos` event); 0.7 now shows the ignored count and warns "Drop ignored" for unsupported files.
 - **Source:** `HANDOFF` "Fixed bugs affecting users"; `CL` 0.3.0 "Fixed"; `docs/PARITY.md` section 1 (drop routing).
 - **Rule:** say what was used and what was ignored; several videos open the Create queue (P3).
-- **Status:** todo (P1). `PlayerController::openPaths` keeps the first video and ignores further videos and unsupported files without a message.
+- **Status:** covered for the Player: `PlayerController::openPaths` names extra videos and unsupported files, and a drop with nothing usable says so (test `dropsNeverVanishSilently`). The Create queue for several videos stays todo (P3).
 
 ### PS-11 Zero is a value, not "unset"
 - **Learned:** at least six bugs where a slider value 0 became a default: Extended-O minimum 0 ran the device at full power (the player treated scale 0 as "not set"); Extended-O Amplitude/Restore 0 -> 0.1/500; Contact strength 0 -> 1 (twice); Expert Smooth/Peak distance 0 -> 11/150.
@@ -594,13 +594,13 @@ Two things share this name: the device **Training** mode (stop-start, plateau, s
 - **Learned:** leftover German strings were fixed at least six times (0.5.6, 0.5.7, 0.5.10, 0.5.45 twice, cancel messages, training errors, update texts), and after the tabs were renamed, texts still sent users to a "Device tab", "Create tab" or "left rail" (nine such strings, 11 Oct).
 - **Source:** `CL` 0.5.7, 0.5.10, 0.5.45; `docs/QA_CHECK_2026-10-11.md` bug 7; `docs/LANGUAGE.md`. D-089.
 - **Rule:** every user-reachable string is English and goes through `tr()`; renaming a mode means grepping all copy.
-- **Status:** todo (P1). Core error texts are German and reach the UI: `core/src/funscript.cpp` ("funscript: ungültiges JSON", "keine actions im Skript gefunden"), `core/src/marks.cpp`, `core/src/project.cpp`, shown by `PlayerController` through `setError(tr("Could not open %1: %2")...)`. `tests/core/project_test.cpp` line 155 pins a German message. Translate them (parity tests compare bytes of files, not error text) and add a test that scans user-visible error strings.
+- **Status:** covered (#35): core error and diagnostics texts are English; tests updated.
 
 ### UI-05 Text from files and users is plain text, never markup
 - **Learned:** a file name containing `<` broke the Create queue list (names must always be shown as text).
 - **Source:** `CL` 0.7.0 "Create queue: a file name containing `<` no longer breaks the list".
 - **Rule:** every `Text`/`Label` that shows a file name, script title, chapter, bookmark or marker name sets `textFormat: Text.PlainText`; add a test with a name like `a<b>c.funscript`.
-- **Status:** todo (P1). None of the 95 `Text` items in `app/qml/` sets `textFormat`; the default `AutoText` renders names that look like HTML tags as rich text.
+- **Status:** covered (#35): every `Text` is `PlainText` (the Script Doctor card is `StyledText` by design); `player_page_qml_test` fails on any `AutoText`.
 
 ### UI-06 Layout at 1366x768 and 1920x1080
 - **Learned:** at 1366x768 the Play core view (curve, lanes, transport) fell below the fold; optional panels collapse, never the video, the timeline or Stop. UI acceptance needs native Windows 11 screenshots at both sizes (the cloud only had browser captures).
@@ -987,10 +987,10 @@ Lessons that matter and are not yet covered in SamNPlayer 2, ordered by risk (us
 
 | # | Entry | What to do |
 |---|---|---|
-| GAP-01 | PS-05 seek while loading | `PlayerPage.qml` `seekTo()` clamps to `media.duration` (0 before the media has loaded), so restored/project seeks become 0. Queue a pending seek, apply on `LoadedMedia`, add a test. A bug that exists today. |
-| GAP-02 | UI-05 plain text | None of the 95 `Text` items sets `textFormat`; file, chapter and bookmark names that look like tags render as rich text. Set `Text.PlainText`, test with `a<b>c.funscript`. Exists today. |
-| GAP-03 | UI-04 language | Core error texts are German and reach the error bar (`funscript.cpp`, `marks.cpp`, `project.cpp`; `project_test.cpp` pins one). Translate, update the test, add a scan of user-visible strings. Exists today. |
-| GAP-04 | PS-09 media errors | No `MediaPlayer` error handler: a decode failure is silent. Show the error class; clear it on a successful play. |
+| GAP-01 | PS-05 seek while loading | `PlayerPage.qml` `seekTo()` clamps to `media.duration` (0 before the media has loaded), so restored/project seeks become 0. Queue a pending seek, apply on `LoadedMedia`, add a test. A bug that exists today. **Done (#35).** |
+| GAP-02 | UI-05 plain text | None of the 95 `Text` items sets `textFormat`; file, chapter and bookmark names that look like tags render as rich text. Set `Text.PlainText`, test with `a<b>c.funscript`. Exists today. **Done (#35).** |
+| GAP-03 | UI-04 language | Core error texts are German and reach the error bar (`funscript.cpp`, `marks.cpp`, `project.cpp`; `project_test.cpp` pins one). Translate, update the test, add a scan of user-visible strings. Exists today. **Done (#35).** |
+| GAP-04 | PS-09 media errors | No `MediaPlayer` error handler: a decode failure is silent. Show the error class; clear it on a successful play. **Done (#35).** |
 | GAP-05 | PS-04, PS-11, DV-07, DV-08 device safety (P2) | Before the Owner hardware test: soft start with a pause-in-ramp test; Extended-O with minimum 0 stored as a reduction; a test for "no second floor" in `SuctionPosition`; tests for contact vibration (off by default, gaps force 0, low-span guard, brief graze). The code paths exist in `mapper.cpp` but are untested. |
 | GAP-06 | GD-23 native memory safety (P3.0) | Add an ASan/UBSan CI job and RAII ownership before the OpenCV port; the 0.7 cgo layer had a heap-corrupting argument and a double free that only an option-matrix test caught. `-Wall -Wextra` is only on `samn_core`. |
 | GAP-07 | GD-02 tracker availability (P3.0/P3.1) | One `CreateTracker()`, a CI self-check that CSRT and an ONNX model run on Linux and Windows (vcpkg `opencv4[contrib,...]`), hard error instead of any fallback. |
@@ -1000,7 +1000,7 @@ Lessons that matter and are not yet covered in SamNPlayer 2, ordered by risk (us
 | GAP-11 | GD-11, GD-12, GD-15 drift defenses (P3.2/P3.4) | Port the detrend default, the displacement guard and the original-seeded appearance-memory gate with their tests; keep the rhythm grid opt-in with the release-factor test pinned from both sides. |
 | GAP-12 | FF-08, FF-09 script quality (P3.6) | `Parse` sorts silently and loses the "was unsorted" fact; expose it, then port Script Doctor and the device-compatibility metrics (100 ms spacing, 900 ms, 5-95, `500 x abs(dpos)/abs(dt)`). Nothing of this is in `core/`. |
 | GAP-13 | FF-01 corpus (P1) | Add the 758-script sweep (load, curve, heatmap, chapters, frames) behind an environment variable. |
-| GAP-14 | PS-10 multi-drop (P1/P3) | `openPaths` ignores extra videos and unsupported files without a word; report the ignored count; several videos go to the Create queue. |
+| GAP-14 | PS-10 multi-drop (P1/P3) | `openPaths` ignores extra videos and unsupported files without a word; report the ignored count; several videos go to the Create queue. **Done for the Player; the Create queue stays P3.** |
 | GAP-15 | GD-25, BC-09 job runner (P3.3) | One job runner: cancel token, run sequence id on every event, single-instance guard, kill children at quit, `CREATE_NO_WINDOW` launch helper with timeout. |
 | GAP-16 | TR-02, TR-03, TR-06 training (P2) | Port Training with the interrupt state table, the both-channel arousal test and the shared stop token; the 0.7 bugs were all in these seams. |
 | GAP-17 | BC-05, BC-06, BC-07 release (P5) | Single version source read by the app, tag = version check, publish allow-list, exact-asset-name updater with visible errors and a "no asset = no update" test. |

@@ -126,7 +126,9 @@ public:
     // lastError when it cannot be opened.
     Q_INVOKABLE bool openPath(const QString& pathOrUrl);
     // Several dropped files: the scripts become the play list (0.7
-    // drop:script) and the first one opens; else as openPath(first).
+    // drop:script) and the first one opens; else the first video opens.
+    // Further videos and unsupported files are named in lastError, and a
+    // drop with nothing usable says so (never silent).
     Q_INVOKABLE bool openPaths(const QStringList& pathsOrUrls);
     // Play list (0.7): add (the loaded script comes first in a new list),
     // remove (loads the next one when the active one goes), pick, next.
