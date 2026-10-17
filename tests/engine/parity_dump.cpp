@@ -1,23 +1,57 @@
 // Parity tool (P3.1, not a test): writes the synthetic clips into a folder
 // and the C++ track of each clip and option set as CSV, for comparison with
 // 0.7's Go TrackROI on the same files (docs/benchmarks/P3_1_TRACK_PARITY.md).
-//   engine_parity_dump <folder>
+//   engine_parity_dump <folder>             tracking (P3.1)
+//   engine_parity_dump <folder> --pipeline  track + signal chain per profile (P3.2)
 
 #include <fstream>
 #include <iostream>
 
+#include "samn/engine/signal_chain.h"
 #include "samn/engine/track_box.h"
 #include "synthetic_clips.h"
 
 using namespace samn::engine;
 namespace clips = samn::engine::testclips;
 
+// 0.7's generator defaults (GenerateNativeCSRT): camera compensation, scene
+// cuts and memory on, axis auto; detrend 3000 ms for stroke profiles (no
+// stroke preview, so the default window); auto-retry off.
+int Pipeline(const std::filesystem::path& dir) {
+    for (const char* clip : {"moving", "panning", "cut", "long"}) {
+        std::string error;
+        TrackOptions to;
+        auto tr = TrackBox(dir / (std::string(clip) + ".mp4"), cv::Rect(100, 40, 120, 160), to, &error);
+        if (!tr) {
+            std::cerr << clip << ": " << error << "\n";
+            return 1;
+        }
+        const std::vector<double> t(tr->times_ms.begin(), tr->times_ms.end());
+        for (const char* profile : {"standard", "autotune", "weich", "tj"}) {
+            if (std::string(clip) == "long" && std::string(profile) != "standard") continue;
+            SignalOptions so;
+            so.profile = profile;
+            so = ApplyDefaultDetrend(so, std::nullopt, nullptr);
+            auto r = RunSignal(t, tr->positions, so, &error);
+            if (!r) {
+                std::cerr << clip << " " << profile << ": " << error << "\n";
+                return 1;
+            }
+            std::ofstream out(dir / (std::string(clip) + "_" + profile + "_actions_cpp.csv"));
+            for (const auto& a : r->actions) out << a.at << ',' << a.pos << '\n';
+            std::cout << clip << ' ' << profile << " actions=" << r->actions.size() << "\n";
+        }
+    }
+    return 0;
+}
+
 int main(int argc, char** argv) {
-    if (argc != 2) {
-        std::cerr << "usage: engine_parity_dump <folder>\n";
+    if (argc < 2 || argc > 3) {
+        std::cerr << "usage: engine_parity_dump <folder> [--pipeline]\n";
         return 2;
     }
     const std::filesystem::path dir = argv[1];
+    if (argc == 3) return Pipeline(dir);
     std::filesystem::create_directories(dir);
     const bool ok = clips::WriteMoving(dir / "moving.mp4", 8, 80, 1.0) &&
                     clips::WriteMoving(dir / "long.mp4", 300, 80, 0.7) &&

@@ -36,15 +36,15 @@
 
 | | Tests | ported | covered | todo-now | todo-later | n/a |
 |---|---:|---:|---:|---:|---:|---:|
-| **All** | **1141** | 207 | 66 | **0** | 818 | 50 |
-| Go | 821 | 188 | 32 | 0 | 556 | 45 |
+| **All** | **1141** | 218 | 66 | **0** | 807 | 50 |
+| Go | 821 | 199 | 32 | 0 | 545 | 45 |
 | Python | 320 | 19 | 34 | 0 | 262 | 5 |
 
 ### Per old package
 
 | Old package | Files | Tests | ported | covered | todo-now | todo-later | n/a |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| `funscript` | 36 | 170 | 75 | 1 | 0 | 94 | 0 |
+| `funscript` | 36 | 170 | 84 | 1 | 0 | 85 | 0 |
 | `device` | 7 | 41 | 39 | 2 | 0 | 0 | 0 |
 | `player` | 7 | 61 | 5 | 9 | 0 | 44 | 3 |
 | `samn` | 2 | 5 | 5 | 0 | 0 | 0 | 0 |
@@ -58,12 +58,12 @@
 | `logging` | 1 | 1 | 0 | 0 | 0 | 1 | 0 |
 | `cmd/cli` | 7 | 18 | 0 | 0 | 0 | 12 | 6 |
 | `cmd/gui-wails (Go)` | 68 | 188 | 16 | 18 | 0 | 141 | 13 |
-| `generator (Go)` | 72 | 237 | 35 | 2 | 0 | 187 | 13 |
+| `generator (Go)` | 72 | 237 | 37 | 2 | 0 | 185 | 13 |
 | `generator (Python)` | 56 | 151 | 0 | 0 | 0 | 151 | 0 |
 | `native/tests (Python)` | 4 | 13 | 13 | 0 | 0 | 0 | 0 |
 | `scripts/benchmark-prep (Python)` | 1 | 8 | 0 | 0 | 0 | 8 | 0 |
 | `frontend (Python/Playwright UI tests)` | 148 | 148 | 6 | 34 | 0 | 103 | 5 |
-| **Total** | **431** | **1141** | **207** | **66** | **0** | **818** | **50** |
+| **Total** | **431** | **1141** | **218** | **66** | **0** | **807** | **50** |
 
 `generator (Go)` includes the sub-packages `aiscript`, `bodyparts`, `posttrack`, `profilemodel`, `simpletrack`, `strokepreview`, `trackcv`, `trackutil`.
 
@@ -71,7 +71,7 @@
 
 | Sub-package | Files | Tests | ported | covered | todo-now | todo-later | n/a |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| `generator/(top level)` | 44 | 122 | 7 | 1 | 0 | 101 | 13 |
+| `generator/(top level)` | 44 | 122 | 9 | 1 | 0 | 99 | 13 |
 | `generator/aiscript` | 3 | 12 | 0 | 0 | 0 | 12 | 0 |
 | `generator/bodyparts` | 1 | 4 | 0 | 0 | 0 | 4 | 0 |
 | `generator/posttrack` | 3 | 9 | 6 | 0 | 0 | 3 | 0 |
@@ -87,7 +87,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 
 ### 2.1 `funscript`
 
-36 files, 170 tests: 75 ported, 1 covered, 0 todo-now, 94 todo-later, 0 n/a.
+36 files, 170 tests: 84 ported, 1 covered, 0 todo-now, 85 todo-later, 0 n/a.
 
 | Old file | Test function(s) | Status | Where / why |
 |---|---|---|---|
@@ -129,7 +129,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 | `omarker_test.go` | `TestSaveOMarkersPreservesUnknownFields` | ported | tests/core/omarker_test.cpp "o-markers: same bytes as 0.7, unknown fields kept, empty list writes null" |
 | `omarker_test.go` | `TestSaveOMarkersRejectsInvalidMarker` | ported | tests/core/omarker_test.cpp "o-markers: invalid markers are rejected and the file stays untouched" |
 | `omarker_test.go` | `TestSaveOMarkersEmptyListClearsMarkers` | ported | tests/core/omarker_test.cpp "o-markers: same bytes as 0.7, unknown fields kept, empty list writes null" (empty list writes null) |
-| `ozone_test.go` | `TestSuggestOZonePicksLatePeak`, `TestSuggestOZoneRejectsFlatTail`, `TestSuggestOZoneShortScript`, `TestSuggestSecondaryOZonesFindsEarlierWeakerPeak`, `TestSuggestSecondaryOZonesRespectsMaxCount`, `TestSuggestSecondaryOZonesNoOverlap`, `TestSuggestSecondaryOZonesNoPrimaryNoSecondary`, `TestSuggestSecondaryOZonesFlatScriptFindsNone`, `TestSuggestSecondaryOZonesMaxCountZero` | todo-later | P3.2 (auto O-zone) / P4 Editor (Suggest O-zone): `SuggestOZone` / `SuggestSecondaryOZones` are not ported. |
+| `ozone_test.go` | `TestSuggestOZonePicksLatePeak`, `TestSuggestOZoneRejectsFlatTail`, `TestSuggestOZoneShortScript`, `TestSuggestSecondaryOZonesFindsEarlierWeakerPeak`, `TestSuggestSecondaryOZonesRespectsMaxCount`, `TestSuggestSecondaryOZonesNoOverlap`, `TestSuggestSecondaryOZonesNoPrimaryNoSecondary`, `TestSuggestSecondaryOZonesFlatScriptFindsNone`, `TestSuggestSecondaryOZonesMaxCountZero` | ported | `tests/core/ozone_test.cpp` (`samn::SuggestOZone`, `SuggestSecondaryOZones`; 6 cases cover all 9). The Editor button follows in P4. |
 | `parse_compat_test.go` | `TestParseOFSStyleMetadata` | ported | core/python/tests/test_funscript_parity.py::test_duration_ofs; tests/core/funscript_test.cpp "funscript parse: actions, clock-string duration" |
 | `parse_compat_test.go` | `TestParseFloatActions` | ported | core/python/tests/test_funscript_parity.py::test_float_actions |
 | `parse_compat_test.go` | `TestLoadChaptersAndBookmarksTimestampStrings` | ported | tests/core/marks_test.cpp "marks: load chapters and bookmarks timestamp strings" |
@@ -459,7 +459,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 
 ### 2.15 `generator (Go)`
 
-72 files, 237 tests: 35 ported, 2 covered, 0 todo-now, 187 todo-later, 13 n/a.
+72 files, 237 tests: 37 ported, 2 covered, 0 todo-now, 185 todo-later, 13 n/a.
 
 | Old file | Test function(s) | Status | Where / why |
 |---|---|---|---|
@@ -487,7 +487,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 | `contact_marks_test.go` | `TestBuildContactMarksMetaEmpty`, `TestBuildContactMarksMetaStrokeFeelOnly`, `TestBuildContactMarksMetaDistanceDrives`, `TestBuildContactMarksMetaExtraFollow`, `TestStampContactMarks` | todo-later | P3.6 (contact marks metadata). |
 | `contact_points_test.go` | `TestLoadContactPointsFilterAndSort`, `TestLoadContactPointsRejectsBadInput` | todo-later | P4 (contact points from teachers JSON, Suite-like). |
 | `contact_review_test.go` | `TestReviewAutoContactCandidateAcceptReject`, `TestSceneMarkAtMsRoundTrip` | todo-later | P4 (Accept/Reject contact candidates). |
-| `detrend_default_test.go` | `TestAdaptiveDetrendTwoStrokePeriods`, `TestApplyDefaultDetrendRespectsCallerAndDistanceProfiles` | todo-later | P3.2 (post-processing: detrend default). |
+| `detrend_default_test.go` | `TestAdaptiveDetrendTwoStrokePeriods`, `TestApplyDefaultDetrendRespectsCallerAndDistanceProfiles` | ported | `tests/engine/signal_chain_test.cpp`: "signal: detrend window is two stroke periods, clamped", "signal: default detrend respects the caller and distance profiles". |
 | `distance_partners_test.go` | `TestDistancePartnersActive` | todo-later | P3.4 (two-point / multi-point distance). |
 | `frame_dump_test.go` | `TestDumpFrameAtZeroAndMid`, `TestDumpFrameAtPastEndFailsCleanly` | todo-later | P3.0 (frame reader: dump a frame). |
 | `generate_cancel_test.go` | `TestGenerateWithContextCancelPython`, `TestGenerateWithContextCancelNativeSimple` | todo-later | P3.3 (run with progress and cancel). |
