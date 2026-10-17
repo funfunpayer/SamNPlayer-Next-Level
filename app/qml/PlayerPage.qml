@@ -30,9 +30,36 @@ Item {
     PlayerController {
         id: ctrl
         device: page.device
-        onSleepReached: media.pause()
+        onSleepReached: page.player.pause()
         // The Emergency stop pauses the video too (the device is already stopped).
-        onEmergencyStopped: media.pause()
+        onEmergencyStopped: page.player.pause()
+    }
+    // A script without a video plays on its own clock (0.7 "Feel without
+    // film"); `player` is whichever drives the playhead.
+    readonly property bool scriptOnly: ctrl.hasScript && ctrl.videoName === ""
+    readonly property QtObject player: scriptOnly ? clock : media
+    onScriptOnlyChanged: clock.stop()  // also back to 0
+    function playheadMoved(pos) {
+        ctrl.setVideoPositionMs(pos)
+        const jump = ctrl.loopJumpFor(pos)
+        if (jump >= 0) page.player.position = jump
+    }
+    ScriptClock {
+        id: clock
+        objectName: "scriptClock"
+        duration: page.scriptOnly ? ctrl.scriptDurationMs : 0
+        playbackRate: page.speed
+        onDurationChanged: if (page.scriptOnly) ctrl.setVideoDurationMs(clock.duration)
+        onPlaybackStateChanged: if (page.scriptOnly) ctrl.setPlaying(clock.playbackState === ScriptClock.PlayingState)
+        onPositionChanged: if (page.scriptOnly) page.playheadMoved(clock.position)
+        // Play list: at the end, Auto-advance opens the next script; one
+        // without a video starts on its own (0.7).
+        onFinished: {
+            if (ctrl.playlistFinished()) {
+                if (ctrl.videoName !== "") media.playWhenLoaded = true
+                else Qt.callLater(clock.play)
+            }
+        }
     }
     Binding { target: ctrl.output; property: "speed"; value: page.speed }
 
@@ -61,14 +88,13 @@ Item {
                 pendingSeekMs = -1
                 page.seekTo(ms)
             }
-            if (mediaStatus === MediaPlayer.EndOfMedia && ctrl.playlistFinished()) playWhenLoaded = ctrl.videoName !== ""
+            if (mediaStatus === MediaPlayer.EndOfMedia && ctrl.playlistFinished()) {
+                if (ctrl.videoName !== "") playWhenLoaded = true
+                else Qt.callLater(clock.play)  // the next script has no video
+            }
             else if (mediaStatus === MediaPlayer.LoadedMedia && playWhenLoaded) { playWhenLoaded = false; media.play() }
         }
-        onPositionChanged: {
-            ctrl.setVideoPositionMs(media.position)
-            const jump = ctrl.loopJumpFor(media.position)
-            if (jump >= 0) media.position = jump
-        }
+        onPositionChanged: page.playheadMoved(media.position)
     }
 
     FileDialog {
@@ -121,11 +147,13 @@ Item {
     }
 
     function openFile() { openDialog.open() }
-    function togglePlay() { media.playbackState === MediaPlayer.PlayingState ? media.pause() : media.play() }
-    function seekBy(ms) { media.position = Math.max(0, Math.min(media.duration, media.position + ms)) }
+    readonly property bool playing: player.playbackState === MediaPlayer.PlayingState
+    function togglePlay() { playing ? player.pause() : player.play() }
+    function seekBy(ms) { player.position = Math.max(0, Math.min(player.duration, player.position + ms)) }
     function seekTo(ms) {
         if (ms < 0) return
-        if (media.duration <= 0 || media.mediaStatus === MediaPlayer.LoadingMedia) media.pendingSeekMs = ms
+        if (scriptOnly) clock.position = ms
+        else if (media.duration <= 0 || media.mediaStatus === MediaPlayer.LoadingMedia) media.pendingSeekMs = ms
         else media.position = Math.max(0, Math.min(media.duration, ms))
     }
     function showTip(item, x, y, text) {
@@ -168,7 +196,7 @@ Item {
         onCollapsedChanged: ctrl.setUiValue("player.inspectorCollapsed", collapsed)
         onSeekRequested: (ms) => page.seekTo(ms)
         onAddToListRequested: addListDialog.open()
-        videoPositionMs: media.position
+        videoPositionMs: page.player.position
         onProjectLoadRequested: projectDialog.open()
     }
     Item {
@@ -216,7 +244,7 @@ Item {
                 }
                 IconButton {
                     width: 36; height: 36; icon: "bookmark"; tip: qsTr("Add a bookmark at the current time")
-                    onClicked: ctrl.addBookmark("", media.position)
+                    onClicked: ctrl.addBookmark("", page.player.position)
                 }
                 IconButton {
                     width: 36; height: 36; icon: "snapshot"; tip: qsTr("Save the current video frame as PNG")
@@ -329,7 +357,7 @@ Item {
                     Text {
                         textFormat: Text.PlainText
                         anchors.horizontalCenter: parent.horizontalCenter
-                        text: ctrl.hasScript ? qsTr("No video beside this script") : qsTr("Drop a video or script here, or press Open…")
+                        text: ctrl.hasScript ? qsTr("Feel without film — Play runs the script alone") : qsTr("Drop a video or script here, or press Open…")
                         color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 14
                     }
                 }
@@ -379,9 +407,9 @@ Item {
                 Text {
                     textFormat: Text.PlainText
                     anchors.left: parent.left; anchors.bottom: parent.bottom; anchors.margins: 14
-                    text: ctrl.formatTime(media.position) + " / " + ctrl.formatTime(media.duration)
+                    text: ctrl.formatTime(page.player.position) + " / " + ctrl.formatTime(page.player.duration)
                     color: "white"; font.family: Theme.fontSoft; font.pixelSize: 13
-                    visible: ctrl.videoName !== ""
+                    visible: ctrl.videoName !== "" || page.scriptOnly
                 }
             }
             Item {
@@ -392,7 +420,7 @@ Item {
                 Item {
                     id: progress
                     x: 18; y: 12; width: parent.width - 36; height: 16
-                    property real frac: media.duration > 0 ? media.position / media.duration : 0
+                    property real frac: page.player.duration > 0 ? page.player.position / page.player.duration : 0
                     Rectangle { anchors.verticalCenter: parent.verticalCenter; width: parent.width; height: 6; radius: 3; color: Qt.rgba(1, 1, 1, 0.10) }
                     Rectangle {
                         anchors.verticalCenter: parent.verticalCenter
@@ -412,7 +440,7 @@ Item {
                     MouseArea {
                         anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor
-                        function seek(mx) { if (media.duration > 0) media.position = Math.max(0, Math.min(1, mx / width)) * media.duration }
+                        function seek(mx) { if (page.player.duration > 0) page.seekTo(Math.max(0, Math.min(1, mx / width)) * page.player.duration) }
                         onPressed: (m) => seek(m.x)
                         onPositionChanged: (m) => { if (pressed) seek(m.x) }
                     }
@@ -455,7 +483,7 @@ Item {
                     spacing: 18
                     IconButton { icon: "back10"; tip: qsTr("Back 10 s"); onClicked: page.seekBy(-10000); anchors.verticalCenter: parent.verticalCenter }
                     PlayButton {
-                        playing: media.playbackState === MediaPlayer.PlayingState
+                        playing: page.playing
                         onClicked: page.togglePlay()
                     }
                     IconButton { icon: "forward10"; tip: qsTr("Forward 10 s"); onClicked: page.seekBy(10000); anchors.verticalCenter: parent.verticalCenter }
@@ -467,9 +495,12 @@ Item {
                     anchors.left: transportRow.right; anchors.leftMargin: 18
                     anchors.verticalCenter: transportRow.verticalCenter
                     onClicked: {
-                        const wasPlaying = media.playbackState === MediaPlayer.PlayingState
-                        media.stop()
-                        if (ctrl.playlistNext()) media.playWhenLoaded = wasPlaying && ctrl.videoName !== ""
+                        const wasPlaying = page.playing
+                        page.player.stop()
+                        if (ctrl.playlistNext() && wasPlaying) {
+                            if (ctrl.videoName !== "") media.playWhenLoaded = true
+                            else Qt.callLater(clock.play)
+                        }
                     }
                 }
                 Row {
@@ -789,7 +820,7 @@ Item {
                     FlowButton {
                         id: addBookmark
                         text: qsTr("Add at playhead"); enabled: ctrl.hasScript
-                        onClicked: if (ctrl.addBookmark(bookmarkName.text, media.position)) bookmarkName.text = ""
+                        onClicked: if (ctrl.addBookmark(bookmarkName.text, page.player.position)) bookmarkName.text = ""
                     }
                 }
                 MarkList {
@@ -892,8 +923,8 @@ Item {
     Shortcut { sequences: ["+", "="]; enabled: !page.deckOpen; onActivated: ctrl.offsetMs = ctrl.offsetMs + 10 }
     Shortcut { sequence: "-"; enabled: !page.deckOpen; onActivated: ctrl.offsetMs = ctrl.offsetMs - 10 }
     Shortcut { sequence: "L"; enabled: !page.deckOpen; onActivated: ctrl.loopEnabled = !ctrl.loopEnabled }
-    Shortcut { sequence: "A"; enabled: !page.deckOpen; onActivated: ctrl.setLoopStart(media.position) }
-    Shortcut { sequence: "B"; enabled: !page.deckOpen; onActivated: ctrl.setLoopEnd(media.position) }
+    Shortcut { sequence: "A"; enabled: !page.deckOpen; onActivated: ctrl.setLoopStart(page.player.position) }
+    Shortcut { sequence: "B"; enabled: !page.deckOpen; onActivated: ctrl.setLoopEnd(page.player.position) }
     // 0.7 key E: Extended-O (ignored when not playing, off or running).
     Shortcut { sequence: "E"; enabled: !page.deckOpen; onActivated: ctrl.output.triggerExtendedO() }
     Repeater {

@@ -36,3 +36,7 @@ target_link_libraries(shell_qml_test PRIVATE samn_app samn_appplugin Qt6::Test)
 target_compile_definitions(shell_qml_test PRIVATE SAMN_APP_QML_DIR="${CMAKE_SOURCE_DIR}/app/qml")
 add_test(NAME shell_qml_test COMMAND shell_qml_test)
 set_tests_properties(shell_qml_test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_MEDIA_BACKEND=ffmpeg")
+
+add_executable(script_clock_test script_clock_test.cpp)
+target_link_libraries(script_clock_test PRIVATE samn_app Qt6::Test)
+add_test(NAME script_clock_test COMMAND script_clock_test)

@@ -20,6 +20,7 @@ qt_add_qml_module(samn_app
     src/ruler_item.h src/ruler_item.cpp
     src/playback_output.h src/playback_output.cpp
     src/player_controller.h src/player_controller.cpp
+    src/script_clock.h src/script_clock.cpp
     src/library_controller.h src/library_controller.cpp
     src/icon_provider.h src/icon_provider.cpp
     src/device_controller.h src/device_controller.cpp
