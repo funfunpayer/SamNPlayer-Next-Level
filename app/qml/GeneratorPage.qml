@@ -233,6 +233,22 @@ Item {
                             objectName: "showAll"; icon: "timeline"; tip: qsTr("Show everything")
                             visible: edit.zoomed; onClicked: edit.showAll()
                         }
+                        // Cock Hero / Fap Hero: one stroke per beat of the
+                        // video's beat bar; works without a script too.
+                        FlowButton {
+                            objectName: "tool_beatbar"
+                            visible: gen.hasVideo
+                            enabled: !edit.busy && !gen.running
+                            text: edit.busy && edit.progress > 0 ? qsTr("Beat bar %1 %").arg(edit.progress) : qsTr("Stroke from the beat bar")
+                            icon: "waveform"
+                            onClicked: edit.strokeFromBeatBar()
+                        }
+                        FlowButton {
+                            objectName: "cancelTool"
+                            visible: edit.busy
+                            text: qsTr("Cancel")
+                            onClicked: edit.cancelTool()
+                        }
                         FlowButton {
                             objectName: "openScript"
                             text: qsTr("Open script…")
@@ -396,7 +412,7 @@ Item {
                         objectName: "editorStatus"
                         textFormat: Text.PlainText
                         Layout.fillWidth: true; elide: Text.ElideRight
-                        text: edit.hasScript ? edit.status : qsTr("Create a script, or open one, to edit its curves here.")
+                        text: edit.status !== "" ? edit.status : (edit.hasScript ? "" : qsTr("Create a script, open one, or take the stroke from a beat bar."))
                         color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                     }
                 }

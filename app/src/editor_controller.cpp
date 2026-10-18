@@ -1,5 +1,7 @@
 #include "editor_controller.h"
 
+#include <QCoreApplication>
+#include <QDir>
 #include <QFileInfo>
 #include <QUrl>
 #include <algorithm>
@@ -16,6 +18,9 @@
 #include "samn/samn_file.h"
 #include "samn/simplify.h"
 #include "samn/sound_vibration.h"
+#include "samn/beat_strokes.h"
+#include "samn/engine/beatbar_video.h"
+#include "samn/fileio.h"
 
 namespace samn::ui {
 namespace {
@@ -36,6 +41,25 @@ EditorController::EditorController(QObject* parent) : QObject(parent), sound_(ne
         setBusy(false);
         setStatus(tr("Vibration from the sound: %1").arg(error));
     });
+}
+
+EditorController::~EditorController() {
+    cancelTool();
+    if (tool_.joinable()) tool_.join();
+}
+
+void EditorController::setProgress(int percent) {
+    if (percent == progress_) return;
+    progress_ = percent;
+    emit progressChanged();
+}
+
+void EditorController::cancelTool() {
+    if (tool_cancel_) *tool_cancel_ = true;
+    if (sound_->busy()) {
+        sound_->cancel();
+        setBusy(false);
+    }
 }
 
 void EditorController::setVideoPath(const QString& path) {
@@ -436,6 +460,86 @@ void EditorController::onSoundEnvelope(const std::vector<double>& envelope) {
     pushCurves();
     if (stepDone())
         setStatus(tr("Vibration from the sound written (%1 points).").arg(session_.Axis("vibration").size()));
+}
+
+bool EditorController::strokeFromBeatBar() {
+    if (busy_ || drag_index_ >= 0) return false;
+    if (video_path_.isEmpty()) {
+        setStatus(tr("No video: the beat bar is read from the video."));
+        return false;
+    }
+    if (tool_.joinable()) tool_.join();  // the last run has ended (busy_ is false)
+    tool_cancel_ = std::make_shared<std::atomic<bool>>(false);
+    setBusy(true);
+    setProgress(0);
+    setStatus(tr("Looking for a beat bar…"));
+    QPointer<EditorController> self(this);
+    tool_ = std::thread([self, cancel = tool_cancel_, video = FsPath(video_path_)] {
+        samn::engine::BeatBarOptions o;
+        o.cancel = [cancel] { return cancel->load(); };
+        o.progress = [self](int p) {
+            QMetaObject::invokeMethod(qApp, [self, p] { if (self) self->setProgress(p); }, Qt::QueuedConnection);
+        };
+        std::string error;
+        std::optional<samn::engine::BeatBarResult> r;
+        try {
+            r = samn::engine::DetectBeatBarBeats(video, o, &error);
+        } catch (const std::exception& e) {
+            error = e.what();
+        }
+        const bool found = r && r->found;
+        std::vector<double> beats = r ? r->beats_ms : std::vector<double>{};
+        const double bpm = r ? r->bpm : 0;
+        const QString err = r ? QString() : QString::fromStdString(error);
+        QMetaObject::invokeMethod(qApp, [self, found, beats = std::move(beats), bpm, err] {
+            if (self) self->onBeats(found, beats, bpm, err);
+        }, Qt::QueuedConnection);
+    });
+    return true;
+}
+
+void EditorController::onBeats(bool found, const std::vector<double>& beats, double bpm, const QString& error) {
+    setBusy(false);
+    setProgress(found ? 100 : 0);
+    if (!error.isEmpty()) {
+        setStatus(error == QLatin1String("canceled") ? tr("Beat bar: canceled.") : tr("Beat bar: %1").arg(error));
+        return;
+    }
+    if (!found || beats.size() < 2) {
+        setStatus(tr("No beat bar found in this video."));
+        return;
+    }
+    std::vector<samn::Action> stroke = samn::BeatStrokes(beats, {});
+    if (stroke.size() < 2) {
+        setStatus(tr("Beat bar: too few beats for a stroke."));
+        return;
+    }
+    if (!hasScript()) {
+        // Open the video's script, or write a new one, beside the video.
+        const QFileInfo v(video_path_);
+        const QString script = v.dir().filePath(v.completeBaseName() + QStringLiteral(".funscript"));
+        if (!QFileInfo::exists(script)) {
+            samn::Script s;
+            s.actions = stroke;
+            try {
+                samn::WriteFileAtomic(FsPath(script), samn::Write(s));
+            } catch (const std::exception& e) {
+                setStatus(tr("Beat bar: cannot write %1: %2").arg(QFileInfo(script).fileName(), QString::fromUtf8(e.what())));
+                return;
+            }
+            open(script);
+            setStatus(tr("Beat bar: %1 beats (about %2 BPM), new script %3.")
+                          .arg(beats.size()).arg(bpm, 0, 'f', 0).arg(QFileInfo(script).fileName()));
+            return;
+        }
+        if (!open(script)) return;
+    }
+    if (drag_index_ >= 0) release();
+    session_.Replace("stroke", std::move(stroke), "stroke from the beat bar");
+    pushCurves();
+    setView(samn::FullView(timelineMs()));
+    if (stepDone())
+        setStatus(tr("Beat bar: %1 beats (about %2 BPM) written as the stroke.").arg(beats.size()).arg(bpm, 0, 'f', 0));
 }
 
 bool EditorController::undo() {

@@ -11,10 +11,12 @@
 #include "editor_controller.h"
 #include "samn/funscript.h"
 #include "samn/samn_file.h"
+#include "synthetic_clips.h"
 
 using samn::Action;
 using samn::ui::CurveItem;
 using samn::ui::EditorController;
+namespace clips = samn::engine::testclips;
 
 namespace {
 
@@ -330,6 +332,59 @@ private slots:
         QVERIFY(LaneAt(e.session().Axis("vibration"), 3000) > 10);
         QVERIFY(e.undo());
         QVERIFY(LaneAt(e.session().Axis("vibration"), 3000) <= 10);
+    }
+
+    void beatBarWritesTheStroke() {
+        const QString video = dir_.filePath("hero.mp4");
+        const auto truth = clips::WriteBeatBar(Fs(video), 12, false);
+        QVERIFY(!truth.empty());
+        EditorController e;
+        QVERIFY(!e.strokeFromBeatBar());
+        QVERIFY(e.status().contains("No video"));
+
+        // No script yet: a new one beside the video.
+        e.setVideoPath(video);
+        QVERIFY(e.strokeFromBeatBar());
+        QVERIFY(e.busy());
+        QVERIFY(!e.strokeFromBeatBar());  // one run at a time
+        QTRY_VERIFY_WITH_TIMEOUT(!e.busy(), 30000);
+        QVERIFY2(e.status().startsWith("Beat bar:"), qPrintable(e.status()));
+        QVERIFY(e.hasScript());
+        QCOMPARE(e.path(), dir_.filePath("hero.funscript"));
+        const auto first = Actions(e.path());
+        QVERIFY(first.size() >= truth.size());  // a stroke per beat
+        QCOMPARE(e.progress(), 100);
+
+        // With the script open: the stroke is replaced as one undo step.
+        e.setMarker(0, 4000);
+        QVERIFY(e.deleteRange());
+        QVERIFY(Actions(e.path()).size() < first.size());
+        QVERIFY(e.strokeFromBeatBar());
+        QTRY_VERIFY_WITH_TIMEOUT(!e.busy(), 30000);
+        QCOMPARE(Actions(e.path()).size(), first.size());
+        QCOMPARE(e.undoText(), QStringLiteral("Undo: stroke from the beat bar"));
+        QVERIFY(e.undo());
+        QVERIFY(Actions(e.path()).size() < first.size());
+
+        // A video without a beat bar.
+        EditorController plain;
+        plain.setVideoPath(dir_.filePath("plain.mp4"));
+        QVERIFY(clips::WriteMoving(Fs(plain.videoPath()), 3, 80.0, 1.0));
+        QVERIFY(plain.strokeFromBeatBar());
+        QTRY_VERIFY_WITH_TIMEOUT(!plain.busy(), 30000);
+        QCOMPARE(plain.status(), QStringLiteral("No beat bar found in this video."));
+        QVERIFY(!plain.hasScript());
+    }
+
+    void destroyingDuringABeatBarRunIsSafe() {
+        const QString video = dir_.filePath("long_hero.mp4");
+        QVERIFY(!clips::WriteBeatBar(Fs(video), 20, false).empty());
+        {
+            EditorController e;
+            e.setVideoPath(video);
+            QVERIFY(e.strokeFromBeatBar());
+        }  // cancels and joins
+        QTest::qWait(50);  // a queued result must find no controller
     }
 
     void zoomFollowsTheMarker() {
