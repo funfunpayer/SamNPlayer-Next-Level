@@ -77,6 +77,15 @@ When sources disagree, the code and reproducible tests win. The 0.7 code
 15. **Everything is GPL-3.0-or-later.** Core and detection engine (`engine/`, a built-in plugin) alike.
 16. **Copied code keeps its origin.** Code taken from GPL-3.0(-or-later), GPL-2.0-or-later, LGPL or AGPL-3.0 projects may go in, with its copyright and licence header, and a line in `THIRD_PARTY.md`. GPL-2.0-only, BSL, "source available" and proprietary code never enter.
 17. **Write small things ourselves** rather than adding a dependency (manifest §4); every new dependency is named in `THIRD_PARTY.md` with its licence.
+18. **Measure before optimising.** Profile first (callgrind, perf, a timed run). Quality comes first, then stability, then speed (manifest). Optimise only where the profile shows the time (see `docs/benchmarks/P3_PROFILE.md`). In hot loops:
+   - pass by `const&`;
+   - `reserve` vectors;
+   - keep data contiguous (`std::vector`, not lists or node maps), and walk images row by row;
+   - allocate outside the loop;
+   - compute nothing twice;
+   - no string building with chained `+`.
+
+   Prefer composition to multiple inheritance; virtual calls are fine outside per-sample loops.
 
 ## Workflow
 
