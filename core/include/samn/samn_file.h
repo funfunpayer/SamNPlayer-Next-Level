@@ -224,6 +224,9 @@ struct Document {
     void ExportFunscript(const std::filesystem::path& path);
     // Go: Document.BakeNeoAxes (vibration/suction from the recipe mapper). Normalizes.
     void BakeNeoAxes();
+    // The mapper options BakeNeoAxes uses (profile + recipe, no smoothing
+    // blur); call on a normalized document.
+    MapOptions BakeOptions() const;
     // Go: Document.ActivePreset; nullptr when none is selected.
     const StrengthPreset* ActivePreset() const;
     // Go: Document.ApplyContactRecipe / ApplyFeelRecipe.

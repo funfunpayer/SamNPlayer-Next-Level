@@ -24,6 +24,7 @@ Item {
     EditorController {
         id: edit
         durationMs: gen.durationMs
+        videoPath: gen.videoPath
     }
 
     FileDialog {
@@ -196,7 +197,7 @@ Item {
             GlassCard {
                 objectName: "editorCard"
                 Layout.fillWidth: true
-                Layout.preferredHeight: (edit.hasScript ? 300 : 96) + (gen.hasVideo ? 62 : 0)
+                Layout.preferredHeight: (edit.hasScript ? 344 : 96) + (gen.hasVideo ? 62 : 0)
                 ColumnLayout {
                     anchors.fill: parent; anchors.margins: 12; spacing: 6
                     RowLayout {
@@ -252,6 +253,29 @@ Item {
                             spacing: 6
                             FlowToggle { id: softEdges; objectName: "softEdges"; checked: true }
                             Text { textFormat: Text.PlainText; text: qsTr("Soft edges"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
+                        }
+                    }
+                    // Create tools: whole lanes from the stroke or the sound
+                    // (0.7 bake and "Write as vibration curve"; one undo step each).
+                    Flow {
+                        Layout.fillWidth: true; spacing: 6
+                        visible: edit.hasScript
+                        enabled: !edit.busy && !gen.running
+                        FlowButton {
+                            objectName: "tool_axes"
+                            text: qsTr("Vibration & suction from the stroke"); icon: "effects"
+                            onClicked: edit.axesFromStroke()
+                        }
+                        FlowButton {
+                            objectName: "tool_sound"
+                            text: edit.busy ? qsTr("Reading the sound…") : qsTr("Vibration from the sound"); icon: "audio"
+                            enabled: gen.hasVideo
+                            onClicked: edit.vibrationFromSound(keepContact.checked)
+                        }
+                        RowLayout {
+                            spacing: 6
+                            FlowToggle { id: keepContact; objectName: "keepContact"; checked: false }
+                            Text { textFormat: Text.PlainText; text: qsTr("Keep contact vibration"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
                         }
                     }
                     // Drag on the ruler marks a range; a click clears it.

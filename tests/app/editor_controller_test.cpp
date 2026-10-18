@@ -3,6 +3,7 @@
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QtTest>
+#include <cmath>
 #include <fstream>
 #include <sstream>
 
@@ -31,6 +32,32 @@ std::vector<Action> Actions(const QString& p) { return samn::Parse(ReadText(p)).
 // A 400 x 100 lane over 0..4000 ms: x = ms / 10, y = 6 + (1 - pos / 100) * 88.
 double X(double ms) { return ms / 10.0; }
 double Y(double pos) { return 6 + (1 - pos / 100.0) * 88; }
+
+// 16-bit mono WAV, 4 s: a 440 Hz tone for 2 s, then silence.
+QString WriteToneThenSilence(const QString& path) {
+    const int rate = 8000;
+    QByteArray pcm;
+    for (int i = 0; i < 4 * rate; ++i) {
+        const qint16 v = i < 2 * rate ? qint16(16000 * std::sin(2 * 3.14159265358979 * 440 * i / rate)) : 0;
+        pcm.append(reinterpret_cast<const char*>(&v), 2);
+    }
+    QByteArray h;
+    auto u32 = [&h](quint32 v) { h.append(reinterpret_cast<const char*>(&v), 4); };
+    auto u16 = [&h](quint16 v) { h.append(reinterpret_cast<const char*>(&v), 2); };
+    h.append("RIFF"); u32(36 + pcm.size()); h.append("WAVEfmt "); u32(16); u16(1); u16(1);
+    u32(rate); u32(rate * 2); u16(2); u16(16); h.append("data"); u32(pcm.size());
+    QFile f(path);
+    f.open(QIODevice::WriteOnly);
+    f.write(h + pcm);
+    return path;
+}
+
+int LaneAt(const std::vector<Action>& lane, int64_t ms) {
+    Action best = lane.front();
+    for (const Action& p : lane)
+        if (p.at <= ms) best = p;
+    return best.pos;
+}
 
 }  // namespace
 
@@ -244,6 +271,65 @@ private slots:
         QVERIFY(e.status().startsWith("Not saved"));
         QVERIFY(e.dirty());
         QCOMPARE(e.session().Axis("stroke")[0].pos, 90);
+    }
+
+    void axesFromTheStrokeMakeTheSamnAndUndoBack() {
+        const QString path = script("g.funscript");
+        const QString samnPath = dir_.filePath("g.samn");
+        EditorController e;
+        QVERIFY(e.open(path));
+        QCOMPARE(e.lanes(), QStringList{"stroke"});
+        QCOMPARE(e.playPath(), path);
+        QSignalSpy lanes(&e, &EditorController::lanesChanged);
+        QVERIFY(e.axesFromStroke());
+        QCOMPARE(e.lanes(), (QStringList{"stroke", "vibration", "suction"}));
+        QCOMPARE(lanes.count(), 1);
+        QCOMPARE(e.playPath(), samnPath);  // the Player now gets the .samn
+        QCOMPARE(e.undoText(), QStringLiteral("Undo: vibration and suction from the stroke"));
+        samn::Document doc = samn::LoadDocument(Fs(samnPath));
+        QVERIFY(!doc.vibration.empty());
+        QVERIFY(!doc.suction.empty());
+        QCOMPARE(int(doc.general.size()), 5);
+        QCOMPARE(QString::fromStdString(doc.playback_source), QStringLiteral("axes"));
+        // Same stroke again: nothing to change.
+        QVERIFY(!e.axesFromStroke());
+
+        // One undo removes both lanes; the recipe plays again.
+        QVERIFY(e.undo());
+        QCOMPARE(e.lanes(), QStringList{"stroke"});
+        doc = samn::LoadDocument(Fs(samnPath));
+        QVERIFY(doc.vibration.empty());
+        QVERIFY(doc.suction.empty());
+        QCOMPARE(QString::fromStdString(doc.playback_source), QStringLiteral("recipe"));
+    }
+
+    void vibrationFollowsTheSound() {
+        const QString path = script("h.funscript");
+        EditorController e;
+        QVERIFY(e.open(path));
+        QVERIFY(!e.vibrationFromSound(false));
+        QVERIFY(e.status().contains("No video"));
+        e.setVideoPath(WriteToneThenSilence(dir_.filePath("h.wav")));
+        QVERIFY(e.vibrationFromSound(false));
+        QVERIFY(e.busy());
+        QTRY_VERIFY_WITH_TIMEOUT(!e.busy(), 20000);
+        QVERIFY2(e.status().startsWith("Vibration from the sound written"), qPrintable(e.status()));
+        const auto& vib = e.session().Axis("vibration");
+        QVERIFY(!vib.empty());
+        QVERIFY(LaneAt(vib, 500) >= 80);   // the tone
+        QVERIFY(LaneAt(vib, 3000) <= 10);  // silence
+        // Suction was written first, so the script plays as before.
+        QVERIFY(!e.session().Axis("suction").empty());
+        QCOMPARE(e.undoText(), QStringLiteral("Undo: vibration from the sound"));
+        const samn::Document doc = samn::LoadDocument(Fs(dir_.filePath("h.samn")));
+        QCOMPARE(doc.vibration.size(), vib.size());
+
+        // With contact: the stroke's own vibration where the sound is silent.
+        QVERIFY(e.vibrationFromSound(true));
+        QTRY_VERIFY_WITH_TIMEOUT(!e.busy(), 20000);
+        QVERIFY(LaneAt(e.session().Axis("vibration"), 3000) > 10);
+        QVERIFY(e.undo());
+        QVERIFY(LaneAt(e.session().Axis("vibration"), 3000) <= 10);
     }
 
     void zoomFollowsTheMarker() {

@@ -180,6 +180,12 @@ private slots:
         QTRY_VERIFY(edit->property("canUndo").toBool());
         QCOMPARE(edit->property("undoText").toString(), QStringLiteral("Undo: Invert range"));
 
+        // A create tool writes new lanes, which appear under the stroke.
+        QMetaObject::invokeMethod(named(root.get(), "tool_axes"), "clicked");
+        QTRY_VERIFY(named(root.get(), "lane_vibration"));
+        QTRY_VERIFY(named(root.get(), "lane_suction"));
+        QCOMPARE(edit->property("undoText").toString(), QStringLiteral("Undo: vibration and suction from the stroke"));
+
         // "Play in the Player" hands the edited script over.
         QVERIFY(named(root.get(), "reviewButton")->isVisible());
         QMetaObject::invokeMethod(named(root.get(), "reviewButton"), "clicked");

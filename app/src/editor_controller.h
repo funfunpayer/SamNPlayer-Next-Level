@@ -10,9 +10,11 @@
 
 #include "samn/curve_geometry.h"
 #include "samn/edit_session.h"
+#include "samn/samn_file.h"
 
 namespace samn::ui {
 
+class AudioLevelDecoder;
 class CurveItem;
 
 // The Editor inside the Generator mode (D-137, D-144): the curves of one
@@ -32,7 +34,11 @@ class EditorController : public QObject {
     // the recipe), else the .funscript.
     Q_PROPERTY(QString playPath READ playPath NOTIFY scriptChanged)
     Q_PROPERTY(bool hasScript READ hasScript NOTIFY scriptChanged)
-    Q_PROPERTY(QStringList lanes READ lanes NOTIFY scriptChanged)
+    Q_PROPERTY(QStringList lanes READ lanes NOTIFY lanesChanged)
+    // The video the script belongs to: the sound for "Vibration from the sound".
+    Q_PROPERTY(QString videoPath READ videoPath WRITE setVideoPath NOTIFY videoPathChanged)
+    // A create tool is working (decoding the sound).
+    Q_PROPERTY(bool busy READ busy NOTIFY busyChanged)
     Q_PROPERTY(int pointCount READ pointCount NOTIFY curvesChanged)
     Q_PROPERTY(double durationMs READ durationMs WRITE setDurationMs NOTIFY durationChanged)
     // The lane the range tools work on: the one last touched.
@@ -64,6 +70,9 @@ public:
     QString playPath() const { return samn_path_.isEmpty() ? path_ : samn_path_; }
     bool hasScript() const { return !path_.isEmpty(); }
     QStringList lanes() const;
+    QString videoPath() const { return video_path_; }
+    void setVideoPath(const QString& path);
+    bool busy() const { return busy_; }
     int pointCount() const;
     double durationMs() const { return duration_ms_; }
     void setDurationMs(double ms);
@@ -112,6 +121,17 @@ public:
     Q_INVOKABLE bool simplifyRange(double maxError = 2);
     Q_INVOKABLE bool invert();
 
+    // Create tools (one undo step each; they write the .samn, which is made
+    // when the script has none).
+    // Vibration and suction from the stroke with the script's feel recipe
+    // (0.7 BakeNeoAxes; a plain funscript uses the standard recipe).
+    Q_INVOKABLE bool axesFromStroke();
+    // Vibration from the video's sound (0.7 "Write as vibration curve");
+    // withContact keeps the script's own vibration where it is stronger.
+    // Asynchronous: busy until the sound is decoded. A script without a
+    // suction lane gets its mapped suction first, so it plays the same.
+    Q_INVOKABLE bool vibrationFromSound(bool withContact);
+
     Q_INVOKABLE bool undo();
     Q_INVOKABLE bool redo();
 
@@ -123,6 +143,9 @@ public:
 
 signals:
     void scriptChanged();
+    void lanesChanged();
+    void videoPathChanged();
+    void busyChanged();
     void curvesChanged();
     void durationChanged();
     void activeLaneChanged();
@@ -139,7 +162,10 @@ private:
     int64_t timelineMs() const;
     bool applyRange(const QString& label, const std::function<std::vector<samn::Action>(const std::vector<samn::Action>&)>& op,
                     bool needsMarker);
-    bool stepDone();  // saves; false when the save failed
+    bool stepDone();
+    samn::Document companion() const;  // the .samn as saved, or a new one
+    void onSoundEnvelope(const std::vector<double>& envelope);
+    void setBusy(bool busy);  // saves; false when the save failed
     bool save();
     void pushCurves();
     void setView(samn::ViewWindow v);
@@ -155,6 +181,11 @@ private:
     double fps_snap_ = 0;
     QString status_;
     std::vector<QPointer<CurveItem>> curves_;
+    QStringList lanes_;
+    QString video_path_;
+    bool busy_ = false;
+    bool sound_with_contact_ = false;
+    AudioLevelDecoder* sound_ = nullptr;
     QPointer<CurveItem> drag_curve_;
     std::string drag_lane_;
     int drag_index_ = -1;
