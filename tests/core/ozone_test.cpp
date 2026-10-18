@@ -80,3 +80,17 @@ TEST_CASE("ozone: a flat lead-in gives no secondary") {
     REQUIRE(p.ok);
     CHECK(SuggestSecondaryOZones(a, p, 2).empty());
 }
+
+// 0.7 app_generator.go applyAutoOZoneMarker / secondaryMarkerFromSuggestion.
+TEST_CASE("ozone: the automatic markers after Create") {
+    const auto a = WithBumps(100000, 10, {{{90000, 100001}, 90}, {{20000, 25000}, 55}});
+    const auto m = AutoOZoneMarkers(a);
+    REQUIRE(m.size() == 2);
+    CHECK(m[0].kind == OMarkerPrimary);
+    CHECK(m[0].intensity == 1.0);
+    CHECK(m[1].kind == OMarkerSecondary);
+    CHECK(m[1].intensity >= 0.2);
+    CHECK(m[1].intensity <= 0.8);
+    for (const auto& x : m) CHECK_NOTHROW(x.Validate());
+    CHECK(AutoOZoneMarkers(WithBumps(50000, 10, {})).empty());
+}

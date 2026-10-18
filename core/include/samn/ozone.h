@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "samn/funscript.h"
+#include "samn/samn_file.h"
 
 namespace samn {
 
@@ -29,5 +30,11 @@ OZoneSuggestion SuggestOZone(const std::vector<Action>& actions);
 // primary's mean, not overlapping, in time order. Empty is the normal result.
 std::vector<OZoneSuggestion> SuggestSecondaryOZones(const std::vector<Action>& actions,
                                                     const OZoneSuggestion& primary, int max_count);
+
+// The markers 0.7 wrote after every Create (app_generator.go
+// applyAutoOZoneMarker): the primary at intensity 1 plus up to two secondary
+// ones at their mean relative to the primary, clamped to 0.2-0.8. Empty when
+// there is no primary zone.
+std::vector<OMarker> AutoOZoneMarkers(const std::vector<Action>& actions);
 
 }  // namespace samn

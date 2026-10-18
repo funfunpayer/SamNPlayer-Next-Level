@@ -37,6 +37,26 @@ target_compile_definitions(shell_qml_test PRIVATE SAMN_APP_QML_DIR="${CMAKE_SOUR
 add_test(NAME shell_qml_test COMMAND shell_qml_test)
 set_tests_properties(shell_qml_test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_MEDIA_BACKEND=ffmpeg")
 
+# The Generator mode on generated test clips (tests/engine/synthetic_clips.h).
+add_executable(generator_controller_test generator_controller_test.cpp)
+target_link_libraries(generator_controller_test PRIVATE samn_app Qt6::Test)
+target_include_directories(generator_controller_test PRIVATE ${CMAKE_SOURCE_DIR}/tests/engine)
+add_test(NAME generator_controller_test COMMAND generator_controller_test)
+set_tests_properties(generator_controller_test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+# The Generator page's QML, loaded the way the app loads it.
+add_executable(generator_qml_test generator_qml_test.cpp)
+target_link_libraries(generator_qml_test PRIVATE samn_app samn_appplugin Qt6::Test)
+target_include_directories(generator_qml_test PRIVATE ${CMAKE_SOURCE_DIR}/tests/engine)
+add_test(NAME generator_qml_test COMMAND generator_qml_test)
+set_tests_properties(generator_qml_test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
 add_executable(script_clock_test script_clock_test.cpp)
 target_link_libraries(script_clock_test PRIVATE samn_app Qt6::Test)
 add_test(NAME script_clock_test COMMAND script_clock_test)
+
+# The Editor inside the Generator mode (D-137, D-144).
+add_executable(editor_controller_test editor_controller_test.cpp)
+target_link_libraries(editor_controller_test PRIVATE samn_app Qt6::Test)
+add_test(NAME editor_controller_test COMMAND editor_controller_test)
+set_tests_properties(editor_controller_test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

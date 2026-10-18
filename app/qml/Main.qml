@@ -59,7 +59,13 @@ ApplicationWindow {
         currentIndex: win.mode
         PlayerPage { id: player; deckOpen: deck.open; device: deviceCtl }
         // Generator and Editor are one mode: the Generator is the Editor (D-137).
-        NotYetPage { mode: qsTr("Generator"); phase: "P3" }
+        GeneratorPage {
+            id: generator
+            deckOpen: deck.open
+            playerVideoUrl: player.controller.videoUrl
+            // The result opens in the Generator's Editor; "Play in the Player" hands it over (D-144).
+            onReviewRequested: (path) => { win.mode = 0; player.controller.openPath(path) }
+        }
         TrainingPage { id: training; deckOpen: deck.open; device: deviceCtl; autostart: trainingStart }
         NotYetPage { mode: qsTr("Scene Map"); phase: "P4" }
     }

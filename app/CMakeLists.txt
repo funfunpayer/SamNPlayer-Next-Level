@@ -27,6 +27,9 @@ qt_add_qml_module(samn_app
     src/device_controller.h src/device_controller.cpp
     src/training_controller.h src/training_controller.cpp
     src/training_curve_item.h src/training_curve_item.cpp
+    src/frame_item.h src/frame_item.cpp
+    src/generator_controller.h src/generator_controller.cpp
+    src/editor_controller.h src/editor_controller.cpp
     src/device_io/waiter.h
     src/device_io/qt_transport.h
     src/device_io/socket_line_transport.h src/device_io/socket_line_transport.cpp
@@ -41,6 +44,7 @@ qt_add_qml_module(samn_app
     qml/PlayButton.qml
     qml/PlayerPage.qml
     qml/NotYetPage.qml
+    qml/GeneratorPage.qml
     qml/TrainingPage.qml
     qml/TrainingRing.qml
     qml/TrainingEditor.qml
@@ -78,7 +82,7 @@ qt_add_qml_module(samn_app
     qml/fonts/Figtree.ttf
 )
 target_include_directories(samn_app PUBLIC src src/device_io)
-target_link_libraries(samn_app PUBLIC samn_core Qt6::Gui Qt6::Quick Qt6::Qml Qt6::Multimedia Qt6::Svg
+target_link_libraries(samn_app PUBLIC samn_core samn_engine Qt6::Gui Qt6::Quick Qt6::Qml Qt6::Multimedia Qt6::Svg
   Qt6::Network Qt6::WebSockets Qt6::SerialPort Qt6::Bluetooth)
 
 qt_add_executable(samnplayer WIN32 src/main.cpp)

@@ -160,3 +160,30 @@ jobs:
           ./build/tests/core_tests
           ./build/tests/vision_tests
           ./build/tests/engine_tests
+
+  # D-142: every part that runs work in parallel also runs under the Thread
+  # Sanitizer. Suppressions (ci/tsan.supp) cover only FFmpeg and OpenCV,
+  # which run their own threads and are not built with TSan.
+  tsan:
+    name: Thread sanitizer (engine runner)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: OpenCV (samn_vision)
+        run: sudo apt-get update && sudo apt-get install -y libopencv-dev libopencv-contrib-dev
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DSAMN_BUILD_APP=OFF -DSAMN_BUILD_PYTHON=OFF \
+            "-DCMAKE_CXX_FLAGS=-fsanitize=thread -fno-omit-frame-pointer"
+
+      - name: Build
+        run: cmake --build build --parallel --target engine_tests
+
+      - name: Threaded engine tests under TSan
+        env:
+          TSAN_OPTIONS: halt_on_error=1 suppressions=${{ github.workspace }}/ci/tsan.supp
+        run: ./build/tests/engine_tests -tc="generate*"

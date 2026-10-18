@@ -101,6 +101,39 @@ double CurveItem::msAtX(double x) const {
     return t0 + std::clamp(x / std::max(1.0, width()), 0.0, 1.0) * (t1 - t0);
 }
 
+double CurveItem::posAtY(double y) const {
+    const double pad = label_.isEmpty() ? kPad : 3;
+    const double span = std::max(1.0, height() - pad * 2);
+    return std::clamp((1 - (y - pad) / span) * 100.0, 0.0, 100.0);
+}
+
+int CurveItem::hitPoint(double x, double y, double radiusPx) const {
+    if (actions_.empty() || width() <= 0) return -1;
+    const double w = width(), h = height();
+    const auto t0 = int64_t(std::floor(msAtX(x - radiusPx)));
+    auto it = std::lower_bound(actions_.begin(), actions_.end(), t0,
+                               [](const samn::Action& a, int64_t t) { return a.at < t; });
+    int best = -1;
+    double bestDist = radiusPx;
+    for (; it != actions_.end(); ++it) {
+        const double dx = xOf(double(it->at), w) - x;
+        if (dx > radiusPx) break;
+        const double dist = std::hypot(dx, yOf(it->pos, h) - y);
+        if (dist < bestDist) {
+            bestDist = dist;
+            best = int(it - actions_.begin());
+        }
+    }
+    return best;
+}
+
+void CurveItem::setActiveIndex(int index) {
+    if (index == activeIndex_) return;
+    activeIndex_ = index;
+    emit activeIndexChanged();
+    update();
+}
+
 QString CurveItem::hoverText(double x) const {
     if (actions_.empty()) return {};
     const double ms = msAtX(x);
@@ -191,6 +224,13 @@ void CurveItem::paint(QPainter* p) {
                 p->drawEllipse(QPointF(x, yOf(*pos, h)), 5, 5);
             }
         }
+    }
+    // The grabbed point, also when the dense view hides the dots (0.7).
+    if (activeIndex_ >= 0 && size_t(activeIndex_) < actions_.size()) {
+        const samn::Action& a = actions_[size_t(activeIndex_)];
+        p->setPen(QPen(QColor(255, 255, 255), 1.25));
+        p->setBrush(QColor(0xff, 0xcc, 0x55));
+        p->drawEllipse(QPointF(xOf(double(a.at), w), yOf(a.pos, h)), 5, 5);
     }
 }
 

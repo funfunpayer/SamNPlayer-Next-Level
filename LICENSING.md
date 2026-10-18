@@ -13,7 +13,8 @@ SamNPlayer Next is **open source under GPL-3.0-or-later**, the detection engine 
 1. **The engine is a built-in plugin.** It runs inside the app through the plugin interface (`docs/P3_GENERATOR.md`, "The engine is a built-in plugin") and ships with every build; there is no separate engine program.
 2. **Copied code keeps its origin.** Code copied or adapted from GPL-3.0(-or-later), GPL-2.0-or-later, LGPL, AGPL-3.0 or permissively licensed projects (for example OpenFunscripter) may go in. It keeps its copyright and licence header, and `THIRD_PARTY.md` names the source and version. GPL-2.0-only, BSL, "source available" and proprietary code never enter.
 3. **Copyright** stays with funfunpayer and the contributors; contributions are accepted under GPL-3.0-or-later.
-4. **Golden clips and private media** never enter any repository (D-073), whatever the licence.
+4. **The best component wins (D-143).** If it needs AGPL-3.0 (for example a YOLO model for detection), the whole project moves to AGPL-3.0-or-later in the same PR. Model weights carry their own licence and are listed like code.
+5. **Golden clips and private media** never enter any repository (D-073), whatever the licence.
 
 ## Before the repository is made public (Owner's step)
 

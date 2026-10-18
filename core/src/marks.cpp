@@ -507,6 +507,31 @@ void PatchMetadataKey(const std::filesystem::path& path, const std::string& key,
     }
 }
 
+void PatchActions(const std::filesystem::path& path, const std::vector<Action>& actions) {
+    Doc doc = ReadDoc(path);
+    if (doc.is_null) throw MarksError("funscript: invalid JSON: not an object");
+    std::vector<Action> sorted = actions;
+    std::stable_sort(sorted.begin(), sorted.end(), [](const Action& a, const Action& b) { return a.at < b.at; });
+    std::string encoded;
+    encoded.reserve(sorted.size() * 24 + 2);
+    encoded += '[';
+    for (size_t i = 0; i < sorted.size(); ++i) {
+        if (i) encoded += ',';
+        encoded += "{\"at\":";
+        encoded += std::to_string(sorted[i].at);
+        encoded += ",\"pos\":";
+        encoded += std::to_string(sorted[i].pos);
+        encoded += '}';
+    }
+    encoded += ']';
+    doc.fields["actions"] = encoded;
+    try {
+        WriteFileAtomic(path, GoIndent(MarshalObject(doc.fields)));
+    } catch (const std::exception& exc) {
+        throw MarksError(std::string("funscript: cannot write the file: ") + exc.what());
+    }
+}
+
 std::vector<Bookmark> LoadBookmarks(const std::filesystem::path& path) {
     static const std::map<std::string, std::string> names{{"name", "name"}, {"time", "time"}};
     return LoadMarks<Bookmark>(path, "bookmarks", [&](const ordered_json& item) {
