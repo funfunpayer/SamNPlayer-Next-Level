@@ -60,7 +60,7 @@ nlohmann::json ReadJson(const fs::path& p) {
 
 TEST_CASE("generate: writes the funscript and its .samn as 0.7 did") {
     const fs::path dir = TempDir("samn_generate_write");
-    REQUIRE(clips::WriteMoving(dir / "moving.mp4", 4, 80.0, 1.0));
+    REQUIRE(clips::WriteMoving(dir / "moving.mp4", 8, 80.0, 1.0));  // O-zones need 4 s and more
     Recorder rec;
     Generate(Request(dir, "moving.mp4", "standard"), 7, {}, rec.fn());
     const auto ev = rec.take();
@@ -83,7 +83,7 @@ TEST_CASE("generate: writes the funscript and its .samn as 0.7 did") {
     CHECK(fs_json["actions"].size() == ev.back().actions);
     CHECK(fs_json["actions"].size() > 4);
     const auto& np = fs_json["metadata"]["native_pipeline"];
-    CHECK(np["frames"] == 100);
+    CHECK(np["frames"] == 200);
     CHECK(np["lost"] == 0);
     CHECK(np["tracking"] == "samn_engine");
     CHECK(!fs_json["metadata"].contains("device_recipe"));
@@ -91,6 +91,13 @@ TEST_CASE("generate: writes the funscript and its .samn as 0.7 did") {
 
     const samn::Document d = samn::LoadDocument(dir / "standard.samn");
     CHECK(d.general.size() == fs_json["actions"].size());
+    // The automatic O-markers land in both files, as in 0.7.
+    REQUIRE(!d.o_markers.empty());
+    CHECK(d.o_markers[0].kind == "primary");
+    CHECK(fs_json["metadata"]["oMarkers"].size() == d.o_markers.size());
+    bool noted = false;
+    for (const auto& e : ev) noted = noted || e.message.rfind("O-marker set", 0) == 0;
+    CHECK(noted);
     CHECK(d.video_path == (dir / "moving.mp4").u8string());
     fs::remove_all(dir);
 }
@@ -124,6 +131,7 @@ TEST_CASE("generate: never overwrites unless asked") {
     Generate(req, 1, {}, rec.fn());
     REQUIRE(rec.take().size() == 1);
     CHECK(rec.take().back().kind == GenerateEventKind::kError);
+    req.auto_ozone = false;
     std::ifstream in(dir / "standard.funscript");
     std::stringstream ss;
     ss << in.rdbuf();

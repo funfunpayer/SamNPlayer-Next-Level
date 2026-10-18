@@ -120,4 +120,16 @@ std::vector<OZoneSuggestion> SuggestSecondaryOZones(const std::vector<Action>& a
     return out;
 }
 
+std::vector<OMarker> AutoOZoneMarkers(const std::vector<Action>& actions) {
+    std::vector<OMarker> out;
+    const OZoneSuggestion zone = SuggestOZone(actions);
+    if (!zone.ok) return out;
+    out.push_back({zone.start_ms, zone.end_ms, OMarkerPrimary, 1.0});
+    for (const OZoneSuggestion& sec : SuggestSecondaryOZones(actions, zone, 2)) {
+        const double intensity = zone.mean > 0 ? std::clamp(sec.mean / zone.mean, 0.2, 0.8) : 0.5;
+        out.push_back({sec.start_ms, sec.end_ms, OMarkerSecondary, intensity});
+    }
+    return out;
+}
+
 }  // namespace samn

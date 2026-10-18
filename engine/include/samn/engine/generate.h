@@ -33,6 +33,7 @@ struct GenerateRequest {
     std::optional<StrokeHint> stroke_hint;  // from the stroke preview (P3.6)
     std::filesystem::path output;           // the .funscript; the .samn goes beside it
     bool overwrite = false;                 // overwrite guard: off = never replace a file
+    bool auto_ozone = true;                 // primary + up to two secondary O-markers (0.7)
 };
 
 enum class GenerateEventKind { kProgress, kNote, kDone, kCanceled, kError };

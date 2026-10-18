@@ -1,8 +1,11 @@
 #include "samn/engine/generate.h"
 
+#include <cstdio>
+
 #include <nlohmann/json.hpp>
 
 #include "samn/fileio.h"
+#include "samn/ozone.h"
 #include "samn/samn_file.h"
 
 namespace samn::engine {
@@ -102,13 +105,22 @@ void Generate(const GenerateRequest& req, uint64_t run_id, const std::function<b
         emit(GenerateEventKind::kCanceled, "canceled");
         return;
     }
+    const std::vector<OMarker> markers = req.auto_ozone ? AutoOZoneMarkers(sig->actions) : std::vector<OMarker>{};
     try {
         Document samn = CompanionSamn(req, sig->actions);
+        samn.o_markers = markers;
         WriteFileAtomic(req.output, FunscriptJson(req, sig->actions, *tr, samn));
+        if (!markers.empty()) SaveOMarkers(req.output, markers);
         SaveDocument(samn_path, samn);
     } catch (const std::exception& e) {
         emit(GenerateEventKind::kError, std::string("cannot write the script: ") + e.what());
         return;
+    }
+    if (!markers.empty()) {
+        char buf[96];
+        std::snprintf(buf, sizeof buf, "O-marker set: %.1f s-%.1f s", markers[0].start_ms / 1000.0,
+                      markers[0].end_ms / 1000.0);
+        emit(GenerateEventKind::kNote, buf);
     }
     emit(GenerateEventKind::kDone, req.output.filename().u8string(), 100, sig->actions.size());
 }
