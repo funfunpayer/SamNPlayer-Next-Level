@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 17 Oct 2026 (late), Claude, branch `claude/samn2-engine-track` (PR #54).
+**Last update:** 18 Oct 2026 (late), Claude, branch `claude/samn2-test-diagnostics`.
 
 ## Rules
 
@@ -67,10 +67,23 @@
 - **Licence** (#53, D-141): everything GPL-3.0-or-later; the detection engine is a built-in plugin, not a separate program and not closed. `LICENSING.md`, `THIRD_PARTY.md`; the Owner's manifest is `docs/MANIFEST.md` (master document).
 - **Detection engine, P3.0–P3.2 and P3.8** (#54): `vision/` (FrameReader with PTS, one CSRT factory, self-check); `engine/` (`samn_engine`): `TrackBox` bit-identical to 0.7 on 32 600 frames, the signal chain (post-processing, profiles, default detrend) giving the same actions as 0.7's `GenerateNativeCSRT` on 13 runs, and the comparison controller `samn_compare` (Motion Fidelity in core, SHA-256 manifest, windows and flags). Numbers in `docs/benchmarks/`. Core also got RDP (`simplify.h`) and O-zone suggestions (`ozone.h`).
 
+- **P3.3 Generator = Editor, 18 Oct** (#55–#58):
+  - **Generation:** `samn::engine::Generate` / `GenerateRunner` writes `.funscript` and `.samn` on its own thread. Anything thrown ends the run as an error, not the app. TSan job in CI.
+  - **Generator page, laid out like the Player (D-144):** video with tip box and frame seek on top, curve lanes below, frame strip at the bottom, settings on the right. The result opens in the Editor; "Play in the Player" hands the `.samn` over.
+  - **Editor:**
+    - `EditSession` in core: undo as patches, transactions, hard history limit.
+    - `EditorController`: drag / add / delete points, ruler range, range tools (delete, cap speed, softer, stronger, simplify, invert), undo/redo, zoom, FPS snap. Saves at once and keeps metadata (`PatchActions`).
+  - **Frame strip:** `FrameCache` (open video plus a size-limited LRU, D-142) and the async `FrameProvider`.
+  - **Create tools** (one undo step each):
+    - vibration and suction from the stroke (`BakeNeoAxes`);
+    - vibration from the sound (`sound_vibration.h`, 0.7 port);
+    - stroke from the video's beat bar (`DetectBeatBarBeats`, streamed `BeatTimer`).
+  - **Decisions:** D-143 (best component, licence follows) and D-144 (the Player plays, the Generator edits).
+
 ## Next (in order; the work list is `LESSONS.md` § Gaps, `TEST_PARITY.md` and `P3_GENERATOR.md`)
 
-1. Merge #54 when CI is green (Windows may rebuild vcpkg once, about 90 min).
-2. **P3.3 Generator page = Editor** (D-137): steps 1–5, marking canvas, run on a worker thread with progress, cancel and run ids, the engine behind the detector plugin interface, writing `.funscript` / `.samn` with 0.7's metadata.
+1. **Windows CI:** some app tests failed now and then with no output (stdout fully buffered when piped). Every app test now writes unbuffered (`tests/app/unbuffered_stdout.cpp`); find the cause on the next red run.
+2. **P3.3 rest:** queue, auto tip-find, contact marks, Settings persistence; the Player's theatre mode with the waveform switchable (D-144).
 3. **P3.6** Quality Doctor on the dense curve, the signal auto-retry and the stroke preview (feeds the adaptive detrend); then the controller reports Quality as its second number (GD-04).
 4. **P3.4** two-point / multi-point, rhythm grid, follow marks; **P3.9** improvements, each measured with `samn_compare` (first lever: memory templates of the subject, not the box, GD-10).
 5. Player finish (`PARITY.md` §1–3), donation pages (manifest), devices for Svakom and other toys, Scene Map, Settings / Tools; bug hunt; release.
