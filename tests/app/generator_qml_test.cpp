@@ -11,7 +11,6 @@
 #include <QTemporaryDir>
 #include <QtQml/QQmlExtensionPlugin>
 #include <QtTest>
-#include <cstdio>
 
 #include "frame_provider.h"
 #include "generator_controller.h"
@@ -23,9 +22,6 @@ Q_IMPORT_QML_PLUGIN(SamNPlugin)
 using samn::ui::GeneratorController;
 
 namespace {
-// A piped stdout is fully buffered on Windows: unbuffered, a crash still
-// shows how far the test got.
-const int g_unbuffered = [] { return std::setvbuf(stdout, nullptr, _IONBF, 0); }();
 QStringList g_messages;
 QtMessageHandler g_previous = nullptr;
 void capture(QtMsgType type, const QMessageLogContext& ctx, const QString& msg) {

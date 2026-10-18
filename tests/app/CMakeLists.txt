@@ -68,3 +68,12 @@ target_link_libraries(frame_cache_test PRIVATE samn_app Qt6::Test)
 target_include_directories(frame_cache_test PRIVATE ${CMAKE_SOURCE_DIR}/tests/engine)
 add_test(NAME frame_cache_test COMMAND frame_cache_test)
 set_tests_properties(frame_cache_test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+# Every test above writes its output unbuffered (see unbuffered_stdout.cpp).
+get_property(_samn_app_tests DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
+foreach(_t IN LISTS _samn_app_tests)
+  get_target_property(_type ${_t} TYPE)
+  if(_type STREQUAL "EXECUTABLE")
+    target_sources(${_t} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/unbuffered_stdout.cpp)
+  endif()
+endforeach()
