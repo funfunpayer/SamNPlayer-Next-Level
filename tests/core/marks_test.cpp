@@ -254,3 +254,30 @@ TEST_CASE("AddSceneMarker cuts the spanning chapter and runs to the next") {
     CHECK_FALSE(samn::AddSceneMarker(in, 20100));  // within 250 ms of B
     CHECK(samn::AddSceneMarker({}, -5)->front().start_ms == 0);
 }
+
+TEST_CASE("PatchActions replaces the actions and keeps everything else") {
+    const auto path = std::filesystem::temp_directory_path() / "samn_patch_actions.funscript";
+    {
+        std::ofstream(path) << R"({"version":"1.0","inverted":false,"range":90,)"
+                               R"("actions":[{"at":0,"pos":0},{"at":500,"pos":100}],)"
+                               R"("metadata":{"creator":"SamNPlayer","oMarkers":[{"startMs":1,"endMs":2,"kind":"o","intensity":1}]},)"
+                               R"("x_unknown":{"keep":[1,2]}})";
+    }
+    samn::PatchActions(path, {{900, 30}, {0, 10}, {400, 70}});
+    std::ifstream in(path);
+    std::stringstream ss;
+    ss << in.rdbuf();
+    in.close();
+    const auto j = nlohmann::json::parse(ss.str());
+    REQUIRE(j["actions"].size() == 3);
+    CHECK(j["actions"][0]["at"] == 0);   // written in time order
+    CHECK(j["actions"][2]["at"] == 900);
+    CHECK(j["actions"][2]["pos"] == 30);
+    CHECK(j["metadata"]["creator"] == "SamNPlayer");
+    CHECK(j["metadata"]["oMarkers"].size() == 1);
+    CHECK(j["x_unknown"]["keep"][1] == 2);
+    CHECK(j["range"] == 90);
+    CHECK(samn::Parse(ss.str()).actions.size() == 3);
+    std::filesystem::remove(path);
+    CHECK_THROWS_AS(samn::PatchActions(path, {{0, 0}}), samn::MarksError);
+}

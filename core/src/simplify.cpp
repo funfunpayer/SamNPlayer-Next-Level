@@ -5,7 +5,7 @@
 
 namespace samn {
 
-std::vector<int> SimplifyIndices(const std::vector<CurvePoint>& pts, double max_error) {
+std::vector<int> SimplifyIndices(const std::vector<SimplifyPoint>& pts, double max_error) {
     const int n = static_cast<int>(pts.size());
     std::vector<int> out;
     if (n <= 2) {
@@ -20,7 +20,7 @@ std::vector<int> SimplifyIndices(const std::vector<CurvePoint>& pts, double max_
         const auto [a, b] = stack.back();
         stack.pop_back();
         if (b - a <= 1) continue;
-        const CurvePoint p0 = pts[a], p1 = pts[b];
+        const SimplifyPoint p0 = pts[a], p1 = pts[b];
         const double dt = p1.t_ms - p0.t_ms;
         double max_dev = 0;
         int max_idx = -1;

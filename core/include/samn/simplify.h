@@ -8,13 +8,13 @@
 
 namespace samn {
 
-struct CurvePoint {
+struct SimplifyPoint {
     double t_ms = 0;
     double pos = 0;
 };
 
 // Indices to keep, ascending; first and last always kept. max_error in
 // position units (<= 0 means 0.5).
-std::vector<int> SimplifyIndices(const std::vector<CurvePoint>& pts, double max_error);
+std::vector<int> SimplifyIndices(const std::vector<SimplifyPoint>& pts, double max_error);
 
 }  // namespace samn

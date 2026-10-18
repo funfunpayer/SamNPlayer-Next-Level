@@ -29,6 +29,7 @@ qt_add_qml_module(samn_app
     src/training_curve_item.h src/training_curve_item.cpp
     src/frame_item.h src/frame_item.cpp
     src/generator_controller.h src/generator_controller.cpp
+    src/editor_controller.h src/editor_controller.cpp
     src/device_io/waiter.h
     src/device_io/qt_transport.h
     src/device_io/socket_line_transport.h src/device_io/socket_line_transport.cpp

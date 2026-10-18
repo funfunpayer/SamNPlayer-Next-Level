@@ -106,3 +106,19 @@ The Generator and the Editor are one mode (Owner 16 Oct, D-137): the same page c
 - AI is a proposal: the user confirms (0.7 and D-129).
 - Measure before choosing a default (0.7 lesson: "measured, not guessed").
 - Read `LESSONS.md` §4 (GD-01..GD-25) and §11 before touching an area of the Generator; each step above names the lessons it must follow.
+
+## Editor create tools (Owner, 18 Oct)
+
+The Editor creates curves as well as editing them, and writes them into the
+.samn (all axes) as well as the .funscript:
+
+- **Beat-bar scripts** (Cock Hero / Fap Hero): detect the beat bar and turn
+  beats into strokes (`samn/beatbar.h`, `samn/beat_strokes.h`, from 0.7).
+- **Vibration and suction from the stroke** with the 0.7 feel algorithms
+  (recipes, suction/vibration balance, contact vibration).
+- **Vibration that follows the sound** (`samn/audio_envelope.h`, 0.7 "Write
+  as vibration curve").
+
+Each tool writes through the Editor's history (one undo step) and is checked
+against 0.7 with the same inputs before it becomes a default.
+

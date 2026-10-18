@@ -63,7 +63,7 @@ ApplicationWindow {
             id: generator
             deckOpen: deck.open
             playerVideoUrl: player.controller.videoUrl
-            // The result opens in the Player for review (D-137; 0.7 "Done — ready in Play").
+            // The result opens in the Generator's Editor; "Play in the Player" hands it over (D-144).
             onReviewRequested: (path) => { win.mode = 0; player.controller.openPath(path) }
         }
         TrainingPage { id: training; deckOpen: deck.open; device: deviceCtl; autostart: trainingStart }

@@ -355,7 +355,7 @@ std::optional<PostResult> PositionsToActions(const std::vector<double>& t, const
     if (o.adaptive_error > 0) keys = RefineKeyframes(t, pos, keys, o.adaptive_error, 2.0);
     if (o.min_interval_ms > 0) keys = EnforceMinInterval(t, pos, keys, o.min_interval_ms);
     if (o.rdp_tolerance > 0 && keys.size() > 2) {
-        std::vector<CurvePoint> pts;
+        std::vector<SimplifyPoint> pts;
         for (int k : keys) pts.push_back({t[k], pos[k]});
         std::vector<int> kept;
         for (int li : SimplifyIndices(pts, o.rdp_tolerance)) kept.push_back(keys[li]);

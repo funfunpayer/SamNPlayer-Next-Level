@@ -134,10 +134,47 @@ private slots:
         QMetaObject::invokeMethod(named(root.get(), "createButton"), "clicked");
         QTRY_VERIFY(gen->running());
         QVERIFY(named(root.get(), "cancelButton")->isVisible());
-        QTRY_VERIFY_WITH_TIMEOUT(!root->property("reviewed").toString().isEmpty(), 60000);
-        QCOMPARE(root->property("reviewed").toString(), dir_.filePath("clip.samn"));
-        QVERIFY(named(root.get(), "reviewButton")->isVisible());
+        // D-144: the result opens here, in the Editor, not in the Player.
+        auto* edit = root->property("page").value<QObject*>()->property("editor").value<QObject*>();
+        QVERIFY(edit);
+        QTRY_VERIFY_WITH_TIMEOUT(edit->property("hasScript").toBool(), 60000);
+        QVERIFY(root->property("reviewed").toString().isEmpty());
         QCOMPARE(named(root.get(), "progressText")->property("text").toString(), QStringLiteral("100 %"));
+        QTRY_VERIFY(named(root.get(), "lane_stroke"));
+        auto* lane = named(root.get(), "lane_stroke");
+        QTRY_VERIFY(lane->isVisible() && lane->height() > 40);
+        auto at = [&](QQuickItem* item, double fx, double fy) {
+            return item->mapToScene(QPointF(item->width() * fx, item->height() * fy)).toPoint();
+        };
+
+        // A click on the curve sets a point there and saves; Undo takes it back.
+        QVERIFY(!edit->property("canUndo").toBool());
+        QTest::mousePress(&window, Qt::LeftButton, {}, at(lane, 0.37, 0.05));
+        QTest::mouseMove(&window, at(lane, 0.38, 0.1));
+        QTest::mouseRelease(&window, Qt::LeftButton, {}, at(lane, 0.38, 0.1));
+        QTRY_VERIFY(edit->property("canUndo").toBool());
+        auto* undo = named(root.get(), "undoButton");
+        QTest::mouseClick(&window, Qt::LeftButton, {}, at(undo, 0.5, 0.5));
+        QTRY_VERIFY(!edit->property("canUndo").toBool());
+        QVERIFY(edit->property("canRedo").toBool());
+
+        // Drag on the ruler marks a range; a range tool works on it.
+        auto* ruler = named(root.get(), "ruler");
+        QTest::mousePress(&window, Qt::LeftButton, {}, at(ruler, 0.2, 0.5));
+        QTest::mouseMove(&window, at(ruler, 0.4, 0.5));
+        QTest::mouseRelease(&window, Qt::LeftButton, {}, at(ruler, 0.6, 0.5));
+        QTRY_VERIFY(edit->property("hasMarker").toBool());
+        auto* invertRange = named(root.get(), "tool_invert");
+        QCOMPARE(invertRange->property("text").toString(), QStringLiteral("Invert range"));
+        QMetaObject::invokeMethod(invertRange, "clicked");
+        QTRY_VERIFY(edit->property("canUndo").toBool());
+        QCOMPARE(edit->property("undoText").toString(), QStringLiteral("Undo: Invert range"));
+
+        // "Play in the Player" hands the edited script over.
+        QVERIFY(named(root.get(), "reviewButton")->isVisible());
+        QMetaObject::invokeMethod(named(root.get(), "reviewButton"), "clicked");
+        QCOMPARE(root->property("reviewed").toString(), dir_.filePath("clip.samn"));
+        if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT_EDIT"); !shot.isEmpty()) window.grabWindow().save(QString::fromLocal8Bit(shot));
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
     }
 };

@@ -41,6 +41,8 @@ class CurveItem : public QQuickPaintedItem {
     Q_PROPERTY(qreal glow MEMBER glow_ NOTIFY styleChanged)
     Q_PROPERTY(qreal fill MEMBER fill_ NOTIFY styleChanged)
     Q_PROPERTY(QString mode READ modeName NOTIFY modeChanged)
+    // The Editor's grabbed point (drawn large and gold, 0.7); -1 = none.
+    Q_PROPERTY(int activeIndex READ activeIndex WRITE setActiveIndex NOTIFY activeIndexChanged)
 public:
     enum class Mode { Empty, Smooth, Fine, Tempo };
     // An O-marker band (0.7 drawOMarkerBands).
@@ -80,6 +82,14 @@ public:
     Q_INVOKABLE QString hoverText(double x) const;
     // Script time at x.
     Q_INVOKABLE double msAtX(double x) const;
+    // Position (0..100) at y, clamped.
+    Q_INVOKABLE double posAtY(double y) const;
+    // The point nearest to (x, y) within radiusPx (0.7 EDIT_HIT_RADIUS_PX
+    // 12), or -1. Looks only at the points inside the radius in time, so it
+    // stays fast on 100 000 points (D-083).
+    Q_INVOKABLE int hitPoint(double x, double y, double radiusPx = 12) const;
+    int activeIndex() const { return activeIndex_; }
+    void setActiveIndex(int index);
     void paint(QPainter* p) override;
     // How often the static layer (everything but the playhead) was drawn.
     int layerRenders() const { return layerRenders_; }
@@ -91,6 +101,7 @@ signals:
     void styleChanged();
     void modeChanged();
     void markerChanged();
+    void activeIndexChanged();
 
 private:
     std::pair<double, double> timeWindow() const;
@@ -106,6 +117,7 @@ private:
     std::vector<Band> bands_;
     double beatPeriod_ = 0, markerStart_ = 0, markerEnd_ = 0, speedLimit_ = 0;
     qint64 playhead_ = -1;
+    int activeIndex_ = -1;
     double viewStart_ = 0, viewEnd_ = -1;
     QColor lineColor_{0xff, 0x8a, 0x23};
     QColor playheadColor_{0xff, 0xff, 0xff};

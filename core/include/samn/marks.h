@@ -17,6 +17,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include "samn/funscript.h"
+
 namespace samn {
 
 // Unreadable file / invalid JSON / invalid metadata (Go: returned error).
@@ -63,6 +65,12 @@ std::map<std::string, std::string> ReadMetadataMap(const std::filesystem::path& 
 // instead of compact json.Marshal (bookmarks, chapters).
 void PatchMetadataKey(const std::filesystem::path& path, const std::string& key,
                       const std::string& encoded, bool indented = false);
+
+// Replace the script's actions (the Editor's save), keep every other field
+// and all metadata as they are, write atomically and indented. The actions
+// are written sorted by time. Throws MarksError when the file cannot be read
+// or written.
+void PatchActions(const std::filesystem::path& path, const std::vector<Action>& actions);
 
 // Go json.Marshal of a string: quoted, invalid UTF-8 replaced by U+FFFD,
 // <, >, & and U+2028/2029 escaped, other non-ASCII kept as is.

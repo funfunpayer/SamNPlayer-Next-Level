@@ -234,7 +234,7 @@ void GeneratorController::onEvent(const engine::GenerateEvent& e) {
             percent_ = 100;
             progress_text_ = QStringLiteral("100 %");
             appendLog(tr("Wrote %1 (%2 actions)").arg(msg).arg(e.actions));
-            setStatus(tr("Done — the script opens in the Player."));
+            setStatus(tr("Done — the script is open below for editing."));
             break;
         }
         case engine::GenerateEventKind::kCanceled:
