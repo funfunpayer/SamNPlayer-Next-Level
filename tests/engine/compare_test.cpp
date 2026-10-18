@@ -73,8 +73,11 @@ TEST_CASE("compare: the manifest is checked and resolved") {
     CHECK(!LoadManifest(dir / "empty.json", &s, &error));
     CHECK(!LoadManifest(dir / "missing.json", &s, &error));
 
+    // An absolute path in the system's own form ("/abs/..." is not absolute on Windows).
+    const fs::path abs_old = fs::temp_directory_path() / "o.funscript";
     std::ofstream(dir / "ok.json") << R"({"window_ms": 5000, "clips": [{"name": "c1", "video": "v/a.mp4",
-        "box": [1, 2, 3, 4], "profile": "autotune", "reference": "r.funscript", "old": "/abs/o.funscript"}]})";
+        "box": [1, 2, 3, 4], "profile": "autotune", "reference": "r.funscript", "old": ")"
+                                   << abs_old.generic_u8string() << R"("}]})";
     const auto clips_ = LoadManifest(dir / "ok.json", &s, &error);
     REQUIRE_MESSAGE(clips_, error);
     REQUIRE(clips_->size() == 1);
@@ -84,7 +87,7 @@ TEST_CASE("compare: the manifest is checked and resolved") {
     CHECK(c.box == cv::Rect(1, 2, 3, 4));
     CHECK(c.signal.profile == "autotune");
     CHECK(c.reference == dir / "r.funscript");
-    CHECK(c.old_output == fs::path("/abs/o.funscript"));
+    CHECK(c.old_output == fs::u8path(abs_old.generic_u8string()));
     CHECK(s.window_ms == 5000);
     fs::remove_all(dir);
 }
