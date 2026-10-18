@@ -20,6 +20,14 @@ Item {
         const w = page.Window.window
         if (w) w.visibility = fullStage ? Window.FullScreen : Window.Windowed
     }
+    // Theatre (D-144): the video in the window without the side panels; the
+    // curve strip under it stays and can be switched off. Remembered.
+    property bool theatre: ctrl.uiValue("player.theatre", false)
+    onTheatreChanged: ctrl.setUiValue("player.theatre", theatre)
+    property bool theatreLanes: ctrl.uiValue("player.theatreLanes", true)
+    onTheatreLanesChanged: ctrl.setUiValue("player.theatreLanes", theatreLanes)
+    // Side panels away: fullscreen or theatre.
+    readonly property bool bare: fullStage || theatre
     property bool muted: false
     // The mode deck uses its number keys while it is open.
     property bool deckOpen: false
@@ -196,7 +204,8 @@ Item {
     }
     LibraryPanel {
         id: libraryPanel
-        visible: !page.fullStage
+        objectName: "libraryPanel"
+        visible: !page.bare
         anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom
         library: library
         currentPath: ctrl.scriptPath
@@ -209,7 +218,8 @@ Item {
     }
     InspectorPanel {
         id: inspector
-        visible: !page.fullStage
+        objectName: "inspector"
+        visible: !page.bare
         anchors.right: parent.right; anchors.top: parent.top; anchors.bottom: parent.bottom
         ctrl: ctrl
         device: page.device
@@ -222,8 +232,8 @@ Item {
     }
     Item {
         id: center
-        anchors.left: page.fullStage ? parent.left : libraryPanel.right; anchors.leftMargin: page.fullStage ? 0 : 14
-        anchors.right: page.fullStage ? parent.right : inspector.left; anchors.rightMargin: page.fullStage ? 0 : 14
+        anchors.left: page.bare ? parent.left : libraryPanel.right; anchors.leftMargin: page.bare ? 0 : 14
+        anchors.right: page.bare ? parent.right : inspector.left; anchors.rightMargin: page.bare ? 0 : 14
         anchors.top: parent.top; anchors.bottom: parent.bottom
 
         // Header: what is open, the script variant, Open.
@@ -275,6 +285,25 @@ Item {
                         snapshotDialog.open()
                     }
                 }
+            }
+            IconButton {
+                id: theatreLanesBtn
+                objectName: "theatreLanesButton"
+                anchors.right: theatreBtn.left; anchors.rightMargin: 8; anchors.verticalCenter: parent.verticalCenter
+                width: 36; height: 36; icon: "waveform"
+                visible: page.theatre && !page.empty
+                opacity: page.theatreLanes ? 1 : 0.45
+                tip: page.theatreLanes ? qsTr("Hide the curve and waveform") : qsTr("Show the curve and waveform")
+                onClicked: page.theatreLanes = !page.theatreLanes
+            }
+            IconButton {
+                id: theatreBtn
+                objectName: "theatreButton"
+                anchors.right: fsBtn.left; anchors.rightMargin: 8; anchors.verticalCenter: parent.verticalCenter
+                width: 36; height: 36; icon: page.theatre ? "minimize" : "video"
+                visible: !page.empty
+                tip: page.theatre ? qsTr("Leave theatre mode (T)") : qsTr("Theatre mode: the video large, panels away (T)")
+                onClicked: page.theatre = !page.theatre
             }
             IconButton {
                 id: fsBtn
@@ -339,10 +368,13 @@ Item {
         // Video card: stage + transport.
         GlassCard {
             id: videoCard
+            objectName: "videoCard"
             visible: !page.empty
             anchors.top: page.fullStage ? parent.top : errorBar.bottom; anchors.topMargin: page.fullStage ? 0 : 10
             width: parent.width
-            height: page.fullStage ? parent.height : Math.max(300, (parent.height - header.height) * 0.58)
+            height: page.fullStage ? parent.height
+                    : page.theatre ? (page.theatreLanes ? Math.max(300, (parent.height - header.height) * 0.76) : parent.height - header.height - 10)
+                    : Math.max(300, (parent.height - header.height) * 0.58)
             Rectangle {
                 id: stage
                 anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
@@ -568,7 +600,8 @@ Item {
         // Timeline card: the curve, the channel lanes and the audio level.
         GlassCard {
             id: timeline
-            visible: !page.empty && !page.fullStage
+            objectName: "timeline"
+            visible: !page.empty && !page.fullStage && (!page.theatre || page.theatreLanes)
             anchors.top: videoCard.bottom; anchors.topMargin: 12
             anchors.bottom: parent.bottom
             width: parent.width
@@ -984,4 +1017,5 @@ Item {
         }
     }
     Shortcut { sequence: "Esc"; enabled: page.fullStage && !page.deckOpen; onActivated: page.fullStage = false }
+    Shortcut { sequence: "T"; enabled: !page.deckOpen && !page.empty; onActivated: page.theatre = !page.theatre }
 }
