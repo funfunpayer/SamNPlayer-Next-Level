@@ -5,7 +5,10 @@
 #include <QString>
 #include <QStringList>
 #include <QtQml/qqmlregistration.h>
+#include <atomic>
 #include <functional>
+#include <memory>
+#include <thread>
 #include <vector>
 
 #include "samn/curve_geometry.h"
@@ -37,8 +40,9 @@ class EditorController : public QObject {
     Q_PROPERTY(QStringList lanes READ lanes NOTIFY lanesChanged)
     // The video the script belongs to: the sound for "Vibration from the sound".
     Q_PROPERTY(QString videoPath READ videoPath WRITE setVideoPath NOTIFY videoPathChanged)
-    // A create tool is working (decoding the sound).
+    // A create tool is working (decoding the sound, reading the beat bar).
     Q_PROPERTY(bool busy READ busy NOTIFY busyChanged)
+    Q_PROPERTY(int progress READ progress NOTIFY progressChanged)  // 0..100 while busy
     Q_PROPERTY(int pointCount READ pointCount NOTIFY curvesChanged)
     Q_PROPERTY(double durationMs READ durationMs WRITE setDurationMs NOTIFY durationChanged)
     // The lane the range tools work on: the one last touched.
@@ -64,6 +68,7 @@ class EditorController : public QObject {
 
 public:
     explicit EditorController(QObject* parent = nullptr);
+    ~EditorController() override;
 
     QString path() const { return path_; }
     QString name() const;
@@ -73,6 +78,7 @@ public:
     QString videoPath() const { return video_path_; }
     void setVideoPath(const QString& path);
     bool busy() const { return busy_; }
+    int progress() const { return progress_; }
     int pointCount() const;
     double durationMs() const { return duration_ms_; }
     void setDurationMs(double ms);
@@ -131,6 +137,14 @@ public:
     // Asynchronous: busy until the sound is decoded. A script without a
     // suction lane gets its mapped suction first, so it plays the same.
     Q_INVOKABLE bool vibrationFromSound(bool withContact);
+    // The stroke from the video's beat bar (Cock Hero / Fap Hero; 0.7
+    // CreateBeatBarScript): finds the bar, times every beat, one stroke per
+    // beat. Runs on its own thread. Without an open script it opens or
+    // creates <video>.funscript beside the video; the stroke then replaces
+    // the lane as one undo step, so nothing is lost.
+    Q_INVOKABLE bool strokeFromBeatBar();
+    // Stops a running create tool (the beat bar).
+    Q_INVOKABLE void cancelTool();
 
     Q_INVOKABLE bool undo();
     Q_INVOKABLE bool redo();
@@ -146,6 +160,7 @@ signals:
     void lanesChanged();
     void videoPathChanged();
     void busyChanged();
+    void progressChanged();
     void curvesChanged();
     void durationChanged();
     void activeLaneChanged();
@@ -165,7 +180,9 @@ private:
     bool stepDone();
     samn::Document companion() const;  // the .samn as saved, or a new one
     void onSoundEnvelope(const std::vector<double>& envelope);
-    void setBusy(bool busy);  // saves; false when the save failed
+    void setBusy(bool busy);
+    void setProgress(int percent);
+    void onBeats(bool found, const std::vector<double>& beats, double bpm, const QString& error);  // saves; false when the save failed
     bool save();
     void pushCurves();
     void setView(samn::ViewWindow v);
@@ -186,6 +203,9 @@ private:
     bool busy_ = false;
     bool sound_with_contact_ = false;
     AudioLevelDecoder* sound_ = nullptr;
+    int progress_ = 0;
+    std::shared_ptr<std::atomic<bool>> tool_cancel_;
+    std::thread tool_;
     QPointer<CurveItem> drag_curve_;
     std::string drag_lane_;
     int drag_index_ = -1;

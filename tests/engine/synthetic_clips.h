@@ -7,6 +7,7 @@
 #include <cmath>
 #include <filesystem>
 #include <random>
+#include <vector>
 #include <string>
 
 #include <opencv2/imgproc.hpp>
@@ -94,6 +95,45 @@ inline bool WriteLightingCutJump(const std::filesystem::path& p, int seconds, in
         w.write(f);
     }
     return true;
+}
+
+// A beat-bar video (Cock Hero style): 640 x 384 at 30 fps over a busy
+// picture, a dark strip near the bottom (rows 336..352, the detector's rows
+// 168..176) with a bright target line at x 120 and dots that scroll left by
+// 16 px per frame, one every 17 frames. vertical draws the same strip down
+// the left edge of a 384 x 640 video (the detector turns it back). Returns
+// the true beat times in ms (a dot on the target line); empty when the
+// writer cannot open.
+inline std::vector<double> WriteBeatBar(const std::filesystem::path& p, int seconds, bool vertical) {
+    constexpr int W = 640, H = 384, fps = 30, y0 = 336, y1 = 352, target = 120, speed = 16, period = 17;
+    const cv::Size size = vertical ? cv::Size(H, W) : cv::Size(W, H);
+    cv::VideoWriter w(p.u8string(), cv::VideoWriter::fourcc('m', 'p', '4', 'v'), fps, size, true);
+    if (!w.isOpened()) return {};
+    const cv::Mat bg = Texture(W, H, 23, 400);
+    std::vector<double> dots, beats;
+    const int n = fps * seconds;
+    for (int i = 0; i < n; ++i) {
+        cv::Mat f = bg.clone();
+        if (i % period == 0) {
+            dots.push_back(W - 8);
+            beats.push_back((i + double(W - 8 - target) / speed) * 1000.0 / fps);
+        }
+        cv::rectangle(f, cv::Rect(0, y0, W, y1 - y0), cv::Scalar(10, 10, 10), cv::FILLED);
+        cv::rectangle(f, cv::Rect(target - 1, y0, 3, y1 - y0), cv::Scalar(200, 200, 200), cv::FILLED);
+        std::vector<double> keep;
+        for (double d : dots) {
+            if (d < target) continue;
+            cv::rectangle(f, cv::Rect(int(d) - 4, y0, 9, y1 - y0), cv::Scalar(250, 250, 250), cv::FILLED);
+            keep.push_back(d - speed);
+        }
+        dots = keep;
+        if (vertical) cv::rotate(f, f, cv::ROTATE_90_COUNTERCLOCKWISE);
+        w.write(f);
+    }
+    std::vector<double> out;
+    for (double b : beats)
+        if (b < (n - 1) * 1000.0 / fps) out.push_back(b);
+    return out;
 }
 
 }  // namespace samn::engine::testclips

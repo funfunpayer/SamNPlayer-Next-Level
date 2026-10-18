@@ -211,4 +211,32 @@ std::vector<double> BeatTimes(const std::vector<GrayFrame>& frames, const BeatBa
     return tr.beats();
 }
 
+struct BeatTimer::Impl {
+    Impl(const BeatBar& bar, double fps) : active(fps > 0 && bar.velocity != 0), tracker(bar, fps > 0 ? fps : 1) {}
+    bool active;
+    BeatTracker tracker;
+    std::vector<double> none;
+};
+
+BeatTimer::BeatTimer(const BeatBar& bar, double fps) : impl_(std::make_unique<Impl>(bar, fps)) {}
+
+BeatTimer::~BeatTimer() = default;
+
+void BeatTimer::AddStrip(const GrayFrame& strip) {
+    if (impl_->active) impl_->tracker.add(bandProfile(strip, 0, strip.h));
+}
+
+const std::vector<double>& BeatTimer::Beats() const { return impl_->active ? impl_->tracker.beats() : impl_->none; }
+
+double MedianBpm(const std::vector<double>& beatsMs) {
+    if (beatsMs.size() < 3) return 0;
+    std::vector<double> iv;
+    iv.reserve(beatsMs.size() - 1);
+    for (size_t i = 1; i < beatsMs.size(); ++i) iv.push_back(beatsMs[i] - beatsMs[i - 1]);
+    std::sort(iv.begin(), iv.end());
+    const size_t n = iv.size();
+    const double m = n % 2 ? iv[n / 2] : (iv[n / 2 - 1] + iv[n / 2]) / 2;
+    return m <= 0 ? 0 : std::round(60000 / m);
+}
+
 }  // namespace samn

@@ -101,3 +101,31 @@ TEST_CASE("beat bar: plain noise is not taken for a beat bar") {
     }
     CHECK_FALSE(FindBeatBar(frames).has_value());
 }
+
+TEST_CASE("beat bar: the streaming BeatTimer gives the same beats from the strip alone") {
+    const auto s = SynthBeatVideo(300, 320, 192, 168, 176, 60, -8, 17, 1);
+    const auto bar = FindBeatBar(s.frames);
+    REQUIRE(bar.has_value());
+    const auto whole = BeatTimes(s.frames, *bar, 30);
+    samn::BeatTimer timer(*bar, 30);
+    for (const GrayFrame& f : s.frames) {
+        GrayFrame strip{f.w, bar->y1 - bar->y0, {}};
+        strip.pix.assign(f.pix.begin() + ptrdiff_t(bar->y0) * f.w, f.pix.begin() + ptrdiff_t(bar->y1) * f.w);
+        timer.AddStrip(strip);
+    }
+    REQUIRE(!whole.empty());
+    CHECK(timer.Beats() == whole);
+
+    samn::BeatBar still = *bar;
+    still.velocity = 0;
+    samn::BeatTimer none(still, 30);
+    none.AddStrip(s.frames[0]);
+    CHECK(none.Beats().empty());
+}
+
+TEST_CASE("beat bar: median BPM (0.7 medianBPM)") {
+    CHECK(samn::MedianBpm({0, 500}) == 0);
+    CHECK(samn::MedianBpm({0, 500, 1000, 1500}) == 120);
+    CHECK(samn::MedianBpm({0, 500, 1000, 1400, 1800}) == 133);  // median of 500,500,400,400 = 450
+    CHECK(samn::MedianBpm({0, 0, 0}) == 0);
+}
