@@ -60,3 +60,10 @@ add_executable(editor_controller_test editor_controller_test.cpp)
 target_link_libraries(editor_controller_test PRIVATE samn_app Qt6::Test)
 add_test(NAME editor_controller_test COMMAND editor_controller_test)
 set_tests_properties(editor_controller_test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+# Video frames for the Editor: cache with a hard limit, async provider (D-142).
+add_executable(frame_cache_test frame_cache_test.cpp)
+target_link_libraries(frame_cache_test PRIVATE samn_app Qt6::Test)
+target_include_directories(frame_cache_test PRIVATE ${CMAKE_SOURCE_DIR}/tests/engine)
+add_test(NAME frame_cache_test COMMAND frame_cache_test)
+set_tests_properties(frame_cache_test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

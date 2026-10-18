@@ -196,7 +196,7 @@ Item {
             GlassCard {
                 objectName: "editorCard"
                 Layout.fillWidth: true
-                Layout.preferredHeight: edit.hasScript ? 300 : 96
+                Layout.preferredHeight: (edit.hasScript ? 300 : 96) + (gen.hasVideo ? 62 : 0)
                 ColumnLayout {
                     anchors.fill: parent; anchors.margins: 12; spacing: 6
                     RowLayout {
@@ -314,6 +314,56 @@ Item {
                                     onPositionChanged: (m) => { if (edit.dragging) { const t = edit.dragTo(m.x, m.y); if (t >= 0) gen.seekPreview(t) } }
                                     onReleased: edit.release()
                                     onDoubleClicked: (m) => edit.deleteAt(laneCurve, m.x, m.y)
+                                }
+                            }
+                        }
+                    }
+                    // Single frames along the shown time (D-144); a click
+                    // shows that moment. Times snap to a power-of-two grid, so
+                    // zooming meets the same frames again in the cache.
+                    Item {
+                        id: strip
+                        objectName: "frameStrip"
+                        Layout.fillWidth: true; Layout.preferredHeight: 54
+                        visible: gen.hasVideo
+                        readonly property real t0: edit.hasScript ? edit.viewStartMs : 0
+                        readonly property real t1: edit.hasScript ? edit.viewEndMs : gen.durationMs
+                        readonly property int count: Math.max(1, Math.floor(width / 86))
+                        readonly property real grid: {
+                            const step = Math.max(1, (t1 - t0) / count)
+                            return Math.pow(2, Math.floor(Math.log2(step)))
+                        }
+                        Row {
+                            anchors.fill: parent; spacing: 2
+                            Repeater {
+                                model: strip.visible ? strip.count : 0
+                                delegate: Item {
+                                    id: thumb
+                                    required property int index
+                                    readonly property real ms: {
+                                        const t = strip.t0 + (index + 0.5) * (strip.t1 - strip.t0) / strip.count
+                                        return Math.min(Math.max(0, gen.durationMs - 1), Math.round(t / strip.grid) * strip.grid)
+                                    }
+                                    readonly property bool current: gen.previewMs >= strip.t0 + index * (strip.t1 - strip.t0) / strip.count
+                                                                   && gen.previewMs < strip.t0 + (index + 1) * (strip.t1 - strip.t0) / strip.count
+                                    width: strip.width / strip.count - 2; height: strip.height
+                                    Image {
+                                        objectName: "frameThumb"
+                                        anchors.fill: parent
+                                        asynchronous: true
+                                        fillMode: Image.PreserveAspectCrop
+                                        sourceSize.height: 108
+                                        source: "image://frames/" + Math.round(thumb.ms) + "/108/" + encodeURIComponent(gen.videoPath)
+                                    }
+                                    Rectangle {
+                                        anchors.fill: parent; radius: 3; color: "transparent"
+                                        border.width: thumb.current ? 2 : 1
+                                        border.color: thumb.current ? Theme.cyan : Qt.rgba(1, 1, 1, 0.08)
+                                    }
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        onClicked: gen.seekPreview(thumb.ms)
+                                    }
                                 }
                             }
                         }

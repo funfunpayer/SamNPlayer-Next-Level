@@ -13,6 +13,7 @@
 #include <QtTest>
 #include <cstdio>
 
+#include "frame_provider.h"
 #include "generator_controller.h"
 #include "icon_provider.h"
 #include "synthetic_clips.h"
@@ -61,6 +62,7 @@ private slots:
         QQmlEngine engine;
         engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
         engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+        engine.addImageProvider(QStringLiteral("frames"), new samn::ui::FrameProvider);
         QQmlComponent comp(&engine);
         comp.setData(R"(
             import QtQuick
@@ -144,6 +146,10 @@ private slots:
         QTRY_VERIFY_WITH_TIMEOUT(edit->property("hasScript").toBool(), 60000);
         QVERIFY(root->property("reviewed").toString().isEmpty());
         QCOMPARE(named(root.get(), "progressText")->property("text").toString(), QStringLiteral("100 %"));
+        // The frame strip under the curves loads its frames off the UI thread.
+        QVERIFY(named(root.get(), "frameStrip")->isVisible());
+        QTRY_VERIFY(named(root.get(), "frameThumb"));
+        QTRY_COMPARE(named(root.get(), "frameThumb")->property("status").toInt(), 1);  // Image.Ready
         QTRY_VERIFY(named(root.get(), "lane_stroke"));
         auto* lane = named(root.get(), "lane_stroke");
         QTRY_VERIFY(lane->isVisible() && lane->height() > 40);
