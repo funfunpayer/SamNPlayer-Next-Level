@@ -1752,8 +1752,7 @@ std::pair<std::vector<Action>, std::vector<Action>> BakeAxesFromRecipe(const std
     return {FramesToActions(frames, true, max_step_ms), FramesToActions(frames, false, max_step_ms)};
 }
 
-void Document::BakeNeoAxes() {
-    Normalize();
+MapOptions Document::BakeOptions() const {
     MapOptions opts = RecipeFor(profile);
     const DeviceRecipe& r = recipe;
     if (!r.sync.empty()) {
@@ -1775,7 +1774,12 @@ void Document::BakeNeoAxes() {
     opts.balance = r.feel_balance;
     opts.tracking_gaps = tracking_gaps;
     opts.contact_vibration_envelope = -1;
-    auto axes = BakeAxesFromRecipe(general, opts, 100);
+    return opts;
+}
+
+void Document::BakeNeoAxes() {
+    Normalize();
+    auto axes = BakeAxesFromRecipe(general, BakeOptions(), 100);
     vibration = std::move(axes.first);
     suction = std::move(axes.second);
     playback_source = PlaybackAxes;

@@ -8,12 +8,14 @@
 #include <fstream>
 #include <sstream>
 
+#include "audio_level.h"
 #include "curve_item.h"
 #include "samn/funscript.h"
 #include "samn/marks.h"
 #include "samn/range_edit.h"
 #include "samn/samn_file.h"
 #include "samn/simplify.h"
+#include "samn/sound_vibration.h"
 
 namespace samn::ui {
 namespace {
@@ -28,7 +30,25 @@ QString LaneTitle(const std::string& lane) {
 
 }  // namespace
 
-EditorController::EditorController(QObject* parent) : QObject(parent) {}
+EditorController::EditorController(QObject* parent) : QObject(parent), sound_(new AudioLevelDecoder(this)) {
+    connect(sound_, &AudioLevelDecoder::finished, this, &EditorController::onSoundEnvelope);
+    connect(sound_, &AudioLevelDecoder::failed, this, [this](const QString& error) {
+        setBusy(false);
+        setStatus(tr("Vibration from the sound: %1").arg(error));
+    });
+}
+
+void EditorController::setVideoPath(const QString& path) {
+    if (path == video_path_) return;
+    video_path_ = path;
+    emit videoPathChanged();
+}
+
+void EditorController::setBusy(bool busy) {
+    if (busy == busy_) return;
+    busy_ = busy;
+    emit busyChanged();
+}
 
 QString EditorController::name() const { return QFileInfo(path_).fileName(); }
 
@@ -178,6 +198,11 @@ void EditorController::pushCurves() {
     for (const auto& c : curves_)
         if (c) c->setActions(session_.Axis(laneKey(c)));
     emit curvesChanged();
+    // Only a new or removed lane rebuilds the lane list (not every drag move).
+    if (const QStringList now = lanes(); now != lanes_) {
+        lanes_ = now;
+        emit lanesChanged();
+    }
 }
 
 double EditorController::press(CurveItem* curve, double x, double y) {
@@ -325,6 +350,94 @@ bool EditorController::invert() {
                       false);
 }
 
+bool EditorController::axesFromStroke() {
+    if (!hasScript() || drag_index_ >= 0 || busy_) return false;
+    if (session_.Axis("stroke").size() < 2) {
+        setStatus(tr("The stroke needs at least 2 points."));
+        return false;
+    }
+    try {
+        samn::Document doc = companion();
+        doc.general = session_.Axis("stroke");
+        doc.BakeNeoAxes();
+        if (samn_path_.isEmpty()) {
+            samn_path_ = QString::fromStdString(samn::CompanionSamnPath(path_.toStdString()));
+            emit scriptChanged();
+        }
+        session_.Begin("vibration and suction from the stroke");
+        session_.Replace("vibration", doc.vibration, {});
+        session_.Replace("suction", doc.suction, {});
+        if (!session_.Commit()) {
+            setStatus(tr("Vibration and suction already follow the stroke."));
+            return false;
+        }
+    } catch (const std::exception& e) {
+        session_.Rollback();
+        setStatus(tr("Vibration and suction: %1").arg(QString::fromUtf8(e.what())));
+        return false;
+    }
+    pushCurves();
+    if (stepDone())
+        setStatus(tr("Vibration and suction written from the stroke (%1 and %2 points).")
+                      .arg(session_.Axis("vibration").size())
+                      .arg(session_.Axis("suction").size()));
+    return true;
+}
+
+bool EditorController::vibrationFromSound(bool withContact) {
+    if (!hasScript() || drag_index_ >= 0 || busy_) return false;
+    if (video_path_.isEmpty()) {
+        setStatus(tr("No video: the sound comes from the script's video."));
+        return false;
+    }
+    if (session_.Axis("stroke").size() < 2) {
+        setStatus(tr("The stroke needs at least 2 points."));
+        return false;
+    }
+    sound_with_contact_ = withContact;
+    setBusy(true);
+    setStatus(tr("Reading the sound…"));
+    sound_->start(video_path_, int(samn::kSoundVibStepMs));
+    return true;
+}
+
+void EditorController::onSoundEnvelope(const std::vector<double>& envelope) {
+    setBusy(false);
+    if (!hasScript()) return;
+    if (drag_index_ >= 0) release();
+    try {
+        samn::Document doc = companion();
+        doc.general = session_.Axis("stroke");
+        doc.Normalize();
+        const auto mapped = samn::ToIntensityCurve(session_.Axis("stroke"), doc.BakeOptions());
+        if (!mapped || envelope.empty()) {
+            setStatus(tr("Vibration from the sound: the video has no sound to follow."));
+            return;
+        }
+        const auto mode = sound_with_contact_ ? samn::SoundVibrationMode::kSoundContact : samn::SoundVibrationMode::kSound;
+        std::vector<samn::Action> vibration = samn::SoundVibrationLane(*mapped, envelope, 0, mode);
+        if (samn_path_.isEmpty()) {
+            samn_path_ = QString::fromStdString(samn::CompanionSamnPath(path_.toStdString()));
+            emit scriptChanged();
+        }
+        session_.Begin(sound_with_contact_ ? "vibration from the sound and contact" : "vibration from the sound");
+        // Suction stays as it plays now: written first when there is no lane yet.
+        if (session_.Axis("suction").empty()) session_.Replace("suction", samn::FramesToLane(*mapped, false), {});
+        session_.Replace("vibration", std::move(vibration), {});
+        if (!session_.Commit()) {
+            setStatus(tr("The vibration already follows the sound."));
+            return;
+        }
+    } catch (const std::exception& e) {
+        session_.Rollback();
+        setStatus(tr("Vibration from the sound: %1").arg(QString::fromUtf8(e.what())));
+        return;
+    }
+    pushCurves();
+    if (stepDone())
+        setStatus(tr("Vibration from the sound written (%1 points).").arg(session_.Axis("vibration").size()));
+}
+
 bool EditorController::undo() {
     if (!session_.Undo()) return false;
     pushCurves();
@@ -345,14 +458,31 @@ bool EditorController::stepDone() {
     return ok;
 }
 
+samn::Document EditorController::companion() const {
+    std::error_code ec;
+    if (!samn_path_.isEmpty() && std::filesystem::exists(FsPath(samn_path_), ec))
+        return samn::LoadDocument(FsPath(samn_path_));
+    samn::Document doc;
+    doc.version = samn::SamnCurrentVersion;
+    doc.kind = samn::SamnKind;
+    doc.creator = "SamNPlayer";
+    doc.general = session_.Axis("stroke");
+    return doc;
+}
+
 bool EditorController::save() {
     try {
         samn::PatchActions(FsPath(path_), session_.Axis("stroke"));
         if (!samn_path_.isEmpty()) {
-            samn::Document doc = samn::LoadDocument(FsPath(samn_path_));
+            samn::Document doc = companion();
             doc.general = session_.Axis("stroke");  // the .samn carries the stroke too
             doc.vibration = session_.Axis("vibration");
             doc.suction = session_.Axis("suction");
+            // Written lanes play as they are (0.7: axes mode after a bake).
+            // Without lanes (a tool undone) the recipe plays again.
+            const char* source = doc.vibration.empty() && doc.suction.empty() ? samn::PlaybackRecipe : samn::PlaybackAxes;
+            doc.playback_source = source;
+            doc.recipe.playback_source = source;
             samn::SaveDocument(FsPath(samn_path_), doc);
         }
     } catch (const std::exception& e) {
