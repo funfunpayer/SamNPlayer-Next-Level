@@ -132,14 +132,18 @@ TEST_CASE("generate: never overwrites unless asked") {
     REQUIRE(rec.take().size() == 1);
     CHECK(rec.take().back().kind == GenerateEventKind::kError);
     req.auto_ozone = false;
-    std::ifstream in(dir / "standard.funscript");
-    std::stringstream ss;
-    ss << in.rdbuf();
-    CHECK(ss.str() == "keep me");
+    {
+        // Closed before the overwrite: Windows refuses to replace an open file.
+        std::ifstream in(dir / "standard.funscript");
+        std::stringstream ss;
+        ss << in.rdbuf();
+        CHECK(ss.str() == "keep me");
+    }
 
     req.overwrite = true;
     Generate(req, 2, {}, rec.fn());
-    CHECK(rec.take().back().kind == GenerateEventKind::kDone);
+    const auto last = rec.take().back();
+    CHECK_MESSAGE(last.kind == GenerateEventKind::kDone, last.message);
     fs::remove_all(dir);
 }
 

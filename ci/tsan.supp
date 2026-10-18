@@ -14,3 +14,6 @@ called_from_lib:libopencv_core.so
 # mutex at thread exit; TSan cannot see OpenCV's locking.
 mutex:__GI___nptl_deallocate_tsd
 mutex:__nptl_deallocate_tsd
+# The same report when the runner's libc has no symbols: matched by the
+# mutex's heap block, which libopencv_core allocated.
+mutex:libopencv_core.so

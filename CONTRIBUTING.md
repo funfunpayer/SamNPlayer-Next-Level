@@ -86,6 +86,13 @@ When sources disagree, the code and reproducible tests win. The 0.7 code
    - no string building with chained `+`.
 
    Prefer composition to multiple inheritance; virtual calls are fine outside per-sample loops.
+19. **Let the compiler check it.** New code uses:
+   - `override` on every overriding function, `final` where a class is not meant to be derived from;
+   - `= delete` for copies and conversions that must not happen;
+   - `enum class` (plain `enum` only where Qt's `Q_ENUM` needs it);
+   - `[[nodiscard]]` on functions whose result must not be ignored (load, save, parse, anything that reports an error);
+   - structured bindings (`auto [a, b]`) where they make code clearer;
+   - `constexpr` for constants, `std::chrono` for durations.
 
 ## Workflow
 
