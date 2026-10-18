@@ -36,34 +36,34 @@
 
 | | Tests | ported | covered | todo-now | todo-later | n/a |
 |---|---:|---:|---:|---:|---:|---:|
-| **All** | **1141** | 175 | 65 | **0** | 851 | 50 |
-| Go | 821 | 156 | 31 | 0 | 589 | 45 |
+| **All** | **1141** | 229 | 66 | **0** | 794 | 52 |
+| Go | 821 | 210 | 32 | 0 | 532 | 47 |
 | Python | 320 | 19 | 34 | 0 | 262 | 5 |
 
 ### Per old package
 
 | Old package | Files | Tests | ported | covered | todo-now | todo-later | n/a |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| `funscript` | 36 | 170 | 75 | 1 | 0 | 94 | 0 |
+| `funscript` | 36 | 170 | 95 | 1 | 0 | 72 | 2 |
 | `device` | 7 | 41 | 39 | 2 | 0 | 0 | 0 |
 | `player` | 7 | 61 | 5 | 9 | 0 | 44 | 3 |
 | `samn` | 2 | 5 | 5 | 0 | 0 | 0 | 0 |
 | `sam` | 7 | 37 | 9 | 0 | 0 | 28 | 0 |
 | `videox` | 6 | 26 | 0 | 0 | 0 | 17 | 9 |
 | `update` | 3 | 14 | 0 | 0 | 0 | 14 | 0 |
-| `motionx` | 2 | 10 | 0 | 0 | 0 | 10 | 0 |
+| `motionx` | 2 | 10 | 4 | 0 | 0 | 6 | 0 |
 | `pluginhost` | 2 | 10 | 0 | 0 | 0 | 10 | 0 |
 | `edition` | 1 | 1 | 0 | 0 | 0 | 0 | 1 |
 | `legal` | 1 | 2 | 0 | 0 | 0 | 2 | 0 |
 | `logging` | 1 | 1 | 0 | 0 | 0 | 1 | 0 |
 | `cmd/cli` | 7 | 18 | 0 | 0 | 0 | 12 | 6 |
 | `cmd/gui-wails (Go)` | 68 | 188 | 16 | 18 | 0 | 141 | 13 |
-| `generator (Go)` | 72 | 237 | 7 | 1 | 0 | 216 | 13 |
+| `generator (Go)` | 72 | 237 | 37 | 2 | 0 | 185 | 13 |
 | `generator (Python)` | 56 | 151 | 0 | 0 | 0 | 151 | 0 |
 | `native/tests (Python)` | 4 | 13 | 13 | 0 | 0 | 0 | 0 |
 | `scripts/benchmark-prep (Python)` | 1 | 8 | 0 | 0 | 0 | 8 | 0 |
 | `frontend (Python/Playwright UI tests)` | 148 | 148 | 6 | 34 | 0 | 103 | 5 |
-| **Total** | **431** | **1141** | **175** | **65** | **0** | **851** | **50** |
+| **Total** | **431** | **1141** | **229** | **66** | **0** | **794** | **52** |
 
 `generator (Go)` includes the sub-packages `aiscript`, `bodyparts`, `posttrack`, `profilemodel`, `simpletrack`, `strokepreview`, `trackcv`, `trackutil`.
 
@@ -71,15 +71,15 @@
 
 | Sub-package | Files | Tests | ported | covered | todo-now | todo-later | n/a |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| `generator/(top level)` | 44 | 122 | 7 | 1 | 0 | 101 | 13 |
+| `generator/(top level)` | 44 | 122 | 9 | 1 | 0 | 99 | 13 |
 | `generator/aiscript` | 3 | 12 | 0 | 0 | 0 | 12 | 0 |
 | `generator/bodyparts` | 1 | 4 | 0 | 0 | 0 | 4 | 0 |
-| `generator/posttrack` | 3 | 9 | 0 | 0 | 0 | 9 | 0 |
+| `generator/posttrack` | 3 | 9 | 6 | 0 | 0 | 3 | 0 |
 | `generator/profilemodel` | 1 | 6 | 0 | 0 | 0 | 6 | 0 |
 | `generator/simpletrack` | 5 | 12 | 0 | 0 | 0 | 12 | 0 |
 | `generator/strokepreview` | 3 | 9 | 0 | 0 | 0 | 9 | 0 |
-| `generator/trackcv` | 11 | 57 | 0 | 0 | 0 | 57 | 0 |
-| `generator/trackutil` | 1 | 6 | 0 | 0 | 0 | 6 | 0 |
+| `generator/trackcv` | 11 | 57 | 17 | 1 | 0 | 39 | 0 |
+| `generator/trackutil` | 1 | 6 | 5 | 0 | 0 | 1 | 0 |
 
 ## 2. Where the old tests went, per package
 
@@ -87,7 +87,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 
 ### 2.1 `funscript`
 
-36 files, 170 tests: 75 ported, 1 covered, 0 todo-now, 94 todo-later, 0 n/a.
+36 files, 170 tests: 95 ported, 1 covered, 0 todo-now, 72 todo-later, 2 n/a.
 
 | Old file | Test function(s) | Status | Where / why |
 |---|---|---|---|
@@ -101,7 +101,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 | `beat_strokes_test.go` | `TestBeatStrokesDownOnEveryBeat` | ported | core/python/tests/test_beat_strokes_parity.py::test_down_on_every_beat |
 | `beat_strokes_test.go` | `TestBeatStrokesSpeedLimitAndHold` | ported | core/python/tests/test_beat_strokes_parity.py::test_speed_limit_and_hold |
 | `companion_test.go` | `TestCompanionPath`, `TestLoadCompanionAxis`, `TestSaveCompanionAxisKeepsFieldsAndInversion`, `TestCreateCompanionAxis` | todo-later | P4 (companion axis files editable) and P2 (loading `<script>.<axis>.funscript` into the player): `CompanionPath`, `LoadCompanionAxis`, `SaveCompanionAxis`, `CreateCompanionAxis` are not ported. `PlaybackOutput::setScript` already takes axis tracks. |
-| `compare_dataset_test.go` | `TestCompareDatasetPairsAndReport`, `TestCompareDatasetSkipsFungenBinary` | todo-later | P3.8 (comparison controller / benchmark): dataset comparison is not ported. |
+| `compare_dataset_test.go` | `TestCompareDatasetPairsAndReport`, `TestCompareDatasetSkipsFungenBinary` | n/a | Replaced by design: the P3.8 controller takes an explicit manifest with content hashes (`samn_compare`, `engine/include/samn/engine/compare.h`, tests `tests/engine/compare_test.cpp`) instead of pairing FunGen exports by file name, which GD-05 names as a source of wrong pairs. |
 | `contact_marks_test.go` | `TestContactMarksHasAreas` | todo-later | P3.6 (contact marks): `ContactMarks.HasAreas` is not ported (the struct exists in `samn_file.h`, no helper). |
 | `contact_preview_test.go` | `TestPreviewContactVibrationSpanEarlier`, `TestPreviewContactVibrationImpulseQuieter` | todo-later | P3.3 (Generator preview): `PreviewContactVibration` is not ported. |
 | `contact_recipe_test.go` | `TestDefaultSyncForProfile`, `TestSaveContactRecipeStrokeEmptySyncStaysIndependent`, `TestSaveContactRecipeTjEmptySyncUsesSuctionPosition`, `TestSaveContactRecipeRoundtrip` | ported | tests/core/recipe_test.cpp "recipe: profile names and default sync" (`TestDefaultSyncForProfile`); tests/core/samn_file_test.cpp "samn_file: contact settings fill an empty stroke sync with independent", "...fill an empty tj sync with suction_position", "samn_file: contact recipe round trip, switching off clears span and curve" (adapted to `Document::ApplyContactRecipe`) |
@@ -129,11 +129,11 @@ One row per old test function (grouped when a whole file shares the same answer)
 | `omarker_test.go` | `TestSaveOMarkersPreservesUnknownFields` | ported | tests/core/omarker_test.cpp "o-markers: same bytes as 0.7, unknown fields kept, empty list writes null" |
 | `omarker_test.go` | `TestSaveOMarkersRejectsInvalidMarker` | ported | tests/core/omarker_test.cpp "o-markers: invalid markers are rejected and the file stays untouched" |
 | `omarker_test.go` | `TestSaveOMarkersEmptyListClearsMarkers` | ported | tests/core/omarker_test.cpp "o-markers: same bytes as 0.7, unknown fields kept, empty list writes null" (empty list writes null) |
-| `ozone_test.go` | `TestSuggestOZonePicksLatePeak`, `TestSuggestOZoneRejectsFlatTail`, `TestSuggestOZoneShortScript`, `TestSuggestSecondaryOZonesFindsEarlierWeakerPeak`, `TestSuggestSecondaryOZonesRespectsMaxCount`, `TestSuggestSecondaryOZonesNoOverlap`, `TestSuggestSecondaryOZonesNoPrimaryNoSecondary`, `TestSuggestSecondaryOZonesFlatScriptFindsNone`, `TestSuggestSecondaryOZonesMaxCountZero` | todo-later | P3.2 (auto O-zone) / P4 Editor (Suggest O-zone): `SuggestOZone` / `SuggestSecondaryOZones` are not ported. |
+| `ozone_test.go` | `TestSuggestOZonePicksLatePeak`, `TestSuggestOZoneRejectsFlatTail`, `TestSuggestOZoneShortScript`, `TestSuggestSecondaryOZonesFindsEarlierWeakerPeak`, `TestSuggestSecondaryOZonesRespectsMaxCount`, `TestSuggestSecondaryOZonesNoOverlap`, `TestSuggestSecondaryOZonesNoPrimaryNoSecondary`, `TestSuggestSecondaryOZonesFlatScriptFindsNone`, `TestSuggestSecondaryOZonesMaxCountZero` | ported | `tests/core/ozone_test.cpp` (`samn::SuggestOZone`, `SuggestSecondaryOZones`; 6 cases cover all 9). The Editor button follows in P4. |
 | `parse_compat_test.go` | `TestParseOFSStyleMetadata` | ported | core/python/tests/test_funscript_parity.py::test_duration_ofs; tests/core/funscript_test.cpp "funscript parse: actions, clock-string duration" |
 | `parse_compat_test.go` | `TestParseFloatActions` | ported | core/python/tests/test_funscript_parity.py::test_float_actions |
 | `parse_compat_test.go` | `TestLoadChaptersAndBookmarksTimestampStrings` | ported | tests/core/marks_test.cpp "marks: load chapters and bookmarks timestamp strings" |
-| `phase_test.go` | `TestBestLagCorrelationShiftedSine`, `TestBestLagCorrelationInverted`, `TestBestLagCorrelationConstantUndefined`, `TestBestLagCorrelationIrregular`, `TestBestLagCorrelationLowConfidence`, `TestDiagnosePhaseTimingVsShape`, `TestWindowedBestLagCorrelationConstantLag`, `TestWindowedBestLagCorrelationDriftingLag`, `TestPeriodicityAliasingCharacterization`, `TestAliasingRiskFlag_doesNotChangeReportedLag`, `TestDominantPeriodMsRequiresGenuineLocalPeak` | todo-later | P3.6 (timing/phase diagnostics used by Quality Doctor and the benchmark): `BestLagCorrelation`, `DiagnosePhase`, `DominantPeriodMs` are not ported. |
+| `phase_test.go` | `TestBestLagCorrelationShiftedSine`, `TestBestLagCorrelationInverted`, `TestBestLagCorrelationConstantUndefined`, `TestBestLagCorrelationIrregular`, `TestBestLagCorrelationLowConfidence`, `TestDiagnosePhaseTimingVsShape`, `TestWindowedBestLagCorrelationConstantLag`, `TestWindowedBestLagCorrelationDriftingLag`, `TestPeriodicityAliasingCharacterization`, `TestAliasingRiskFlag_doesNotChangeReportedLag`, `TestDominantPeriodMsRequiresGenuineLocalPeak` | ported | `tests/core/motion_fidelity_test.cpp` (`samn/motion_fidelity.h`); the aliasing characterisation is strict here (deterministic: lag -860 = -300 - 2 x 280, windows swing and flip). |
 | `pipeline_hint_test.go` | `TestSuggestPipelineTwoROIUsesStroke`, `TestSuggestPipelineSmallUsesCSRTGo`, `TestSuggestPipelineLargeUsesCSRT` | todo-later | P3.5 (backends): `SuggestPipeline` is not ported. |
 | `polarity_test.go` | `TestSuggestPolarityLowFirstHalf`, `TestSuggestPolarityHighFirstHalf`, `TestSuggestPolarityTooFewPoints` | todo-later | P3.3 (Review) / P4 Editor (Suggest polarity): `SuggestPolarity` is not ported. |
 | `project_test.go` | `TestBookmarksRoundTrip` | ported | tests/core/marks_test.cpp "marks: bookmarks round trip" |
@@ -300,12 +300,13 @@ One row per old test function (grouped when a whole file shares the same answer)
 
 ### 2.8 `motionx`
 
-2 files, 10 tests: 0 ported, 0 covered, 0 todo-now, 10 todo-later, 0 n/a.
+2 files, 10 tests: 4 ported, 0 covered, 0 todo-now, 6 todo-later, 0 n/a.
 
 | Old file | Test function(s) | Status | Where / why |
 |---|---|---|---|
 | `chapters_test.go` | `TestChaptersMapsStates`, `TestChaptersNil` | todo-later | P4 (Analysis, Scene Map): `motionx` chapters-from-states is not ported. |
-| `motionx_test.go` | `TestSimplifyKeepsEndpoints`, `TestSimplifyRespectsTolerance`, `TestSimplifyStraightLineCollapses`, `TestSimplifyDeepCurveDoesNotRecurse`, `TestDedup`, `TestClassifyStaticCurve`, `TestClassifyStartStop`, `TestClassifySegmentsAreContiguousAndLongEnough` | todo-later | P4 (Analysis, Scene Map): `Simplify`, `Dedup`, `Classify` are not ported. |
+| `motionx_test.go` | `TestSimplifyKeepsEndpoints`, `TestSimplifyRespectsTolerance`, `TestSimplifyStraightLineCollapses`, `TestSimplifyDeepCurveDoesNotRecurse` | ported | `tests/core/simplify_test.cpp` (`samn::SimplifyIndices`, used by the post-processing RDP step). |
+| `motionx_test.go` | `TestDedup`, `TestClassifyStaticCurve`, `TestClassifyStartStop`, `TestClassifySegmentsAreContiguousAndLongEnough` | todo-later | P4 (Analysis, Scene Map): `Dedup`, `Classify` are not ported. |
 
 ### 2.9 `pluginhost`
 
@@ -458,7 +459,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 
 ### 2.15 `generator (Go)`
 
-72 files, 237 tests: 7 ported, 1 covered, 0 todo-now, 216 todo-later, 13 n/a.
+72 files, 237 tests: 37 ported, 2 covered, 0 todo-now, 185 todo-later, 13 n/a.
 
 | Old file | Test function(s) | Status | Where / why |
 |---|---|---|---|
@@ -486,7 +487,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 | `contact_marks_test.go` | `TestBuildContactMarksMetaEmpty`, `TestBuildContactMarksMetaStrokeFeelOnly`, `TestBuildContactMarksMetaDistanceDrives`, `TestBuildContactMarksMetaExtraFollow`, `TestStampContactMarks` | todo-later | P3.6 (contact marks metadata). |
 | `contact_points_test.go` | `TestLoadContactPointsFilterAndSort`, `TestLoadContactPointsRejectsBadInput` | todo-later | P4 (contact points from teachers JSON, Suite-like). |
 | `contact_review_test.go` | `TestReviewAutoContactCandidateAcceptReject`, `TestSceneMarkAtMsRoundTrip` | todo-later | P4 (Accept/Reject contact candidates). |
-| `detrend_default_test.go` | `TestAdaptiveDetrendTwoStrokePeriods`, `TestApplyDefaultDetrendRespectsCallerAndDistanceProfiles` | todo-later | P3.2 (post-processing: detrend default). |
+| `detrend_default_test.go` | `TestAdaptiveDetrendTwoStrokePeriods`, `TestApplyDefaultDetrendRespectsCallerAndDistanceProfiles` | ported | `tests/engine/signal_chain_test.cpp`: "signal: detrend window is two stroke periods, clamped", "signal: default detrend respects the caller and distance profiles". |
 | `distance_partners_test.go` | `TestDistancePartnersActive` | todo-later | P3.4 (two-point / multi-point distance). |
 | `frame_dump_test.go` | `TestDumpFrameAtZeroAndMid`, `TestDumpFrameAtPastEndFailsCleanly` | todo-later | P3.0 (frame reader: dump a frame). |
 | `generate_cancel_test.go` | `TestGenerateWithContextCancelPython`, `TestGenerateWithContextCancelNativeSimple` | todo-later | P3.3 (run with progress and cancel). |
@@ -503,9 +504,9 @@ One row per old test function (grouped when a whole file shares the same answer)
 | `native_two_point_test.go` | `TestGenerateNativeTwoPointSimple` | todo-later | P3.4 (two-point tracking). |
 | `native_write_test.go` | `TestWriteFileAtomicReplacesExistingFile` | ported | tests/core/fileio_test.cpp "fileio: atomic write creates, replaces and leaves no temp file" |
 | `native_write_test.go` | `TestWriteFileAtomicCleansTempAfterRenameFailure` | ported | tests/core/fileio_test.cpp "fileio: a failed rename leaves the destination and the folder clean" (shared with funscript/atomic_write_test.go) |
-| `posttrack/convert_test.go` | `TestPositionsToActionsMatchesPythonGoldens`, `TestLimitSpeedMatchesPythonGolden`, `TestProminenceReducesDampedRinging`, `TestPercentileBeatsMinMaxOnOutlier` | todo-later | P3.2 (post-processing; Go goldens from the Python port). |
-| `posttrack/filters_test.go` | `TestRollingDetrendRemovesSlowDrift`, `TestBandpassAttenuatesDCAndHighFreq` | todo-later | P3.2 (post-processing filters). |
-| `posttrack/preview_test.go` | `TestPreviewStatsDefaultKnobs`, `TestPreviewStatsProminenceReducesPeaks`, `TestPreviewStatsWideSmoothCalmerHint` | todo-later | P3.2 (post-processing preview stats). |
+| `posttrack/convert_test.go` | `TestPositionsToActionsMatchesPythonGoldens`, `TestLimitSpeedMatchesPythonGolden`, `TestProminenceReducesDampedRinging`, `TestPercentileBeatsMinMaxOnOutlier` | ported | `tests/engine/post_track_test.cpp`: "post: every golden gives the same actions and dense curve as 0.7" (13 goldens, actions exact, dense curve within 0.05; the goldens file is `tests/engine/testdata/posttrack_goldens.json`), "post: the speed limit equals 0.7", "post: prominence quiets damped ringing", "post: percentile normalisation beats min/max on an outlier". |
+| `posttrack/filters_test.go` | `TestRollingDetrendRemovesSlowDrift`, `TestBandpassAttenuatesDCAndHighFreq` | ported | `tests/engine/post_track_test.cpp`: "post: detrend removes slow drift and keeps the stroke", "post: bandpass removes DC and keeps the stroke band". |
+| `posttrack/preview_test.go` | `TestPreviewStatsDefaultKnobs`, `TestPreviewStatsProminenceReducesPeaks`, `TestPreviewStatsWideSmoothCalmerHint` | todo-later | P3.3 (the Expert preview belongs to the Generator page). |
 | `profilemodel/model_test.go` | `TestAppendTrainLoadAndSuggest`, `TestSuggestRejectsUnknownAndAmbiguousSignatures`, `TestOldProfileLabelsRemainTrainable`, `TestAppendLabelRejectsInvalidInput`, `TestCorruptModelDoesNotBlockRetraining`, `TestAppendLabelSerializesConcurrentWriters` | todo-later | P4 (AI profile model). |
 | `roi_still_classreg_test.go` | `TestEnsureClassIDsRegistersCanonicalLabels` | todo-later | P4 (AI Train: ROI class registry). |
 | `roi_still_test.go` | `TestStillTrainingGetsValSplit`, `TestEnsureRoiDatasetSplitsHealsEmptyVal`, `TestPrepareRoiDatasetForTrainingEmpty`, `TestPrepareRoiDatasetForTrainingHealsThenOK` | todo-later | P4 (AI Train: YOLO dataset splits). |
@@ -528,19 +529,22 @@ One row per old test function (grouped when a whole file shares the same answer)
 | `strokepreview/hint_test.go` | `TestToHintSuggestsPeakDistance`, `TestToHintWeakSuggestsAudio` | todo-later | P3.6 (stroke preview). |
 | `strokepreview/overlap_test.go` | `TestPeakOverlapMatchesNearbyUps` | todo-later | P3.6 (stroke preview). |
 | `strokepreview/preview_test.go` | `TestAnalyzeSyntheticBounceFindsExtrema`, `TestFrameStatsIgnoresCodecNoise`, `TestClassifyWeakWhenNoMotion`, `TestStrokeHzFromPeaks`, `TestAnalyzeMissingFile`, `TestFindPeaksExportStillWorks` | todo-later | P3.6 (stroke preview). |
-| `trackcv/appearance_memory_test.go` | `TestAppearanceMemoryMatchesOriginalAcceptsTheOriginalRegion`, `TestAppearanceMemoryMatchesOriginalRejectsDriftedRegion`, `TestAppearanceMemoryMatchesOriginalNotDefeatedByShrunkBox`, `TestAppearanceMemoryMatchesOriginalNoTemplatesYetAllowsRemembering`, `TestTrackROIStillWorksWithGatedAppearanceMemory` | todo-later | P3.4 (appearance memory). |
+| `trackcv/appearance_memory_test.go` | `TestAppearanceMemoryMatchesOriginalAcceptsTheOriginalRegion`, `TestAppearanceMemoryMatchesOriginalRejectsDriftedRegion`, `TestAppearanceMemoryMatchesOriginalNotDefeatedByShrunkBox`, `TestAppearanceMemoryMatchesOriginalNoTemplatesYetAllowsRemembering`, `TestTrackROIStillWorksWithGatedAppearanceMemory` | ported | `tests/engine/track_box_test.cpp`: "parts: appearance memory knows the start region and fails closed" (original region, drifted region, shrunk box on / off target, no templates yet), "track: the gated memory does not lose easy material". |
 | `trackcv/contact_points_test.go` | `TestApplyContactPointsGateAndHold`, `TestRhythmGridContactPointsReachFarStroke`, `TestRhythmGridContactPointsNearBoxBitIdentical`, `TestVerifyContactPointsKeepsOnlyWhereEngineMeasuresMore`, `TestVerifyContactPointsAtHonoursStartOffset` | todo-later | P4 (contact points; teacher JSON, verify with the engine). |
 | `trackcv/contact_verify_e2e_test.go` | `TestTrackROIContactVerifyFiltersQuietTeacherPoints` | todo-later | P4 (contact verify, hybrid K=1.5). |
 | `trackcv/contact_verify_edge_test.go` | `TestVerifyContactPointsUsesNearestOverlappingWindow`, `TestVerifyContactPointsClampsThreeByThreeAtImageEdges` | todo-later | P4 (contact verify). |
-| `trackcv/dispguard_test.go` | `TestDispGuardFlagsImplausibleJumpsAtRealClipScale`, `TestDispGuardAllowsLargestGenuineRealClipMotion`, `TestDispGuardIgnoresJitterBelowFloorRegardlessOfRatio`, `TestDispGuardRatioScalesWithFastMotion`, `TestDispGuardAcceptTrimsWindow`, `TestDispGuardColdStartNeverFlags` | todo-later | P3.4 (CSRT jump/drift guards). |
+| `trackcv/dispguard_test.go` | `TestDispGuardFlagsImplausibleJumpsAtRealClipScale`, `TestDispGuardAllowsLargestGenuineRealClipMotion`, `TestDispGuardIgnoresJitterBelowFloorRegardlessOfRatio`, `TestDispGuardRatioScalesWithFastMotion`, `TestDispGuardAcceptTrimsWindow`, `TestDispGuardColdStartNeverFlags` | ported | `tests/engine/track_box_test.cpp`: "parts: the jump guard flags real-clip jumps, not real motion" (all six cases). |
 | `trackcv/multi_recover_test.go` | `TestReacquireRejectsPoisonedDistractorVersusTipSeed`, `TestReacquirePrefersTipWhenVisibleDespiteDistractorTemplate`, `TestTrackTwoPointsHardTipAppearanceMemoryStable`, `TestRecoverOrCoastResetsCoastOnReacquire` | todo-later | P3.4 (re-acquire, coast). |
-| `trackcv/progress_total_test.go` | `TestProgressTotalFramesAfterSeek` | todo-later | P3.1 (progress total after seek). |
+| `trackcv/progress_total_test.go` | `TestProgressTotalFramesAfterSeek` | ported | `tests/engine/track_box_test.cpp`: "parts: progress total after a seek". |
 | `trackcv/rhythm_grid_test.go` | `TestRhythmGridRecoversStrokeDespiteDrift`, `TestRhythmGridKeepsConfirmedTargetWhenTrackerDriftsOntoThigh`, `TestRhythmGridRejectsInPhaseAndAntiPhaseHighAmplitudeThigh`, `TestRhythmGridReseedsConfirmedIdentityAfterSceneCut`, `TestRhythmGridFallsBackToTracker`, `TestRhythmGridBadInputReturnsTracker`, `TestRhythmGridRows`, `TestRhythmGridKeepsOrientationWhereTrackerIsUninformative`, `TestRhythmGridSplitBitIdentical`, `TestNormalizeScores`, `TestScoreWindowsQuickScanNoBox`, `TestRhythmGridExcludeSkipsHighScoringThigh`, `TestRhythmGridExcludeUsesFollowPath`, `TestRhythmGridSourceHintPreference`, `TestRhythmGridMarksNilBitIdentical`, `TestRhythmGridReleasesLockWhenLockedCellGoesQuiet` | todo-later | P3.4 (rhythm grid). |
 | `trackcv/tip_distance_test.go` | `TestTipPartnerDistance_smallTipMatchesCenter`, `TestTipPartnerDistance_largePenisUsesNearEdge`, `TestTipPartnerDistance_overlapIsZero`, `TestFuseTipPartners_excludesLostPartner` | todo-later | P3.4 (tip/partner distance). |
-| `trackcv/track_test.go` | `TestTrackROIBasicAmplitude`, `TestTrackROICameraCompensation`, `TestTrackROISceneCutDetection`, `TestTrackROIAxisSelection`, `TestTrackROIMaxFrames`, `TestMain_videoWriterProducesReadableFile`, `TestTrackROIRhythmGrid` | todo-later | P3.1 (CSRT single-box track, scene cuts, camera compensation); the P3.1 acceptance test. |
+| `trackcv/track_test.go` | `TestTrackROIBasicAmplitude`, `TestTrackROICameraCompensation`, `TestTrackROISceneCutDetection`, `TestTrackROIAxisSelection`, `TestTrackROIMaxFrames` | ported | `tests/engine/track_box_test.cpp`: "track: follows the amplitude on easy material", "track: camera compensation brings the amplitude closer", "track: a hard cut is found and motion continues after it", "track: the axis follows the motion", "track: max frames, start time, progress and cancel". Positions equal 0.7 bit for bit (`docs/benchmarks/P3_1_TRACK_PARITY.md`). |
+| `trackcv/track_test.go` | `TestMain_videoWriterProducesReadableFile` | covered | every clip writer in `tests/engine/synthetic_clips.h` is checked with `REQUIRE` before tracking. |
+| `trackcv/track_test.go` | `TestTrackROIRhythmGrid` | todo-later | P3.4 (rhythm grid). |
 | `trackcv/types_test.go` | `TestSceneMarkRectAt_static`, `TestSceneMarkRectAt_nearestPath`, `TestCameraExcludeRects_usesPath`, `TestMarkShouldFollow`, `TestSceneMarkTimebaseIncludesStartOffset`, `TestSceneMarksShiftedKeepsSentinelAndInput` | todo-later | P3.4 (scene marks geometry). |
 | `tracking_gaps_test.go` | `TestTrackingGapsFromFlags` | todo-later | P3.4 (tracking gaps from flags). |
-| `trackutil/coast_test.go` | `TestCoastBridgesBriefLoss`, `TestCoastExhausts`, `TestCoastHoldsWithoutVelocity`, `TestCoastNoPosition`, `TestCoastResetAfterReacquire`, `TestCoastBudgetReopensAfterObserveOK` | todo-later | P3.4 (coast bridging). |
+| `trackutil/coast_test.go` | `TestCoastBridgesBriefLoss`, `TestCoastExhausts`, `TestCoastHoldsWithoutVelocity`, `TestCoastNoPosition`, `TestCoastBudgetReopensAfterObserveOK` | ported | `tests/engine/track_box_test.cpp`: "parts: coast moves on for 8 frames, then gives up". |
+| `trackutil/coast_test.go` | `TestCoastResetAfterReacquire` | todo-later | P3.4 (`Reset` and `MaxFrames` come with the two-point tracker). |
 | `truncate_test.go` | `TestTruncateActionsMs` | todo-later | P3.2 (`TruncateActionsMs`). |
 
 ### 2.16 `generator (Python)`

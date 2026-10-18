@@ -19,6 +19,16 @@ if(SAMN_BUILD_VISION)
   add_executable(vision_tests core/main.cpp ${VISION_TESTS})
   target_link_libraries(vision_tests PRIVATE samn_vision doctest)
   add_test(NAME vision_tests COMMAND vision_tests)
+
+  file(GLOB ENGINE_TESTS CONFIGURE_DEPENDS engine/*_test.cpp)
+  add_executable(engine_tests core/main.cpp ${ENGINE_TESTS})
+  target_link_libraries(engine_tests PRIVATE samn_engine doctest)
+  target_include_directories(engine_tests PRIVATE ${PROJECT_SOURCE_DIR}/engine/src)
+  target_compile_definitions(engine_tests PRIVATE SAMN_ENGINE_TESTDATA="${CMAKE_CURRENT_SOURCE_DIR}/engine/testdata")
+  add_test(NAME engine_tests COMMAND engine_tests)
+  # Parity tool against 0.7 (run by hand, docs/benchmarks/P3_1_TRACK_PARITY.md).
+  add_executable(engine_parity_dump EXCLUDE_FROM_ALL engine/parity_dump.cpp)
+  target_link_libraries(engine_parity_dump PRIVATE samn_engine)
 endif()
 
 if(SAMN_BUILD_APP)

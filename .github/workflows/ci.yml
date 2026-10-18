@@ -62,7 +62,11 @@ jobs:
         with:
           path: ${{ github.workspace }}/.vcpkg-cache
           key: vcpkg-${{ runner.os }}-${{ steps.vcpkg.outputs.commit }}-${{ hashFiles('ci/vcpkg/vcpkg.json') }}
-          restore-keys: vcpkg-${{ runner.os }}-${{ steps.vcpkg.outputs.commit }}-
+          # A new runner image brings a new vcpkg commit; the older cache
+          # still serves every package whose ABI hash did not change.
+          restore-keys: |
+            vcpkg-${{ runner.os }}-${{ steps.vcpkg.outputs.commit }}-
+            vcpkg-${{ runner.os }}-
 
       - name: Python packages (bindings and parity tests)
         run: python -m pip install pybind11
@@ -146,7 +150,7 @@ jobs:
             "-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=undefined"
 
       - name: Build
-        run: cmake --build build --parallel --target core_tests vision_tests
+        run: cmake --build build --parallel --target core_tests vision_tests engine_tests
 
       - name: Core tests under sanitizers
         env:
@@ -155,3 +159,4 @@ jobs:
         run: |
           ./build/tests/core_tests
           ./build/tests/vision_tests
+          ./build/tests/engine_tests
