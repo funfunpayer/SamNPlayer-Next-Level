@@ -136,6 +136,29 @@ private:
         QMetaObject::invokeMethod(page, "setVolume", Q_ARG(QVariant, 0.33));
         QCOMPARE(vol->property("value").toDouble(), 0.35);
         QCOMPARE(ctrl->uiValue(QStringLiteral("player.volume"), 0.8).toDouble(), 0.35);
+        // Theatre (D-144): panels away, the video larger, the curve strip
+        // stays and can be switched off; both choices are remembered.
+        auto* lib = page->findChild<QQuickItem*>(QStringLiteral("libraryPanel"));
+        auto* insp = page->findChild<QQuickItem*>(QStringLiteral("inspector"));
+        auto* card = page->findChild<QQuickItem*>(QStringLiteral("videoCard"));
+        auto* timeline = page->findChild<QQuickItem*>(QStringLiteral("timeline"));
+        QVERIFY(lib && insp && card && timeline);
+        QVERIFY(lib->isVisible() && insp->isVisible() && timeline->isVisible());
+        const qreal normalW = card->width(), normalH = card->height();
+        page->setProperty("theatre", true);
+        QTRY_VERIFY(!lib->isVisible() && !insp->isVisible());
+        QVERIFY(timeline->isVisible());
+        QTRY_VERIFY(card->width() > normalW && card->height() > normalH);
+        const qreal withLanes = card->height();
+        page->setProperty("theatreLanes", false);
+        QTRY_VERIFY(!timeline->isVisible());
+        QTRY_VERIFY(card->height() > withLanes);
+        QVERIFY(ctrl->uiValue(QStringLiteral("player.theatre"), false).toBool());
+        QVERIFY(!ctrl->uiValue(QStringLiteral("player.theatreLanes"), true).toBool());
+        page->setProperty("theatreLanes", true);
+        page->setProperty("theatre", false);
+        QTRY_VERIFY(lib->isVisible() && insp->isVisible() && timeline->isVisible());
+        QTRY_COMPARE(card->width(), normalW);
         // A video makes the video the player again.
         QVERIFY(ctrl->openPath(QStringLiteral(SAMN_TEST_DATA "/testpattern_4s.mp4")));
         QVERIFY(!page->property("scriptOnly").toBool());
