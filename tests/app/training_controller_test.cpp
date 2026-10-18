@@ -388,8 +388,12 @@ private slots:
         QCOMPARE(r.tc.state(), QString("paused"));
         QVERIFY(r.tc.paused());
         QCOMPARE(r.tc.vibration(), 0.0);
-        QTRY_VERIFY(MockLines(r.log).mid(MockLines(r.log).size() - 2).contains("[mock] vibration=0.00"));
-        QVERIFY(MockLines(r.log).last() == "[mock] suction=0.00" || MockLines(r.log).last() == "[mock] vibration=0.00");
+        // Pause sends both channels to zero; count only once both writes are
+        // in, or a slow machine counts before the second one lands.
+        QTRY_VERIFY([&] {
+            const QStringList tail = MockLines(r.log).mid(MockLines(r.log).size() - 2);
+            return tail.contains("[mock] vibration=0.00") && tail.contains("[mock] suction=0.00");
+        }());
         const int sec = r.tc.elapsedSec();
         const int writes = MockLines(r.log).size();
         QTest::qWait(400);
