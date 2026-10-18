@@ -14,6 +14,8 @@ called_from_lib:libopencv_core.so
 # mutex at thread exit; TSan cannot see OpenCV's locking.
 mutex:__GI___nptl_deallocate_tsd
 mutex:__nptl_deallocate_tsd
-# The same report when the runner's libc has no symbols: matched by the
-# mutex's heap block, which libopencv_core allocated.
-mutex:libopencv_core.so
+# The same report when the runner's libc has no symbols. TSan matches mutex
+# reports only by their own stacks, here pthread_mutex_unlock called from
+# inside libc. Our own code unlocks through std::mutex in our binary, never
+# from a libc frame, so this cannot hide our mutex bugs.
+mutex:libc.so.6

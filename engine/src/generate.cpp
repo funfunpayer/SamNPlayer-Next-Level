@@ -61,8 +61,10 @@ Document CompanionSamn(const GenerateRequest& req, const std::vector<Action>& ac
 
 }  // namespace
 
-void Generate(const GenerateRequest& req, uint64_t run_id, const std::function<bool()>& cancel,
-              const GenerateCallback& on_event) {
+namespace {
+
+void GenerateUnguarded(const GenerateRequest& req, uint64_t run_id, const std::function<bool()>& cancel,
+                       const GenerateCallback& on_event) {
     auto emit = [&](GenerateEventKind kind, std::string message, int percent = -1, size_t actions = 0) {
         if (on_event) on_event({run_id, kind, percent, std::move(message), actions});
     };
@@ -123,6 +125,24 @@ void Generate(const GenerateRequest& req, uint64_t run_id, const std::function<b
         emit(GenerateEventKind::kNote, buf);
     }
     emit(GenerateEventKind::kDone, req.output.filename().u8string(), 100, sig->actions.size());
+}
+
+}  // namespace
+
+void Generate(const GenerateRequest& req, uint64_t run_id, const std::function<bool()>& cancel,
+              const GenerateCallback& on_event) {
+    // Whatever throws below (OpenCV, FFmpeg, the signal chain) ends this run
+    // as an error; on the runner's thread it would end the whole app.
+    std::string failure;
+    try {
+        GenerateUnguarded(req, run_id, cancel, on_event);
+        return;
+    } catch (const std::exception& e) {
+        failure = e.what();
+    } catch (...) {
+        failure = "unknown error";
+    }
+    if (on_event) on_event({run_id, GenerateEventKind::kError, -1, "generation failed: " + failure, 0});
 }
 
 GenerateRunner::GenerateRunner(GenerateCallback on_event) : on_event_(std::move(on_event)) {}

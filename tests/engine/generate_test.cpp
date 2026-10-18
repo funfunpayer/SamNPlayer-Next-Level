@@ -1,10 +1,12 @@
 #include <doctest/doctest.h>
 
+#include <atomic>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <mutex>
 #include <sstream>
+#include <stdexcept>
 #include <vector>
 
 #include <nlohmann/json.hpp>
@@ -191,5 +193,41 @@ TEST_CASE("generate: the runner does one run at a time, cancels and waits on shu
     CHECK(ev.back().kind == GenerateEventKind::kCanceled);
     CHECK(std::chrono::steady_clock::now() - t0 < std::chrono::seconds(1));
     CHECK(!fs::exists(dir / "standard.funscript"));
+    fs::remove_all(dir);
+}
+
+TEST_CASE("generate: autotune with invert runs through (the Generator page's choice)") {
+    const fs::path dir = TempDir("samn_generate_autotune");
+    REQUIRE(clips::WriteMoving(dir / "moving.mp4", 8, 80.0, 1.0));
+    Recorder rec;
+    GenerateRequest req = Request(dir, "moving.mp4", "autotune");
+    req.signal.invert = true;
+    Generate(req, 9, {}, rec.fn());
+    const auto last = rec.take().back();
+    CHECK_MESSAGE(last.kind == GenerateEventKind::kDone, last.message);
+    fs::remove_all(dir);
+}
+
+TEST_CASE("generate: anything thrown ends the run as an error, not the app") {
+    const fs::path dir = TempDir("samn_generate_throw");
+    REQUIRE(clips::WriteMoving(dir / "moving.mp4", 2, 80.0, 1.0));
+    Recorder rec;
+    Generate(Request(dir, "moving.mp4", "standard"), 5, [] () -> bool { throw std::runtime_error("boom"); }, rec.fn());
+    const auto last = rec.take().back();
+    CHECK(last.kind == GenerateEventKind::kError);
+    CHECK(last.message == "generation failed: boom");
+    CHECK(last.run_id == 5);
+
+    // On the runner's own thread too.
+    std::atomic<int> errors{0};
+    {
+        GenerateRunner runner([&](const GenerateEvent& e) {
+            if (e.kind == GenerateEventKind::kError) ++errors;
+            if (e.kind == GenerateEventKind::kProgress) throw std::runtime_error("callback failed");
+        });
+        REQUIRE(runner.Start(Request(dir, "moving.mp4", "standard")) != 0);
+        runner.Wait();
+    }
+    CHECK(errors == 1);
     fs::remove_all(dir);
 }
