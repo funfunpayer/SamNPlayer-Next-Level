@@ -1,5 +1,7 @@
 #include "generator_controller.h"
 
+#include "frame_cache.h"
+
 #include <QFileInfo>
 #include <QPointer>
 #include <QUrl>
@@ -86,16 +88,13 @@ bool GeneratorController::openVideo(const QString& pathOrUrl) {
 
 void GeneratorController::seekPreview(double ms) {
     if (video_path_.isEmpty()) return;
-    std::string error;
-    auto reader = vision::FrameReader::Open(std::filesystem::path(video_path_.toStdU16String()), &error);
-    if (!reader) return;
     ms = std::clamp(ms, 0.0, std::max(0.0, duration_ms_ - 1));
-    vision::VideoFrame f;
-    if (!reader->SeekMs(int64_t(ms)) || !reader->Read(f)) return;
-    cv::Mat rgb;
-    cv::cvtColor(f.bgr, rgb, cv::COLOR_BGR2RGB);
-    frame_ = QImage(rgb.data, rgb.cols, rgb.rows, int(rgb.step), QImage::Format_RGB888).copy();
-    preview_ms_ = f.pts_us / 1000.0;
+    // The shared cache keeps the video open: dragging a curve point seeks
+    // on every mouse move (D-142 size limit).
+    const FrameCache::Frame f = FrameCache::shared().At(video_path_, ms);
+    if (f.image.isNull()) return;
+    frame_ = f.image;
+    preview_ms_ = f.ms;
     emit previewChanged();
 }
 
