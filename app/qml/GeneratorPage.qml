@@ -860,8 +860,11 @@ Item {
                                 onMoved: (v) => gen.contactSpan = v
                             }
                             Text {
+                                objectName: "contactSpanLabel"
                                 textFormat: Text.PlainText
-                                text: Math.round(gen.contactSpan * 100) + (gen.contactSpan <= 0.45 ? " · " + qsTr("deep only") : "")
+                                // 0.7: the contact starts at this share of the stroke depth, so a high
+                                // value means deep strokes only (<= 50 "earlier", >= 85 "deep only").
+                                text: gen.contactSpan <= 0.5 ? qsTr("earlier") : gen.contactSpan >= 0.85 ? qsTr("deep only") : gen.contactSpan.toFixed(2)
                                 color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                             }
                         }

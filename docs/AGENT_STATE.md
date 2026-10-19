@@ -82,6 +82,8 @@
 - **P3.3 continued, 19 Oct** (#59–#63 and this branch): the Player's theatre mode with the curve strip switchable; Find tip (0.7 `auto_roi`, bit-exact on 3 clips) with candidates; the queue (0.7 "Create queue"); the audit sync (`docs/AUDIT_2026-10-19.md`); **contact marks**: tip and contact classes, contact areas on the frame, contact vibration on by default; Generate writes the 0.7 recipe, `contactMarks` and the tip path (`.samn`), and the Player turns the path into spatial contact vibration (`core/include/samn/contact_marks.h`, 0.7 `feel_spatial` tests ported).
 - **Scene Map in the Editor** (D-145): the mode card is gone (#65); the Generator's right panel has a "Scenes" tab (cards with frame, name, range, feel per scene, suggestion from `<clip>.scene.json` or the contact mark, Apply suggestions) and scene bands under the curve lanes (`core/include/samn/scenes.h`, `EditorController` scenes).
 
+**Parity (19 Oct):** about 45 % of 0.7/0.8 by the `PARITY.md` checklist (227 done, 117 partly, 19 dropped on purpose, 313 open of 676); `python3 ci/parity_status.py` recounts.
+
 ## Next (in order; the work list is `LESSONS.md` § Gaps, `TEST_PARITY.md` and `P3_GENERATOR.md`)
 
 1. **Windows CI:** some app tests failed now and then with no output (stdout fully buffered when piped). Every app test now writes unbuffered (`tests/app/unbuffered_stdout.cpp`); find the cause on the next red run.
