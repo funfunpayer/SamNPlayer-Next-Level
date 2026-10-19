@@ -1,10 +1,13 @@
 import QtQuick
 import QtQuick.Dialogs
 import QtQuick.Layouts
+import QtMultimedia
 import SamN
 
 // The Generator mode is the Editor (D-137), laid out like the Player (D-144):
-// the video on top, the curves under it, the settings on the right.
+// the video on top, the curves under it, the settings on the right. The
+// video plays as in the Player, with the same transport (D-154); paused, the
+// exact frame shows so the tip box can be drawn on it.
 // Creating: 1 Video · 2 Tip · 3 Feel · 4 Create · 5 Review; the result opens
 // here for editing (0.7 generator.js + playback.js edit tools).
 Item {
@@ -31,6 +34,36 @@ Item {
         durationMs: gen.durationMs
         videoPath: gen.videoPath
     }
+
+    // Playback (D-154). Paused, the playhead is the decoded preview frame;
+    // playing, it is the video's position.
+    MediaPlayer {
+        id: media
+        objectName: "generatorMedia"
+        source: gen.hasVideo ? gen.videoUrl : ""
+        videoOutput: videoOut
+        playbackRate: page.speed
+        audioOutput: AudioOutput { volume: transport.volume; muted: page.muted }
+        onPlaybackStateChanged: if (playbackState !== MediaPlayer.PlayingState && gen.hasVideo) gen.seekPreview(position)
+    }
+    readonly property bool playing: media.playbackState === MediaPlayer.PlayingState
+    readonly property real playheadMs: playing ? media.position : gen.previewMs
+    property real speed: 1.0
+    property bool muted: false
+    function togglePlay() {
+        if (!gen.hasVideo) { videoDialog.open(); return }
+        if (playing) { media.pause(); return }
+        media.position = gen.previewMs
+        media.play()
+    }
+    function seekTo(ms) {
+        const t = Math.max(0, Math.min(gen.durationMs, ms))
+        gen.seekPreview(t)
+        if (playing) media.position = t
+    }
+    function seekBy(ms) { seekTo(playheadMs + ms) }
+    function stop() { media.stop(); gen.seekPreview(0) }
+    Connections { target: gen; function onVideoChanged() { media.stop() } }
 
     FileDialog {
         id: videoDialog
@@ -98,7 +131,7 @@ Item {
         if (!s) return
         page.selectedScene = i
         page.sidePanel = 1
-        gen.seekPreview(s.startMs)
+        page.seekTo(s.startMs)
     }
     function fmt(ms) {
         return Math.floor(ms / 60000) + ":" + String(Math.floor(ms / 1000) % 60).padStart(2, "0")
@@ -110,6 +143,14 @@ Item {
         return names[c] || c
     }
 
+    // The Player's keys (D-154): Space plays, arrows seek, , and . step.
+    Shortcut { sequence: "Space"; enabled: page.visible && !page.overlayOpen && gen.hasVideo; onActivated: page.togglePlay() }
+    Shortcut { sequence: "Left"; enabled: page.visible && !page.overlayOpen && gen.hasVideo; onActivated: page.seekBy(-5000) }
+    Shortcut { sequence: "Right"; enabled: page.visible && !page.overlayOpen && gen.hasVideo; onActivated: page.seekBy(5000) }
+    Shortcut { sequence: "Shift+Left"; enabled: page.visible && !page.overlayOpen && gen.hasVideo; onActivated: page.seekBy(-1000) }
+    Shortcut { sequence: "Shift+Right"; enabled: page.visible && !page.overlayOpen && gen.hasVideo; onActivated: page.seekBy(1000) }
+    Shortcut { sequence: ","; enabled: page.visible && !page.overlayOpen && gen.hasVideo; onActivated: page.seekBy(-40) }
+    Shortcut { sequence: "."; enabled: page.visible && !page.overlayOpen && gen.hasVideo; onActivated: page.seekBy(40) }
     Shortcut { sequences: [StandardKey.Undo]; enabled: page.visible && edit.canUndo; onActivated: edit.undo() }
     Shortcut { sequences: [StandardKey.Redo, "Ctrl+Y"]; enabled: page.visible && edit.canRedo; onActivated: edit.redo() }
 
@@ -168,20 +209,47 @@ Item {
                             }
                         }
                     }
-                    Item {
+                    Rectangle {
+                        objectName: "generatorStage"
                         Layout.fillWidth: true; Layout.fillHeight: true
+                        radius: Theme.radius; color: "#02070f"; clip: true
+                        SilkLayer { running: parent.visible && !gen.hasVideo && Qt.application.state === Qt.ApplicationActive }
+                        VideoOutput {
+                            id: videoOut
+                            anchors.fill: parent
+                            visible: page.playing
+                        }
                         FrameItem {
                             id: frameView
                             objectName: "frameView"
                             anchors.fill: parent
+                            visible: !page.playing
                             image: gen.frame
                         }
-                        Text {
-                            textFormat: Text.PlainText
+                        // Nothing open: the Player's round Play button opens a video.
+                        Column {
+                            objectName: "generatorEmpty"
                             anchors.centerIn: parent
                             visible: !gen.hasVideo
-                            text: qsTr("Start here: choose a short clip, drag a box around the moving tip, create.")
-                            color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 14
+                            spacing: 14
+                            PlayButton {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                width: 96; height: 96
+                                onClicked: videoDialog.open()
+                            }
+                            Text {
+                                textFormat: Text.PlainText
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                text: qsTr("Choose video…")
+                                color: Theme.text; font.family: Theme.font; font.pixelSize: 17
+                                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: videoDialog.open() }
+                            }
+                            Text {
+                                textFormat: Text.PlainText
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                text: qsTr("Then drag a box around the moving tip and create.")
+                                color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 13
+                            }
                         }
                         // Video pixels <-> item coordinates.
                         readonly property real scaleX: gen.videoSize.width > 0 ? frameView.imageRect.width / gen.videoSize.width : 1
@@ -278,7 +346,7 @@ Item {
                             id: drag
                             objectName: "markArea"
                             anchors.fill: parent
-                            enabled: gen.hasVideo && !gen.running
+                            enabled: gen.hasVideo && !gen.running && !page.playing
                             cursorShape: Qt.CrossCursor
                             property bool active: false
                             property point start
@@ -308,7 +376,7 @@ Item {
                         Text {
                             objectName: "boxLabel"
                             textFormat: Text.PlainText
-                            Layout.maximumWidth: 260; elide: Text.ElideRight
+                            Layout.fillWidth: true; elide: Text.ElideRight
                             text: gen.boxLabel; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                         }
                         FlowButton {
@@ -317,20 +385,45 @@ Item {
                             enabled: !gen.running
                             onClicked: gen.finding ? gen.cancelFind() : gen.findTip()
                         }
-                        IconButton { objectName: "frameBack"; icon: "back10"; tip: qsTr("10 s back"); onClicked: gen.seekPreview(gen.previewMs - 10000) }
-                        FlowSlider {
-                            objectName: "frameSlider"
-                            Layout.fillWidth: true
-                            from: 0; to: Math.max(1, gen.durationMs); value: gen.previewMs
-                            onMoved: (v) => gen.seekPreview(v)
-                        }
-                        IconButton { objectName: "frameForward"; icon: "forward10"; tip: qsTr("10 s forward"); onClicked: gen.seekPreview(gen.previewMs + 10000) }
-                        Text {
-                            textFormat: Text.PlainText
-                            text: page.fmt(gen.previewMs) + " / " + page.fmt(gen.durationMs)
-                            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
-                        }
                     }
+                // The Player's transport (D-154), lower so the curves keep their room.
+                VideoTransport {
+                    id: transport
+                    objectName: "generatorTransport"
+                    compact: true
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: height
+                    enabled: gen.hasVideo
+                    opacity: enabled ? 1 : 0.5
+                    position: page.playheadMs
+                    duration: gen.durationMs
+                    playing: page.playing
+                    muted: page.muted
+                    volume: 0.8
+                    onSeekRequested: (ms) => page.seekTo(ms)
+                    onSeekByRequested: (ms) => page.seekBy(ms)
+                    onTogglePlayRequested: page.togglePlay()
+                    onPreviousRequested: page.seekTo(0)
+                    onStopRequested: page.stop()
+                    onMuteToggled: page.muted = !page.muted
+                    onVolumeMoved: (v) => transport.volume = v
+                    leftItems: [
+                        Text {
+                            objectName: "generatorTime"
+                            textFormat: Text.PlainText
+                            y: 8
+                            text: page.fmt(page.playheadMs) + " / " + page.fmt(gen.durationMs)
+                            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                        },
+                        FlowCombo {
+                            width: 78
+                            model: ["0.5×", "0.75×", "1.0×", "1.25×", "1.5×", "2.0×"]
+                            readonly property var rates: [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
+                            currentIndex: rates.indexOf(page.speed)
+                            onActivated: (i) => page.speed = rates[i]
+                        }
+                    ]
+                }
                 }
             }
 
@@ -442,7 +535,7 @@ Item {
                         Layout.fillWidth: true; Layout.preferredHeight: 22
                         visible: edit.hasScript
                         viewStartMs: edit.viewStartMs; viewEndMs: edit.viewEndMs
-                        playheadMs: gen.previewMs
+                        playheadMs: page.playheadMs
                         textColor: Theme.textDim; markColor: Theme.laneVibration
                         MouseArea {
                             anchors.fill: parent
@@ -452,7 +545,7 @@ Item {
                             onPositionChanged: (m) => edit.setMarker(startMs, msAt(m.x))
                             onReleased: (m) => {
                                 const end = msAt(m.x)
-                                if (Math.abs(end - startMs) < 40) { edit.clearMarker(); gen.seekPreview(end) }
+                                if (Math.abs(end - startMs) < 40) { edit.clearMarker(); page.seekTo(end) }
                                 else edit.setMarker(startMs, end)
                             }
                         }
@@ -476,7 +569,7 @@ Item {
                                 editMode: true
                                 markerStartMs: edit.markerStartMs; markerEndMs: edit.markerEndMs
                                 viewStartMs: edit.viewStartMs; viewEndMs: edit.viewEndMs
-                                playheadMs: gen.previewMs
+                                playheadMs: page.playheadMs
                                 Component.onCompleted: edit.attachCurve(laneCurve)
                                 Rectangle {
                                     anchors.fill: parent; color: "transparent"; radius: 4
@@ -491,8 +584,8 @@ Item {
                                 MouseArea {
                                     anchors.fill: parent
                                     cursorShape: edit.dragging ? Qt.ClosedHandCursor : Qt.CrossCursor
-                                    onPressed: (m) => { const t = edit.press(laneCurve, m.x, m.y); if (t >= 0) gen.seekPreview(t) }
-                                    onPositionChanged: (m) => { if (edit.dragging) { const t = edit.dragTo(m.x, m.y); if (t >= 0) gen.seekPreview(t) } }
+                                    onPressed: (m) => { const t = edit.press(laneCurve, m.x, m.y); if (t >= 0) page.seekTo(t) }
+                                    onPositionChanged: (m) => { if (edit.dragging) { const t = edit.dragTo(m.x, m.y); if (t >= 0) page.seekTo(t) } }
                                     onReleased: edit.release()
                                     onDoubleClicked: (m) => edit.deleteAt(laneCurve, m.x, m.y)
                                 }
@@ -561,8 +654,8 @@ Item {
                                         const t = strip.t0 + (index + 0.5) * (strip.t1 - strip.t0) / strip.count
                                         return Math.min(Math.max(0, gen.durationMs - 1), Math.round(t / strip.grid) * strip.grid)
                                     }
-                                    readonly property bool current: gen.previewMs >= strip.t0 + index * (strip.t1 - strip.t0) / strip.count
-                                                                   && gen.previewMs < strip.t0 + (index + 1) * (strip.t1 - strip.t0) / strip.count
+                                    readonly property bool current: page.playheadMs >= strip.t0 + index * (strip.t1 - strip.t0) / strip.count
+                                                                   && page.playheadMs < strip.t0 + (index + 1) * (strip.t1 - strip.t0) / strip.count
                                     width: strip.width / strip.count - 2; height: strip.height
                                     Image {
                                         objectName: "frameThumb"
@@ -579,7 +672,7 @@ Item {
                                     }
                                     MouseArea {
                                         anchors.fill: parent
-                                        onClicked: gen.seekPreview(thumb.ms)
+                                        onClicked: page.seekTo(thumb.ms)
                                     }
                                 }
                             }
@@ -629,7 +722,7 @@ Item {
                             objectName: "addScene"
                             text: qsTr("+ Scene here")
                             enabled: edit.hasScript
-                            onClicked: if (edit.addScene(gen.previewMs)) page.selectedScene = -1
+                            onClicked: if (edit.addScene(page.playheadMs)) page.selectedScene = -1
                         }
                     }
                     FlowButton {

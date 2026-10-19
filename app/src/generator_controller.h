@@ -3,6 +3,7 @@
 #include <QElapsedTimer>
 #include <QImage>
 #include <QObject>
+#include <QUrl>
 #include <QRect>
 #include <QString>
 #include <QStringList>
@@ -27,6 +28,8 @@ class GeneratorController : public QObject {
     QML_ELEMENT
     Q_PROPERTY(QString videoPath READ videoPath NOTIFY videoChanged)
     Q_PROPERTY(QString videoName READ videoName NOTIFY videoChanged)
+    // For the MediaPlayer (D-154).
+    Q_PROPERTY(QUrl videoUrl READ videoUrl NOTIFY videoChanged)
     Q_PROPERTY(bool hasVideo READ hasVideo NOTIFY videoChanged)
     Q_PROPERTY(double durationMs READ durationMs NOTIFY videoChanged)
     Q_PROPERTY(QString videoInfo READ videoInfo NOTIFY videoChanged)  // "0:08 · 320×240 · 25 fps"
@@ -85,6 +88,7 @@ public:
 
     QString videoPath() const { return video_path_; }
     QString videoName() const;
+    QUrl videoUrl() const { return videoPath().isEmpty() ? QUrl() : QUrl::fromLocalFile(videoPath()); }
     bool hasVideo() const { return !video_path_.isEmpty(); }
     double durationMs() const { return duration_ms_; }
     QString videoInfo() const { return video_info_; }

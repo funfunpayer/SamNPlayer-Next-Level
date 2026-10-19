@@ -91,6 +91,20 @@ private slots:
         QTRY_VERIFY(gen->hasVideo());
         QCOMPARE(named(root.get(), "videoLabel")->property("text").toString(), QStringLiteral("clip.mp4"));
 
+        // D-154: the video plays as in the Player and pausing shows that frame.
+        QVERIFY(named(root.get(), "generatorTransport")->isEnabled());
+        QVERIFY(!named(root.get(), "generatorEmpty")->isVisible());
+        auto* media = page->findChild<QObject*>("generatorMedia");
+        QVERIFY(media);
+        QVERIFY(QMetaObject::invokeMethod(page, "togglePlay"));
+        QTRY_COMPARE(media->property("playbackState").toInt(), 1);
+        QTRY_VERIFY(page->property("playheadMs").toDouble() > 300);
+        QVERIFY(QMetaObject::invokeMethod(page, "togglePlay"));
+        QTRY_COMPARE(media->property("playbackState").toInt(), 2);
+        QTRY_VERIFY(qAbs(gen->previewMs() - media->property("position").toDouble()) < 120);
+        QVERIFY(QMetaObject::invokeMethod(page, "stop"));
+        QTRY_VERIFY(gen->previewMs() < 50);
+
         // Find tip sets a box and shows the other candidates as numbered chips.
         QMetaObject::invokeMethod(named(root.get(), "findTip"), "clicked");
         QTRY_VERIFY(gen->finding());
@@ -103,7 +117,7 @@ private slots:
         // row and box label appear with the video and shrink the frame, so
         // wait until the layout has settled.
         auto* frame = named(root.get(), "frameView");
-        QTRY_VERIFY(named(root.get(), "frameSlider")->isVisible());
+        QTRY_VERIFY(named(root.get(), "boxLabel")->isVisible());
         QRectF ir;
         QTRY_VERIFY([&] {
             const QRectF now = frame->property("imageRect").toRectF();

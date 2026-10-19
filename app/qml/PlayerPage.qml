@@ -97,7 +97,7 @@ Item {
         source: ctrl.videoUrl
         videoOutput: videoOut
         onDurationChanged: ctrl.setVideoDurationMs(media.duration)
-        audioOutput: AudioOutput { id: audio; volume: volume.value; muted: page.muted }
+        audioOutput: AudioOutput { id: audio; volume: transport.volume; muted: page.muted }
         playbackRate: page.speed
         onPlaybackStateChanged: ctrl.setPlaying(playbackState === MediaPlayer.PlayingState)
         // errorChanged, not errorOccurred: the FFmpeg backend of Qt 6.4 sets
@@ -182,8 +182,8 @@ Item {
     readonly property bool playing: player.playbackState === MediaPlayer.PlayingState
     function togglePlay() { playing ? player.pause() : player.play() }
     function setVolume(v) {
-        volume.value = Math.max(0, Math.min(1, Math.round(v * 20) / 20))  // steps of 0.05 (0.7)
-        ctrl.setUiValue("player.volume", volume.value)
+        transport.volume = Math.max(0, Math.min(1, Math.round(v * 20) / 20))  // steps of 0.05 (0.7)
+        ctrl.setUiValue("player.volume", transport.volume)
     }
     function stop() { player.stop(); if (!scriptOnly) media.position = 0 }
     function previous() {
@@ -595,63 +595,48 @@ Item {
                     visible: ctrl.videoName !== "" || page.scriptOnly
                 }
             }
-            Item {
+            VideoTransport {
                 id: transport
                 anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
-                height: 132
-                // Progress: blue → cyan → orange with a glowing knob.
-                Item {
-                    id: progress
-                    x: 18; y: 12; width: parent.width - 36; height: 16
-                    property real frac: page.player.duration > 0 ? page.player.position / page.player.duration : 0
-                    Rectangle { anchors.verticalCenter: parent.verticalCenter; width: parent.width; height: 6; radius: 3; color: Qt.rgba(1, 1, 1, 0.10) }
-                    Rectangle {
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: parent.width * progress.frac; height: 6; radius: 3
-                        gradient: Gradient {
-                            orientation: Gradient.Horizontal
-                            GradientStop { position: 0; color: Theme.blue }
-                            GradientStop { position: 0.55; color: Theme.cyan }
-                            GradientStop { position: 1; color: Theme.orange }
-                        }
-                    }
-                    Rectangle {
-                        x: parent.width * progress.frac - 8; anchors.verticalCenter: parent.verticalCenter
-                        width: 16; height: 16; radius: 8
-                        color: "#dff8ff"; border.color: Theme.blue; border.width: 3
-                    }
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        function seek(mx) { if (page.player.duration > 0) page.seekTo(Math.max(0, Math.min(1, mx / width)) * page.player.duration) }
-                        onPressed: (m) => seek(m.x)
-                        onPositionChanged: (m) => { if (pressed) seek(m.x) }
-                    }
-                }
+                position: page.player.position
+                duration: page.player.duration
+                playing: page.playing
+                muted: page.muted
+                volume: ctrl.uiValue("player.volume", 0.8)  // remembered (0.7 pb.volume)
                 // Live channel values at the playhead (0.7 stat row).
-                Text {
-                    textFormat: Text.PlainText
-                    x: 18; y: 34
-                    visible: ctrl.hasScript
-                    text: qsTr("Vibration %1   ·   Suction %2").arg(ctrl.vibrationNow).arg(ctrl.suctionNow)
-                    color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                info: ctrl.hasScript ? qsTr("Vibration %1   ·   Suction %2").arg(ctrl.vibrationNow).arg(ctrl.suctionNow) : ""
+                canPrevious: ctrl.hasScript || ctrl.videoName !== ""
+                showNext: ctrl.playlistHasNext
+                onSeekRequested: (ms) => page.seekTo(ms)
+                onSeekByRequested: (ms) => page.seekBy(ms)
+                onTogglePlayRequested: page.togglePlay()
+                // Previous: the item before in the list (playing on if it
+                // played), else back to the start (0.7).
+                onPreviousRequested: page.previous()
+                onStopRequested: page.stop()
+                onNextRequested: {
+                    const wasPlaying = page.playing
+                    page.player.stop()
+                    if (ctrl.playlistNext() && wasPlaying) {
+                        if (ctrl.videoName !== "") media.playWhenLoaded = true
+                        else Qt.callLater(clock.play)
+                    }
                 }
+                onMuteToggled: page.muted = !page.muted
+                onVolumeMoved: (v) => page.setVolume(v)
                 // Left (0.7 transport): sleep timer, loop selection, speed.
-                Row {
-                    id: leftControls
-                    anchors.left: parent.left; anchors.leftMargin: 18
-                    y: 66; spacing: 8
+                leftItems: [
                     FlowCombo {
                         width: 108
                         model: [qsTr("Sleep off"), "15 min", "30 min", "45 min", "60 min", "90 min"]
                         readonly property var minutes: [0, 15, 30, 45, 60, 90]
                         currentIndex: Math.max(0, minutes.indexOf(ctrl.sleepMinutes))
                         onActivated: (i) => ctrl.sleepMinutes = minutes[i]
-                    }
+                    },
                     FlowButton {
                         text: qsTr("Loop"); checked: ctrl.loopEnabled
                         onClicked: ctrl.loopEnabled = !ctrl.loopEnabled
-                    }
+                    },
                     FlowCombo {
                         width: 78
                         model: ["0.5×", "0.75×", "1.0×", "1.25×", "1.5×", "2.0×"]
@@ -659,71 +644,7 @@ Item {
                         currentIndex: rates.indexOf(page.speed)
                         onActivated: (i) => page.speed = rates[i]
                     }
-                }
-                // Centred in the gap between the side controls, so nothing
-                // overlaps on a narrow card.
-                Row {
-                    id: transportRow
-                    readonly property real gapLeft: leftControls.x + leftControls.width
-                    x: gapLeft + Math.max(0, (rightControls.x - gapLeft - width) / 2)
-                    y: 54
-                    spacing: 12
-                    // Previous: the item before in the list (playing on if it
-                    // played), else back to the start (0.7).
-                    IconButton {
-                        objectName: "previousButton"
-                        width: 36; height: 36
-                        icon: "skipBack"; tip: qsTr("Previous item, or back to the start")
-                        enabled: ctrl.hasScript || ctrl.videoName !== ""
-                        anchors.verticalCenter: parent.verticalCenter
-                        onClicked: page.previous()
-                    }
-                    IconButton { icon: "back10"; tip: qsTr("Back 10 s"); onClicked: page.seekBy(-10000); anchors.verticalCenter: parent.verticalCenter }
-                    PlayButton {
-                        playing: page.playing
-                        onClicked: page.togglePlay()
-                    }
-                    IconButton { icon: "forward10"; tip: qsTr("Forward 10 s"); onClicked: page.seekBy(10000); anchors.verticalCenter: parent.verticalCenter }
-                    // Stop: the device stops and the playhead goes back to 0.
-                    IconButton {
-                        objectName: "stopButton"
-                        width: 36; height: 36
-                        icon: "stop"; tip: qsTr("Stop")
-                        enabled: page.playing || page.player.position > 0
-                        anchors.verticalCenter: parent.verticalCenter
-                        onClicked: page.stop()
-                    }
-                    IconButton {
-                        width: 36; height: 36
-                        icon: "skipForward"; tip: qsTr("Next item in the list")
-                        visible: ctrl.playlistHasNext
-                        anchors.verticalCenter: parent.verticalCenter
-                        onClicked: {
-                            const wasPlaying = page.playing
-                            page.player.stop()
-                            if (ctrl.playlistNext() && wasPlaying) {
-                                if (ctrl.videoName !== "") media.playWhenLoaded = true
-                                else Qt.callLater(clock.play)
-                            }
-                        }
-                    }
-                }
-                Row {
-                    id: rightControls
-                    anchors.right: parent.right; anchors.rightMargin: 18
-                    y: 74; spacing: 10
-                    IconButton {
-                        width: 36; height: 36; icon: page.muted ? "mute" : "volume"; tip: qsTr("Mute")
-                        anchors.verticalCenter: parent.verticalCenter
-                        onClicked: page.muted = !page.muted
-                    }
-                    FlowSlider {
-                        id: volume; objectName: "volume"
-                        from: 0; to: 1; width: 110; anchors.verticalCenter: parent.verticalCenter
-                        value: ctrl.uiValue("player.volume", 0.8)  // remembered (0.7 pb.volume)
-                        onMoved: (v) => page.setVolume(v)
-                    }
-                }
+                ]
             }
         }
 
@@ -1121,13 +1042,13 @@ Item {
     // Drop a video or a script anywhere on the page.
 
     // Keys as 0.7 (Player, not while typing).
-    Shortcut { sequence: "Space"; enabled: !page.overlayOpen; onActivated: page.togglePlay() }
-    Shortcut { sequence: "Left"; enabled: !page.overlayOpen; onActivated: page.seekBy(-5000) }
-    Shortcut { sequence: "Right"; enabled: !page.overlayOpen; onActivated: page.seekBy(5000) }
-    Shortcut { sequence: "Shift+Left"; enabled: !page.overlayOpen; onActivated: page.seekBy(-1000) }
-    Shortcut { sequence: "Shift+Right"; enabled: !page.overlayOpen; onActivated: page.seekBy(1000) }
-    Shortcut { sequence: ","; enabled: !page.overlayOpen; onActivated: page.seekBy(-200) }
-    Shortcut { sequence: "."; enabled: !page.overlayOpen; onActivated: page.seekBy(200) }
+    Shortcut { sequence: "Space"; enabled: page.visible && !page.overlayOpen; onActivated: page.togglePlay() }
+    Shortcut { sequence: "Left"; enabled: page.visible && !page.overlayOpen; onActivated: page.seekBy(-5000) }
+    Shortcut { sequence: "Right"; enabled: page.visible && !page.overlayOpen; onActivated: page.seekBy(5000) }
+    Shortcut { sequence: "Shift+Left"; enabled: page.visible && !page.overlayOpen; onActivated: page.seekBy(-1000) }
+    Shortcut { sequence: "Shift+Right"; enabled: page.visible && !page.overlayOpen; onActivated: page.seekBy(1000) }
+    Shortcut { sequence: ","; enabled: page.visible && !page.overlayOpen; onActivated: page.seekBy(-200) }
+    Shortcut { sequence: "."; enabled: page.visible && !page.overlayOpen; onActivated: page.seekBy(200) }
     Shortcut { sequences: ["+", "="]; enabled: !page.overlayOpen; onActivated: ctrl.offsetMs = ctrl.offsetMs + 10 }
     Shortcut { sequence: "-"; enabled: !page.overlayOpen; onActivated: ctrl.offsetMs = ctrl.offsetMs - 10 }
     Shortcut { sequence: "L"; enabled: !page.overlayOpen; onActivated: ctrl.loopEnabled = !ctrl.loopEnabled }
