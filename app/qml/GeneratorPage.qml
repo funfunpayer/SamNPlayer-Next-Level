@@ -34,6 +34,13 @@ Item {
         onAccepted: gen.openVideo(selectedFile.toString())
     }
     FileDialog {
+        id: queueDialog
+        title: qsTr("Add videos to the queue")
+        fileMode: FileDialog.OpenFiles
+        nameFilters: [qsTr("Video (*.mp4 *.mkv *.webm *.mov *.avi *.m4v)"), qsTr("All files (*)")]
+        onAccepted: gen.addToQueue(selectedFiles.map((u) => u.toString()))
+    }
+    FileDialog {
         id: scriptDialog
         title: qsTr("Open a script to edit")
         nameFilters: [qsTr("Scripts (*.funscript *.samn)"), qsTr("All files (*)")]
@@ -563,14 +570,14 @@ Item {
                         }
                         FlowButton {
                             objectName: "cancelButton"
-                            text: qsTr("Cancel"); visible: gen.running
+                            text: qsTr("Cancel"); visible: gen.running || gen.queueRunning
                             onClicked: gen.cancel()
                         }
                     }
                     Rectangle {
                         objectName: "progressBar"
                         Layout.fillWidth: true; height: 6; radius: 3
-                        visible: gen.running || gen.percent > 0
+                        visible: gen.running || gen.queueRunning || gen.percent > 0
                         color: Qt.rgba(1, 1, 1, 0.08)
                         Rectangle {
                             height: parent.height; radius: 3
@@ -603,6 +610,62 @@ Item {
                         text: qsTr("Play in the Player")
                         icon: "play"
                         onClicked: page.reviewRequested(edit.hasScript ? edit.playPath : gen.outputPath)
+                    }
+                    // The queue (0.7 "Create queue"): each video gets its tip
+                    // found and its script created with the settings above.
+                    RowLayout {
+                        Layout.fillWidth: true; spacing: 6
+                        FlowButton {
+                            objectName: "addToQueue"
+                            text: qsTr("Add to queue…"); icon: "playlist"
+                            enabled: !gen.queueRunning
+                            onClicked: queueDialog.open()
+                        }
+                        FlowButton {
+                            objectName: "runQueue"
+                            visible: gen.queue.length > 0
+                            text: qsTr("Create queue")
+                            enabled: !gen.queueRunning && !gen.running && gen.queue.some((q) => q.status === "queued")
+                            onClicked: gen.runQueue(false)
+                        }
+                        FlowButton {
+                            objectName: "clearQueue"
+                            visible: gen.queue.length > 0 && !gen.queueRunning
+                            text: qsTr("Clear")
+                            onClicked: gen.clearQueue()
+                        }
+                    }
+                    Text {
+                        objectName: "queueSummary"
+                        textFormat: Text.PlainText
+                        visible: gen.queueSummary !== ""
+                        text: gen.queueSummary; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                    }
+                    Column {
+                        objectName: "queueList"
+                        Layout.fillWidth: true; spacing: 2
+                        Repeater {
+                            model: gen.queue
+                            delegate: RowLayout {
+                                required property int index
+                                required property var modelData
+                                width: parent.width; spacing: 6
+                                Text {
+                                    textFormat: Text.PlainText
+                                    Layout.preferredWidth: 18
+                                    text: modelData.status === "done" ? "✓" : modelData.status === "running" ? "…"
+                                        : modelData.status === "failed" ? "✗" : modelData.status === "queued" ? String(index + 1) : "–"
+                                    color: modelData.status === "done" ? Theme.cyan : modelData.status === "failed" ? Theme.orange : Theme.textDim
+                                    font.family: Theme.fontSoft; font.pixelSize: 12
+                                }
+                                Text {
+                                    textFormat: Text.PlainText
+                                    Layout.fillWidth: true; elide: Text.ElideMiddle
+                                    text: modelData.name + (modelData.message !== "" && modelData.status !== "done" ? " · " + modelData.message : "")
+                                    color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 12
+                                }
+                            }
+                        }
                     }
                     ListView {
                         objectName: "runLog"

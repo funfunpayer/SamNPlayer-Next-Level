@@ -55,6 +55,11 @@ class GeneratorController : public QObject {
     // ({x, y, w, h, score} in video pixels, strongest first).
     Q_PROPERTY(bool finding READ finding NOTIFY findingChanged)
     Q_PROPERTY(QVariantList tipCandidates READ tipCandidates NOTIFY tipCandidatesChanged)
+    // The queue (0.7 "Create queue"): {path, name, status, message}; status is
+    // queued | running | done | skipped | failed | canceled.
+    Q_PROPERTY(QVariantList queue READ queue NOTIFY queueChanged)
+    Q_PROPERTY(bool queueRunning READ queueRunning NOTIFY queueChanged)
+    Q_PROPERTY(QString queueSummary READ queueSummary NOTIFY queueChanged)
 
 public:
     explicit GeneratorController(QObject* parent = nullptr);
@@ -92,6 +97,9 @@ public:
     int step() const;
     bool finding() const { return finding_; }
     QVariantList tipCandidates() const { return tip_candidates_; }
+    QVariantList queue() const { return queue_; }
+    bool queueRunning() const { return queue_running_; }
+    QString queueSummary() const;
 
     // A video path or file URL. false with the status set when it cannot be read.
     Q_INVOKABLE bool openVideo(const QString& pathOrUrl);
@@ -109,6 +117,14 @@ public:
     Q_INVOKABLE void cancelFind();
     // Takes candidate i as the tip box.
     Q_INVOKABLE void pickCandidate(int index);
+    // Adds videos (paths or file URLs; duplicates once) to the queue.
+    Q_INVOKABLE int addToQueue(const QStringList& pathsOrUrls);
+    Q_INVOKABLE void removeFromQueue(int index);
+    Q_INVOKABLE void clearQueue();
+    // Creates every queued video in order on its own thread: Find tip, then
+    // the script beside it with the current feel settings. Existing scripts
+    // are skipped unless overwrite. cancel() stops the rest.
+    Q_INVOKABLE bool runQueue(bool overwrite = false);
     // Tests: waits for the run on the worker to end (events still arrive queued).
     void waitForRun();
 
@@ -125,6 +141,8 @@ signals:
     void stepChanged();
     void findingChanged();
     void tipCandidatesChanged();
+    void queueChanged();
+    void queueFinished(int done, int skipped, int failed);
     // The script is written: the page opens it for review (D-137).
     void created(const QString& path);
 
@@ -156,6 +174,12 @@ private:
     QVariantList tip_candidates_;
     std::shared_ptr<std::atomic<bool>> find_cancel_;
     std::thread finder_;
+    QVariantList queue_;
+    bool queue_running_ = false;
+    std::shared_ptr<std::atomic<bool>> queue_cancel_;
+    std::thread queue_worker_;
+    void setQueueItem(int index, const QString& status, const QString& message);
+    void finishQueue();
 };
 
 }  // namespace samn::ui
