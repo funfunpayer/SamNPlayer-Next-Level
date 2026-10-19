@@ -159,7 +159,7 @@ jobs:
           env -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH -u QT_ROOT_DIR \
             PATH="/c/Windows/system32:/c/Windows:/usr/bin" SAMN_CONFIG_DIR="$cfg" \
             SAMN_SCREENSHOT="$GITHUB_WORKSPACE/package.png" SAMN_SCREENSHOT_DELAY_MS=4000 \
-            timeout 90 ./SamNPlayer2.exe "$GITHUB_WORKSPACE/smoke.funscript" "$GITHUB_WORKSPACE/tests/app/data/testpattern_4s.mp4"
+            /usr/bin/timeout 90 ./SamNPlayer2.exe "$GITHUB_WORKSPACE/smoke.funscript" "$GITHUB_WORKSPACE/tests/app/data/testpattern_4s.mp4"
           test -s "$GITHUB_WORKSPACE/package.png"
           log="$cfg/logs/samnplayer2.log"
           cat "$log"
