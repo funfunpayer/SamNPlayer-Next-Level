@@ -1,9 +1,11 @@
 #include "samn/engine/generate.h"
 
+#include <cmath>
 #include <cstdio>
 
 #include <nlohmann/json.hpp>
 
+#include "samn/contact_marks.h"
 #include "samn/fileio.h"
 #include "samn/ozone.h"
 #include "samn/samn_file.h"
@@ -31,16 +33,37 @@ std::string FunscriptJson(const GenerateRequest& req, const std::vector<Action>&
                         {"native_pipeline", pipeline}};
     const std::string profile = NormalizeProfile(req.signal.profile);
     if (!profile.empty() && profile != "standard") meta["profile"] = profile;
-    if (IsDistanceProfile(req.signal.profile)) {
-        // The same recipe as the .samn, through the one serializer.
+    else if (req.contact_vibration) meta["profile"] = "standard";
+    if (IsDistanceProfile(req.signal.profile) || req.contact_vibration || samn.contact_marks) {
+        // The same recipe and marks as the .samn, through the one serializer.
+        // The tip path stays in the .samn only: it is long, and the Player
+        // reads the .samn first.
         const nlohmann::json doc = nlohmann::json::parse(MarshalDocument(samn));
-        if (doc.contains("recipe")) meta["device_recipe"] = doc["recipe"];
+        if ((IsDistanceProfile(req.signal.profile) || req.contact_vibration) && doc.contains("recipe"))
+            meta["device_recipe"] = doc["recipe"];
+        if (doc.contains("contactMarks")) meta["contact_marks"] = doc["contactMarks"];
     }
     return nlohmann::json{{"actions", acts}, {"metadata", meta}}.dump(2);
 }
 
+// The tip's path for spatial contact (0.7 buildTrajectoryData): the box
+// centre in frame pixels, one point per kTipPathStepMs, 0.1 px.
+constexpr int64_t kTipPathStepMs = 50;
+
+TrajectoryData TipPath(const TrackResult& tr) {
+    TrajectoryData t;
+    t.width = tr.size.width;
+    t.height = tr.size.height;
+    const auto tenth = [](double v) { return std::round(v * 10.0) / 10.0; };
+    for (size_t i = 0; i < tr.times_ms.size() && i < tr.xs.size() && i < tr.frame_ys.size(); ++i) {
+        if (!t.tip.empty() && tr.times_ms[i] - t.tip.back().at_ms < kTipPathStepMs) continue;
+        t.tip.push_back({tr.times_ms[i], tenth(tr.xs[i]), tenth(tr.frame_ys[i])});
+    }
+    return t;
+}
+
 // 0.7 writeCompanionSamn for the single-box path.
-Document CompanionSamn(const GenerateRequest& req, const std::vector<Action>& actions) {
+Document CompanionSamn(const GenerateRequest& req, const std::vector<Action>& actions, const TrackResult& tr) {
     Document d;
     d.version = SamnCurrentVersion;
     d.kind = SamnKind;
@@ -52,10 +75,34 @@ Document CompanionSamn(const GenerateRequest& req, const std::vector<Action>& ac
     d.duration_ms = actions.empty() ? 0 : actions.back().at;
     if (IsDistanceProfile(req.signal.profile)) {
         d.recipe = RecipeMeta(req.signal.profile);
+        if (req.contact_vibration)
+            ApplyContactVibration(d.recipe, req.contact_vibration_span, req.contact_vibration_curve);
         d.strength_presets = DefaultStrengthPresets();
         d.active_strength = "normal";
         d.BakeNeoAxes();
+    } else if (req.contact_vibration) {
+        // Everyday stroke with contact vibration: the same recipe as 0.7.
+        DeviceRecipe r;
+        r.sync = SyncModeName(SyncMode::Independent);
+        r.smoothing = 0.3;
+        if (d.profile == ProfileWeich) r = RecipeMeta(ProfileWeich);
+        ApplyContactVibration(r, req.contact_vibration_span, req.contact_vibration_curve);
+        d.recipe = r;
+        if (d.profile.empty()) d.profile = "standard";
     }
+    ContactMarkInput marks;
+    marks.profile = req.signal.profile;
+    marks.tip_class = req.tip_class;
+    if (req.box.width > 0 && req.box.height > 0)
+        marks.tip = ContactMarkBox{req.box.x, req.box.y, req.box.width, req.box.height, req.tip_class, false};
+    // The tip box is always stored (0.7 withTipROI); the contact areas only
+    // with contact vibration, which is all they are for (0.7 hid them then).
+    if (req.contact_vibration || IsDistanceProfile(req.signal.profile)) {
+        marks.primary = req.contact_area;
+        marks.extras = req.extra_areas;
+    }
+    d.contact_marks = BuildContactMarks(marks);
+    if (d.contact_marks && HasContactAreas(*d.contact_marks)) d.trajectory = TipPath(tr);
     return d;
 }
 
@@ -109,7 +156,7 @@ void GenerateUnguarded(const GenerateRequest& req, uint64_t run_id, const std::f
     }
     const std::vector<OMarker> markers = req.auto_ozone ? AutoOZoneMarkers(sig->actions) : std::vector<OMarker>{};
     try {
-        Document samn = CompanionSamn(req, sig->actions);
+        Document samn = CompanionSamn(req, sig->actions, *tr);
         samn.o_markers = markers;
         WriteFileAtomic(req.output, FunscriptJson(req, sig->actions, *tr, samn));
         if (!markers.empty()) SaveOMarkers(req.output, markers);

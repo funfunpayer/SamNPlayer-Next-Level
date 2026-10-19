@@ -100,6 +100,54 @@ private slots:
         QTRY_COMPARE_WITH_TIMEOUT(created.count(), 2, 60000);
     }
 
+    void contactAreasAndClassesGoIntoTheScript() {
+        QTemporaryDir own;
+        const QString video = own.filePath("c.mp4");
+        clips::WriteMoving(std::filesystem::path(video.toStdU16String()), 3, 80.0, 1.0);
+        GeneratorController g;
+        QVERIFY(g.contactVibration());  // 0.7: on by default
+        QCOMPARE(g.tipClass(), QStringLiteral("glans"));
+        QCOMPARE(g.contactClass(), QStringLiteral("nipples"));
+        QCOMPARE(g.tipClasses(), QStringList({"glans", "penis"}));
+        QCOMPARE(g.contactClasses(), QStringList({"mouth", "nipples", "breasts"}));
+        QVERIFY(!g.addContactArea(QRect(10, 10, 40, 40)));  // no video
+        QVERIFY(g.openVideo(video));
+        g.setBox(QRect(100, 40, 120, 160));
+        g.setTipClass("penis");
+        g.setTipClass("hand");  // not offered: kept
+        QCOMPARE(g.tipClass(), QStringLiteral("penis"));
+        QSignalSpy changed(&g, &GeneratorController::contactChanged);
+        g.setMarkContact(true);
+        QVERIFY(!g.addContactArea(QRect(10, 10, 4, 40)));  // a click, not an area
+        QVERIFY(!g.markContact());                         // marking ends either way
+        QVERIFY(g.addContactArea(QRect(130, 90, 60, 60)));
+        g.setContactClass("mouth");
+        QVERIFY(g.addContactArea(QRect(300, 200, 60, 60)));  // clipped to the frame
+        QCOMPARE(g.contactAreas().size(), 2);
+        QCOMPARE(g.contactAreas().at(1).toMap().value("w").toInt(), 20);
+        QCOMPARE(g.contactAreas().at(1).toMap().value("cls").toString(), QStringLiteral("mouth"));
+        QVERIFY(changed.count() >= 3);
+        QCOMPARE(g.box(), QRect(100, 40, 120, 160));  // the tip box is untouched
+
+        QSignalSpy created(&g, &GeneratorController::created);
+        QVERIFY(g.create());
+        QTRY_COMPARE_WITH_TIMEOUT(created.count(), 1, 60000);
+        const samn::Document d = samn::LoadDocument(std::filesystem::path(own.filePath("c.samn").toStdU16String()));
+        QVERIFY(d.recipe.contact_vibration);
+        QVERIFY(d.contact_marks.has_value());
+        QCOMPARE(QString::fromStdString(d.contact_marks->tip_class), QStringLiteral("penis"));
+        QVERIFY(d.contact_marks->primary.has_value());
+        QCOMPARE(QString::fromStdString(d.contact_marks->primary->cls), QStringLiteral("nipples"));
+        QCOMPARE(d.contact_marks->extras.size(), size_t(1));
+        QVERIFY(d.trajectory.has_value() && !d.trajectory->tip.empty());
+
+        g.removeContactArea(0);
+        QCOMPARE(g.contactAreas().size(), 1);
+        // Another video: the areas belonged to the old one.
+        QVERIFY(g.openVideo(clip("a.mp4", 8)));
+        QVERIFY(g.contactAreas().isEmpty());
+    }
+
     void findTipProposesTheBoxAndCandidates() {
         GeneratorController g;
         QVERIFY(!g.findTip());  // no video

@@ -139,6 +139,36 @@ private slots:
                           invert->mapToScene(QPointF(invert->width() / 2, invert->height() / 2)).toPoint());
         QTRY_VERIFY(gen->invert());
 
+        // Contact: on by default; "Mark contact area" makes the next drag a
+        // contact area and leaves the tip box alone.
+        QVERIFY(gen->contactVibration());
+        QVERIFY(named(root.get(), "contactMarks")->isVisible());
+        QMetaObject::invokeMethod(named(root.get(), "markContact"), "clicked");
+        QTRY_VERIFY(gen->markContact());
+        const QRect tip = gen->box();
+        const QPointF c1 = frame->mapToScene(QPointF(ir.x() + 20 * s, ir.y() + 20 * s));
+        const QPointF c2 = frame->mapToScene(QPointF(ir.x() + 80 * s, ir.y() + 70 * s));
+        QTest::mousePress(&window, Qt::LeftButton, {}, c1.toPoint());
+        QTest::mouseMove(&window, ((c1 + c2) / 2).toPoint());
+        QTRY_VERIFY(named(root.get(), "contactDraft")->isVisible());
+        QTest::mouseMove(&window, c2.toPoint());
+        QTest::mouseRelease(&window, Qt::LeftButton, {}, c2.toPoint());
+        QTRY_COMPARE(gen->contactAreas().size(), 1);
+        QVERIFY(!gen->markContact());
+        QCOMPARE(gen->box(), tip);
+        const QVariantMap area = gen->contactAreas().first().toMap();
+        QVERIFY(qAbs(area.value("x").toInt() - 20) <= 2);
+        QVERIFY(qAbs(area.value("w").toInt() - 60) <= 3);
+        QCOMPARE(area.value("cls").toString(), QStringLiteral("nipples"));
+        QTRY_VERIFY(named(root.get(), "contactArea_0"));
+        QVERIFY(named(root.get(), "contactArea_0")->isVisible());
+        // Off hides the classes and the areas; on brings them back.
+        gen->setContactVibration(false);
+        QTRY_VERIFY(!named(root.get(), "contactMarks")->isVisible());
+        QTRY_VERIFY(!named(root.get(), "contactArea_0"));
+        gen->setContactVibration(true);
+        QTRY_VERIFY(named(root.get(), "contactArea_0"));
+
         if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT"); !shot.isEmpty()) window.grabWindow().save(QString::fromLocal8Bit(shot));
 
         QMetaObject::invokeMethod(named(root.get(), "createButton"), "clicked");

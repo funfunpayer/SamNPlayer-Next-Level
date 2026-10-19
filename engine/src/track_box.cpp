@@ -173,6 +173,7 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
     }
     progress.Report(idx);
 
+    res.frame_ys = res.ys;
     if (opts.camera_compensation) ApplyCameraCompensation(res.ys, camera_dy, res.scene_cuts);
 
     res.stats.vertical_range = Ptp(res.ys);

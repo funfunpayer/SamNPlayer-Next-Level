@@ -46,6 +46,7 @@ struct TrackResult {
     std::vector<int64_t> times_ms;  // video time per frame
     std::vector<double> positions;  // chosen axis, pixels
     std::vector<double> xs, ys;     // box centre per frame (y camera-compensated)
+    std::vector<double> frame_ys;   // box centre y in frame pixels, before compensation (tip path)
     bool horizontal = false;        // positions are xs
     cv::Size size;
     std::vector<int> scene_cuts;    // frame numbers counted from the first tracked frame

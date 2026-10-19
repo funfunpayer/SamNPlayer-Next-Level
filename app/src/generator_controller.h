@@ -11,6 +11,7 @@
 #include <atomic>
 #include <memory>
 #include <thread>
+#include <vector>
 
 #include "samn/engine/generate.h"
 
@@ -42,6 +43,18 @@ class GeneratorController : public QObject {
     Q_PROPERTY(bool cameraCompensation READ cameraCompensation WRITE setCameraCompensation NOTIFY optionsChanged)
     Q_PROPERTY(bool sceneCuts READ sceneCuts WRITE setSceneCuts NOTIFY optionsChanged)
     Q_PROPERTY(bool autoOZone READ autoOZone WRITE setAutoOZone NOTIFY optionsChanged)
+    // Contact vibration (0.7 Step 2 "Tip & contact", on by default): the
+    // tip's class, and contact areas the tip's path can reach; the Player
+    // vibrates when it does. contactAreas: {x, y, w, h, cls} in video pixels,
+    // the first is the primary. markContact: the next box drawn is a contact
+    // area instead of the tip box.
+    Q_PROPERTY(bool contactVibration READ contactVibration WRITE setContactVibration NOTIFY optionsChanged)
+    Q_PROPERTY(QString tipClass READ tipClass WRITE setTipClass NOTIFY optionsChanged)
+    Q_PROPERTY(QString contactClass READ contactClass WRITE setContactClass NOTIFY optionsChanged)
+    Q_PROPERTY(QStringList tipClasses READ tipClasses CONSTANT)
+    Q_PROPERTY(QStringList contactClasses READ contactClasses CONSTANT)
+    Q_PROPERTY(bool markContact READ markContact WRITE setMarkContact NOTIFY contactChanged)
+    Q_PROPERTY(QVariantList contactAreas READ contactAreas NOTIFY contactChanged)
     // The run.
     Q_PROPERTY(bool running READ running NOTIFY runChanged)
     Q_PROPERTY(int percent READ percent NOTIFY progressChanged)  // -1 = unknown length
@@ -87,6 +100,17 @@ public:
     void setSceneCuts(bool v);
     bool autoOZone() const { return auto_ozone_; }
     void setAutoOZone(bool v);
+    bool contactVibration() const { return contact_vibration_; }
+    void setContactVibration(bool v);
+    QString tipClass() const { return tip_class_; }
+    void setTipClass(const QString& c);
+    QString contactClass() const { return contact_class_; }
+    void setContactClass(const QString& c);
+    QStringList tipClasses() const;
+    QStringList contactClasses() const;
+    bool markContact() const { return mark_contact_; }
+    void setMarkContact(bool v);
+    QVariantList contactAreas() const;
     bool running() const { return running_; }
     int percent() const { return percent_; }
     QString progressText() const { return progress_text_; }
@@ -106,6 +130,11 @@ public:
     // Loads the marking frame at ms (clamped to the clip).
     Q_INVOKABLE void seekPreview(double ms);
     Q_INVOKABLE void clearBox();
+    // A contact area with the current contact class (inside the frame, at
+    // least 8 px; false otherwise). Marking ends after one area.
+    Q_INVOKABLE bool addContactArea(const QRect& area);
+    Q_INVOKABLE void removeContactArea(int index);
+    Q_INVOKABLE void clearContactAreas();
     // Starts the run. Without overwrite an existing script stops it (the page
     // asks first, 0.7 confirm). false when it cannot start.
     Q_INVOKABLE bool create(bool overwrite = false);
@@ -141,6 +170,7 @@ signals:
     void stepChanged();
     void findingChanged();
     void tipCandidatesChanged();
+    void contactChanged();
     void queueChanged();
     void queueFinished(int done, int skipped, int failed);
     // The script is written: the page opens it for review (D-137).
@@ -161,6 +191,11 @@ private:
     QRect box_;
     QString profile_ = QStringLiteral("standard");
     bool invert_ = false, camera_ = true, scene_cuts_ = true, auto_ozone_ = true;
+    bool contact_vibration_ = true;
+    QString tip_class_ = QStringLiteral("glans");
+    QString contact_class_ = QStringLiteral("nipples");
+    bool mark_contact_ = false;
+    std::vector<samn::ContactMarkBox> contact_areas_;
     bool running_ = false;
     int percent_ = 0;
     QString progress_text_;

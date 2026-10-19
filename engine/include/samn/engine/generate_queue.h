@@ -19,6 +19,12 @@ struct QueueSettings {
     bool scene_cuts = true;
     bool auto_ozone = true;
     bool overwrite = false;  // otherwise a video that has a script is skipped
+    // Contact vibration and the tip class; contact areas are marked per
+    // video, so the queue has none.
+    bool contact_vibration = false;
+    double contact_vibration_span = 0;
+    std::string contact_vibration_curve;
+    std::string tip_class;
 };
 
 enum class QueueItemStatus { kDone, kSkipped, kFailed, kCanceled };

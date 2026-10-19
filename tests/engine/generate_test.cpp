@@ -231,3 +231,74 @@ TEST_CASE("generate: anything thrown ends the run as an error, not the app") {
     CHECK(errors == 1);
     fs::remove_all(dir);
 }
+
+TEST_CASE("generate: contact vibration stores the recipe, the marks and the tip's path (0.7 contact marks)") {
+    const fs::path dir = TempDir("samn_generate_contact");
+    REQUIRE(clips::WriteMoving(dir / "moving.mp4", 3, 80.0, 1.0));
+    GenerateRequest req = Request(dir, "moving.mp4", "standard");
+    req.contact_vibration = true;
+    req.contact_vibration_curve = "soft";
+    req.tip_class = "glans";
+    // Around the tip's start: the path passes through it.
+    const cv::Point c(req.box.x + req.box.width / 2, req.box.y + req.box.height / 2);
+    req.contact_area = samn::ContactMarkBox{c.x - 30, c.y - 30, 60, 60, "nipples", false};
+    req.extra_areas = {samn::ContactMarkBox{0, 0, 10, 10, "mouth", true}};
+    Recorder rec;
+    Generate(req, 1, {}, rec.fn());
+    REQUIRE(rec.take().back().kind == GenerateEventKind::kDone);
+
+    samn::Document d = samn::LoadDocument(dir / "standard.samn");
+    CHECK(d.profile == "standard");
+    CHECK(d.recipe.contact_vibration);
+    CHECK(d.recipe.contact_vibration_curve == "soft");
+    REQUIRE(d.contact_marks);
+    CHECK(d.contact_marks->tip_class == "glans");
+    REQUIRE(d.contact_marks->tip);
+    CHECK(d.contact_marks->tip->w == req.box.width);
+    REQUIRE(d.contact_marks->primary);
+    CHECK(d.contact_marks->primary->cls == "nipples");
+    REQUIRE(d.contact_marks->extras.size() == 1);
+    CHECK(d.contact_marks->extras[0].fixed);
+    CHECK_FALSE(d.contact_marks->drive_stroke);
+    // The path: frame pixels, about every 50 ms, inside the frame.
+    REQUIRE(d.trajectory);
+    CHECK(d.trajectory->width > 0);
+    REQUIRE(d.trajectory->tip.size() >= 30);  // 3 s at 25 fps, every second frame
+    for (size_t i = 1; i < d.trajectory->tip.size(); ++i)
+        CHECK(d.trajectory->tip[i].at_ms - d.trajectory->tip[i - 1].at_ms >= 40);
+    CHECK(d.trajectory->tip.front().x == doctest::Approx(c.x).epsilon(0.02));
+    // The Player turns it into contact vibration.
+    const samn::MapOptions o = samn::MapOptionsFromScript(d.ToFunscript());
+    REQUIRE(o.spatial_contact);
+    CHECK(o.contact_vibration);
+    CHECK(o.spatial_contact(d.trajectory->tip.front().at_ms) >= 0.99);
+
+    const auto fs_json = ReadJson(dir / "standard.funscript");
+    CHECK(fs_json["metadata"]["profile"] == "standard");
+    CHECK(fs_json["metadata"]["device_recipe"]["contact_vibration"] == true);
+    CHECK(fs_json["metadata"]["contact_marks"]["primary"]["class"] == "nipples");
+    CHECK(!fs_json["metadata"].contains("trajectory"));  // .samn only
+    fs::remove_all(dir);
+}
+
+TEST_CASE("generate: without contact vibration only the tip box is stored") {
+    const fs::path dir = TempDir("samn_generate_nocontact");
+    REQUIRE(clips::WriteMoving(dir / "moving.mp4", 2, 80.0, 1.0));
+    GenerateRequest req = Request(dir, "moving.mp4", "standard");
+    req.tip_class = "penis";
+    req.contact_area = samn::ContactMarkBox{10, 10, 60, 60, "mouth", false};
+    Recorder rec;
+    Generate(req, 1, {}, rec.fn());
+    REQUIRE(rec.take().back().kind == GenerateEventKind::kDone);
+    const samn::Document d = samn::LoadDocument(dir / "standard.samn");
+    CHECK_FALSE(d.recipe.contact_vibration);
+    REQUIRE(d.contact_marks);
+    CHECK(d.contact_marks->tip_class == "penis");
+    CHECK(d.contact_marks->tip);
+    CHECK_FALSE(d.contact_marks->primary);
+    CHECK_FALSE(d.trajectory);
+    const auto fs_json = ReadJson(dir / "standard.funscript");
+    CHECK(!fs_json["metadata"].contains("device_recipe"));
+    CHECK(fs_json["metadata"]["contact_marks"]["tip"]["class"] == "penis");
+    fs::remove_all(dir);
+}
