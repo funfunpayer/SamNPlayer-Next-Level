@@ -203,6 +203,7 @@ All 12 are specified only; none was built.
 | Neo 2 raw-value profile from real diagnostics (G2.2–G2.5) | `PRODUCTION_ROADMAP` G2 | Later (Owner opens) |
 | PoseObserver, MT-ID, depth/pose defaults | `PRODUCTION_ROADMAP` G3 | Later (Owner clip gates) |
 | Updater source and release host (old D13), edition split (D-004, D-007), C# role (D-104) | `OPEN_DECISIONS`, `PLAN.md` | Decide before P5 |
+| Windows code signing (D-149 builds are unsigned). Options checked on 19 Oct 2026: SignPath Foundation (free for OSI-licensed public projects; publisher shown as "SignPath Foundation"; asks for verifiable reputation; each signing approved by hand), Certum Open Source certificate (from about 49 €; shows "Open Source Developer, <real name>"), Microsoft Artifact Signing (individuals only in the US/Canada). No certificate removes SmartScreen's first warnings, EV included since 2024: reputation grows with downloads. Suggested: try SignPath first, Certum as fallback if the Owner accepts his name in the certificate. Both need the source public. | Owner question, 19 Oct | Decide before P5 |
 | Tag v0.7.0 and delete old branches (old repo) | `AGENT_STATE` | Owner |
 | macOS build, phone player (no generator) | `PLATFORMS.md` | Later |
 | Cleanup of `samn_file.py` (own chapter/bookmark loaders, methods attached to `Document` after the class) | `MODULES.md` | P1 |
