@@ -13,6 +13,8 @@ Item {
     property PlayerController player: null
     // The app's one device connection (Main.qml).
     property DeviceController device: null
+    // The app's update check (Main.qml; D-147).
+    property UpdateChecker updates: null
     property int tab: 0
     readonly property alias settings: ctl
     visible: opacity > 0
@@ -197,6 +199,70 @@ Item {
                                 spacing: 8
                                 FlowButton { text: qsTr("Open log folder"); enabled: ctl.logFile !== ""; onClicked: ctl.openLogFolder() }
                                 FlowButton { text: qsTr("Open settings folder"); onClicked: ctl.openConfigFolder() }
+                            }
+                        }
+                    }
+                    // 0.7 Runtime & updates, check only (D-147).
+                    GlassCard {
+                        Layout.fillWidth: true; implicitHeight: updCol.implicitHeight + 28
+                        visible: root.updates !== null
+                        ColumnLayout {
+                            id: updCol
+                            anchors.fill: parent; anchors.margins: 14; spacing: 10
+                            Text { textFormat: Text.PlainText; text: qsTr("Updates"); color: Theme.text; font.family: Theme.font; font.pixelSize: 15 }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Text {
+                                    textFormat: Text.PlainText
+                                    Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                    text: qsTr("Check for updates on startup")
+                                    color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                                }
+                                FlowToggle {
+                                    objectName: "updateCheckOnStartup"
+                                    checked: root.updates !== null && root.updates.checkOnStartup
+                                    onToggled: (c) => root.updates.checkOnStartup = c
+                                }
+                            }
+                            Text {
+                                textFormat: Text.PlainText
+                                Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                text: qsTr("Asks GitHub for the newest release; nothing is downloaded or installed by the app.")
+                                color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                            Row {
+                                spacing: 8
+                                FlowButton {
+                                    objectName: "updateCheckNow"
+                                    text: qsTr("Check for updates now")
+                                    enabled: root.updates !== null && root.updates.state !== "checking"
+                                    onClicked: root.updates.check()
+                                }
+                                FlowButton {
+                                    objectName: "updateOpenPage"
+                                    primary: true
+                                    text: qsTr("Open download page")
+                                    visible: root.updates !== null && root.updates.state === "available"
+                                    onClicked: root.updates.openReleasePage()
+                                }
+                            }
+                            Text {
+                                objectName: "updateStatus"
+                                textFormat: Text.PlainText
+                                Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                visible: text !== ""
+                                text: root.updates ? root.updates.statusText : ""
+                                color: root.updates && root.updates.state === "error" ? Theme.danger
+                                     : root.updates && root.updates.state === "available" ? Theme.cyan : Theme.textDim
+                                font.family: Theme.fontSoft; font.pixelSize: 13
+                            }
+                            Text {
+                                objectName: "updateNotes"
+                                textFormat: Text.PlainText
+                                Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                visible: root.updates !== null && root.updates.state === "available" && root.updates.notesPreview !== ""
+                                text: root.updates ? root.updates.notesPreview : ""
+                                color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
                             }
                         }
                     }

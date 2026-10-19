@@ -34,6 +34,7 @@ qt_add_qml_module(samn_app
     src/editor_controller.h src/editor_controller.cpp
     src/app_log.h src/app_log.cpp
     src/settings_controller.h src/settings_controller.cpp
+    src/update_checker.h src/update_checker.cpp
     src/device_io/waiter.h
     src/device_io/qt_transport.h
     src/device_io/socket_line_transport.h src/device_io/socket_line_transport.cpp

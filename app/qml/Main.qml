@@ -39,6 +39,8 @@ ApplicationWindow {
     // The one connection to the toy / stroker, shared by every mode (0.7: one
     // device connection for the whole app).
     DeviceController { id: deviceCtl }
+    // Check for updates, check only (D-147); the startup check is quiet.
+    UpdateChecker { id: updates }
 
     TopBar {
         id: top
@@ -97,6 +99,45 @@ ApplicationWindow {
     // Ctrl+O from every mode opens in the Player (0.7 top-bar Open).
     Shortcut { sequence: StandardKey.Open; enabled: !deck.open; onActivated: { win.mode = 0; player.openFile() } }
 
+    // 0.7 startup update banner: the new version, its notes, the download
+    // page; × hides it until the next start.
+    GlassCard {
+        id: updateBanner
+        objectName: "updateBanner"
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.top: top.bottom; anchors.topMargin: 4
+        width: Math.min(parent.width - 40, 640)
+        implicitHeight: bannerRow.implicitHeight + 20
+        visible: opacity > 0
+        opacity: updates.bannerVisible && !settingsPage.open && !deck.open ? 1 : 0
+        Behavior on opacity { NumberAnimation { duration: Theme.animNormal } }
+        // Opaque under the glass, as the Settings card.
+        Rectangle { anchors.fill: parent; radius: Theme.radius; color: Theme.bgBottom; z: -1 }
+        RowLayout {
+            id: bannerRow
+            anchors.fill: parent; anchors.margins: 10; anchors.leftMargin: 16; spacing: 10
+            ColumnLayout {
+                Layout.fillWidth: true; spacing: 2
+                Text {
+                    objectName: "updateBannerText"
+                    textFormat: Text.PlainText
+                    Layout.fillWidth: true; elide: Text.ElideRight
+                    text: qsTr("SamNPlayer %1 is available (you have %2).").arg(updates.latestTag).arg(updates.currentVersion)
+                    color: Theme.text; font.family: Theme.font; font.pixelSize: 14
+                }
+                Text {
+                    textFormat: Text.PlainText
+                    Layout.fillWidth: true; elide: Text.ElideRight
+                    visible: text !== ""
+                    text: updates.notesPreview
+                    color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
+                }
+            }
+            FlowButton { objectName: "updateBannerOpen"; primary: true; text: qsTr("Download page"); onClicked: updates.openReleasePage() }
+            IconButton { objectName: "updateBannerClose"; icon: "close"; tip: qsTr("Hide"); onClicked: updates.dismissBanner() }
+        }
+    }
+
     ModeDeck {
         id: deck
         anchors.fill: parent
@@ -110,6 +151,7 @@ ApplicationWindow {
         anchors.fill: parent
         player: player.controller
         device: deviceCtl
+        updates: updates
     }
     Shortcut { sequence: "Ctrl+,"; onActivated: settingsPage.open = !settingsPage.open }
     Shortcut { sequence: "Esc"; enabled: settingsPage.open; onActivated: settingsPage.open = false }
@@ -124,5 +166,8 @@ ApplicationWindow {
         }
     }
 
-    Component.onCompleted: if (startupPaths.length > 0) player.controller.openPaths(startupPaths)
+    Component.onCompleted: {
+        if (startupPaths.length > 0) player.controller.openPaths(startupPaths)
+        updates.checkIfEnabled()
+    }
 }
