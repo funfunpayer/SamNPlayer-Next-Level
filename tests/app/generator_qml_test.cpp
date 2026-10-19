@@ -220,6 +220,39 @@ private slots:
         QTRY_VERIFY(named(root.get(), "lane_suction"));
         QCOMPARE(edit->property("undoText").toString(), QStringLiteral("Undo: vibration and suction from the stroke"));
 
+        // Scenes (D-145): the side tab switches the right panel; "+ Scene here"
+        // starts a scene at the shown frame, and it appears as a band.
+        QVERIFY(!named(root.get(), "scenesCard")->isVisible());
+        auto* tabs = named(root.get(), "sideTabs");
+        QTest::mouseClick(&window, Qt::LeftButton, {}, tabs->mapToScene(QPointF(tabs->width() - 20, tabs->height() / 2)).toPoint());
+        QTRY_VERIFY(named(root.get(), "scenesCard")->isVisible());
+        QVERIFY(!named(root.get(), "createButton")->isVisible());
+        gen->seekPreview(0);
+        QMetaObject::invokeMethod(named(root.get(), "addScene"), "clicked");
+        gen->seekPreview(4000);
+        QMetaObject::invokeMethod(named(root.get(), "addScene"), "clicked");
+        QTRY_COMPARE(edit->property("scenes").toList().size(), 2);
+        QTRY_VERIFY(named(root.get(), "sceneBand_1"));
+        QVERIFY(named(root.get(), "sceneBand_1")->isVisible());
+        QTRY_VERIFY(named(root.get(), "sceneCard_1"));
+        // A click on a band selects that scene and shows its start.
+        auto* band0 = named(root.get(), "sceneBand_0");
+        QTRY_VERIFY(band0->height() > 10 && band0->width() > 20);  // the strip has just been laid out
+        QTest::mouseClick(&window, Qt::LeftButton, {}, band0->mapToScene(QPointF(band0->width() / 2, band0->height() / 2)).toPoint());
+        QTRY_COMPARE(page->property("selectedScene").toInt(), 0);
+        QTRY_VERIFY(gen->previewMs() < 100);
+        // The feel combo: index 2 is Oral after "Script default" and Classic.
+        auto* feel = named(root.get(), "sceneFeel_1");
+        feel->setProperty("currentIndex", 2);
+        QMetaObject::invokeMethod(feel, "activated", Q_ARG(int, 2));
+        QTRY_COMPARE(edit->property("scenes").toList().at(1).toMap().value("feel").toString(), QStringLiteral("oral"));
+        // The rebuilt card shows the saved feel.
+        QTRY_COMPARE(named(root.get(), "sceneFeel_1")->property("currentIndex").toInt(), 2);
+        QCOMPARE(named(root.get(), "sceneFeel_0")->property("currentIndex").toInt(), 0);
+        if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT_SCENES"); !shot.isEmpty()) window.grabWindow().save(QString::fromLocal8Bit(shot));
+        QTest::mouseClick(&window, Qt::LeftButton, {}, tabs->mapToScene(QPointF(20, tabs->height() / 2)).toPoint());
+        QTRY_VERIFY(named(root.get(), "createButton")->isVisible());
+
         // "Play in the Player" hands the edited script over.
         QVERIFY(named(root.get(), "reviewButton")->isVisible());
         QMetaObject::invokeMethod(named(root.get(), "reviewButton"), "clicked");

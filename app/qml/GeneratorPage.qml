@@ -10,6 +10,11 @@ import SamN
 Item {
     id: page
     property bool deckOpen: false
+    // Right panel: 0 create (video, feel, create), 1 scenes (D-145).
+    property int sidePanel: 0
+    property int selectedScene: -1
+    // Scene colours c0-c4 (0.7 scene strip).
+    readonly property var sceneColors: ["#3dccc0", "#f2b03d", "#e070a0", "#6b8cff", "#7ee787"]
     // The Player's video, for "Use Player video".
     property url playerVideoUrl
     property alias controller: gen
@@ -56,6 +61,18 @@ Item {
     function startCreate() {
         if (gen.scriptExists) overwriteDialog.open()
         else gen.create(false)
+    }
+    function feelName(f) {
+        const names = { "": qsTr("Classic"), oral: qsTr("Oral"), intercourse: qsTr("Intercourse"),
+                        breast: qsTr("Breast"), hand: qsTr("Hand") }
+        return names[f] !== undefined ? names[f] : f
+    }
+    function showScene(i) {
+        const s = edit.scenes[i]
+        if (!s) return
+        page.selectedScene = i
+        page.sidePanel = 1
+        gen.seekPreview(s.startMs)
     }
     function fmt(ms) {
         return Math.floor(ms / 60000) + ":" + String(Math.floor(ms / 1000) % 60).padStart(2, "0")
@@ -456,6 +473,42 @@ Item {
                             }
                         }
                     }
+                    // The scenes (the script's chapters) as bands on the shown
+                    // time (D-145); a click selects one in the Scenes panel.
+                    Item {
+                        id: sceneStrip
+                        objectName: "sceneStrip"
+                        Layout.fillWidth: true; Layout.preferredHeight: 20
+                        visible: edit.hasScript && edit.scenes.length > 0
+                        clip: true
+                        Repeater {
+                            model: sceneStrip.visible ? edit.scenes : []
+                            delegate: Rectangle {
+                                id: band
+                                required property int index
+                                required property var modelData
+                                objectName: "sceneBand_" + index
+                                readonly property real span: Math.max(1, edit.viewEndMs - edit.viewStartMs)
+                                x: (modelData.startMs - edit.viewStartMs) / span * sceneStrip.width
+                                width: Math.max(2, (modelData.endMs - modelData.startMs) / span * sceneStrip.width - 1)
+                                height: sceneStrip.height; radius: 4
+                                readonly property color tone: page.sceneColors[index % 5]
+                                color: Qt.rgba(tone.r, tone.g, tone.b, page.selectedScene === index ? 0.45 : 0.22)
+                                border.color: page.selectedScene === index ? tone : "transparent"
+                                Text {
+                                    textFormat: Text.PlainText
+                                    anchors.fill: parent; anchors.leftMargin: 6
+                                    verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                                    text: band.modelData.name + (band.modelData.hasFeel ? " · " + page.feelName(band.modelData.feel) : "")
+                                    color: "white"; font.family: Theme.fontSoft; font.pixelSize: 11
+                                }
+                                MouseArea {
+                                    anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                                    onClicked: page.showScene(band.index)
+                                }
+                            }
+                        }
+                    }
                     // Single frames along the shown time (D-144); a click
                     // shows that moment. Times snap to a power-of-two grid, so
                     // zooming meets the same frames again in the cache.
@@ -517,14 +570,154 @@ Item {
             }
         }
 
-        // ---- right panel: video, feel, create ----
+        // ---- right panel: video, feel, create | scenes ----
         ColumnLayout {
             Layout.preferredWidth: 340; Layout.maximumWidth: 340
             Layout.fillHeight: true
             spacing: 12
 
+            FlowTabs {
+                objectName: "sideTabs"
+                model: [qsTr("Create"), qsTr("Scenes") + (edit.scenes.length > 0 ? " (" + edit.scenes.length + ")" : "")]
+                current: page.sidePanel
+                onPicked: (i) => page.sidePanel = i
+            }
+
+            // Scenes (D-145, 0.7 Scene Map): one card per scene with its
+            // frame, range, feel and suggestion.
+            GlassCard {
+                objectName: "scenesCard"
+                visible: page.sidePanel === 1
+                Layout.fillWidth: true; Layout.fillHeight: true
+                ColumnLayout {
+                    anchors.fill: parent; anchors.margins: 14; spacing: 8
+                    RowLayout {
+                        Layout.fillWidth: true; spacing: 8
+                        Text {
+                            textFormat: Text.PlainText
+                            Layout.fillWidth: true
+                            text: edit.scenes.length === 1 ? qsTr("1 scene") : qsTr("%1 scenes").arg(edit.scenes.length)
+                            color: Theme.text; font.family: Theme.font; font.pixelSize: 15
+                        }
+                        FlowButton {
+                            objectName: "addScene"
+                            text: qsTr("+ Scene here")
+                            enabled: edit.hasScript
+                            onClicked: if (edit.addScene(gen.previewMs)) page.selectedScene = -1
+                        }
+                    }
+                    FlowButton {
+                        objectName: "applySuggestions"
+                        visible: edit.hasSceneSuggestions
+                        text: qsTr("Apply suggestions")
+                        onClicked: edit.applySceneSuggestions()
+                    }
+                    Text {
+                        textFormat: Text.PlainText
+                        visible: edit.scenes.length === 0
+                        Layout.fillWidth: true; wrapMode: Text.WordWrap
+                        text: edit.hasScript
+                              ? qsTr("No scenes yet. Scenes are the script's chapters: show a frame and press \"+ Scene here\".")
+                              : qsTr("Open or create a script to mark its scenes.")
+                        color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
+                    }
+                    ListView {
+                        id: sceneList
+                        objectName: "sceneList"
+                        Layout.fillWidth: true; Layout.fillHeight: true
+                        clip: true; spacing: 8
+                        model: edit.scenes
+                        delegate: Rectangle {
+                            id: card
+                            required property int index
+                            required property var modelData
+                            objectName: "sceneCard_" + index
+                            width: sceneList.width
+                            height: cardCol.implicitHeight + 16; radius: 12
+                            readonly property color tone: page.sceneColors[index % 5]
+                            color: page.selectedScene === index ? Qt.rgba(0, 120 / 255, 1, 0.14) : Qt.rgba(1, 1, 1, 0.03)
+                            border.color: page.selectedScene === index ? tone : Theme.cardBorder
+                            MouseArea { anchors.fill: parent; onClicked: page.showScene(card.index) }
+                            ColumnLayout {
+                                id: cardCol
+                                anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                                anchors.margins: 8; spacing: 6
+                                RowLayout {
+                                    Layout.fillWidth: true; spacing: 8
+                                    Image {
+                                        visible: gen.hasVideo
+                                        Layout.preferredWidth: 96; Layout.preferredHeight: 54
+                                        asynchronous: true; fillMode: Image.PreserveAspectCrop
+                                        sourceSize.height: 108
+                                        // The frame just inside the scene's start (0.7 thumbFor).
+                                        source: gen.hasVideo ? "image://frames/" + Math.round(card.modelData.startMs + 40) + "/108/" + encodeURIComponent(gen.videoPath) : ""
+                                    }
+                                    ColumnLayout {
+                                        Layout.fillWidth: true; spacing: 2
+                                        FlowTextField {
+                                            objectName: "sceneName_" + card.index
+                                            Layout.fillWidth: true; implicitHeight: 28
+                                            text: card.modelData.name
+                                            onAccepted: edit.renameScene(card.index, text)
+                                        }
+                                        Text {
+                                            textFormat: Text.PlainText
+                                            text: page.fmt(card.modelData.startMs) + " – " + page.fmt(card.modelData.endMs)
+                                                  + " · " + page.fmt(card.modelData.endMs - card.modelData.startMs)
+                                            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                                        }
+                                    }
+                                    IconButton {
+                                        objectName: "deleteScene_" + card.index
+                                        icon: "trash"; tip: qsTr("Remove this scene")
+                                        onClicked: { edit.deleteScene(card.index); page.selectedScene = -1 }
+                                    }
+                                }
+                                RowLayout {
+                                    Layout.fillWidth: true; spacing: 8
+                                    Text {
+                                        textFormat: Text.PlainText
+                                        text: qsTr("Feel"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                                    }
+                                    FlowCombo {
+                                        objectName: "sceneFeel_" + card.index
+                                        Layout.fillWidth: true
+                                        textRole: "label"; valueRole: "value"
+                                        // "-": the script's own feel; "" is Classic.
+                                        model: [{ label: qsTr("Script default"), value: "-" }].concat(
+                                                   edit.sceneFeels.map((f) => ({ label: page.feelName(f), value: f })))
+                                        // Computed from the list, not indexOfValue: that runs before the model is set.
+                                        currentIndex: card.modelData.hasFeel ? 1 + Math.max(0, edit.sceneFeels.indexOf(card.modelData.feel)) : 0
+                                        onActivated: currentValue === "-" ? edit.clearSceneFeel(card.index) : edit.setSceneFeel(card.index, currentValue)
+                                    }
+                                }
+                                RowLayout {
+                                    Layout.fillWidth: true; spacing: 8
+                                    Text {
+                                        textFormat: Text.PlainText
+                                        Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                        text: card.modelData.suggested !== ""
+                                              ? qsTr("Suggested: %1 · %2 %3%").arg(page.feelName(card.modelData.suggested))
+                                                    .arg(card.modelData.source).arg(Math.round(card.modelData.confidence * 100))
+                                              : qsTr("No suggestion for this part.")
+                                        color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 11
+                                    }
+                                    FlowButton {
+                                        objectName: "useSuggestion_" + card.index
+                                        visible: card.modelData.suggested !== "" && !(card.modelData.hasFeel && card.modelData.feel === card.modelData.suggested)
+                                        text: qsTr("Use")
+                                        onClicked: edit.setSceneFeel(card.index, card.modelData.suggested)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // 1 Video
             GlassCard {
+                visible: page.sidePanel === 0
                 Layout.fillWidth: true; implicitHeight: videoCol.implicitHeight + 28
                 ColumnLayout {
                     id: videoCol
@@ -561,6 +754,7 @@ Item {
 
             // 3 Feel
             GlassCard {
+                visible: page.sidePanel === 0
                 Layout.fillWidth: true; implicitHeight: feelCol.implicitHeight + 28
                 opacity: gen.hasVideo ? 1 : 0.5
                 ColumnLayout {
@@ -683,6 +877,7 @@ Item {
 
             // 4 Create
             GlassCard {
+                visible: page.sidePanel === 0
                 Layout.fillWidth: true; Layout.fillHeight: true
                 ColumnLayout {
                     anchors.fill: parent; anchors.margins: 14; spacing: 8
