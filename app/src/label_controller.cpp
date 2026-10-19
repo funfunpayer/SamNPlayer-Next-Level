@@ -1,6 +1,9 @@
 #include "label_controller.h"
 
+#include <QCoreApplication>
 #include <QDir>
+#include <QPointer>
+#include <QTimer>
 #include <QFile>
 #include <QFileInfo>
 #include <QImageReader>
@@ -9,7 +12,10 @@
 #include <filesystem>
 #include <fstream>
 
+#include "audio_level.h"
 #include "frame_cache.h"
+#include "samn/phase_rules.h"
+#include "samn/vision/picture_signals.h"
 #include "samn/vision/frame_reader.h"
 
 namespace samn::ui {
@@ -19,11 +25,18 @@ QString LocalPath(const QString& pathOrUrl) {
     const QUrl url(pathOrUrl);
     return url.isLocalFile() ? url.toLocalFile() : pathOrUrl;
 }
+constexpr int kSoundGraceMs = 4000;
+
 std::filesystem::path Fs(const QString& p) { return std::filesystem::path(p.toStdU16String()); }
 constexpr size_t kUndoMax = 200;
 }  // namespace
 
 LabelController::LabelController(QObject* parent) : QObject(parent) {}
+
+LabelController::~LabelController() {
+    if (suggest_cancel_) *suggest_cancel_ = true;
+    if (suggest_worker_.joinable()) suggest_worker_.join();
+}
 
 QString LabelController::videoName() const { return QFileInfo(video_path_).fileName(); }
 
@@ -50,6 +63,7 @@ void LabelController::setCurrentLabel(const QString& label) {
 }
 
 bool LabelController::openVideo(const QString& pathOrUrl) {
+    cancelSuggest();
     const QString path = LocalPath(pathOrUrl);
     if (!QFileInfo(path).isFile()) {
         setStatus(tr("Not found: %1").arg(path));
@@ -235,6 +249,141 @@ int LabelController::confirmPhases() {
         return true;
     });
     return n;
+}
+
+bool LabelController::suggestPhases() {
+    if (!hasVideo() || suggesting_) return false;
+    if (still_) {
+        setStatus(tr("Phases need a clip, not a still picture."));
+        return false;
+    }
+    if (suggest_worker_.joinable()) suggest_worker_.join();
+    suggest_cancel_ = std::make_shared<std::atomic<bool>>(false);
+    suggesting_ = true;
+    suggest_progress_ = 0;
+    picture_done_ = audio_done_ = false;
+    luma_.clear();
+    motion_.clear();
+    loudness_.clear();
+    emit suggestingChanged();
+    setStatus(tr("Looking for phases…"));
+
+    // The sound: loudness per 50 ms; no sound is fine.
+    if (!audio_) {
+        audio_ = new AudioLevelDecoder(this);
+        connect(audio_, &AudioLevelDecoder::finished, this, [this](const std::vector<double>& env) {
+            if (!suggesting_ || audio_done_) return;
+            loudness_ = env;
+            audio_done_ = true;
+            finishSuggest();
+        });
+        connect(audio_, &AudioLevelDecoder::failed, this, [this](const QString&) {
+            if (!suggesting_ || audio_done_) return;
+            audio_done_ = true;
+            finishSuggest();
+        });
+    }
+    audio_->start(video_path_);
+
+    // The picture: brightness and change per step, on a worker.
+    QPointer<LabelController> self(this);
+    const int run = ++suggest_run_;
+    suggest_worker_ = std::thread([self, run, cancel = suggest_cancel_, video = Fs(video_path_)] {
+        samn::vision::PictureSignalOptions o;
+        o.cancel = [cancel] { return cancel->load(); };
+        o.progress = [self, run](int p) {
+            QMetaObject::invokeMethod(qApp, [self, run, p] {
+                if (self && self->suggesting_ && run == self->suggest_run_) {
+                    self->suggest_progress_ = p;
+                    emit self->suggestingChanged();
+                }
+            }, Qt::QueuedConnection);
+        };
+        std::string error;
+        samn::vision::PictureSignals s;
+        try {
+            s = samn::vision::MeasurePictureSignals(video, o, &error);
+        } catch (const std::exception& e) {
+            error = e.what();
+        }
+        const QString err = s.luma.empty() ? QString::fromStdString(error) : QString();
+        QMetaObject::invokeMethod(qApp, [self, run, luma = std::move(s.luma), motion = std::move(s.motion), err] {
+            // A canceled run's late answer is not the new run's.
+            if (self && run == self->suggest_run_) self->onPictureSignals(luma, motion, err);
+        }, Qt::QueuedConnection);
+    });
+    return true;
+}
+
+void LabelController::cancelSuggest() {
+    if (!suggesting_) return;
+    if (suggest_cancel_) *suggest_cancel_ = true;
+    if (audio_) audio_->cancel();
+    suggesting_ = false;
+    emit suggestingChanged();
+    setStatus(tr("Phase search canceled."));
+}
+
+void LabelController::onPictureSignals(const std::vector<double>& luma, const std::vector<double>& motion,
+                                       const QString& error) {
+    if (!suggesting_) return;
+    if (luma.empty()) {
+        if (audio_) audio_->cancel();
+        suggesting_ = false;
+        emit suggestingChanged();
+        setStatus(tr("Phases: cannot read the clip: %1").arg(error));
+        return;
+    }
+    luma_ = luma;
+    motion_ = motion;
+    picture_done_ = true;
+    if (!audio_done_) {
+        // A clip without a sound track may never report back from the
+        // decoder: after the picture, the sound gets a few seconds more.
+        const int run = suggest_run_;
+        QTimer::singleShot(kSoundGraceMs, this, [this, run] {
+            if (!suggesting_ || run != suggest_run_ || audio_done_) return;
+            if (audio_) audio_->cancel();
+            loudness_.clear();
+            audio_done_ = true;
+            finishSuggest();
+        });
+    }
+    finishSuggest();
+}
+
+void LabelController::finishSuggest() {
+    if (!picture_done_ || !audio_done_ || !suggesting_) return;
+    samn::PhaseSignals s;
+    s.step_ms = 500;
+    s.luma = luma_;
+    s.motion = motion_;
+    // The 50 ms loudness as the mean per step, against the clip's loudest step.
+    if (!loudness_.empty()) {
+        const size_t per = size_t(s.step_ms / samn::kAudioLevelStepMs);
+        double top = 0;
+        for (size_t i = 0; i < loudness_.size(); i += per) {
+            double sum = 0;
+            size_t k = 0;
+            for (; k < per && i + k < loudness_.size(); ++k) sum += loudness_[i + k];
+            s.loudness.push_back(sum / double(std::max<size_t>(1, k)));
+            top = std::max(top, s.loudness.back());
+        }
+        if (top > 0)
+            for (auto& v : s.loudness) v /= top;
+        s.loudness.resize(s.luma.size(), 0.0);
+    }
+    const auto suggestions = samn::SuggestPhases(s);
+    int added = 0;
+    change(tr("Phase suggestions"), [&](samn::LabelProject& p) {
+        added = samn::ApplyPhaseSuggestions(p, suggestions);
+        return added > 0;
+    });
+    suggesting_ = false;
+    suggest_progress_ = 100;
+    emit suggestingChanged();
+    setStatus(added > 0 ? tr("%n phase suggestion(s): check them and confirm.", "", added)
+                        : tr("No phase suggestions for this clip."));
 }
 
 void LabelController::change(const QString& what, const std::function<bool(samn::LabelProject&)>& op) {

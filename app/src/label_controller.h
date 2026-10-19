@@ -8,11 +8,16 @@
 #include <QUrl>
 #include <QVariantList>
 #include <QtQml/qqmlregistration.h>
+#include <atomic>
+#include <memory>
+#include <thread>
 #include <vector>
 
 #include "samn/label_track.h"
 
 namespace samn::ui {
+
+class AudioLevelDecoder;
 
 // The AI Train label editor (D-155 §2.2): a clip, its label tracks and the
 // frame under the playhead. Every change is one undo step and is saved at
@@ -47,9 +52,13 @@ class LabelController : public QObject {
     Q_PROPERTY(QVariantList phases READ phases NOTIFY tracksChanged)
     Q_PROPERTY(QStringList phaseNames READ phaseNames CONSTANT)
     Q_PROPERTY(QString phaseAtPreview READ phaseAtPreview NOTIFY previewChanged)
+    // The rule-based phase suggestions run (D-157): busy and 0..100.
+    Q_PROPERTY(bool suggesting READ suggesting NOTIFY suggestingChanged)
+    Q_PROPERTY(int suggestProgress READ suggestProgress NOTIFY suggestingChanged)
 
 public:
     explicit LabelController(QObject* parent = nullptr);
+    ~LabelController() override;
 
     QString videoPath() const { return video_path_; }
     QString videoName() const;
@@ -94,6 +103,12 @@ public:
     Q_INVOKABLE bool setPhase(double startMs, double endMs, const QString& phase);
     // Confirms every phase suggestion.
     Q_INVOKABLE int confirmPhases();
+    // Measures the picture and the sound and adds phase suggestions where no
+    // phase is set yet (empty, intro, climax, cool-down). Asynchronous.
+    Q_INVOKABLE bool suggestPhases();
+    Q_INVOKABLE void cancelSuggest();
+    bool suggesting() const { return suggesting_; }
+    int suggestProgress() const { return suggest_progress_; }
     Q_INVOKABLE int exportDataset(const QString& dirOrUrl, double everyMs);
 
     QVariantList phases() const;
@@ -106,6 +121,7 @@ signals:
     void tracksChanged();
     void currentLabelChanged();
     void statusChanged();
+    void suggestingChanged();
 
 private:
     void change(const QString& what, const std::function<bool(samn::LabelProject&)>& op);
@@ -122,6 +138,17 @@ private:
     samn::LabelProject project_;
     std::vector<samn::LabelProject> undo_, redo_;
     QString status_;
+
+    void onPictureSignals(const std::vector<double>& luma, const std::vector<double>& motion, const QString& error);
+    void finishSuggest();
+    bool suggesting_ = false;
+    int suggest_progress_ = 0;
+    int suggest_run_ = 0;
+    std::shared_ptr<std::atomic<bool>> suggest_cancel_;
+    std::thread suggest_worker_;
+    AudioLevelDecoder* audio_ = nullptr;
+    bool picture_done_ = false, audio_done_ = false;
+    std::vector<double> luma_, motion_, loudness_;
 };
 
 }  // namespace samn::ui

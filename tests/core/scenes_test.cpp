@@ -127,3 +127,36 @@ TEST_CASE("chapter scenes: the saved oral feel keeps a seal at the shallow point
         if (f.at < 9000) min_suc = std::min(min_suc, f.suction);
     CHECK(min_suc >= 0.25);
 }
+
+TEST_CASE("phases (D-157): feel phases suggest the scene's feel, confirmed phases become scenes") {
+    std::vector<LabelPhase> phases{{0, 10000, "intro", true, "user"},
+                                   {10000, 40000, "oral", true, "user"},
+                                   {40000, 50000, "climax", false, "rules"},
+                                   {60000, 80000, "hand", false, "rules"}};
+    const auto props = PhaseProposals(phases);
+    REQUIRE(props.size() == 2);  // only the feels
+    CHECK(props[0].scene_type == "oral");
+    CHECK(props[0].confidence == doctest::Approx(1.0));
+    CHECK(props[1].confidence == doctest::Approx(0.6));
+    CHECK(props[0].source == "phases");
+    const std::vector<Chapter> one{{"All", 0, 0}};
+    const auto scenes = ChapterScenes(one, 90000, {}, props, std::nullopt);
+    REQUIRE(scenes.size() == 1);
+    CHECK(scenes[0].suggested == "oral");
+    CHECK(scenes[0].source == "phases");
+
+    int added = 0;
+    const auto chapters = ChaptersFromPhases({}, phases, 90000, &added);
+    // Intro and Oral (confirmed) and a scene where oral ends into no phase.
+    REQUIRE(chapters.size() == 3);
+    CHECK(added == 3);
+    CHECK(chapters[0].name == "Intro");
+    CHECK(chapters[1].name == "Oral");
+    CHECK(chapters[1].start_ms == 10000);
+    CHECK(chapters[2].start_ms == 40000);
+    // Twice changes nothing; a phase up to the end adds no empty scene.
+    ChaptersFromPhases(chapters, phases, 90000, &added);
+    CHECK(added == 0);
+    ChaptersFromPhases({}, {{0, 90000, "oral", true, "user"}}, 90000, &added);
+    CHECK(added == 1);
+}

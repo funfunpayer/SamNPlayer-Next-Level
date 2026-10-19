@@ -179,8 +179,14 @@ lanes; its stretches are dragged and named like chapters:
    keys `1`–`9`, `,` `.`, arrows, `X`, `Delete`, Ctrl+Z).
 2d. **Phases** (D-157, §2.6): the phase lane in the editor and in
    `<clip>.labels.json`, export as `phases.csv` for the scene model (done:
-   pick a phase, drag over the lane, the badge on the frame); next the
-   rule-based suggestions, then phases into the Editor's scenes and the Training's video stage.
+   pick a phase, drag over the lane, the badge on the frame); the rule-based
+   suggestions (done: `phase_rules.h` over brightness and change per 500 ms
+   from `vision/picture_signals.h` and the loudness, *Suggest phases* in the
+   editor; they only fill stretches nobody set and stay pale until
+   confirmed); the Editor's scenes (done: the feel phases suggest a scene's
+   feel, *Scenes from phases* adds a scene where each confirmed phase
+   begins); next the device shaping per phase (hold over intro and empty,
+   build-up, fade) and the Training's video stage.
 3. **Tracking between keyframes:** CSRT forward and backward from each keyframe,
    blended; the uncertainty lane and *Next uncertain*.
 4. **Teachers:** ONNX Runtime in the build, NudeNet (one-click download),

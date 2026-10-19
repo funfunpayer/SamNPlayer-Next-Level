@@ -9,6 +9,7 @@
 
 #include "curve_item.h"
 #include "editor_controller.h"
+#include "samn/label_track.h"
 #include "samn/funscript.h"
 #include "samn/marks.h"
 #include "samn/samn_file.h"
@@ -442,6 +443,30 @@ private slots:
 
     // D-145: the Scene Map in the Editor (0.7 scene_panel.js, SuggestChapterScenes,
     // SaveChapterScenes): scenes are chapters, a feel per scene, suggestions.
+    void phasesFromTheLabelEditorBecomeScenes() {
+        EditorController e;
+        QVERIFY(e.open(script("phases.funscript")));
+        QVERIFY(!e.hasPhases());
+        samn::LabelProject labels;
+        labels.duration_ms = 4000;
+        labels.SetPhase(0, 1000, "intro");
+        labels.SetPhase(1000, 3000, "oral");
+        labels.SetPhase(3000, 3500, "climax", false, "rules");  // not confirmed: no scene
+        samn::SaveLabelProject(samn::LabelProjectPath(Fs(dir_.filePath("phases.mp4"))), labels);
+        e.setVideoPath(dir_.filePath("phases.mp4"));
+        QVERIFY(e.hasPhases());
+        QCOMPARE(e.scenesFromPhases(), 3);  // Intro, Oral, and the rest after it
+        QCOMPARE(e.scenes().size(), 3);
+        QCOMPARE(e.scenes().at(0).toMap().value("name").toString(), QStringLiteral("Intro"));
+        const QVariantMap oral = e.scenes().at(1).toMap();
+        QCOMPARE(oral.value("name").toString(), QStringLiteral("Oral"));
+        QCOMPARE(oral.value("suggested").toString(), QStringLiteral("oral"));
+        QCOMPARE(oral.value("source").toString(), QStringLiteral("phases"));
+        QCOMPARE(e.scenesFromPhases(), 0);  // nothing twice
+        QVERIFY(e.applySceneSuggestions() >= 1);
+        QCOMPARE(e.scenes().at(1).toMap().value("feel").toString(), QStringLiteral("oral"));
+    }
+
     void scenesAreChaptersWithAFeelAndSuggestions() {
         EditorController e;
         const QString p = script("scenes.funscript");

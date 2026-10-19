@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "samn/label_track.h"
 #include "samn/marks.h"
 #include "samn/mapper.h"
 #include "samn/samn_file.h"
@@ -25,6 +26,7 @@ struct SceneProposal {
     int64_t end_ms = 0;
     std::string scene_type;  // blowjob | handjob | titjob | penetration, "" = unknown
     double confidence = 0;
+    std::string source = "scene detection";  // or "phases" (D-157)
 };
 
 // `<clip>.scene.json` beside the video (0.7 SceneProposalsPathBesideVideo).
@@ -59,6 +61,17 @@ std::vector<ChapterScene> ChapterScenes(const std::vector<Chapter>& chapters, in
                                         const std::vector<SceneFeelRange>& saved,
                                         const std::vector<SceneProposal>& proposals,
                                         const std::optional<ContactMarks>& marks);
+
+// The label editor's phases (D-157) as proposals: the phases that are a feel
+// (oral, hand, breast, intercourse), confirmed at 1.0, suggestions at 0.6.
+std::vector<SceneProposal> PhaseProposals(const std::vector<LabelPhase>& phases);
+
+// Scenes where the confirmed phases begin, named after them ("Intro",
+// "Climax" …), plus one where a phase ends into a stretch without a phase
+// (not at the very end of the script).
+// Existing scenes stay; *added counts the new ones.
+std::vector<Chapter> ChaptersFromPhases(std::vector<Chapter> chapters, const std::vector<LabelPhase>& phases,
+                                        int64_t total_ms, int* added = nullptr);
 
 // The ranges to store: one per scene that has a feel (0.7 saveFeels).
 std::vector<SceneFeelRange> SceneRangesOf(const std::vector<ChapterScene>& scenes);
