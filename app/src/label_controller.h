@@ -32,14 +32,16 @@ class LabelController : public QObject {
     Q_PROPERTY(QImage frame READ frame NOTIFY previewChanged)
     Q_PROPERTY(QStringList labels READ labels NOTIFY tracksChanged)
     Q_PROPERTY(QString currentLabel READ currentLabel WRITE setCurrentLabel NOTIFY currentLabelChanged)
-    // At the preview: {label, index, x, y, w, h, present, keyed, confirmed, reviewed}.
+    // At the preview: {label, cls, classIndex, index, x, y, w, h, present, keyed, confirmed, reviewed}.
     Q_PROPERTY(QVariantList boxes READ boxes NOTIFY previewChanged)
-    // Per label: {label, index, keys: [{ms, absent, confirmed, source}], spans: [{startMs, endMs, present, reviewed}]}.
+    // Per object: {label, cls, classIndex, index, keys: [{ms, absent, confirmed, source}],
+    // spans: [{startMs, endMs, present, reviewed}]}.
     Q_PROPERTY(QVariantList lanes READ lanes NOTIFY tracksChanged)
     Q_PROPERTY(bool canUndo READ canUndo NOTIFY tracksChanged)
     Q_PROPERTY(bool canRedo READ canRedo NOTIFY tracksChanged)
     Q_PROPERTY(QString status READ status NOTIFY statusChanged)
-    // 0.7's preset labels; any other name is a custom label.
+    // The classes offered (body parts and the contact point); any other name
+    // is an own class. Each can have several objects ("hand", "hand 2").
     Q_PROPERTY(QStringList presetLabels READ presetLabels CONSTANT)
 
 public:
@@ -69,11 +71,13 @@ public:
     Q_INVOKABLE bool openVideo(const QString& pathOrUrl);
     Q_INVOKABLE void seek(double ms);
     Q_INVOKABLE void step(int frames);
-    Q_INVOKABLE bool addLabel(const QString& label);
+    // A new object of the class ("hand", then "hand 2" …), made current.
+    Q_INVOKABLE bool addLabel(const QString& cls);
     // The current label's box at this frame (video pixels), confirmed.
     Q_INVOKABLE bool setBox(const QRectF& box);
-    // The current label is not visible from this frame on.
-    Q_INVOKABLE bool markAbsent();
+    // The current label is not in the picture from this frame on (a negative
+    // sample), or with covered: it is there but hidden (no sample at all).
+    Q_INVOKABLE bool markAbsent(bool covered = false);
     // Removes the current label's key at this frame.
     Q_INVOKABLE bool removeKey();
     // Confirms the current label's keys in the whole clip (accepts proposals).

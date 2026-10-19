@@ -21,6 +21,17 @@ LabelBox Lerp(const LabelBox& a, const LabelBox& b, double f) {
 }
 }  // namespace
 
+std::string LabelClassOf(const std::string& label) {
+    const auto sp = label.find_last_of(' ');
+    if (sp == std::string::npos || sp + 1 >= label.size()) return label;
+    for (size_t i = sp + 1; i < label.size(); ++i)
+        if (label[i] < '0' || label[i] > '9') return label;
+    return label.substr(0, sp);
+}
+
+LabelTrack::LabelTrack(std::string label, std::string cls)
+    : label_(std::move(label)), cls_(cls.empty() ? LabelClassOf(label_) : std::move(cls)) {}
+
 void LabelTrack::SetKey(const LabelKey& key, int64_t tolerance_ms) {
     for (auto& k : keys_)
         if (std::llabs(k.ms - key.ms) <= tolerance_ms) {
@@ -77,6 +88,7 @@ LabelState LabelTrack::At(int64_t ms) const {
     const bool on_key = prev.ms == ms;
     if (prev.absent) {
         s.present = false;
+        s.covered = prev.covered;
         s.reviewed = prev.confirmed && (on_key || next == keys_.end() || next->confirmed);
         return s;
     }
@@ -105,6 +117,31 @@ LabelTrack& LabelProject::AddTrack(const std::string& label) {
     return tracks.back();
 }
 
+LabelTrack& LabelProject::AddObject(const std::string& cls) {
+    if (!Track(cls)) {
+        tracks.emplace_back(cls, cls);
+        return tracks.back();
+    }
+    for (int n = 2;; ++n) {
+        const std::string name = cls + " " + std::to_string(n);
+        if (!Track(name)) {
+            tracks.emplace_back(name, cls);
+            return tracks.back();
+        }
+    }
+}
+
+std::vector<std::string> LabelProject::Classes() const {
+    std::vector<std::string> out;
+    for (const auto& t : tracks)
+        if (std::find(out.begin(), out.end(), t.cls()) == out.end()) out.push_back(t.cls());
+    return out;
+}
+
+int LabelProject::ObjectCount(const std::string& cls) const {
+    return int(std::count_if(tracks.begin(), tracks.end(), [&](const LabelTrack& t) { return t.cls() == cls; }));
+}
+
 std::filesystem::path LabelProjectPath(const std::filesystem::path& clip) {
     std::filesystem::path p = clip;
     p.replace_extension(".labels.json");
@@ -123,10 +160,11 @@ std::string SerializeLabelProject(const LabelProject& p) {
         for (const auto& k : t.keys()) {
             nlohmann::json o{{"ms", k.ms}, {"confirmed", k.confirmed}, {"source", k.source}};
             if (k.absent) o["absent"] = true;
+            if (k.absent && k.covered) o["covered"] = true;
             else o["box"] = {k.box.x, k.box.y, k.box.w, k.box.h};
             keys.push_back(std::move(o));
         }
-        j["tracks"].push_back({{"label", t.label()}, {"keys", std::move(keys)}});
+        j["tracks"].push_back({{"label", t.label()}, {"class", t.cls()}, {"keys", std::move(keys)}});
     }
     return j.dump(2);
 }
@@ -144,7 +182,13 @@ LabelProject ParseLabelProject(const std::string& json) {
     p.duration_ms = j.value("durationMs", int64_t(0));
     for (const auto& t : j.value("tracks", nlohmann::json::array())) {
         if (!t.is_object()) continue;
-        LabelTrack& track = p.AddTrack(t.value("label", ""));
+        const std::string label = t.value("label", "");
+        LabelTrack* existing = p.Track(label);
+        if (!existing) {
+            p.tracks.emplace_back(label, t.value("class", ""));
+            existing = &p.tracks.back();
+        }
+        LabelTrack& track = *existing;
         for (const auto& o : t.value("keys", nlohmann::json::array())) {
             if (!o.is_object() || !o.contains("ms")) continue;
             LabelKey k;
@@ -152,6 +196,7 @@ LabelProject ParseLabelProject(const std::string& json) {
             k.confirmed = o.value("confirmed", false);
             k.source = o.value("source", "user");
             k.absent = o.value("absent", false);
+            k.covered = k.absent && o.value("covered", false);
             if (!k.absent) {
                 const auto b = o.value("box", nlohmann::json::array());
                 if (!b.is_array() || b.size() != 4) continue;
@@ -182,17 +227,18 @@ std::vector<LabelSample> ExportSamples(const LabelProject& p, const std::vector<
     for (int64_t ms = 0; ms <= p.duration_ms; ms += every_ms) {
         LabelSample s;
         s.ms = ms;
-        bool reviewed = false;
+        bool reviewed = false, covered = false;
         for (const auto& t : p.tracks) {
-            const auto it = std::find(classes.begin(), classes.end(), t.label());
+            const auto it = std::find(classes.begin(), classes.end(), t.cls());
             if (it == classes.end()) continue;
             const LabelState st = t.At(ms);
+            if (st.covered) covered = true;
             if (!st.reviewed) continue;
             reviewed = true;
             if (st.present && st.box.w > 0 && st.box.h > 0)
                 s.items.push_back({int(it - classes.begin()), st.box});
         }
-        if (reviewed) out.push_back(std::move(s));
+        if (reviewed && !covered) out.push_back(std::move(s));
     }
     return out;
 }

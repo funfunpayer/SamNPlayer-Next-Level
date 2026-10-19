@@ -29,7 +29,9 @@ QString LabelController::videoName() const { return QFileInfo(video_path_).fileN
 QUrl LabelController::videoUrl() const { return video_path_.isEmpty() ? QUrl() : QUrl::fromLocalFile(video_path_); }
 
 QStringList LabelController::presetLabels() const {
-    return {"face", "mouth", "breasts", "nipples", "hand_1", "hand_2", "penis", "glans", "vagina"};
+    // 0.7's body parts as classes (one class, several objects), and the
+    // contact point where the stroke touches (0.8 teacher plan).
+    return {"glans", "penis", "mouth", "hand", "breast", "nipple", "vagina", "face", "contact"};
 }
 
 QStringList LabelController::labels() const {
@@ -117,18 +119,15 @@ void LabelController::seek(double ms) {
 
 void LabelController::step(int frames) { seek(preview_ms_ + frames * frame_ms_); }
 
-bool LabelController::addLabel(const QString& label) {
-    const QString name = label.trimmed().toLower().replace(' ', '_');
+bool LabelController::addLabel(const QString& cls) {
+    const QString name = cls.trimmed().toLower().replace(' ', '_');
     if (name.isEmpty() || !hasVideo()) return false;
-    if (labels().contains(name)) {
-        setCurrentLabel(name);
-        return false;
-    }
-    change(tr("Add label %1").arg(name), [&](samn::LabelProject& p) {
-        p.AddTrack(name.toStdString());
+    QString added;
+    change(tr("Add %1").arg(name), [&](samn::LabelProject& p) {
+        added = QString::fromStdString(p.AddObject(name.toStdString()).label());
         return true;
     });
-    setCurrentLabel(name);
+    setCurrentLabel(added);
     return true;
 }
 
@@ -149,13 +148,14 @@ bool LabelController::setBox(const QRectF& box) {
     return done;
 }
 
-bool LabelController::markAbsent() {
+bool LabelController::markAbsent(bool covered) {
     if (current_.isEmpty() || !hasVideo()) return false;
     bool done = false;
-    change(tr("%1 not visible").arg(current_), [&](samn::LabelProject& p) {
+    change(covered ? tr("%1 covered").arg(current_) : tr("%1 not in the picture").arg(current_), [&](samn::LabelProject& p) {
         samn::LabelKey k;
         k.ms = int64_t(std::llround(preview_ms_));
         k.absent = true;
+        k.covered = covered;
         k.confirmed = true;
         p.AddTrack(current_.toStdString()).SetKey(k, tolerance());
         return done = true;
@@ -236,12 +236,16 @@ void LabelController::setStatus(const QString& s) {
 
 QVariantList LabelController::boxes() const {
     QVariantList out;
+    const auto classes = project_.Classes();
+    const auto classIndex = [&](const std::string& c) { return int(std::find(classes.begin(), classes.end(), c) - classes.begin()); };
     const auto ms = int64_t(std::llround(preview_ms_));
     for (size_t i = 0; i < project_.tracks.size(); ++i) {
         const auto& t = project_.tracks[i];
         const samn::LabelState s = t.At(ms);
         const samn::LabelKey* key = t.KeyAt(ms, tolerance());
         out << QVariantMap{{"label", QString::fromStdString(t.label())},
+                           {"cls", QString::fromStdString(t.cls())},
+                           {"classIndex", classIndex(t.cls())},
                            {"index", int(i)},
                            {"x", s.box.x},
                            {"y", s.box.y},
@@ -257,21 +261,27 @@ QVariantList LabelController::boxes() const {
 
 QVariantList LabelController::lanes() const {
     QVariantList out;
+    const auto classes = project_.Classes();
     for (size_t i = 0; i < project_.tracks.size(); ++i) {
         const auto& t = project_.tracks[i];
         QVariantList keys, spans;
         const auto& k = t.keys();
         for (const auto& key : k)
-            keys << QVariantMap{{"ms", double(key.ms)}, {"absent", key.absent}, {"confirmed", key.confirmed},
+            keys << QVariantMap{{"ms", double(key.ms)}, {"absent", key.absent}, {"covered", key.covered}, {"confirmed", key.confirmed},
                                 {"source", QString::fromStdString(key.source)}};
         // One span per stretch between keys (the last one runs to the end).
         for (size_t j = 0; j < k.size(); ++j) {
             const double end = j + 1 < k.size() ? double(k[j + 1].ms) : std::max(duration_ms_, double(k[j].ms));
             const bool reviewed = k[j].confirmed && (j + 1 == k.size() || k[j + 1].confirmed);
-            spans << QVariantMap{{"startMs", double(k[j].ms)}, {"endMs", end}, {"present", !k[j].absent},
+            spans << QVariantMap{{"startMs", double(k[j].ms)}, {"endMs", end}, {"present", !k[j].absent}, {"covered", k[j].covered},
                                  {"reviewed", reviewed}};
         }
-        out << QVariantMap{{"label", QString::fromStdString(t.label())}, {"index", int(i)}, {"keys", keys}, {"spans", spans}};
+        out << QVariantMap{{"label", QString::fromStdString(t.label())},
+                           {"cls", QString::fromStdString(t.cls())},
+                           {"classIndex", int(std::find(classes.begin(), classes.end(), t.cls()) - classes.begin())},
+                           {"index", int(i)},
+                           {"keys", keys},
+                           {"spans", spans}};
     }
     return out;
 }
@@ -283,8 +293,7 @@ int LabelController::exportDataset(const QString& dirOrUrl, double everyMs) {
         setStatus(tr("Cannot write to %1").arg(dir));
         return -1;
     }
-    std::vector<std::string> classes;
-    for (const auto& t : project_.tracks) classes.push_back(t.label());
+    const std::vector<std::string> classes = project_.Classes();
     const auto samples = samn::ExportSamples(project_, classes, std::max<int64_t>(1, int64_t(everyMs)));
     const QString stem = QFileInfo(video_path_).completeBaseName();
     int written = 0;

@@ -128,6 +128,49 @@ TEST_CASE("samples come from reviewed stretches only, negatives included") {
     CHECK(samn::ExportSamples(p, {"glans"}, 0).empty());
 }
 
+TEST_CASE("a class has as many objects as the scene needs") {
+    CHECK(samn::LabelClassOf("hand 2") == "hand");
+    CHECK(samn::LabelClassOf("hand") == "hand");
+    CHECK(samn::LabelClassOf("top 10 x") == "top 10 x");
+    samn::LabelProject p;
+    p.duration_ms = 1000;
+    CHECK(p.AddObject("hand").label() == "hand");
+    CHECK(p.AddObject("hand").label() == "hand 2");
+    CHECK(p.AddObject("nipple").label() == "nipple");
+    CHECK(p.AddObject("hand").label() == "hand 3");
+    CHECK(p.ObjectCount("hand") == 3);
+    CHECK(p.Classes() == std::vector<std::string>{"hand", "nipple"});
+    // Two hands at once: one sample, two boxes of class 0.
+    p.Track("hand")->SetKey(Box(0, 0));
+    p.Track("hand 2")->SetKey(Box(0, 50));
+    const auto s = samn::ExportSamples(p, p.Classes(), 1000);
+    REQUIRE(s.size() == 2);
+    REQUIRE(s[0].items.size() == 2);
+    CHECK(s[0].items[0].class_id == 0);
+    CHECK(s[0].items[1].class_id == 0);
+    // The class survives save and load.
+    const auto back = samn::ParseLabelProject(samn::SerializeLabelProject(p));
+    CHECK(back.tracks[1].cls() == "hand");
+    CHECK(back.tracks[1].label() == "hand 2");
+}
+
+TEST_CASE("a covered object leaves its frames out of the samples") {
+    samn::LabelProject p;
+    p.duration_ms = 2000;
+    auto& g = p.AddTrack("glans");
+    g.SetKey(Box(0, 0));
+    LabelKey covered = Absent(1000);
+    covered.covered = true;
+    g.SetKey(covered);
+    CHECK(g.At(1500).covered);
+    CHECK_FALSE(g.At(1500).present);
+    const auto s = samn::ExportSamples(p, {"glans"}, 500);
+    REQUIRE(s.size() == 2);  // 0 and 500 only; 1000..2000 are covered
+    CHECK(s.back().ms == 500);
+    const auto back = samn::ParseLabelProject(samn::SerializeLabelProject(p));
+    CHECK(back.tracks[0].keys()[1].covered);
+}
+
 TEST_CASE("YOLO lines are normalised and clipped to the frame") {
     samn::LabelSample s;
     s.items.push_back({2, LabelBox{90, 40, 20, 20}});  // runs over the right edge

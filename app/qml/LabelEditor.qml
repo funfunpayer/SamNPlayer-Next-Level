@@ -17,6 +17,12 @@ Item {
     function colorOf(i) { return colors[i % colors.length] }
     function fmt(ms) { return Math.floor(ms / 60000) + ":" + String(Math.floor(ms / 1000) % 60).padStart(2, "0") + "." + String(Math.floor(ms / 100) % 10) }
     readonly property int currentIndex: labels.labels.indexOf(labels.currentLabel)
+    readonly property int currentClassIndex: currentIndex >= 0 && labels.lanes[currentIndex] ? labels.lanes[currentIndex].classIndex : 0
+    // "hand" reads "hand 1" once there is a "hand 2".
+    function displayName(lane) {
+        if (lane.label !== lane.cls) return lane.label
+        return labels.lanes.filter((l) => l.cls === lane.cls).length > 1 ? lane.cls + " 1" : lane.cls
+    }
 
     // Play: steps through the frames (scrubbing speed, no sound).
     property bool playing: false
@@ -39,7 +45,8 @@ Item {
     Shortcut { sequence: "."; enabled: root.active && labels.hasVideo; onActivated: { root.playing = false; labels.step(1) } }
     Shortcut { sequence: "Left"; enabled: root.active && labels.hasVideo; onActivated: labels.seek(labels.previewMs - 1000) }
     Shortcut { sequence: "Right"; enabled: root.active && labels.hasVideo; onActivated: labels.seek(labels.previewMs + 1000) }
-    Shortcut { sequence: "X"; enabled: root.active && labels.hasVideo; onActivated: labels.markAbsent() }
+    Shortcut { sequence: "X"; enabled: root.active && labels.hasVideo; onActivated: labels.markAbsent(false) }
+    Shortcut { sequence: "H"; enabled: root.active && labels.hasVideo; onActivated: labels.markAbsent(true) }
     Shortcut { sequences: [StandardKey.Delete, "Backspace"]; enabled: root.active && labels.hasVideo; onActivated: labels.removeKey() }
     Shortcut { sequences: [StandardKey.Undo]; enabled: root.active && labels.canUndo; onActivated: labels.undo() }
     Shortcut { sequences: [StandardKey.Redo, "Ctrl+Y"]; enabled: root.active && labels.canRedo; onActivated: labels.redo() }
@@ -66,37 +73,47 @@ Item {
                 anchors.fill: parent; anchors.margins: 12; spacing: 8
                 Text { textFormat: Text.PlainText; text: qsTr("Labels"); color: Theme.text; font.family: Theme.font; font.pixelSize: 15 }
                 Repeater {
-                    model: labels.labels
+                    model: labels.lanes
                     delegate: Rectangle {
                         required property int index
-                        required property string modelData
-                        objectName: "labelRow_" + modelData
+                        required property var modelData
+                        objectName: "labelRow_" + modelData.label
                         Layout.fillWidth: true; height: 32; radius: 9
-                        readonly property bool current: modelData === labels.currentLabel
+                        readonly property bool current: modelData.label === labels.currentLabel
                         color: current ? Qt.rgba(0, 120 / 255, 1, 0.22) : la.containsMouse ? Qt.rgba(1, 1, 1, 0.05) : "transparent"
                         border.color: current ? Theme.cyan : "transparent"
-                        Rectangle { x: 10; anchors.verticalCenter: parent.verticalCenter; width: 12; height: 12; radius: 3; color: root.colorOf(index) }
+                        Rectangle { x: 10; anchors.verticalCenter: parent.verticalCenter; width: 12; height: 12; radius: modelData.cls === "contact" ? 6 : 3; color: root.colorOf(modelData.classIndex) }
                         Text {
                             textFormat: Text.PlainText
-                            x: 30; anchors.verticalCenter: parent.verticalCenter
-                            text: (index < 9 ? (index + 1) + "  " : "") + modelData
+                            x: 30; anchors.verticalCenter: parent.verticalCenter; width: parent.width - 64; elide: Text.ElideRight
+                            text: (index < 9 ? (index + 1) + "  " : "") + root.displayName(modelData)
                             color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 13
                         }
-                        MouseArea { id: la; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: labels.currentLabel = modelData }
+                        MouseArea { id: la; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: labels.currentLabel = modelData.label }
+                        // One more object of this class (a second hand, the other breast …).
+                        Rectangle {
+                            objectName: "addObject_" + modelData.label
+                            anchors.right: parent.right; anchors.rightMargin: 6; anchors.verticalCenter: parent.verticalCenter
+                            width: 22; height: 22; radius: 11
+                            color: pa.containsMouse ? Qt.rgba(1, 1, 1, 0.10) : "transparent"
+                            Text { textFormat: Text.PlainText; anchors.centerIn: parent; text: "+"; color: Theme.textDim; font.pixelSize: 15 }
+                            MouseArea { id: pa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: labels.addLabel(modelData.cls) }
+                            ToolTipText { text: qsTr("Another %1").arg(modelData.cls); shown: pa.containsMouse }
+                        }
                     }
                 }
                 Text {
                     textFormat: Text.PlainText
                     visible: labels.labels.length === 0
                     Layout.fillWidth: true; wrapMode: Text.WordWrap
-                    text: qsTr("Pick a label below, then drag its box on the frame.")
+                    text: qsTr("Pick what to mark below, then drag its box on the frame. A class can have several objects: + adds another (a second hand, the other breast).")
                     color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
                 }
-                Text { textFormat: Text.PlainText; text: qsTr("Add"); color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 11; topPadding: 4 }
+                Text { textFormat: Text.PlainText; text: qsTr("Mark"); color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 11; topPadding: 4 }
                 Flow {
                     Layout.fillWidth: true; spacing: 4
                     Repeater {
-                        model: labels.presetLabels.filter((p) => labels.labels.indexOf(p) < 0)
+                        model: labels.presetLabels
                         delegate: Rectangle {
                             required property string modelData
                             objectName: "addLabel_" + modelData
@@ -111,11 +128,18 @@ Item {
                 FlowTextField {
                     id: custom
                     Layout.fillWidth: true
-                    placeholder: qsTr("Own label, Enter adds it")
+                    placeholder: qsTr("Own class, Enter adds it")
                     onAccepted: { if (labels.addLabel(text)) text = "" }
                 }
                 Item { Layout.fillHeight: true }
-                FlowButton { Layout.fillWidth: true; text: qsTr("Not visible from here (X)"); enabled: labels.currentLabel !== ""; onClicked: labels.markAbsent() }
+                FlowButton { Layout.fillWidth: true; text: qsTr("Not in the picture (X)"); enabled: labels.currentLabel !== ""; onClicked: labels.markAbsent(false) }
+                FlowButton { objectName: "markCovered"; Layout.fillWidth: true; text: qsTr("There but covered (H)"); enabled: labels.currentLabel !== ""; onClicked: labels.markAbsent(true) }
+                Text {
+                    textFormat: Text.PlainText
+                    Layout.fillWidth: true; wrapMode: Text.WordWrap
+                    text: qsTr("Partly visible: mark the part you see. Covered stretches are left out of training.")
+                    color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 11
+                }
                 FlowButton { Layout.fillWidth: true; text: qsTr("Remove this key (Del)"); enabled: labels.currentLabel !== ""; onClicked: labels.removeKey() }
                 FlowButton { Layout.fillWidth: true; text: qsTr("Confirm all of this label"); enabled: labels.currentLabel !== ""; onClicked: labels.confirmAll() }
             }
@@ -143,7 +167,7 @@ Item {
                     model: labels.boxes
                     delegate: Rectangle {
                         required property var modelData
-                        readonly property color tone: root.colorOf(modelData.index)
+                        readonly property color tone: root.colorOf(modelData.classIndex)
                         readonly property bool current: modelData.label === labels.currentLabel
                         visible: modelData.present && !(draw.active && current)
                         x: frameView.imageRect.x + modelData.x * stage.scaleX
@@ -159,6 +183,9 @@ Item {
                             text: modelData.label + (modelData.keyed ? " ◆" : "")
                             color: parent.tone; font.family: Theme.fontSoft; font.pixelSize: 11
                         }
+                        // The contact point: where the stroke touches (vibration).
+                        Rectangle { visible: modelData.cls === "contact"; anchors.centerIn: parent; width: 18; height: 2; color: parent.tone }
+                        Rectangle { visible: modelData.cls === "contact"; anchors.centerIn: parent; width: 2; height: 18; color: parent.tone }
                     }
                 }
                 Rectangle {
@@ -166,7 +193,7 @@ Item {
                     x: frameView.imageRect.x + draw.rect.x * stage.scaleX
                     y: frameView.imageRect.y + draw.rect.y * stage.scaleY
                     width: draw.rect.width * stage.scaleX; height: draw.rect.height * stage.scaleY
-                    readonly property color tone: root.colorOf(Math.max(0, root.currentIndex))
+                    readonly property color tone: root.colorOf(root.currentClassIndex)
                     color: Qt.rgba(tone.r, tone.g, tone.b, 0.18)
                     border.color: tone; border.width: 2
                 }
@@ -248,11 +275,11 @@ Item {
                                 id: lane
                                 required property var modelData
                                 width: lanesArea.width; height: 26
-                                readonly property color tone: root.colorOf(modelData.index)
+                                readonly property color tone: root.colorOf(modelData.classIndex)
                                 Text {
                                     textFormat: Text.PlainText
                                     width: lanesArea.nameW - 8; anchors.verticalCenter: parent.verticalCenter; elide: Text.ElideRight
-                                    text: lane.modelData.label
+                                    text: root.displayName(lane.modelData)
                                     color: lane.modelData.label === labels.currentLabel ? Theme.text : Theme.textDim
                                     font.family: Theme.fontSoft; font.pixelSize: 12
                                 }
@@ -265,6 +292,9 @@ Item {
                                         width: Math.max(2, lanesArea.xOf(modelData.endMs) - x); height: lane.height - 8; radius: 3
                                         color: modelData.present ? Qt.rgba(lane.tone.r, lane.tone.g, lane.tone.b, modelData.reviewed ? 0.55 : 0.22)
                                                                  : Qt.rgba(1, 1, 1, modelData.reviewed ? 0.10 : 0.04)
+                                        // Covered: a dashed outline, it is there but not seen.
+                                        border.color: modelData.covered ? Qt.rgba(lane.tone.r, lane.tone.g, lane.tone.b, 0.7) : "transparent"
+                                        border.width: modelData.covered ? 1 : 0
                                     }
                                 }
                                 Repeater {

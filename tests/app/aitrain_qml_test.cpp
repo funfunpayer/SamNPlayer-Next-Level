@@ -99,13 +99,26 @@ private slots:
         QTest::keyClick(&window, Qt::Key_X);
         QTRY_COMPARE(labels->lanes().value(0).toMap().value("keys").toList().size(), 2);
         QVERIFY(!labels->boxes().value(0).toMap().value("present").toBool());
-        if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT"); !shot.isEmpty()) {
-            labels->seek(500);
-            QTest::qWait(300);
-            window.grabWindow().save(QString::fromLocal8Bit(shot));
-        }
         QTest::keyClick(&window, Qt::Key_Z, Qt::ControlModifier);
         QTRY_COMPARE(labels->lanes().value(0).toMap().value("keys").toList().size(), 1);
+
+        // The + on a row adds another object of its class: two breasts, a contact point.
+        labels->seek(500);
+        QVERIFY(labels->addLabel("breast"));
+        QVERIFY(labels->setBox(QRectF(20, 150, 50, 50)));
+        QQuickItem* plus = nullptr;
+        QTRY_VERIFY((plus = named(root.get(), "addObject_breast")));
+        QTest::mouseClick(&window, Qt::LeftButton, {}, plus->mapToScene(QPointF(plus->width() / 2, plus->height() / 2)).toPoint());
+        QTRY_COMPARE(labels->currentLabel(), QString("breast 2"));
+        QVERIFY(labels->setBox(QRectF(80, 150, 50, 50)));
+        QVERIFY(labels->addLabel("contact"));
+        QVERIFY(labels->setBox(QRectF(140, 100, 16, 16)));
+        QCOMPARE(labels->lanes().size(), 4);
+        QCOMPARE(labels->lanes()[2].toMap().value("classIndex").toInt(), 1);  // breast 2 shares the colour of breast
+        if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT"); !shot.isEmpty()) {
+                        QTest::qWait(300);
+            window.grabWindow().save(QString::fromLocal8Bit(shot));
+        }
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }
 };

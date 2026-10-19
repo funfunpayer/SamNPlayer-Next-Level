@@ -36,7 +36,6 @@ private slots:
 
         QVERIFY(c.addLabel("Glans"));
         QCOMPARE(c.currentLabel(), QString("glans"));
-        QVERIFY(!c.addLabel("glans"));  // once
         QVERIFY(c.setBox(QRectF(10, 20, 40, 40)));
         c.seek(2000);
         const double t = c.previewMs();
@@ -64,6 +63,9 @@ private slots:
         QVERIFY(!c.boxes().value(0).toMap().value("present").toBool());
         QVERIFY(c.removeKey());
         QVERIFY(c.boxes().value(0).toMap().value("present").toBool());
+        QVERIFY(c.markAbsent(true));  // covered
+        QVERIFY(c.lanes()[0].toMap().value("keys").toList().last().toMap().value("covered").toBool());
+        QVERIFY(c.undo());
         QVERIFY(QFile::exists(dir_.filePath("clip.labels.json")));
 
         LabelController again;
@@ -93,6 +95,33 @@ private slots:
         QVERIFY(first.open(QIODevice::ReadOnly));
         const QString lines = QString::fromUtf8(first.readAll());
         QVERIFY2(lines.contains(QRegularExpression("^0 [0-9.]+ [0-9.]+ [0-9.]+ [0-9.]+\n1 ")), qPrintable(lines));
+    }
+
+    // A class has several objects: two hands, two breasts; the model learns the class.
+    void aClassHasSeveralObjects() {
+        const QString hands = dir_.filePath("hands.mp4");
+        QVERIFY(QFile::copy(clip_, hands));  // its own, empty labels file
+        LabelController c;
+        QVERIFY(c.openVideo(hands));
+        QVERIFY(c.presetLabels().contains("hand"));
+        QVERIFY(c.presetLabels().contains("contact"));
+        QVERIFY(c.addLabel("hand"));
+        QVERIFY(c.setBox(QRectF(10, 10, 30, 30)));
+        QVERIFY(c.addLabel("hand"));
+        QCOMPARE(c.currentLabel(), QString("hand 2"));
+        QVERIFY(c.setBox(QRectF(100, 10, 30, 30)));
+        const QVariantList lanes = c.lanes();
+        QCOMPARE(lanes.size(), 2);
+        QCOMPARE(lanes[1].toMap().value("cls").toString(), QString("hand"));
+        QCOMPARE(lanes[1].toMap().value("classIndex").toInt(), 0);
+        const QString out = dir_.filePath("hands_ds");
+        QVERIFY(c.exportDataset(out, 1000) > 0);
+        QFile classes(out + "/classes.txt");
+        QVERIFY(classes.open(QIODevice::ReadOnly));
+        QCOMPARE(QString::fromUtf8(classes.readAll()), QString("hand\n"));
+        QFile first(out + "/labels/hands_00000000.txt");
+        QVERIFY(first.open(QIODevice::ReadOnly));
+        QCOMPARE(QString::fromUtf8(first.readAll()).count(QRegularExpression("^0 ", QRegularExpression::MultilineOption)), 2);
     }
 
     void anImageIsAClipOfOneFrame() {

@@ -21,6 +21,9 @@ struct LabelBox {
 struct LabelKey {
     int64_t ms = 0;
     bool absent = false;  // the label is not visible from here on
+    // With absent: it is there but covered (by a hand, a body, the edge …);
+    // those frames teach nothing, so they are left out of the samples.
+    bool covered = false;
     LabelBox box;         // ignored when absent
     bool confirmed = false;
     std::string source = "user";  // "user", "tracker", "teacher:<name>"
@@ -29,15 +32,19 @@ struct LabelKey {
 // What a track says at one time.
 struct LabelState {
     bool present = false;
+    bool covered = false;  // absent because something covers it
     LabelBox box;
     // Between two confirmed keys (or on one): the user has checked this stretch.
     bool reviewed = false;
 };
 
+// A track is one object of a class: "hand" and "hand 2" are two hands; the
+// model learns the class, the number only tells the objects apart.
 class LabelTrack {
 public:
-    explicit LabelTrack(std::string label = {}) : label_(std::move(label)) {}
+    explicit LabelTrack(std::string label = {}, std::string cls = {});
     const std::string& label() const { return label_; }
+    const std::string& cls() const { return cls_; }
     const std::vector<LabelKey>& keys() const { return keys_; }
 
     // Adds or replaces the key at the same time (within tolerance_ms).
@@ -53,6 +60,7 @@ public:
 
 private:
     std::string label_;
+    std::string cls_;
     std::vector<LabelKey> keys_;  // sorted by ms, unique ms
 };
 
@@ -63,7 +71,15 @@ struct LabelProject {
 
     LabelTrack* Track(const std::string& label);
     LabelTrack& AddTrack(const std::string& label);  // returns the existing one when present
+    // A new object of the class: "hand", then "hand 2", "hand 3" (the lowest free number).
+    LabelTrack& AddObject(const std::string& cls);
+    // The classes in the order they first appear.
+    std::vector<std::string> Classes() const;
+    int ObjectCount(const std::string& cls) const;
 };
+
+// "hand 2" → "hand"; "hand" → "hand".
+std::string LabelClassOf(const std::string& label);
 
 // <clip>.labels.json beside the clip.
 std::filesystem::path LabelProjectPath(const std::filesystem::path& clip);
@@ -84,8 +100,10 @@ struct LabelSample {
     std::vector<Item> items;
 };
 
-// Every every_ms of the clip, the frames where at least one track is reviewed;
-// class ids are the indices in `classes` (labels not in it are skipped).
+// Every every_ms of the clip, the frames where at least one track is reviewed
+// and none is covered there (a covered object would teach "nothing here");
+// class ids are the indices of the tracks' classes in `classes` (tracks of
+// other classes are skipped).
 std::vector<LabelSample> ExportSamples(const LabelProject& p, const std::vector<std::string>& classes,
                                        int64_t every_ms);
 
