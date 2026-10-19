@@ -137,6 +137,63 @@ private slots:
         QTest::qWait(50);
     }
 
+    void theQueueCreatesEachVideoInOrder() {
+        GeneratorController g;
+        QTemporaryDir own;
+        auto make = [&](const char* name, int seconds, double amp) {
+            const QString p = own.filePath(QString::fromLatin1(name));
+            clips::WriteMoving(std::filesystem::path(p.toStdU16String()), seconds, amp, 1.0);
+            return p;
+        };
+        const QString a = make("a.mp4", 8, 80.0), still = make("still.mp4", 4, 0.0);
+        const QString missing = own.filePath("missing.mp4");
+        QCOMPARE(g.addToQueue({QUrl::fromLocalFile(a).toString(), still, missing, a}), 3);  // a once
+        QCOMPARE(g.queue().size(), 3);
+        QVERIFY(g.queueSummary().contains("3 waiting"));
+        QSignalSpy finished(&g, &GeneratorController::queueFinished);
+        QVERIFY(g.runQueue());
+        QVERIFY(g.queueRunning());
+        QVERIFY(!g.create());   // nothing else while the queue runs
+        QVERIFY(!g.findTip());
+        QCOMPARE(g.addToQueue({own.filePath("x.mp4")}), 0);
+        QTRY_COMPARE_WITH_TIMEOUT(finished.count(), 1, 60000);
+        QVERIFY(!g.queueRunning());
+        auto status = [&](int i) { return g.queue().at(i).toMap().value("status").toString(); };
+        QCOMPARE(status(0), QStringLiteral("done"));
+        QCOMPARE(status(1), QStringLiteral("failed"));  // only weak motion
+        QVERIFY(g.queue().at(1).toMap().value("message").toString().contains("weak"));
+        QCOMPARE(status(2), QStringLiteral("failed"));
+        QVERIFY(QFileInfo::exists(own.filePath("a.funscript")));
+        QVERIFY(!QFileInfo::exists(own.filePath("still.funscript")));
+        QCOMPARE(finished.at(0).at(0).toInt(), 1);
+        QVERIFY(g.status().startsWith("Queue finished: 1 created"));
+        QVERIFY(!g.runQueue());  // nothing waiting
+
+        // Again with a script there: skipped, unless overwrite.
+        g.clearQueue();
+        QVERIFY(g.queue().isEmpty());
+        g.addToQueue({a});
+        QVERIFY(g.runQueue(false));
+        QTRY_COMPARE_WITH_TIMEOUT(finished.count(), 2, 60000);
+        QCOMPARE(status(0), QStringLiteral("skipped"));
+        g.clearQueue();
+        g.addToQueue({a});
+        QVERIFY(g.runQueue(true));
+        QTRY_COMPARE_WITH_TIMEOUT(finished.count(), 3, 60000);
+        QCOMPARE(status(0), QStringLiteral("done"));
+
+        // Cancel stops the rest.
+        g.clearQueue();
+        g.addToQueue({make("b.mp4", 8, 80.0), make("c.mp4", 8, 80.0)});
+        QVERIFY(g.runQueue());
+        g.cancel();
+        QTRY_COMPARE_WITH_TIMEOUT(finished.count(), 4, 60000);
+        QCOMPARE(status(1), QStringLiteral("canceled"));
+        QVERIFY(!QFileInfo::exists(own.filePath("c.funscript")));
+        g.removeFromQueue(0);
+        QCOMPARE(g.queue().size(), 1);
+    }
+
     void cancelStopsTheRunAndWritesNothing() {
         QTemporaryDir own;
         const QString video = own.filePath("long.mp4");

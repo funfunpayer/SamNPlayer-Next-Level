@@ -11,6 +11,7 @@
 
 #include <opencv2/imgproc.hpp>
 
+#include "samn/engine/generate_queue.h"
 #include "samn/engine/tip_find.h"
 #include "samn/samn_file.h"
 #include "samn/vision/frame_reader.h"
@@ -49,12 +50,14 @@ GeneratorController::GeneratorController(QObject* parent) : QObject(parent) {
 // The runner cancels and joins first (GD-25: nothing outlives the app).
 GeneratorController::~GeneratorController() {
     cancelFind();
+    if (queue_cancel_) *queue_cancel_ = true;
     if (finder_.joinable()) finder_.join();
+    if (queue_worker_.joinable()) queue_worker_.join();
     runner_.reset();
 }
 
 bool GeneratorController::findTip() {
-    if (video_path_.isEmpty() || running_ || finding_) return false;
+    if (video_path_.isEmpty() || running_ || finding_ || queue_running_) return false;
     if (finder_.joinable()) finder_.join();
     find_cancel_ = std::make_shared<std::atomic<bool>>(false);
     finding_ = true;
@@ -96,6 +99,133 @@ bool GeneratorController::findTip() {
         }, Qt::QueuedConnection);
     });
     return true;
+}
+
+QString GeneratorController::queueSummary() const {
+    int waiting = 0, done = 0, other = 0;
+    for (const QVariant& v : queue_) {
+        const QString st = v.toMap().value("status").toString();
+        if (st == QLatin1String("queued")) ++waiting;
+        else if (st == QLatin1String("done")) ++done;
+        else if (st != QLatin1String("running")) ++other;
+    }
+    if (queue_.isEmpty()) return {};
+    if (queue_running_) return tr("Queue %1/%2 running").arg(done + other + 1).arg(queue_.size());
+    QString s = tr("Queue: %n video(s), %1 waiting", nullptr, int(queue_.size())).arg(waiting);
+    if (done) s += tr(", %1 done").arg(done);
+    if (other) s += tr(", %1 skipped or failed").arg(other);
+    return s;
+}
+
+int GeneratorController::addToQueue(const QStringList& pathsOrUrls) {
+    if (queue_running_) return 0;
+    int added = 0;
+    for (const QString& in : pathsOrUrls) {
+        const QString path = in.startsWith(QStringLiteral("file:")) ? QUrl(in).toLocalFile() : in;
+        if (path.isEmpty()) continue;
+        bool known = false;
+        for (const QVariant& v : queue_) known |= v.toMap().value("path").toString() == path;
+        if (known) continue;
+        queue_.append(QVariantMap{{"path", path}, {"name", QFileInfo(path).fileName()}, {"status", "queued"}, {"message", ""}});
+        ++added;
+    }
+    if (added) emit queueChanged();
+    return added;
+}
+
+void GeneratorController::removeFromQueue(int index) {
+    if (queue_running_ || index < 0 || index >= queue_.size()) return;
+    queue_.removeAt(index);
+    emit queueChanged();
+}
+
+void GeneratorController::clearQueue() {
+    if (queue_running_ || queue_.isEmpty()) return;
+    queue_.clear();
+    emit queueChanged();
+}
+
+void GeneratorController::setQueueItem(int index, const QString& status, const QString& message) {
+    if (index < 0 || index >= queue_.size()) return;
+    QVariantMap m = queue_.at(index).toMap();
+    m["status"] = status;
+    m["message"] = message;
+    queue_[index] = m;
+    emit queueChanged();
+}
+
+bool GeneratorController::runQueue(bool overwrite) {
+    if (queue_running_ || running_ || finding_) return false;
+    std::vector<std::pair<int, std::filesystem::path>> items;
+    for (int i = 0; i < queue_.size(); ++i) {
+        const QVariantMap m = queue_.at(i).toMap();
+        if (m.value("status").toString() == QLatin1String("queued"))
+            items.emplace_back(i, std::filesystem::path(m.value("path").toString().toStdU16String()));
+    }
+    if (items.empty()) return false;
+    if (queue_worker_.joinable()) queue_worker_.join();
+    engine::QueueSettings settings;
+    settings.signal.profile = profile_.toStdString();
+    settings.signal.invert = invert_;
+    settings.camera_compensation = camera_;
+    settings.scene_cuts = scene_cuts_;
+    settings.auto_ozone = auto_ozone_;
+    settings.overwrite = overwrite;
+    queue_cancel_ = std::make_shared<std::atomic<bool>>(false);
+    queue_running_ = true;
+    percent_ = 0;
+    progress_text_.clear();
+    emit queueChanged();
+    emit progressChanged();
+    setStatus(tr("Creating the queue…"));
+    QPointer<GeneratorController> self(this);
+    queue_worker_ = std::thread([self, items, settings, cancel = queue_cancel_] {
+        auto post = [self](auto fn) {
+            QMetaObject::invokeMethod(qApp, [self, fn] { if (self) fn(self.data()); }, Qt::QueuedConnection);
+        };
+        const int total = int(items.size());
+        for (int n = 0; n < total; ++n) {
+            const auto& [index, video] = items[size_t(n)];
+            if (cancel->load()) {
+                post([index](GeneratorController* g) { g->setQueueItem(index, "canceled", {}); });
+                continue;
+            }
+            post([index](GeneratorController* g) { g->setQueueItem(index, "running", {}); });
+            engine::QueueItemOutcome r;
+            try {
+                r = engine::GenerateQueueItem(video, settings, [cancel] { return cancel->load(); }, [post, n, total](int p) {
+                    post([n, total, p](GeneratorController* g) {
+                        g->percent_ = (n * 100 + p) / total;
+                        g->progress_text_ = tr("Queue %1/%2 · %3 %").arg(n + 1).arg(total).arg(p);
+                        emit g->progressChanged();
+                    });
+                });
+            } catch (const std::exception& e) {
+                r.status = engine::QueueItemStatus::kFailed;
+                r.message = e.what();
+            }
+            static const char* const names[] = {"done", "skipped", "failed", "canceled"};
+            const QString status = QString::fromLatin1(names[int(r.status)]);
+            const QString message = QString::fromStdString(r.message);
+            post([index, status, message](GeneratorController* g) { g->setQueueItem(index, status, message); });
+        }
+        post([](GeneratorController* g) { g->finishQueue(); });
+    });
+    return true;
+}
+
+void GeneratorController::finishQueue() {
+    queue_running_ = false;
+    int done = 0, skipped = 0, failed = 0;
+    for (const QVariant& v : queue_) {
+        const QString st = v.toMap().value("status").toString();
+        if (st == QLatin1String("done")) ++done;
+        else if (st == QLatin1String("skipped")) ++skipped;
+        else if (st == QLatin1String("failed")) ++failed;
+    }
+    emit queueChanged();
+    setStatus(tr("Queue finished: %1 created, %2 skipped, %3 failed.").arg(done).arg(skipped).arg(failed));
+    emit queueFinished(done, skipped, failed);
 }
 
 void GeneratorController::cancelFind() {
@@ -226,7 +356,7 @@ int GeneratorController::step() const {
 }
 
 bool GeneratorController::create(bool overwrite) {
-    if (running_) return false;
+    if (running_ || queue_running_) return false;
     if (!hasVideo() || !hasBox()) {
         setStatus(hasVideo() ? tr("Drag a tip box on the frame first.") : tr("Choose a video first."));
         return false;
@@ -260,6 +390,11 @@ bool GeneratorController::create(bool overwrite) {
 }
 
 void GeneratorController::cancel() {
+    if (queue_running_ && queue_cancel_) {
+        *queue_cancel_ = true;
+        setStatus(tr("Cancel requested…"));
+        return;
+    }
     if (!running_) return;
     runner_->Cancel();
     setStatus(tr("Cancel requested…"));
