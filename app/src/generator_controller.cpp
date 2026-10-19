@@ -46,6 +46,45 @@ GeneratorController::GeneratorController(QObject* parent) : QObject(parent) {
             },
             Qt::QueuedConnection);
     });
+    loadSettings();
+}
+
+void GeneratorController::loadSettings() {
+    try {
+        settings_ = std::make_unique<samn::Settings>();
+        auto& s = *settings_;
+        const auto str = [&](const char* key, const QString& fallback) {
+            const auto v = s.get(key);
+            return v.is_string() ? QString::fromStdString(v.get<std::string>()) : fallback;
+        };
+        const auto flag = [&](const char* key, bool fallback) {
+            const auto v = s.get(key);
+            return v.is_boolean() ? v.get<bool>() : fallback;
+        };
+        // Through the setters: an unknown value keeps the default.
+        setProfile(str("generator.profile", profile_));
+        camera_ = flag("generator.camera_compensation", camera_);
+        scene_cuts_ = flag("generator.scene_cuts", scene_cuts_);
+        auto_ozone_ = flag("generator.auto_ozone", auto_ozone_);
+        contact_vibration_ = flag("generator.contact_vibration", contact_vibration_);
+        setTipClass(str("generator.tip_class", tip_class_));
+        setContactClass(str("generator.contact_class", contact_class_));
+        // 0.7 stored the sensitivity in percent (75).
+        const auto span = s.get("generator.contact_vibration_span");
+        if (span.is_number()) setContactSpan(span.get<double>() / 100.0);
+        setContactCurve(str("generator.contact_vibration_curve", contact_curve_));
+    } catch (const std::exception&) {
+        // Unreadable settings: the defaults stay.
+    }
+}
+
+void GeneratorController::saveSetting(const char* key, const nlohmann::json& value) {
+    if (!settings_) return;
+    try {
+        settings_->set(key, value);
+    } catch (const std::exception&) {
+        // A settings file that cannot be written must not stop creating.
+    }
 }
 
 // The runner cancels and joins first (GD-25: nothing outlives the app).
@@ -173,6 +212,8 @@ bool GeneratorController::runQueue(bool overwrite) {
     settings.auto_ozone = auto_ozone_;
     settings.overwrite = overwrite;
     settings.contact_vibration = contact_vibration_;
+    settings.contact_vibration_span = contact_span_;
+    settings.contact_vibration_curve = contact_curve_.toStdString();
     settings.tip_class = tip_class_.toStdString();
     queue_cancel_ = std::make_shared<std::atomic<bool>>(false);
     queue_running_ = true;
@@ -324,20 +365,22 @@ void GeneratorController::setProfile(const QString& p) {
     const QString v = p == QLatin1String("weich") || p == QLatin1String("autotune") ? p : QStringLiteral("standard");
     if (v == profile_) return;
     profile_ = v;
+    saveSetting("generator.profile", v.toStdString());
     emit optionsChanged();
 }
 
-#define SAMN_SETTER(Name, member)              \
+#define SAMN_SETTER(Name, member, key)         \
     void GeneratorController::Name(bool v) {   \
         if (member == v) return;               \
         member = v;                            \
+        if (key) saveSetting(key, v);          \
         emit optionsChanged();                 \
     }
-SAMN_SETTER(setInvert, invert_)
-SAMN_SETTER(setCameraCompensation, camera_)
-SAMN_SETTER(setSceneCuts, scene_cuts_)
-SAMN_SETTER(setAutoOZone, auto_ozone_)
-SAMN_SETTER(setContactVibration, contact_vibration_)
+SAMN_SETTER(setInvert, invert_, nullptr)
+SAMN_SETTER(setCameraCompensation, camera_, "generator.camera_compensation")
+SAMN_SETTER(setSceneCuts, scene_cuts_, "generator.scene_cuts")
+SAMN_SETTER(setAutoOZone, auto_ozone_, "generator.auto_ozone")
+SAMN_SETTER(setContactVibration, contact_vibration_, "generator.contact_vibration")
 #undef SAMN_SETTER
 
 namespace {
@@ -356,12 +399,31 @@ QStringList GeneratorController::contactClasses() const { return ToQt(samn::Cont
 void GeneratorController::setTipClass(const QString& c) {
     if (c == tip_class_ || !tipClasses().contains(c)) return;
     tip_class_ = c;
+    saveSetting("generator.tip_class", c.toStdString());
     emit optionsChanged();
 }
 
 void GeneratorController::setContactClass(const QString& c) {
     if (c == contact_class_ || !contactClasses().contains(c)) return;
     contact_class_ = c;
+    saveSetting("generator.contact_class", c.toStdString());
+    emit optionsChanged();
+}
+
+void GeneratorController::setContactSpan(double span) {
+    // 0.7 slider: 40-95 in steps of 5.
+    const double v = std::round(std::clamp(span, 0.40, 0.95) * 20.0) / 20.0;
+    if (std::abs(v - contact_span_) < 1e-9) return;
+    contact_span_ = v;
+    saveSetting("generator.contact_vibration_span", int(std::lround(v * 100)));
+    emit optionsChanged();
+}
+
+void GeneratorController::setContactCurve(const QString& curve) {
+    const QString v = QString::fromStdString(samn::NormalizeContactCurve(curve.toStdString()));
+    if (v == contact_curve_) return;
+    contact_curve_ = v;
+    saveSetting("generator.contact_vibration_curve", v.toStdString());
     emit optionsChanged();
 }
 
@@ -444,6 +506,8 @@ bool GeneratorController::create(bool overwrite) {
     req.overwrite = overwrite;
     req.auto_ozone = auto_ozone_;
     req.contact_vibration = contact_vibration_;
+    req.contact_vibration_span = contact_span_;
+    req.contact_vibration_curve = contact_curve_.toStdString();
     req.tip_class = tip_class_.toStdString();
     if (!contact_areas_.empty()) {
         req.contact_area = contact_areas_.front();

@@ -8,6 +8,7 @@
 
 #include "generator_controller.h"
 #include "samn/samn_file.h"
+#include "samn/settings.h"
 #include "synthetic_clips.h"
 
 using samn::ui::GeneratorController;
@@ -24,6 +25,9 @@ class GeneratorControllerTest : public QObject {
     }
 
 private slots:
+    // The controller reads and writes settings: never the user's own file.
+    void initTestCase() { qputenv("SAMN_CONFIG_DIR", dir_.filePath("config").toUtf8()); }
+
     void openingAVideoShowsItsFrameAndInfo() {
         GeneratorController g;
         QCOMPARE(g.step(), 1);
@@ -146,6 +150,66 @@ private slots:
         // Another video: the areas belonged to the old one.
         QVERIFY(g.openVideo(clip("a.mp4", 8)));
         QVERIFY(g.contactAreas().isEmpty());
+    }
+
+    // 0.7 Step 3: sensitivity and curve of contact vibration, written into
+    // the script; the Generator's choices are remembered (generator.* keys).
+    void contactFeelAndChoicesAreRemembered() {
+        {
+            GeneratorController g;
+            QCOMPARE(g.contactSpan(), 0.75);
+            QCOMPARE(g.contactCurve(), QStringLiteral("soft"));
+            g.setContactSpan(0.52);  // the 0.7 slider steps by 5
+            QCOMPARE(g.contactSpan(), 0.5);
+            g.setContactSpan(2);
+            QCOMPARE(g.contactSpan(), 0.95);
+            g.setContactSpan(0.6);
+            g.setContactCurve("peak");
+            g.setContactCurve("nonsense");  // unknown: linear, as 0.7's NormalizeContactCurve
+            QCOMPARE(g.contactCurve(), QStringLiteral("linear"));
+            g.setContactCurve("impulse");
+            g.setProfile("weich");
+            g.setSceneCuts(false);
+            g.setContactVibration(false);
+            g.setTipClass("penis");
+            g.setContactClass("mouth");
+            g.setInvert(true);
+        }
+        const samn::Settings s;
+        QCOMPARE(s.get("generator.contact_vibration_span").get<int>(), 60);  // percent, as 0.7
+        QCOMPARE(QString::fromStdString(s.get("generator.contact_vibration_curve").get<std::string>()), QStringLiteral("impulse"));
+        {
+            GeneratorController g;
+            QCOMPARE(g.contactSpan(), 0.6);
+            QCOMPARE(g.contactCurve(), QStringLiteral("impulse"));
+            QCOMPARE(g.profile(), QStringLiteral("weich"));
+            QVERIFY(!g.sceneCuts());
+            QVERIFY(!g.contactVibration());
+            QCOMPARE(g.tipClass(), QStringLiteral("penis"));
+            QCOMPARE(g.contactClass(), QStringLiteral("mouth"));
+            QVERIFY(!g.invert());  // per video, not remembered
+            // The script gets the sensitivity and the curve.
+            QTemporaryDir own;
+            const QString video = own.filePath("f.mp4");
+            clips::WriteMoving(std::filesystem::path(video.toStdU16String()), 2, 80.0, 1.0);
+            QVERIFY(g.openVideo(video));
+            g.setBox(QRect(100, 40, 120, 160));
+            g.setContactVibration(true);
+            QSignalSpy created(&g, &GeneratorController::created);
+            QVERIFY(g.create());
+            QTRY_COMPARE_WITH_TIMEOUT(created.count(), 1, 60000);
+            const samn::Document d = samn::LoadDocument(std::filesystem::path(own.filePath("f.samn").toStdU16String()));
+            QVERIFY(d.recipe.contact_vibration);
+            QCOMPARE(d.recipe.contact_vibration_span, 0.6);
+            QCOMPARE(QString::fromStdString(d.recipe.contact_vibration_curve), QStringLiteral("impulse"));
+            // Back to the defaults for the other tests.
+            g.setProfile("standard");
+            g.setSceneCuts(true);
+            g.setTipClass("glans");
+            g.setContactClass("nipples");
+            g.setContactSpan(0.75);
+            g.setContactCurve("soft");
+        }
     }
 
     void findTipProposesTheBoxAndCandidates() {

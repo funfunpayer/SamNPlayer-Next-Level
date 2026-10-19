@@ -143,6 +143,14 @@ private slots:
         // contact area and leaves the tip box alone.
         QVERIFY(gen->contactVibration());
         QVERIFY(named(root.get(), "contactMarks")->isVisible());
+        // Sensitivity and curve reach the controller.
+        auto* curve = named(root.get(), "contactCurveCombo");
+        QCOMPARE(curve->property("currentIndex").toInt(), 1);  // soft
+        curve->setProperty("currentIndex", 2);
+        QMetaObject::invokeMethod(curve, "activated", Q_ARG(int, 2));
+        QTRY_COMPARE(gen->contactCurve(), QStringLiteral("peak"));
+        QMetaObject::invokeMethod(named(root.get(), "contactSpan"), "moved", Q_ARG(double, 0.5));
+        QTRY_COMPARE(gen->contactSpan(), 0.5);
         QMetaObject::invokeMethod(named(root.get(), "markContact"), "clicked");
         QTRY_VERIFY(gen->markContact());
         const QRect tip = gen->box();

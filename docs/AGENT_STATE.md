@@ -85,7 +85,7 @@
 ## Next (in order; the work list is `LESSONS.md` § Gaps, `TEST_PARITY.md` and `P3_GENERATOR.md`)
 
 1. **Windows CI:** some app tests failed now and then with no output (stdout fully buffered when piped). Every app test now writes unbuffered (`tests/app/unbuffered_stdout.cpp`); find the cause on the next red run.
-2. **P3.3 rest:** Settings persistence of the Generator's choices (contact span and curve included); the contact-marks overlay in the Player (PARITY §3 "Contact marks overlay on video").
+2. **P3.3 done** (19 Oct): the Generator remembers its choices (0.7 `generator.*` keys), contact sensitivity and curve; the Player shows the contact marks on the video (#67). Left for later: the feel probe, the body map, the partner path.
 3. **P3.6** Quality Doctor on the dense curve, the signal auto-retry and the stroke preview (feeds the adaptive detrend); then the controller reports Quality as its second number (GD-04).
 4. **P3.4** two-point / multi-point, rhythm grid, follow marks; **P3.9** improvements, each measured with `samn_compare` (first lever: memory templates of the subject, not the box, GD-10).
 5. Player finish (`PARITY.md` §1–3), donation pages (manifest), devices for Svakom and other toys, the Scene Map as a view in the Editor (D-145, no own mode), Settings / Tools; bug hunt; release.

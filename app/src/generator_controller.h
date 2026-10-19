@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "samn/engine/generate.h"
+#include "samn/settings.h"
 
 namespace samn::ui {
 
@@ -49,6 +50,10 @@ class GeneratorController : public QObject {
     // the first is the primary. markContact: the next box drawn is a contact
     // area instead of the tip box.
     Q_PROPERTY(bool contactVibration READ contactVibration WRITE setContactVibration NOTIFY optionsChanged)
+    // 0.7 Step 3 "Sensitivity" (0.40 deep only … 0.95) and "Contact curve"
+    // (linear | soft | peak | impulse; soft by default).
+    Q_PROPERTY(double contactSpan READ contactSpan WRITE setContactSpan NOTIFY optionsChanged)
+    Q_PROPERTY(QString contactCurve READ contactCurve WRITE setContactCurve NOTIFY optionsChanged)
     Q_PROPERTY(QString tipClass READ tipClass WRITE setTipClass NOTIFY optionsChanged)
     Q_PROPERTY(QString contactClass READ contactClass WRITE setContactClass NOTIFY optionsChanged)
     Q_PROPERTY(QStringList tipClasses READ tipClasses CONSTANT)
@@ -102,6 +107,10 @@ public:
     void setAutoOZone(bool v);
     bool contactVibration() const { return contact_vibration_; }
     void setContactVibration(bool v);
+    double contactSpan() const { return contact_span_; }
+    void setContactSpan(double span);
+    QString contactCurve() const { return contact_curve_; }
+    void setContactCurve(const QString& curve);
     QString tipClass() const { return tip_class_; }
     void setTipClass(const QString& c);
     QString contactClass() const { return contact_class_; }
@@ -192,6 +201,13 @@ private:
     QString profile_ = QStringLiteral("standard");
     bool invert_ = false, camera_ = true, scene_cuts_ = true, auto_ozone_ = true;
     bool contact_vibration_ = true;
+    double contact_span_ = 0.75;
+    QString contact_curve_ = QStringLiteral("soft");
+    // The choices are remembered (0.7 "generator.*" settings); the invert
+    // switch belongs to one video and is not.
+    std::unique_ptr<samn::Settings> settings_;
+    void loadSettings();
+    void saveSetting(const char* key, const nlohmann::json& value);
     QString tip_class_ = QStringLiteral("glans");
     QString contact_class_ = QStringLiteral("nipples");
     bool mark_contact_ = false;
