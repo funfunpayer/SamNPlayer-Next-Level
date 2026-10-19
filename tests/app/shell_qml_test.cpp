@@ -647,7 +647,7 @@ private slots:
             QQuickItem* library = s.one("LibraryPanel");
             QQuickItem* inspector = s.one("InspectorPanel");
             QQuickItem* video = nullptr;
-            for (QQuickItem* i : descendants(s.root()))
+            for (QQuickItem* i : descendants(s.one("PlayerPage")))  // Training has a film stage too
                 if (i->inherits("QQuickVideoOutput")) video = i;
             QVERIFY(library && inspector && video);
             // The collapse button: the 28 px round control at the top of each column.

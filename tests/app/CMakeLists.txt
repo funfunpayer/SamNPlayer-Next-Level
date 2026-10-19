@@ -14,8 +14,9 @@ endforeach()
 add_executable(training_qml_test training_qml_test.cpp)
 target_link_libraries(training_qml_test PRIVATE samn_app samn_appplugin Qt6::Test)
 target_include_directories(training_qml_test PRIVATE ${CMAKE_SOURCE_DIR}/tests/core)
+target_compile_definitions(training_qml_test PRIVATE SAMN_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data")
 add_test(NAME training_qml_test COMMAND training_qml_test)
-set_tests_properties(training_qml_test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+set_tests_properties(training_qml_test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_MEDIA_BACKEND=ffmpeg")
 
 # The Inspector's QML, loaded the way the app loads it (static module plugin).
 add_executable(inspector_qml_test inspector_qml_test.cpp)

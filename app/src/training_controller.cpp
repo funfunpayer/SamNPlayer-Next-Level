@@ -2,6 +2,8 @@
 
 #include <QDateTime>
 #include <QFile>
+#include <QFileInfo>
+#include <QUrl>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLocale>
@@ -10,6 +12,7 @@
 #include <filesystem>
 
 #include "device_controller.h"
+#include "samn/library.h"
 
 namespace samn::ui {
 
@@ -161,6 +164,76 @@ void TrainingController::load() {
     opts_.peak_intensity = num("training.peak_intensity", 0.8, 0, 1);
     opts_.plateau_fraction = num("training.plateau_fraction", 0.7, 0, 1);
     opts_.progression_per_cycle = num("training.progression_per_cycle", 0.15, 0, 1);
+    const auto text = [&](const char* key) {
+        const auto v = s.get(key, "");
+        return v.is_string() ? QString::fromStdString(v.get<std::string>()) : QString();
+    };
+    const QString stage = text("training.stage.mode");
+    if (stage == "figure" || stage == "video") stage_ = stage;
+    video_path_ = text("training.stage.video");
+    const auto flag = [&](const char* key, bool def) {
+        const auto v = s.get(key, def);
+        return v.is_boolean() ? v.get<bool>() : def;
+    };
+    video_loop_ = flag("training.stage.loop", true);
+    video_muted_ = flag("training.stage.muted", true);
+}
+
+// ---------------------------------------------------------------- stage
+
+void TrainingController::setStage(const QString& stage) {
+    if (stage == stage_ || (stage != "rings" && stage != "figure" && stage != "video")) return;
+    stage_ = stage;
+    save("training.stage.mode", stage_.toStdString());
+    emit stageChanged();
+}
+
+QString TrainingController::videoUrl() const {
+    return video_path_.isEmpty() ? QString() : QUrl::fromLocalFile(video_path_).toString();
+}
+
+QString TrainingController::videoName() const { return QFileInfo(video_path_).fileName(); }
+
+void TrainingController::setVideoLoop(bool on) {
+    if (on == video_loop_) return;
+    video_loop_ = on;
+    save("training.stage.loop", on);
+    emit stageChanged();
+}
+
+void TrainingController::setVideoMuted(bool on) {
+    if (on == video_muted_) return;
+    video_muted_ = on;
+    save("training.stage.muted", on);
+    emit stageChanged();
+}
+
+QStringList TrainingController::recentVideos() {
+    QStringList out;
+    try {
+        const auto v = settings().get(samn::kRecentVideosKey, nlohmann::json::array());
+        if (v.is_array())
+            for (const auto& e : v)
+                if (e.is_string() && !e.get<std::string>().empty()) out << QString::fromStdString(e.get<std::string>());
+    } catch (const std::exception&) {
+    }
+    return out;
+}
+
+void TrainingController::chooseVideo(const QString& pathOrUrl) {
+    const QUrl url(pathOrUrl);
+    const QString path = QFileInfo(url.isLocalFile() ? url.toLocalFile() : pathOrUrl).absoluteFilePath();
+    if (pathOrUrl.isEmpty() || !QFileInfo(path).isFile()) return;
+    video_path_ = path;
+    save("training.stage.video", path.toStdString());
+    std::vector<std::string> recent;
+    for (const auto& p : recentVideos()) recent.push_back(p.toStdString());
+    save(samn::kRecentVideosKey, samn::PushFront(std::move(recent), path.toStdString(), samn::kRecentMax));
+    if (stage_ != "video") {
+        stage_ = QStringLiteral("video");
+        save("training.stage.mode", "video");
+    }
+    emit stageChanged();
 }
 
 // ---------------------------------------------------------------- device

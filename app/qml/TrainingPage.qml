@@ -3,6 +3,7 @@ import QtQuick.Shapes
 import QtQuick.Controls.Basic
 import QtQuick.Dialogs
 import QtQuick.Layouts
+import QtMultimedia
 import SamN
 
 // Training mode (0.7 Training tab, the Owner's target docs/visual-target/training.png):
@@ -21,6 +22,13 @@ Item {
     TrainingController {
         id: ctl
         device: page.device
+    }
+
+    FileDialog {
+        id: stageVideoDialog
+        title: qsTr("Choose a video to play along")
+        nameFilters: [qsTr("Video (*.mp4 *.mkv *.webm *.mov *.avi *.m4v)"), qsTr("All files (*)")]
+        onAccepted: ctl.chooseVideo(selectedFile.toString())
     }
 
     // Phase tint from the planned strength: calm cyan, orange, red (0.7 heatColor).
@@ -245,9 +253,11 @@ Item {
                         PathArc { x: Theme.radius; y: 0; radiusX: Theme.radius; radiusY: Theme.radius }
                     }
                 }
+                readonly property bool videoStage: ctl.stage === "video"
                 Image {
                     id: bridge
                     objectName: "silkBridge"
+                    visible: ctl.stage === "rings"
                     source: "assets/stage-ribbons.svg"
                     sourceSize.width: 2000
                     fillMode: Image.Stretch
@@ -274,8 +284,138 @@ Item {
                     text: qsTr("LIVE TRAINING") + (ctl.active ? "  ·  " + ctl.phaseName : "")
                     color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11; font.letterSpacing: 2
                 }
+                // Video stage (0.8 training_video.js): the user's film plays
+                // along while the training runs and pauses when it stops; the
+                // device follows the training, not the film.
+                MediaPlayer {
+                    id: stageMedia
+                    objectName: "stageMedia"
+                    source: stage.videoStage ? ctl.videoUrl : ""
+                    videoOutput: stageVideo
+                    loops: ctl.videoLoop ? MediaPlayer.Infinite : 1
+                    audioOutput: AudioOutput { muted: ctl.videoMuted }
+                    readonly property bool shouldPlay: stage.videoStage && ctl.state === "running"
+                    onShouldPlayChanged: shouldPlay ? play() : pause()
+                    onMediaStatusChanged: if (mediaStatus === MediaPlayer.LoadedMedia && shouldPlay) play()
+                }
+                VideoOutput {
+                    id: stageVideo
+                    visible: stage.videoStage && ctl.videoPath !== ""
+                    anchors.fill: parent; anchors.margins: 1
+                    anchors.topMargin: 52
+                }
+                Text {
+                    objectName: "stageVideoHint"
+                    textFormat: Text.PlainText
+                    visible: stage.videoStage && ctl.videoPath === ""
+                    anchors.centerIn: parent
+                    width: Math.min(parent.width - 60, 420)
+                    horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap
+                    text: qsTr("Choose a video — it plays along while the training runs. The device follows the training, not the film.")
+                    color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 14
+                }
+                Row {
+                    objectName: "stageVideoControls"
+                    visible: stage.videoStage
+                    anchors.left: parent.left; anchors.leftMargin: 16
+                    anchors.top: parent.top; anchors.topMargin: 36
+                    spacing: 12
+                    FlowButton {
+                        objectName: "stageVideoChoose"
+                        height: 30
+                        text: qsTr("Choose video…")
+                        onClicked: stageVideoDialog.open()
+                    }
+                    FlowCombo {
+                        objectName: "stageVideoRecent"
+                        width: 200; height: 30
+                        enabled: ctl.recentVideos.length > 0
+                        model: ctl.recentVideos.map((p) => p.split(/[\\/]/).pop())
+                        displayText: ctl.videoName !== "" ? ctl.videoName : qsTr("Recent videos")
+                        onActivated: (i) => ctl.chooseVideo(ctl.recentVideos[i])
+                    }
+                    Row {
+                        anchors.verticalCenter: parent.verticalCenter; spacing: 6
+                        FlowToggle { objectName: "stageVideoLoop"; anchors.verticalCenter: parent.verticalCenter; checked: ctl.videoLoop; onToggled: (on) => ctl.videoLoop = on }
+                        Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; text: qsTr("Loop"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
+                    }
+                    Row {
+                        anchors.verticalCenter: parent.verticalCenter; spacing: 6
+                        FlowToggle { objectName: "stageVideoMuted"; anchors.verticalCenter: parent.verticalCenter; checked: ctl.videoMuted; onToggled: (on) => ctl.videoMuted = on }
+                        Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; text: qsTr("Muted"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
+                    }
+                }
+                // The Flow figure (D-152, in place of 0.7's pixel clip): it follows
+                // the live level; while no session runs it shows the technique's
+                // shape (0.7 pixel_figure.js: stop-start 1600 ms ramp 45 % · hold
+                // 10 % · down 45 %, plateau 2200 ms 0.72 + 0.18 sin, times the peak).
+                Item {
+                    id: figureStage
+                    objectName: "figureStage"
+                    visible: ctl.stage === "figure"
+                    anchors.fill: parent; anchors.topMargin: 44; anchors.bottomMargin: 56
+                    readonly property bool live: ctl.state === "running"
+                    readonly property real liveLevel: Math.max(ctl.vibrationAvailable ? ctl.vibration : 0, ctl.suctionAvailable ? ctl.suction : 0)
+                    property real demo: 0
+                    property real previous: 0
+                    property bool rising: false
+                    readonly property real level: live ? liveLevel : demo
+                    onLevelChanged: { if (Math.abs(level - previous) > 0.002) rising = level > previous; previous = level }
+                    Timer {
+                        interval: 40; repeat: true
+                        running: figureStage.visible && !figureStage.live
+                        property real t0: Date.now()
+                        onTriggered: {
+                            const t = Date.now() - t0, peak = ctl.peak
+                            if (ctl.technique === "plateau") {
+                                figureStage.demo = (0.72 + 0.18 * Math.sin(t / 2200 * 2 * Math.PI)) * peak
+                            } else {
+                                const f = (t % 1600) / 1600
+                                figureStage.demo = (f < 0.45 ? f / 0.45 : f < 0.55 ? 1 : (1 - f) / 0.45) * peak
+                            }
+                        }
+                    }
+                    FlowFigure {
+                        anchors.fill: parent
+                        level: figureStage.level
+                        tint: page.heat(0.25 + figureStage.level * 0.55)
+                    }
+                }
+                Column {
+                    visible: figureStage.visible
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.bottom: parent.bottom; anchors.bottomMargin: 14
+                    spacing: 2
+                    Text {
+                        objectName: "figureReadout"
+                        textFormat: Text.PlainText
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: (ctl.technique === "plateau" ? qsTr("Plateau (edge)") : qsTr("Stop-start")) + "  ·  " +
+                              (figureStage.live ? Math.round(figureStage.level * 100) + "% · " + (figureStage.rising ? qsTr("up") : qsTr("down"))
+                                                : qsTr("Idle"))
+                        color: Theme.text; font.family: Theme.font; font.pixelSize: 15
+                    }
+                    Text {
+                        textFormat: Text.PlainText
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: ctl.lastFeedback > 0 ? qsTr("Last feedback %1").arg(ctl.lastFeedback) : qsTr("No feedback yet")
+                        color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                    }
+                }
+                // The stage switch (0.8 Clip · Rings · Waves · Video; the waves
+                // have their own card here, D-152).
+                FlowTabs {
+                    objectName: "stageSwitch"
+                    anchors.right: parent.right; anchors.rightMargin: 12
+                    anchors.top: parent.top; anchors.topMargin: 6
+                    readonly property var modes: ["rings", "figure", "video"]
+                    model: [qsTr("Rings"), qsTr("Figure"), qsTr("Video")]
+                    current: Math.max(0, modes.indexOf(ctl.stage))
+                    onPicked: (i) => ctl.stage = modes[i]
+                }
                 Row {
                     id: rings
+                    visible: ctl.stage === "rings"
                     anchors.centerIn: parent
                     spacing: Math.max(30, stage.width * 0.12)
                     TrainingRing {

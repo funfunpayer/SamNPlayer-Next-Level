@@ -92,6 +92,79 @@ private slots:
         QTRY_COMPARE(ctl->state(), QString("idle"));
     }
 
+    // 0.8 training_video.js: the Video stage plays the user's film while the
+    // session runs and pauses when it ends; the choice and the film are kept.
+    void videoStagePlaysAlongWithTheSession() {
+        QQmlEngine engine;
+        engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
+        engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+        QQmlComponent comp(&engine);
+        comp.setData("import QtQuick\nimport SamN\nItem { width: 1440; height: 860; property alias page: tp\n"
+                     "DeviceController { id: dev }\nTrainingPage { id: tp; anchors.fill: parent; device: dev } }",
+                     QUrl("qrc:/test/Wrapper.qml"));
+        QVERIFY2(comp.status() == QQmlComponent::Ready, qPrintable(comp.errorString()));
+        QQuickWindow window;
+        window.resize(1440, 860);
+        std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
+        QVERIFY(root);
+        root->setParentItem(window.contentItem());
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto* page = root->property("page").value<QQuickItem*>();
+        auto* ctl = page->property("controller").value<TrainingController*>();
+        QVERIFY(ctl);
+        QCOMPARE(ctl->stage(), QString("rings"));
+        auto* hint = page->findChild<QQuickItem*>("stageVideoHint");
+        auto* media = page->findChild<QObject*>("stageMedia");
+        QVERIFY(hint && media);
+        QVERIFY(!hint->isVisible());
+
+        ctl->setStage(QStringLiteral("video"));
+        QTRY_VERIFY(hint->isVisible());  // no film yet
+        ctl->setStage(QStringLiteral("nonsense"));
+        QCOMPARE(ctl->stage(), QString("video"));
+
+        const QString film = QStringLiteral(SAMN_TEST_DATA "/testpattern_4s.mp4");
+        ctl->chooseVideo(QUrl::fromLocalFile(film).toString());
+        QCOMPARE(ctl->videoPath(), QFileInfo(film).absoluteFilePath());
+        QCOMPARE(ctl->videoName(), QString("testpattern_4s.mp4"));
+        QCOMPARE(ctl->recentVideos().value(0), QFileInfo(film).absoluteFilePath());
+        QVERIFY(ctl->videoLoop() && ctl->videoMuted());
+        QTRY_VERIFY(!hint->isVisible());
+        QCOMPARE(media->property("playbackState").toInt(), 0);  // stopped until the session runs
+
+        ctl->setCycles(1);
+        ctl->setRampUpMs(100);
+        ctl->setHoldMs(20000);
+        QVERIFY(ctl->start());
+        QTRY_COMPARE(media->property("playbackState").toInt(), 1);  // playing
+        ctl->stop();
+        QTRY_COMPARE(ctl->state(), QString("idle"));
+        QTRY_COMPARE(media->property("playbackState").toInt(), 2);  // paused
+
+        // A second controller reads the kept stage and film.
+        TrainingController again;
+        QCOMPARE(again.stage(), QString("video"));
+        QCOMPARE(again.videoPath(), QFileInfo(film).absoluteFilePath());
+        // The Flow figure: the technique's shape while idle, the live level in a session.
+        ctl->setStage(QStringLiteral("figure"));
+        auto* readout = page->findChild<QQuickItem*>("figureReadout");
+        QVERIFY(readout);
+        QTRY_VERIFY(readout->isVisible());
+        QVERIFY(readout->property("text").toString().endsWith("Idle"));
+        QVERIFY(ctl->start());
+        QTRY_VERIFY(readout->property("text").toString().contains("% \u00b7 up"));
+        ctl->stop();
+        QTRY_COMPARE(ctl->state(), QString("idle"));
+
+        ctl->setVideoLoop(false);
+        ctl->setStage(QStringLiteral("rings"));
+        QTRY_VERIFY(!hint->isVisible());
+        TrainingController third;
+        QVERIFY(!third.videoLoop());
+        QCOMPARE(third.stage(), QString("rings"));
+    }
+
     void pageRunsASessionAndTheEditorSavesAProgram() {
         g_messages.clear();
         g_previous = qInstallMessageHandler(capture);
