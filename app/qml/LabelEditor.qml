@@ -313,6 +313,14 @@ Item {
                     }
                 }
                 Item { Layout.fillWidth: true }
+                // Rules over the picture and the sound propose empty, intro,
+                // climax and cool-down where nothing is set yet (D-157).
+                FlowButton {
+                    objectName: "suggestPhases"
+                    text: labels.suggesting ? qsTr("Looking… %1 %").arg(labels.suggestProgress) : qsTr("Suggest phases")
+                    enabled: labels.hasVideo && labels.durationMs > 0
+                    onClicked: labels.suggesting ? labels.cancelSuggest() : labels.suggestPhases()
+                }
                 FlowButton {
                     objectName: "confirmPhases"
                     text: qsTr("Confirm phases")

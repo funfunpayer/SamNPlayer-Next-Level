@@ -6,6 +6,9 @@
 #include <QTemporaryDir>
 #include <QtTest>
 
+#include <opencv2/imgproc.hpp>
+#include <opencv2/videoio.hpp>
+
 #include "label_controller.h"
 #include "synthetic_clips.h"
 
@@ -161,6 +164,49 @@ private slots:
         const QString text = QString::fromUtf8(csv.readAll());
         QVERIFY(text.startsWith("clip,start_ms,end_ms,phase\n"));
         QVERIFY(text.contains("phases.mp4,0,1000,intro\n"));
+    }
+
+    void theRulesSuggestPhases() {
+        // 3 s black, then 12 s of a moving square: the start is "empty".
+        const QString path = dir_.filePath("story.avi");
+        {
+            cv::VideoWriter w(path.toStdString(), cv::CAP_OPENCV_MJPEG, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'), 10,
+                              cv::Size(96, 64));
+            QVERIFY(w.isOpened());
+            for (int i = 0; i < 150; ++i) {
+                cv::Mat f(64, 96, CV_8UC3, cv::Scalar(0, 0, 0));
+                if (i >= 30) {
+                    f.setTo(cv::Scalar(110, 110, 110));
+                    cv::rectangle(f, cv::Rect((i * 7) % 70, 20, 24, 24), cv::Scalar(250, 250, 250), cv::FILLED);
+                }
+                w.write(f);
+            }
+        }
+        LabelController c;
+        QVERIFY(c.openVideo(path));
+        c.setPhase(10000, 12000, "hand");  // the user's own stays
+        QVERIFY(c.suggestPhases());
+        QVERIFY(c.suggesting());
+        QVERIFY(!c.suggestPhases());  // one run at a time
+        QTRY_VERIFY_WITH_TIMEOUT(!c.suggesting(), 30000);
+        QCOMPARE(c.suggestProgress(), 100);
+        c.seek(1000);
+        QCOMPARE(c.phaseAtPreview(), QString("empty"));
+        const QVariantMap first = c.phases().value(0).toMap();
+        QCOMPARE(first.value("source").toString(), QString("rules"));
+        QVERIFY(!first.value("confirmed").toBool());
+        c.seek(11000);
+        QCOMPARE(c.phaseAtPreview(), QString("hand"));
+        // Confirm, and undo takes the suggestions back in one step.
+        QVERIFY(c.confirmPhases() > 0);
+        QVERIFY(c.undo());
+        QVERIFY(c.undo());
+        c.seek(1000);
+        QCOMPARE(c.phaseAtPreview(), QString());
+        // A run can be canceled.
+        QVERIFY(c.suggestPhases());
+        c.cancelSuggest();
+        QVERIFY(!c.suggesting());
     }
 
     void anImageIsAClipOfOneFrame() {
