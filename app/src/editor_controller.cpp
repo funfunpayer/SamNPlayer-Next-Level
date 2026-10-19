@@ -13,6 +13,7 @@
 #include "audio_level.h"
 #include "curve_item.h"
 #include "samn/funscript.h"
+#include "samn/improve.h"
 #include "samn/marks.h"
 #include "samn/range_edit.h"
 #include "samn/samn_file.h"
@@ -439,6 +440,61 @@ bool EditorController::axesFromStroke() {
                       .arg(session_.Axis("vibration").size())
                       .arg(session_.Axis("suction").size()));
     return true;
+}
+
+QString EditorController::optimizeFor(const QString& target) {
+    if (!hasScript() || drag_index_ >= 0 || busy_) return {};
+    const bool neo2 = target == QLatin1String("neo2");
+    if (!neo2 && target != QLatin1String("general")) return {};
+    const std::vector<samn::Action>& stroke = session_.Axis("stroke");
+    if (stroke.size() < 2) {
+        setStatus(tr("The stroke needs at least 2 points."));
+        return {};
+    }
+    samn::ImproveOptions o;
+    o.fill_gaps = true;
+    o.heal_tracking_gaps = true;
+    try {
+        o.tracking_gaps = samn::LoadFunscript(FsPath(path_)).metadata.tracking_gaps;
+    } catch (const std::exception&) {
+        // No metadata to read: fill only.
+    }
+    const QString label = neo2 ? tr("Optimize for Sam Neo 2") : tr("Optimize for any device");
+    QStringList parts{neo2 ? tr("Neo 2 ready") : tr("Ready for any device")};
+    try {
+        const samn::ImproveResult res = samn::ImproveScript(stroke, o);
+        const bool strokeChanged = res.points_added > 0 || res.windows_healed > 0 || res.after_count != res.before_count;
+        session_.Begin(label.toStdString());
+        if (strokeChanged) session_.Replace("stroke", res.actions, {});
+        if (res.windows_healed > 0) parts << tr("healed %n tracking gap(s)", "", res.windows_healed);
+        if (res.gaps_filled > 0) parts << tr("filled %n gap(s) (+%1 points)", "", res.gaps_filled).arg(res.points_added);
+        else if (!neo2) parts << tr("no gaps to fill");
+        if (neo2) {
+            samn::Document doc = companion();
+            doc.general = strokeChanged ? res.actions : session_.Axis("stroke");
+            doc.ApplyContactRecipe(true, samn::DefaultContactVibrationSpan, "soft");
+            doc.BakeNeoAxes();
+            if (samn_path_.isEmpty()) {
+                samn_path_ = QString::fromStdString(samn::CompanionSamnPath(path_.toStdString()));
+                emit scriptChanged();
+            }
+            session_.Replace("vibration", doc.vibration, {});
+            session_.Replace("suction", doc.suction, {});
+            parts << tr("contact on") << tr("vibration and suction written");
+        }
+        if (!session_.Commit()) {
+            setStatus(parts.join(QStringLiteral(" · ")));
+            return parts.join(QStringLiteral(" · "));
+        }
+    } catch (const std::exception& e) {
+        session_.Rollback();
+        setStatus(tr("%1: %2").arg(label, QString::fromUtf8(e.what())));
+        return {};
+    }
+    pushCurves();
+    const QString msg = parts.join(QStringLiteral(" · "));
+    if (stepDone()) setStatus(msg);
+    return msg;
 }
 
 bool EditorController::vibrationFromSound(bool withContact) {
