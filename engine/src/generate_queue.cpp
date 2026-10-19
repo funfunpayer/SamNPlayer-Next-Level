@@ -57,6 +57,10 @@ QueueItemOutcome GenerateQueueItem(const std::filesystem::path& video, const Que
     req.scene_cuts = settings.scene_cuts;
     req.auto_ozone = settings.auto_ozone;
     req.overwrite = settings.overwrite;
+    req.contact_vibration = settings.contact_vibration;
+    req.contact_vibration_span = settings.contact_vibration_span;
+    req.contact_vibration_curve = settings.contact_vibration_curve;
+    req.tip_class = settings.tip_class;
     req.output = script;
     Generate(req, 1, cancel, [&](const GenerateEvent& e) {
         switch (e.kind) {

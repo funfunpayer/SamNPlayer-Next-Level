@@ -13,11 +13,13 @@
 #include <optional>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include <opencv2/core.hpp>
 
 #include "samn/engine/signal_chain.h"
 #include "samn/engine/track_box.h"
+#include "samn/samn_file.h"
 
 namespace samn::engine {
 
@@ -34,6 +36,16 @@ struct GenerateRequest {
     std::filesystem::path output;           // the .funscript; the .samn goes beside it
     bool overwrite = false;                 // overwrite guard: off = never replace a file
     bool auto_ozone = true;                 // primary + up to two secondary O-markers (0.7)
+    // Contact vibration and the marked areas (0.7 Options.ContactVibration,
+    // RegionClass, ROI2, ExtraTargets); boxes in video pixels. With a contact
+    // area the tip's path is stored too, so the Player vibrates when the tip
+    // reaches an area.
+    bool contact_vibration = false;
+    double contact_vibration_span = 0;  // 0 = default
+    std::string contact_vibration_curve;
+    std::string tip_class;
+    std::optional<ContactMarkBox> contact_area;
+    std::vector<ContactMarkBox> extra_areas;
 };
 
 enum class GenerateEventKind { kProgress, kNote, kDone, kCanceled, kError };

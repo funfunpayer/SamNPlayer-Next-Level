@@ -60,6 +60,12 @@ Item {
     function fmt(ms) {
         return Math.floor(ms / 60000) + ":" + String(Math.floor(ms / 1000) % 60).padStart(2, "0")
     }
+    // The stored class names (lower case, as 0.7 wrote them) for display.
+    function className(c) {
+        const names = { glans: qsTr("Glans"), penis: qsTr("Penis"), mouth: qsTr("Mouth"),
+                        nipples: qsTr("Nipples"), breasts: qsTr("Breasts") }
+        return names[c] || c
+    }
 
     Shortcut { sequences: [StandardKey.Undo]; enabled: page.visible && edit.canUndo; onActivated: edit.undo() }
     Shortcut { sequences: [StandardKey.Redo, "Ctrl+Y"]; enabled: page.visible && edit.canRedo; onActivated: edit.redo() }
@@ -140,13 +146,59 @@ Item {
                         // The tip box: teal, as 0.7 (#3dccc0).
                         Rectangle {
                             objectName: "tipBox"
-                            visible: gen.hasBox || drag.active
-                            readonly property rect r: drag.active ? drag.rect : gen.box
+                            visible: gen.hasBox || (drag.active && !gen.markContact)
+                            readonly property rect r: drag.active && !gen.markContact ? drag.rect : gen.box
                             x: frameView.imageRect.x + r.x * parent.scaleX
                             y: frameView.imageRect.y + r.y * parent.scaleY
                             width: r.width * parent.scaleX; height: r.height * parent.scaleY
                             color: Qt.rgba(61 / 255, 204 / 255, 192 / 255, 0.16)
                             border.color: "#3dccc0"; border.width: 2
+                        }
+                        // Contact areas with their class and ×: the first gold, extras
+                        // magenta (0.7 #f2b03d / #e070a0).
+                        Repeater {
+                            model: gen.contactVibration ? gen.contactAreas : []
+                            delegate: Rectangle {
+                                id: area
+                                required property int index
+                                required property var modelData
+                                objectName: "contactArea_" + index
+                                x: frameView.imageRect.x + modelData.x * parent.scaleX
+                                y: frameView.imageRect.y + modelData.y * parent.scaleY
+                                width: modelData.w * parent.scaleX; height: modelData.h * parent.scaleY
+                                z: 2
+                                readonly property color tone: index === 0 ? "#f2b03d" : "#e070a0"
+                                color: Qt.rgba(tone.r, tone.g, tone.b, 0.17)
+                                border.color: tone; border.width: 2
+                                Text {
+                                    textFormat: Text.PlainText
+                                    x: 4; y: 2
+                                    text: page.className(area.modelData.cls)
+                                    color: area.tone; font.family: Theme.fontSoft; font.pixelSize: 11
+                                }
+                                Text {
+                                    objectName: "removeContact_" + area.index
+                                    textFormat: Text.PlainText
+                                    anchors.right: parent.right; anchors.rightMargin: 4; y: 1
+                                    text: "×"; color: "white"; font.pixelSize: 14
+                                    MouseArea {
+                                        anchors.fill: parent; anchors.margins: -4
+                                        cursorShape: Qt.PointingHandCursor
+                                        enabled: !gen.running
+                                        onClicked: gen.removeContactArea(area.index)
+                                    }
+                                }
+                            }
+                        }
+                        Rectangle {
+                            objectName: "contactDraft"
+                            visible: drag.active && gen.markContact
+                            x: frameView.imageRect.x + drag.rect.x * parent.scaleX
+                            y: frameView.imageRect.y + drag.rect.y * parent.scaleY
+                            width: drag.rect.width * parent.scaleX; height: drag.rect.height * parent.scaleY
+                            readonly property color tone: gen.contactAreas.length === 0 ? "#f2b03d" : "#e070a0"
+                            color: Qt.rgba(tone.r, tone.g, tone.b, 0.17)
+                            border.color: tone; border.width: 2
                         }
                         // Find tip's other proposals: dashed, a numbered chip picks one.
                         Repeater {
@@ -201,7 +253,9 @@ Item {
                             onReleased: (m) => {
                                 spanTo(m.x, m.y)
                                 active = false
-                                gen.box = Qt.rect(Math.round(rect.x), Math.round(rect.y), Math.round(rect.width), Math.round(rect.height))
+                                const r = Qt.rect(Math.round(rect.x), Math.round(rect.y), Math.round(rect.width), Math.round(rect.height))
+                                if (gen.markContact) gen.addContactArea(r)
+                                else gen.box = r
                             }
                         }
                     }
@@ -546,6 +600,82 @@ Item {
                                 checked: gen[modelData.key]
                                 onToggled: (c) => gen[modelData.key] = c
                             }
+                        }
+                    }
+                    // Contact vibration (0.7 Step 2 "Tip & contact"): the
+                    // classes and areas show only while it is on.
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Text {
+                            textFormat: Text.PlainText
+                            Layout.fillWidth: true
+                            text: qsTr("Contact vibration"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                        }
+                        FlowToggle {
+                            objectName: "toggle_contactVibration"
+                            enabled: !gen.running
+                            checked: gen.contactVibration
+                            onToggled: (c) => gen.contactVibration = c
+                        }
+                    }
+                    ColumnLayout {
+                        objectName: "contactMarks"
+                        visible: gen.contactVibration
+                        Layout.fillWidth: true; spacing: 6
+                        RowLayout {
+                            Layout.fillWidth: true; spacing: 8
+                            Text {
+                                textFormat: Text.PlainText
+                                text: qsTr("Tip"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                            FlowCombo {
+                                objectName: "tipClassCombo"
+                                Layout.fillWidth: true
+                                enabled: !gen.running
+                                textRole: "label"; valueRole: "value"
+                                model: gen.tipClasses.map((c) => ({ label: page.className(c), value: c }))
+                                currentIndex: Math.max(0, indexOfValue(gen.tipClass))
+                                onActivated: gen.tipClass = currentValue
+                            }
+                            Text {
+                                textFormat: Text.PlainText
+                                text: qsTr("Contact"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                            FlowCombo {
+                                objectName: "contactClassCombo"
+                                Layout.fillWidth: true
+                                enabled: !gen.running
+                                textRole: "label"; valueRole: "value"
+                                model: gen.contactClasses.map((c) => ({ label: page.className(c), value: c }))
+                                currentIndex: Math.max(0, indexOfValue(gen.contactClass))
+                                onActivated: gen.contactClass = currentValue
+                            }
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true; spacing: 8
+                            FlowButton {
+                                objectName: "markContact"
+                                text: gen.markContact ? qsTr("Drag the area on the frame…") : qsTr("Mark contact area")
+                                enabled: gen.hasVideo && !gen.running
+                                onClicked: gen.markContact = !gen.markContact
+                            }
+                            FlowButton {
+                                objectName: "clearContact"
+                                visible: gen.contactAreas.length > 0
+                                enabled: !gen.running
+                                text: qsTr("Clear areas")
+                                onClicked: gen.clearContactAreas()
+                            }
+                        }
+                        Text {
+                            textFormat: Text.PlainText
+                            Layout.fillWidth: true; wrapMode: Text.WordWrap
+                            text: gen.contactAreas.length === 1
+                                  ? qsTr("1 contact area: the toy vibrates when the tip reaches it.")
+                                  : gen.contactAreas.length > 1
+                                  ? qsTr("%1 contact areas: the toy vibrates when the tip reaches one.").arg(gen.contactAreas.length)
+                                  : qsTr("Optional: mark where the tip makes contact; without areas the vibration follows the stroke's depth.")
+                            color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
                         }
                     }
                 }

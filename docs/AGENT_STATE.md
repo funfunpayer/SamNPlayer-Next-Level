@@ -79,11 +79,12 @@
     - vibration from the sound (`sound_vibration.h`, 0.7 port);
     - stroke from the video's beat bar (`DetectBeatBarBeats`, streamed `BeatTimer`).
   - **Decisions:** D-143 (best component, licence follows) and D-144 (the Player plays, the Generator edits).
+- **P3.3 continued, 19 Oct** (#59–#63 and this branch): the Player's theatre mode with the curve strip switchable; Find tip (0.7 `auto_roi`, bit-exact on 3 clips) with candidates; the queue (0.7 "Create queue"); the audit sync (`docs/AUDIT_2026-10-19.md`); **contact marks**: tip and contact classes, contact areas on the frame, contact vibration on by default; Generate writes the 0.7 recipe, `contactMarks` and the tip path (`.samn`), and the Player turns the path into spatial contact vibration (`core/include/samn/contact_marks.h`, 0.7 `feel_spatial` tests ported).
 
 ## Next (in order; the work list is `LESSONS.md` § Gaps, `TEST_PARITY.md` and `P3_GENERATOR.md`)
 
 1. **Windows CI:** some app tests failed now and then with no output (stdout fully buffered when piped). Every app test now writes unbuffered (`tests/app/unbuffered_stdout.cpp`); find the cause on the next red run.
-2. **P3.3 rest:** queue, auto tip-find, contact marks, Settings persistence; the Player's theatre mode with the waveform switchable (D-144).
+2. **P3.3 rest:** Settings persistence of the Generator's choices (contact span and curve included); the contact-marks overlay in the Player (PARITY §3 "Contact marks overlay on video").
 3. **P3.6** Quality Doctor on the dense curve, the signal auto-retry and the stroke preview (feeds the adaptive detrend); then the controller reports Quality as its second number (GD-04).
 4. **P3.4** two-point / multi-point, rhythm grid, follow marks; **P3.9** improvements, each measured with `samn_compare` (first lever: memory templates of the subject, not the box, GD-10).
 5. Player finish (`PARITY.md` §1–3), donation pages (manifest), devices for Svakom and other toys, Scene Map, Settings / Tools; bug hunt; release.

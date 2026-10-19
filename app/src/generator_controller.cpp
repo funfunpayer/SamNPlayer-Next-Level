@@ -13,6 +13,7 @@
 
 #include "samn/engine/generate_queue.h"
 #include "samn/engine/tip_find.h"
+#include "samn/contact_marks.h"
 #include "samn/samn_file.h"
 #include "samn/vision/frame_reader.h"
 
@@ -171,6 +172,8 @@ bool GeneratorController::runQueue(bool overwrite) {
     settings.scene_cuts = scene_cuts_;
     settings.auto_ozone = auto_ozone_;
     settings.overwrite = overwrite;
+    settings.contact_vibration = contact_vibration_;
+    settings.tip_class = tip_class_.toStdString();
     queue_cancel_ = std::make_shared<std::atomic<bool>>(false);
     queue_running_ = true;
     percent_ = 0;
@@ -261,6 +264,9 @@ bool GeneratorController::openVideo(const QString& pathOrUrl) {
                       .arg(video_size_.height())
                       .arg(std::round(reader->fps() * 100) / 100);
     box_ = QRect();
+    contact_areas_.clear();  // drawn on the old video
+    mark_contact_ = false;
+    emit contactChanged();
     cancelFind();  // a search on the old video ends; its result is not used
     tip_candidates_.clear();
     emit tipCandidatesChanged();
@@ -331,7 +337,73 @@ SAMN_SETTER(setInvert, invert_)
 SAMN_SETTER(setCameraCompensation, camera_)
 SAMN_SETTER(setSceneCuts, scene_cuts_)
 SAMN_SETTER(setAutoOZone, auto_ozone_)
+SAMN_SETTER(setContactVibration, contact_vibration_)
 #undef SAMN_SETTER
+
+namespace {
+
+QStringList ToQt(const std::vector<std::string>& v) {
+    QStringList out;
+    for (const std::string& s : v) out << QString::fromStdString(s);
+    return out;
+}
+
+}  // namespace
+
+QStringList GeneratorController::tipClasses() const { return ToQt(samn::TipClasses()); }
+QStringList GeneratorController::contactClasses() const { return ToQt(samn::ContactClasses()); }
+
+void GeneratorController::setTipClass(const QString& c) {
+    if (c == tip_class_ || !tipClasses().contains(c)) return;
+    tip_class_ = c;
+    emit optionsChanged();
+}
+
+void GeneratorController::setContactClass(const QString& c) {
+    if (c == contact_class_ || !contactClasses().contains(c)) return;
+    contact_class_ = c;
+    emit optionsChanged();
+}
+
+void GeneratorController::setMarkContact(bool v) {
+    if (v == mark_contact_) return;
+    mark_contact_ = v;
+    emit contactChanged();
+}
+
+QVariantList GeneratorController::contactAreas() const {
+    QVariantList out;
+    for (const samn::ContactMarkBox& b : contact_areas_)
+        out << QVariantMap{{"x", qint64(b.x)}, {"y", qint64(b.y)}, {"w", qint64(b.w)}, {"h", qint64(b.h)},
+                           {"cls", QString::fromStdString(b.cls)}};
+    return out;
+}
+
+bool GeneratorController::addContactArea(const QRect& area) {
+    // The same rule as the tip box: inside the frame, at least 8 px.
+    const QRect r = area.normalized().intersected(QRect(QPoint(0, 0), video_size_));
+    mark_contact_ = false;
+    if (!hasVideo() || r.width() < 8 || r.height() < 8) {
+        emit contactChanged();
+        return false;
+    }
+    contact_areas_.push_back({r.x(), r.y(), r.width(), r.height(), contact_class_.toStdString(), false});
+    emit contactChanged();
+    return true;
+}
+
+void GeneratorController::removeContactArea(int index) {
+    if (index < 0 || index >= static_cast<int>(contact_areas_.size())) return;
+    contact_areas_.erase(contact_areas_.begin() + index);
+    emit contactChanged();
+}
+
+void GeneratorController::clearContactAreas() {
+    if (contact_areas_.empty() && !mark_contact_) return;
+    contact_areas_.clear();
+    mark_contact_ = false;
+    emit contactChanged();
+}
 
 std::filesystem::path GeneratorController::funscriptPath() const {
     // 0.7 scriptPathForVideo: the video's name with .funscript, beside it.
@@ -371,6 +443,12 @@ bool GeneratorController::create(bool overwrite) {
     req.output = funscriptPath();
     req.overwrite = overwrite;
     req.auto_ozone = auto_ozone_;
+    req.contact_vibration = contact_vibration_;
+    req.tip_class = tip_class_.toStdString();
+    if (!contact_areas_.empty()) {
+        req.contact_area = contact_areas_.front();
+        req.extra_areas.assign(contact_areas_.begin() + 1, contact_areas_.end());
+    }
     const uint64_t id = runner_->Start(std::move(req));
     if (id == 0) return false;
     run_id_ = id;

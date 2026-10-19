@@ -1,5 +1,7 @@
 // .samn script container (port of samn/formats/samn_file.py / Go package samn).
 #include "samn/samn_file.h"
+
+#include "samn/contact_marks.h"
 #include "samn/fileio.h"
 
 #include <algorithm>
@@ -1561,6 +1563,8 @@ MapOptions MapOptionsFromScript(const FunscriptView& s) {
         }
     }
     if (!s.metadata.tracking_gaps.empty()) opts.tracking_gaps = s.metadata.tracking_gaps;
+    // Go read metadata.contact_marks and .trajectory inside the mapper.
+    opts.spatial_contact = SpatialContactFor(s.metadata);
     return opts;
 }
 
