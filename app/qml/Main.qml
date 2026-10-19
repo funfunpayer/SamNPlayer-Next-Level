@@ -109,6 +109,7 @@ ApplicationWindow {
         id: settingsPage
         anchors.fill: parent
         player: player.controller
+        device: deviceCtl
     }
     Shortcut { sequence: "Ctrl+,"; onActivated: settingsPage.open = !settingsPage.open }
     Shortcut { sequence: "Esc"; enabled: settingsPage.open; onActivated: settingsPage.open = false }

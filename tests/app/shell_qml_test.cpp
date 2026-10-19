@@ -535,8 +535,10 @@ private slots:
             QVERIFY(byName("generalTab")->isVisible());
             QVERIFY(!byName("logTab")->isVisible());
             page->setProperty("tab", 1);
-            QTRY_VERIFY_WITH_TIMEOUT(byName("logTab")->isVisible(), kWait);
+            QTRY_VERIFY_WITH_TIMEOUT(byName("deviceTab")->isVisible(), kWait);
             page->setProperty("tab", 2);
+            QTRY_VERIFY_WITH_TIMEOUT(byName("logTab")->isVisible(), kWait);
+            page->setProperty("tab", 3);
             QTRY_VERIFY_WITH_TIMEOUT(byName("aboutTab")->isVisible(), kWait);
             QVERIFY(byName("legalText")->property("text").toString().contains("GNU GENERAL PUBLIC LICENSE"));
             if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT_SETTINGS"); !shot.isEmpty()) {
@@ -554,6 +556,84 @@ private slots:
             QQuickItem* close = byName("settingsClose");
             QTest::mouseClick(s.window, Qt::LeftButton, {}, close->mapToScene(QPointF(close->width() / 2, close->height() / 2)).toPoint());
             QTRY_VERIFY_WITH_TIMEOUT(!page->isVisible(), kWait);
+        }
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
+
+    void settingsDeviceTabTestsTheMockDevice() {
+        {
+            Shell s;
+            loadShell(s);
+            QVERIFY(s.window);
+            auto byName = [&](const char* name) -> QQuickItem* {
+                for (QQuickItem* i : descendants(s.root()))
+                    if (i->objectName() == QLatin1String(name)) return i;
+                return nullptr;
+            };
+            QQuickItem* page = s.one("SettingsPage");
+            page->setProperty("open", true);
+            page->setProperty("tab", 1);
+            QQuickItem* tab = byName("deviceTab");
+            QTRY_VERIFY_WITH_TIMEOUT(tab->isVisible(), kWait);
+            QQuickItem* vib = byName("testVibration");
+            QQuickItem* pulse = byName("testPulse");
+            QVERIFY(vib && pulse);
+            QVERIFY(byName("deviceStatus")->property("text").toString().startsWith(QStringLiteral("Not connected")));
+            QVERIFY(!vib->isEnabled());  // nothing to test without a device
+            QVERIFY(!pulse->isEnabled());
+
+            auto* dev = s.window->findChild<samn::ui::DeviceController*>();
+            QVERIFY(dev);
+            QSignalSpy log(dev, &samn::ui::DeviceController::logMessage);
+            dev->connectMock();
+            QTRY_VERIFY_WITH_TIMEOUT(byName("deviceStatus")->property("text").toString().startsWith(QStringLiteral("Connected · Mock device")), kWait);
+            QTRY_VERIFY(vib->isEnabled());
+            auto lines = [&] {
+                QStringList out;
+                for (const auto& a : log) out << a.at(0).toString();
+                return out;
+            };
+
+            // The slider drives the device; the label shows 0.7's level.
+            vib->setProperty("value", 50.0);
+            QVERIFY(QMetaObject::invokeMethod(vib, "moved", Q_ARG(qreal, 50.0)));
+            QTRY_VERIFY_WITH_TIMEOUT(lines().join("\n").contains("[mock] vibration=0.50"), kWait);
+            QCOMPARE(byName("testVibrationLabel")->property("text").toString(), QStringLiteral("50 % (level 5)"));
+
+            // Raw value: above the documented maximum is flagged, and sent as is.
+            byName("rawValue")->setProperty("text", "20");
+            QCOMPARE(byName("rawHint")->property("text").toString(), QStringLiteral("above documented maximum (10)"));
+            QQuickItem* send = byName("rawSend");
+            QTest::mouseClick(s.window, Qt::LeftButton, {}, send->mapToScene(QPointF(send->width() / 2, send->height() / 2)).toPoint());
+            QTRY_VERIFY_WITH_TIMEOUT(lines().join("\n").contains("[mock] vibration_raw=20"), kWait);
+            byName("rawValue")->setProperty("text", "4");
+            QCOMPARE(byName("rawHint")->property("text").toString(), QString());
+
+            // A session blocks the test; All off still works.
+            dev->setSessionActive(true);
+            QTRY_VERIFY(!vib->isEnabled());
+            QVERIFY(byName("testAllOff")->isEnabled());
+            dev->setSessionActive(false);
+
+            // The diagnostics report becomes 0.7's table.
+            QQuickItem* table = byName("diagTable");
+            QVERIFY(!table->isVisible());
+            const QString report = QStringLiteral(
+                R"({"phases":[{"phase":"raw_sweep_vibration","commands":12,"errors":1,"meanLatencyMs":4.25,"maxLatencyMs":9.5}],)"
+                R"("notes":["Raw values above 10 were accepted."],"interrupted":true})");
+            QVERIFY(QMetaObject::invokeMethod(tab, "showReport", Q_ARG(QVariant, report)));
+            QTRY_VERIFY(table->isVisible());
+            QStringList cells;
+            for (QQuickItem* c : table->childItems())
+                if (c->isVisible() && c->property("text").isValid()) cells << c->property("text").toString();
+            QCOMPARE(cells.mid(5), QStringList({"raw sweep vibration", "12", "1", "4.3 ms", "9.5 ms"}));
+            QCOMPARE(byName("diagStatus")->property("text").toString(), QStringLiteral("Done."));
+            if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT_DEVICE"); !shot.isEmpty()) {
+                QTest::qWait(300);
+                s.window->grabWindow().save(QString::fromLocal8Bit(shot));
+            }
+            dev->disconnectDevice();
+            QTRY_VERIFY_WITH_TIMEOUT(!vib->isEnabled(), kWait);
         }
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }
