@@ -27,7 +27,8 @@ Item {
 
     GeneratorController {
         id: gen
-        onCreated: (path) => edit.open(path)
+        // 0.8 "Optimize after Create" (D-156): the new script is optimized right away.
+        onCreated: (path) => { if (edit.open(path) && gen.optimizeTarget !== "") edit.optimizeFor(gen.optimizeTarget) }
     }
     EditorController {
         id: edit
@@ -511,6 +512,21 @@ Item {
                         Layout.fillWidth: true; spacing: 6
                         visible: edit.hasScript
                         enabled: !edit.busy && !gen.running
+                        // 0.8 "Optimize for" (D-156): fill and heal the stroke for any
+                        // device, or also write the Sam Neo 2 feel (contact vibration,
+                        // vibration and suction).
+                        FlowCombo {
+                            id: optimizeTarget
+                            objectName: "optimizeTarget"
+                            width: 130; height: 36
+                            readonly property var targets: ["general", "neo2"]
+                            model: [qsTr("Any device"), qsTr("Sam Neo 2")]
+                        }
+                        FlowButton {
+                            objectName: "tool_optimize"
+                            text: qsTr("Optimize for"); icon: "sliders"
+                            onClicked: edit.optimizeFor(optimizeTarget.targets[optimizeTarget.currentIndex])
+                        }
                         FlowButton {
                             objectName: "tool_axes"
                             text: qsTr("Vibration & suction from the stroke"); icon: "effects"
@@ -1074,6 +1090,22 @@ Item {
                             objectName: "cancelButton"
                             text: qsTr("Cancel"); visible: gen.running || gen.queueRunning
                             onClicked: gen.cancel()
+                        }
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true; spacing: 8
+                        Text {
+                            textFormat: Text.PlainText
+                            text: qsTr("Optimize after Create")
+                            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                        }
+                        FlowCombo {
+                            objectName: "optimizeAfterCreate"
+                            Layout.fillWidth: true
+                            readonly property var targets: ["", "general", "neo2"]
+                            model: [qsTr("Off — keep as created"), qsTr("Any device"), qsTr("Sam Neo 2")]
+                            currentIndex: Math.max(0, targets.indexOf(gen.optimizeTarget))
+                            onActivated: (i) => gen.optimizeTarget = targets[i]
                         }
                     }
                     Rectangle {

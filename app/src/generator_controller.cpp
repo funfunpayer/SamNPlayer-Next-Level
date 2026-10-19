@@ -73,6 +73,7 @@ void GeneratorController::loadSettings() {
         const auto span = s.get("generator.contact_vibration_span");
         if (span.is_number()) setContactSpan(span.get<double>() / 100.0);
         setContactCurve(str("generator.contact_vibration_curve", contact_curve_));
+        setOptimizeTarget(str("generator.optimize_target", optimize_target_));
     } catch (const std::exception&) {
         // Unreadable settings: the defaults stay.
     }
@@ -424,6 +425,14 @@ void GeneratorController::setContactCurve(const QString& curve) {
     if (v == contact_curve_) return;
     contact_curve_ = v;
     saveSetting("generator.contact_vibration_curve", v.toStdString());
+    emit optionsChanged();
+}
+
+void GeneratorController::setOptimizeTarget(const QString& target) {
+    const QString v = target == QLatin1String("general") || target == QLatin1String("neo2") ? target : QString();
+    if (v == optimize_target_) return;
+    optimize_target_ = v;
+    saveSetting("generator.optimize_target", v.toStdString());
     emit optionsChanged();
 }
 

@@ -57,6 +57,8 @@ class GeneratorController : public QObject {
     // (linear | soft | peak | impulse; soft by default).
     Q_PROPERTY(double contactSpan READ contactSpan WRITE setContactSpan NOTIFY optionsChanged)
     Q_PROPERTY(QString contactCurve READ contactCurve WRITE setContactCurve NOTIFY optionsChanged)
+    // 0.8 "Optimize after Create": "" (off), "general" or "neo2" (D-156).
+    Q_PROPERTY(QString optimizeTarget READ optimizeTarget WRITE setOptimizeTarget NOTIFY optionsChanged)
     Q_PROPERTY(QString tipClass READ tipClass WRITE setTipClass NOTIFY optionsChanged)
     Q_PROPERTY(QString contactClass READ contactClass WRITE setContactClass NOTIFY optionsChanged)
     Q_PROPERTY(QStringList tipClasses READ tipClasses CONSTANT)
@@ -115,6 +117,8 @@ public:
     void setContactSpan(double span);
     QString contactCurve() const { return contact_curve_; }
     void setContactCurve(const QString& curve);
+    QString optimizeTarget() const { return optimize_target_; }
+    void setOptimizeTarget(const QString& target);
     QString tipClass() const { return tip_class_; }
     void setTipClass(const QString& c);
     QString contactClass() const { return contact_class_; }
@@ -207,6 +211,7 @@ private:
     bool contact_vibration_ = true;
     double contact_span_ = 0.75;
     QString contact_curve_ = QStringLiteral("soft");
+    QString optimize_target_;
     // The choices are remembered (0.7 "generator.*" settings); the invert
     // switch belongs to one video and is not.
     std::unique_ptr<samn::Settings> settings_;
