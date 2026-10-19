@@ -845,6 +845,45 @@ Item {
                                 onActivated: gen.contactClass = currentValue
                             }
                         }
+                        // 0.7 Step 3: how deep the stroke must go and how the vibration rises.
+                        RowLayout {
+                            Layout.fillWidth: true; spacing: 8
+                            Text {
+                                textFormat: Text.PlainText
+                                text: qsTr("Sensitivity"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                            FlowSlider {
+                                objectName: "contactSpan"
+                                Layout.fillWidth: true
+                                enabled: !gen.running
+                                from: 0.40; to: 0.95; value: gen.contactSpan
+                                onMoved: (v) => gen.contactSpan = v
+                            }
+                            Text {
+                                textFormat: Text.PlainText
+                                text: Math.round(gen.contactSpan * 100) + (gen.contactSpan <= 0.45 ? " · " + qsTr("deep only") : "")
+                                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true; spacing: 8
+                            Text {
+                                textFormat: Text.PlainText
+                                text: qsTr("Curve"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                            FlowCombo {
+                                objectName: "contactCurveCombo"
+                                Layout.fillWidth: true
+                                enabled: !gen.running
+                                textRole: "label"; valueRole: "value"
+                                model: [{ label: qsTr("Linear"), value: "linear" },
+                                        { label: qsTr("Soft onset (contact-like)"), value: "soft" },
+                                        { label: qsTr("Stronger peak"), value: "peak" },
+                                        { label: qsTr("Impulse (peaks only, experiment)"), value: "impulse" }]
+                                currentIndex: Math.max(0, ["linear", "soft", "peak", "impulse"].indexOf(gen.contactCurve))
+                                onActivated: gen.contactCurve = currentValue
+                            }
+                        }
                         RowLayout {
                             Layout.fillWidth: true; spacing: 8
                             FlowButton {

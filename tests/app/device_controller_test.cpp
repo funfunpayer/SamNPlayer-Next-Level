@@ -155,7 +155,11 @@ private slots:
         c.setVibration(0.0);
         QTRY_VERIFY(MockLines(log).contains("[mock] stop"));
         QTest::qWait(50);
-        QVERIFY(!MockLines(log).contains("[mock] vibration=0.90"));
+        // The worker may send 0.9 before the stop arrives (it wakes on the
+        // queue); what the stop must prevent is a queued level going out
+        // after it.
+        const QStringList lines = MockLines(log);
+        QVERIFY(!lines.mid(lines.indexOf("[mock] stop")).contains("[mock] vibration=0.90"));
     }
 
     void motorLevelsAreAccepted() {
