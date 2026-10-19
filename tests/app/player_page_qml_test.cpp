@@ -138,7 +138,13 @@ private:
 
         // "Create script" asks Main to open the Generator with the video.
         QMetaObject::invokeMethod(named(page, "noScriptCreate"), "clicked");
-        QCOMPARE(asked(), QStringList({QUrl::fromLocalFile(video).toString() + "|false"}));
+        // Compared as URLs: Qt versions differ in how a space is written.
+        auto same = [&](const QString& entry, const char* start) {
+            const QString url = entry.section('|', 0, -2);
+            return QUrl(url).toLocalFile() == video && entry.section('|', -1) == QLatin1String(start);
+        };
+        QCOMPARE(asked().size(), 1);
+        QVERIFY2(same(asked().at(0), "false"), qPrintable(asked().at(0)));
 
         // "Back to the script" opens the last one again.
         QMetaObject::invokeMethod(named(page, "noScriptBack"), "clicked");
@@ -150,7 +156,7 @@ private:
         QVERIFY(ctrl->autoCreate());
         QVERIFY(ctrl->openPath(video));
         QTRY_COMPARE(asked().size(), 2);
-        QCOMPARE(asked().at(1), QUrl::fromLocalFile(video).toString() + "|true");
+        QVERIFY2(same(asked().at(1), "true"), qPrintable(asked().at(1)));
         ctrl->setAutoCreate(false);
     }
 
