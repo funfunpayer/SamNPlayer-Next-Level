@@ -122,6 +122,22 @@ private slots:
         QTRY_COMPARE(labels->currentLabel(), QString("exclude"));
         QVERIFY(labels->setBox(QRectF(200, 160, 90, 60)));
         QCOMPARE(labels->lanes().size(), 5);
+        // Phases: pick "oral", drag over the phase lane, the badge shows it.
+        QQuickItem* oral = nullptr;
+        QTRY_VERIFY((oral = named(root.get(), "phaseChip_oral")));
+        QTest::mouseClick(&window, Qt::LeftButton, {}, oral->mapToScene(QPointF(oral->width() / 2, oral->height() / 2)).toPoint());
+        auto* paint = named(root.get(), "phasePaint");
+        QVERIFY(paint);
+        const QPointF p0 = paint->mapToScene(QPointF(2, paint->height() / 2));
+        const QPointF p1 = paint->mapToScene(QPointF(paint->width() * 0.6, paint->height() / 2));
+        QTest::mousePress(&window, Qt::LeftButton, {}, p0.toPoint());
+        QTest::mouseMove(&window, ((p0 + p1) / 2).toPoint());
+        QTest::mouseMove(&window, p1.toPoint());
+        QTest::mouseRelease(&window, Qt::LeftButton, {}, p1.toPoint());
+        QTRY_COMPARE(labels->phases().size(), 1);
+        QCOMPARE(labels->phases()[0].toMap().value("phase").toString(), QString("oral"));
+        labels->seek(500);
+        QTRY_VERIFY(named(root.get(), "phaseBadge")->isVisible());
         if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT"); !shot.isEmpty()) {
                         QTest::qWait(300);
             window.grabWindow().save(QString::fromLocal8Bit(shot));

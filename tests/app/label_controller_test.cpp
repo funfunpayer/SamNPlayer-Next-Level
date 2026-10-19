@@ -132,6 +132,37 @@ private slots:
         QCOMPARE(lines.count(QRegularExpression("^1 ", QRegularExpression::MultilineOption)), 1);
     }
 
+    void phasesAreALaneOfTheirOwn() {
+        const QString path = dir_.filePath("phases.mp4");
+        QVERIFY(QFile::copy(clip_, path));
+        LabelController c;
+        QVERIFY(c.openVideo(path));
+        QVERIFY(c.phaseNames().contains("climax"));
+        QVERIFY(c.phaseNames().contains("cool-down"));
+        QVERIFY(c.setPhase(0, 1000, "intro"));
+        QVERIFY(c.setPhase(1000, 99999, "oral"));  // clamped to the clip
+        QCOMPARE(c.phases().size(), 2);
+        QCOMPARE(c.phases()[1].toMap().value("endMs").toDouble(), c.durationMs());
+        c.seek(500);
+        QCOMPARE(c.phaseAtPreview(), QString("intro"));
+        QVERIFY(c.undo());
+        QCOMPARE(c.phases().size(), 1);
+        QVERIFY(c.redo());
+        // Saved beside the clip and back on the next open.
+        LabelController again;
+        QVERIFY(again.openVideo(path));
+        QCOMPARE(again.phases().size(), 2);
+        // Exported for the scene model.
+        QVERIFY(again.setPhase(0, 0, "intro") == false);
+        const QString out = dir_.filePath("phases_ds");
+        again.exportDataset(out, 1000);
+        QFile csv(out + "/phases.csv");
+        QVERIFY(csv.open(QIODevice::ReadOnly));
+        const QString text = QString::fromUtf8(csv.readAll());
+        QVERIFY(text.startsWith("clip,start_ms,end_ms,phase\n"));
+        QVERIFY(text.contains("phases.mp4,0,1000,intro\n"));
+    }
+
     void anImageIsAClipOfOneFrame() {
         QImage img(64, 48, QImage::Format_RGB888);
         img.fill(Qt::darkCyan);

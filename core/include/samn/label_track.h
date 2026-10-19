@@ -64,10 +64,32 @@ private:
     std::vector<LabelKey> keys_;  // sorted by ms, unique ms
 };
 
+// A stretch of the clip with its phase (D-157): intro, empty, oral, hand,
+// breast, intercourse, climax, cool-down. [start_ms, end_ms).
+struct LabelPhase {
+    int64_t start_ms = 0;
+    int64_t end_ms = 0;
+    std::string name;
+    bool confirmed = true;      // false: a suggestion nobody has looked at
+    std::string source = "user";  // user, rules, a teacher's name
+};
+
+// The phase names in lane order.
+const std::vector<std::string>& PhaseNames();
+
 struct LabelProject {
     std::string video;  // file name of the clip, relative to the project file
     int64_t duration_ms = 0;
     std::vector<LabelTrack> tracks;
+    std::vector<LabelPhase> phases;  // sorted, never overlapping
+
+    // Sets [start, end) to the phase; what was there is cut back or split.
+    // An empty name clears the stretch. Neighbours of the same phase and
+    // confirmation merge.
+    void SetPhase(int64_t start_ms, int64_t end_ms, const std::string& name, bool confirmed = true,
+                  const std::string& source = "user");
+    // The phase at ms, or nullptr.
+    const LabelPhase* PhaseAt(int64_t ms) const;
 
     LabelTrack* Track(const std::string& label);
     LabelTrack& AddTrack(const std::string& label);  // returns the existing one when present

@@ -178,8 +178,9 @@ lanes; its stretches are dragged and named like chapters:
    objects, drawing and moving boxes on the frame, scrubbing and play, lanes,
    keys `1`–`9`, `,` `.`, arrows, `X`, `Delete`, Ctrl+Z).
 2d. **Phases** (D-157, §2.6): the phase lane in the editor and in
-   `<clip>.labels.json`, the rule-based suggestions, export for the scene
-   model; then phases into the Editor's scenes and the Training's video stage.
+   `<clip>.labels.json`, export as `phases.csv` for the scene model (done:
+   pick a phase, drag over the lane, the badge on the frame); next the
+   rule-based suggestions, then phases into the Editor's scenes and the Training's video stage.
 3. **Tracking between keyframes:** CSRT forward and backward from each keyframe,
    blended; the uncertainty lane and *Next uncertain*.
 4. **Teachers:** ONNX Runtime in the build, NudeNet (one-click download),
