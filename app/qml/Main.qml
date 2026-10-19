@@ -10,7 +10,7 @@ ApplicationWindow {
     visible: true
     title: "SamNPlayer 2"
     color: Theme.bgBottom
-    // Test hook: SAMN_MODE=1..4 opens that mode (the numbers of the mode deck).
+    // Test hook: SAMN_MODE=1..3 opens that mode (the numbers of the mode deck).
     property int mode: startMode
     readonly property var modeNames: deck.modes.map(m => m.name)
 
@@ -67,7 +67,6 @@ ApplicationWindow {
             onReviewRequested: (path) => { win.mode = 0; player.controller.openPath(path) }
         }
         TrainingPage { id: training; deckOpen: deck.open; device: deviceCtl; autostart: trainingStart }
-        NotYetPage { mode: qsTr("Scene Map"); phase: "P4" }
     }
 
     // Drops anywhere in the window open in the Player (0.7 files:dropped,

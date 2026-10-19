@@ -47,9 +47,9 @@ FocusScope {
     readonly property var modes: [
         { name: qsTr("Player"), text: qsTr("Play scripts with video\nand your device"), color: Theme.cyan, icon: "player" },
         { name: qsTr("Generator"), text: qsTr("Create a script from a\nvideo and edit it"), color: Theme.orange, icon: "create" },
-        { name: qsTr("Training"), text: qsTr("Guided sessions with\nlive curves"), color: Theme.blue, icon: "training" },
-        { name: qsTr("Scene Map"), text: qsTr("Scenes, chapters and\nrhythm"), color: "#2fd6a8", icon: "scenemap" }
+        { name: qsTr("Training"), text: qsTr("Guided sessions with\nlive curves"), color: Theme.blue, icon: "training" }
     ]
+    // Three modes (D-144, D-145): the Scene Map is a view in the Editor, not a mode.
     visible: opacity > 0
     opacity: open ? 1 : 0
     Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
