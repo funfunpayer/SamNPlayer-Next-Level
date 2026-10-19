@@ -604,7 +604,7 @@ Item {
                     Image { source: "assets/logo.png"; Layout.preferredWidth: 72; Layout.preferredHeight: 72; sourceSize: Qt.size(144, 144) }
                     ColumnLayout {
                         spacing: 4
-                        Text { textFormat: Text.PlainText; text: "SamNPlayer 2"; color: Theme.orange; font.family: Theme.font; font.pixelSize: 26; font.weight: Font.DemiBold }
+                        Text { textFormat: Text.PlainText; text: "SamNPlayer Next"; color: Theme.orange; font.family: Theme.font; font.pixelSize: 26; font.weight: Font.DemiBold }
                         Text {
                             objectName: "aboutVersion"
                             textFormat: Text.PlainText

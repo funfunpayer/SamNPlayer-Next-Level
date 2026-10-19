@@ -8,11 +8,11 @@ ApplicationWindow {
     width: 1440; height: 900
     minimumWidth: 960; minimumHeight: 640
     visible: true
-    title: "SamNPlayer 2"
+    title: "SamNPlayer Next"
     color: Theme.bgBottom
-    // Test hook: SAMN_MODE=1..3 opens that mode (the numbers of the mode deck).
+    // Test hook: SAMN_MODE=1..3 opens that mode (the order of the tabs).
     property int mode: startMode
-    readonly property var modeNames: deck.modes.map(m => m.name)
+    readonly property var modeNames: top.modes.map(m => m.name)
 
     // Background: near-black navy with blue / orange light ribbons in the
     // top-right and bottom-left corners (0.7 assets).
@@ -23,17 +23,48 @@ ApplicationWindow {
             GradientStop { position: 1; color: Theme.bgBottom }
         }
     }
+    // The silk bands of the Flow look in their corners, large and slowly
+    // drifting: blue from the top right, orange from the bottom left, behind
+    // every mode (Owner, 19 Oct: as strong as on the Training stage).
     Image {
+        id: silkTop
         anchors.right: parent.right; anchors.top: parent.top
-        width: parent.width * 0.44; fillMode: Image.PreserveAspectFit
-        source: "assets/bg-top.svg"; sourceSize.width: 1400
+        anchors.rightMargin: -parent.width * 0.04 + driftX; anchors.topMargin: -parent.height * 0.03 + driftY
+        width: parent.width * 0.66; fillMode: Image.PreserveAspectFit
+        source: "assets/bg-top.svg"; sourceSize.width: 2000
         asynchronous: true
+        property real driftX: 0
+        property real driftY: 0
+        SequentialAnimation on driftX {
+            running: win.visible; loops: Animation.Infinite
+            NumberAnimation { to: -win.width * 0.025; duration: 32000; easing.type: Easing.InOutSine }
+            NumberAnimation { to: 0; duration: 32000; easing.type: Easing.InOutSine }
+        }
+        SequentialAnimation on driftY {
+            running: win.visible; loops: Animation.Infinite
+            NumberAnimation { to: win.height * 0.02; duration: 32000; easing.type: Easing.InOutSine }
+            NumberAnimation { to: 0; duration: 32000; easing.type: Easing.InOutSine }
+        }
     }
     Image {
+        id: silkBottom
         anchors.left: parent.left; anchors.bottom: parent.bottom
-        width: parent.width * 0.38; fillMode: Image.PreserveAspectFit
-        source: "assets/bg-bottom.svg"; sourceSize.width: 1200
+        anchors.leftMargin: -parent.width * 0.03 + driftX; anchors.bottomMargin: -parent.height * 0.02 + driftY
+        width: parent.width * 0.58; fillMode: Image.PreserveAspectFit
+        source: "assets/bg-bottom.svg"; sourceSize.width: 2000
         asynchronous: true
+        property real driftX: 0
+        property real driftY: 0
+        SequentialAnimation on driftX {
+            running: win.visible; loops: Animation.Infinite
+            NumberAnimation { to: win.width * 0.03; duration: 40000; easing.type: Easing.InOutSine }
+            NumberAnimation { to: 0; duration: 40000; easing.type: Easing.InOutSine }
+        }
+        SequentialAnimation on driftY {
+            running: win.visible; loops: Animation.Infinite
+            NumberAnimation { to: win.height * 0.02; duration: 40000; easing.type: Easing.InOutSine }
+            NumberAnimation { to: 0; duration: 40000; easing.type: Easing.InOutSine }
+        }
     }
 
     // The one connection to the toy / stroker, shared by every mode (0.7: one
@@ -45,10 +76,9 @@ ApplicationWindow {
     TopBar {
         id: top
         width: parent.width
-        modeName: win.modeNames[win.mode]
-        modeIcon: deck.modes[win.mode].icon
+        currentMode: win.mode
+        onModeChosen: (i) => win.mode = i
         device: deviceCtl
-        onModeDeckRequested: deck.open = true
         onOpenRequested: { win.mode = 0; player.openFile() }
         onDeviceRequested: { win.mode = 0; player.showDevices() }
         onSettingsRequested: settingsPage.open = true
@@ -61,19 +91,19 @@ ApplicationWindow {
         anchors.margins: 20; anchors.topMargin: 6
         currentIndex: win.mode
         PlayerPage {
-            id: player; deckOpen: deck.open; device: deviceCtl
+            id: player; overlayOpen: settingsPage.open; device: deviceCtl
             // 0.7: "Create script" goes to the Generator with this video.
             onCreateRequested: (video, start) => { win.mode = 1; generator.createFor(video, start) }
         }
         // Generator and Editor are one mode: the Generator is the Editor (D-137).
         GeneratorPage {
             id: generator
-            deckOpen: deck.open
+            overlayOpen: settingsPage.open
             playerVideoUrl: player.controller.videoUrl
             // The result opens in the Generator's Editor; "Play in the Player" hands it over (D-144).
             onReviewRequested: (path) => { win.mode = 0; player.controller.openPath(path) }
         }
-        TrainingPage { id: training; deckOpen: deck.open; device: deviceCtl; autostart: trainingStart }
+        TrainingPage { id: training; overlayOpen: settingsPage.open; device: deviceCtl; autostart: trainingStart }
     }
 
     // Drops anywhere in the window open in the Player (0.7 files:dropped,
@@ -106,7 +136,7 @@ ApplicationWindow {
         }
     }
     // Ctrl+O from every mode opens in the Player (0.7 top-bar Open).
-    Shortcut { sequence: StandardKey.Open; enabled: !deck.open; onActivated: { win.mode = 0; player.openFile() } }
+    Shortcut { sequence: StandardKey.Open; enabled: !settingsPage.open; onActivated: { win.mode = 0; player.openFile() } }
 
     // 0.7 startup update banner: the new version, its notes, the download
     // page; × hides it until the next start.
@@ -118,7 +148,7 @@ ApplicationWindow {
         width: Math.min(parent.width - 40, 640)
         implicitHeight: bannerRow.implicitHeight + 20
         visible: opacity > 0
-        opacity: updates.bannerVisible && !settingsPage.open && !deck.open ? 1 : 0
+        opacity: updates.bannerVisible && !settingsPage.open ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: Theme.animNormal } }
         // Opaque under the glass, as the Settings card.
         Rectangle { anchors.fill: parent; radius: Theme.radius; color: Theme.bgBottom; z: -1 }
@@ -147,12 +177,6 @@ ApplicationWindow {
         }
     }
 
-    ModeDeck {
-        id: deck
-        anchors.fill: parent
-        current: win.mode
-        onChosen: (i) => win.mode = i
-    }
 
     // Settings over the current mode (D-146); Esc closes it.
     SettingsPage {
@@ -165,13 +189,12 @@ ApplicationWindow {
     Shortcut { sequence: "Ctrl+,"; onActivated: settingsPage.open = !settingsPage.open }
     Shortcut { sequence: "Esc"; enabled: settingsPage.open; onActivated: settingsPage.open = false }
 
-    Shortcut { sequence: "M"; enabled: !settingsPage.open; onActivated: deck.open = !deck.open }
-    Shortcut { sequence: "Esc"; enabled: deck.open; onActivated: deck.open = false }
+    // Ctrl+1…3: the modes, as the tabs (D-150; replaces the M deck).
     Repeater {
-        model: deck.modes.length
+        model: top.modes.length
         delegate: Item {
             required property int index
-            Shortcut { sequence: String(index + 1); enabled: deck.open; onActivated: { win.mode = index; deck.open = false } }
+            Shortcut { sequence: "Ctrl+" + (index + 1); onActivated: win.mode = index }
         }
     }
 

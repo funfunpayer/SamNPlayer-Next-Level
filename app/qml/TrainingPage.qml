@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Shapes
 import QtQuick.Controls.Basic
 import QtQuick.Dialogs
 import QtQuick.Layouts
@@ -13,7 +14,7 @@ Item {
     property alias controller: ctl
     required property DeviceController device
     // The mode deck uses Esc while it is open.
-    property bool deckOpen: false
+    property bool overlayOpen: false
     // Test hook (SAMN_TRAINING_START in main.cpp): start this program ("custom" = the form) at once.
     property string autostart: ""
 
@@ -42,7 +43,7 @@ Item {
 
     Shortcut {
         sequence: "Esc"
-        enabled: page.visible && !page.deckOpen && !editor.open && ctl.state === "running"
+        enabled: page.visible && !page.overlayOpen && !editor.open && ctl.state === "running"
         onActivated: ctl.interrupt()
     }
     Component.onCompleted: {
@@ -218,13 +219,53 @@ Item {
                 id: stage
                 Layout.fillWidth: true; Layout.fillHeight: true; Layout.minimumHeight: 200
                 clip: true
-                SilkLayer { running: stage.visible; strength: 1.5 }
-                // The silk image has a hard top edge: fade it into the card.
-                Rectangle {
-                    width: parent.width; height: 56
-                    gradient: Gradient {
-                        GradientStop { position: 0; color: Theme.cardTop }
-                        GradientStop { position: 1; color: "transparent" }
+                // 0.8 #550 rings stage: calm dark navy with the silk "infinity
+                // bridge" (stage-ribbons) drifting behind the two gauges; the
+                // window's own silk bands stay outside (Owner, 19 Oct).
+                Shape {
+                    anchors.fill: parent
+                    ShapePath {
+                        strokeColor: "transparent"
+                        fillGradient: RadialGradient {
+                            centerX: stage.width / 2; centerY: stage.height * 0.48
+                            focalX: centerX; focalY: centerY
+                            centerRadius: Math.max(stage.width, stage.height) * 0.62
+                            GradientStop { position: 0; color: Qt.rgba(10 / 255, 42 / 255, 72 / 255, 0.55) }
+                            GradientStop { position: 1; color: Qt.rgba(2 / 255, 8 / 255, 18 / 255, 0.95) }
+                        }
+                        // A rounded rectangle (PathRectangle needs Qt 6.8).
+                        startX: Theme.radius; startY: 0
+                        PathLine { x: stage.width - Theme.radius; y: 0 }
+                        PathArc { x: stage.width; y: Theme.radius; radiusX: Theme.radius; radiusY: Theme.radius }
+                        PathLine { x: stage.width; y: stage.height - Theme.radius }
+                        PathArc { x: stage.width - Theme.radius; y: stage.height; radiusX: Theme.radius; radiusY: Theme.radius }
+                        PathLine { x: Theme.radius; y: stage.height }
+                        PathArc { x: 0; y: stage.height - Theme.radius; radiusX: Theme.radius; radiusY: Theme.radius }
+                        PathLine { x: 0; y: Theme.radius }
+                        PathArc { x: Theme.radius; y: 0; radiusX: Theme.radius; radiusY: Theme.radius }
+                    }
+                }
+                Image {
+                    id: bridge
+                    objectName: "silkBridge"
+                    source: "assets/stage-ribbons.svg"
+                    sourceSize.width: 2000
+                    fillMode: Image.Stretch
+                    width: stage.width * 1.2; height: stage.height * 1.0
+                    x: (stage.width - width) / 2 + dx; y: (stage.height - height) / 2 + stage.height * 0.04
+                    opacity: 0.9
+                    asynchronous: true
+                    property real dx: 0
+                    // silk-bridge-drift: 28 s alternate, ±1.5 %, scale 1.04.
+                    SequentialAnimation on dx {
+                        running: stage.visible; loops: Animation.Infinite
+                        NumberAnimation { from: -stage.width * 0.015; to: stage.width * 0.015; duration: 28000; easing.type: Easing.InOutSine }
+                        NumberAnimation { to: -stage.width * 0.015; duration: 28000; easing.type: Easing.InOutSine }
+                    }
+                    SequentialAnimation on scale {
+                        running: stage.visible; loops: Animation.Infinite
+                        NumberAnimation { from: 1.0; to: 1.04; duration: 28000; easing.type: Easing.InOutSine }
+                        NumberAnimation { to: 1.0; duration: 28000; easing.type: Easing.InOutSine }
                     }
                 }
                 Text {

@@ -9,7 +9,7 @@ import SamN
 // here for editing (0.7 generator.js + playback.js edit tools).
 Item {
     id: page
-    property bool deckOpen: false
+    property bool overlayOpen: false
     // Right panel: 0 create (video, feel, create), 1 scenes (D-145).
     property int sidePanel: 0
     property int selectedScene: -1

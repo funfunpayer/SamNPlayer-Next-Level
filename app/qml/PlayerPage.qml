@@ -31,8 +31,8 @@ Item {
     readonly property bool bare: fullStage || theatre
     property bool muted: false
     readonly property string videoGlobs: "*.mp4 *.mkv *.avi *.mov *.wmv *.m4v *.webm *.ts *.m2ts *.flv *.mpg *.mpeg *.3gp *.ogv"
-    // The mode deck uses its number keys while it is open.
-    property bool deckOpen: false
+    // An overlay (Settings) is open: its keys win.
+    property bool overlayOpen: false
 
     // The device connection of the app (Main.qml); the Player drives it.
     required property DeviceController device
@@ -1121,31 +1121,31 @@ Item {
     // Drop a video or a script anywhere on the page.
 
     // Keys as 0.7 (Player, not while typing).
-    Shortcut { sequence: "Space"; enabled: !page.deckOpen; onActivated: page.togglePlay() }
-    Shortcut { sequence: "Left"; enabled: !page.deckOpen; onActivated: page.seekBy(-5000) }
-    Shortcut { sequence: "Right"; enabled: !page.deckOpen; onActivated: page.seekBy(5000) }
-    Shortcut { sequence: "Shift+Left"; enabled: !page.deckOpen; onActivated: page.seekBy(-1000) }
-    Shortcut { sequence: "Shift+Right"; enabled: !page.deckOpen; onActivated: page.seekBy(1000) }
-    Shortcut { sequence: ","; enabled: !page.deckOpen; onActivated: page.seekBy(-200) }
-    Shortcut { sequence: "."; enabled: !page.deckOpen; onActivated: page.seekBy(200) }
-    Shortcut { sequences: ["+", "="]; enabled: !page.deckOpen; onActivated: ctrl.offsetMs = ctrl.offsetMs + 10 }
-    Shortcut { sequence: "-"; enabled: !page.deckOpen; onActivated: ctrl.offsetMs = ctrl.offsetMs - 10 }
-    Shortcut { sequence: "L"; enabled: !page.deckOpen; onActivated: ctrl.loopEnabled = !ctrl.loopEnabled }
-    Shortcut { sequence: "A"; enabled: !page.deckOpen; onActivated: ctrl.setLoopStart(page.player.position) }
-    Shortcut { sequence: "B"; enabled: !page.deckOpen; onActivated: ctrl.setLoopEnd(page.player.position) }
+    Shortcut { sequence: "Space"; enabled: !page.overlayOpen; onActivated: page.togglePlay() }
+    Shortcut { sequence: "Left"; enabled: !page.overlayOpen; onActivated: page.seekBy(-5000) }
+    Shortcut { sequence: "Right"; enabled: !page.overlayOpen; onActivated: page.seekBy(5000) }
+    Shortcut { sequence: "Shift+Left"; enabled: !page.overlayOpen; onActivated: page.seekBy(-1000) }
+    Shortcut { sequence: "Shift+Right"; enabled: !page.overlayOpen; onActivated: page.seekBy(1000) }
+    Shortcut { sequence: ","; enabled: !page.overlayOpen; onActivated: page.seekBy(-200) }
+    Shortcut { sequence: "."; enabled: !page.overlayOpen; onActivated: page.seekBy(200) }
+    Shortcut { sequences: ["+", "="]; enabled: !page.overlayOpen; onActivated: ctrl.offsetMs = ctrl.offsetMs + 10 }
+    Shortcut { sequence: "-"; enabled: !page.overlayOpen; onActivated: ctrl.offsetMs = ctrl.offsetMs - 10 }
+    Shortcut { sequence: "L"; enabled: !page.overlayOpen; onActivated: ctrl.loopEnabled = !ctrl.loopEnabled }
+    Shortcut { sequence: "A"; enabled: !page.overlayOpen; onActivated: ctrl.setLoopStart(page.player.position) }
+    Shortcut { sequence: "B"; enabled: !page.overlayOpen; onActivated: ctrl.setLoopEnd(page.player.position) }
     // 0.7 key E: Extended-O (ignored when not playing, off or running).
-    Shortcut { sequence: "E"; enabled: !page.deckOpen; onActivated: ctrl.output.triggerExtendedO() }
+    Shortcut { sequence: "E"; enabled: !page.overlayOpen; onActivated: ctrl.output.triggerExtendedO() }
     Repeater {
         model: 9
         delegate: Item {
             required property int index
             Shortcut {
                 sequence: String(index + 1)
-                enabled: !page.deckOpen
+                enabled: !page.overlayOpen
                 onActivated: page.seekTo(ctrl.jumpTenthVideoMs(index + 1))
             }
         }
     }
-    Shortcut { sequence: "Esc"; enabled: page.fullStage && !page.deckOpen; onActivated: page.fullStage = false }
-    Shortcut { sequence: "T"; enabled: !page.deckOpen && !page.empty; onActivated: page.theatre = !page.theatre }
+    Shortcut { sequence: "Esc"; enabled: page.fullStage && !page.overlayOpen; onActivated: page.fullStage = false }
+    Shortcut { sequence: "T"; enabled: !page.overlayOpen && !page.empty; onActivated: page.theatre = !page.theatre }
 }
