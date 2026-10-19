@@ -71,15 +71,35 @@ the tracker is more than 3 cells from it).
 The centre is the Player (the shared stage and transport, D-154); a label is a
 **track through the clip**, not a box on one picture.
 
-- **Lanes like the timeline.** One lane per label (glans, mouth, hand_1 …) under
+- **Classes and objects.** You mark a class (hand, breast, nipple, mouth …)
+  and add as many objects of it as the scene has: *hand 1*, *hand 2*, a third
+  hand of a second person. The number is given by the app; the model learns
+  the class (Owner, 19 Oct: "hand 1 and hand 2 make no sense … more logical
+  what one marks and how"). 0.7's fixed `hand_1` / `hand_2` and plural
+  `breasts` / `nipples` are gone.
+- **Lanes like the timeline.** One lane per object (glans, mouth, hand 1 …) under
   the video: where the label is present, where it is confirmed, where it is
   absent, and the keyframes as dots. Colour shows the teachers' agreement.
 - **Scrub and drag.** Play or scrub; the boxes ride along on the video. Where a
   box drifts, drag it back: that frame becomes a confirmed keyframe, and the
   tracker re-runs from it to the next keyframe (forward and backward, the two
   results blended), so one correction fixes the whole stretch.
-- **Absent.** A key marks "not visible from here" until it shows again; those
-  frames become negative samples, not wrong boxes.
+- **Not in the picture (`X`)** marks where an object is gone until it shows
+  again; those frames become negative samples, not wrong boxes.
+- **There but covered (`H`)** marks where an object is hidden by a hand, a body
+  or the edge (Owner, 19 Oct: "manchmal sieht man nicht alles auf einem
+  Bild"); those frames are left out of training, so the model never learns
+  "nothing here" where something is. Partly visible: mark the part you see.
+- **Contact point.** A class `contact` marks where the stroke touches: the
+  point the contact vibration follows (0.8 teacher plan).
+- **Not this (exclusion zones).** A class `exclude` marks what must not be
+  tracked: a thigh that looks like the tip (0.7's "thigh wins" error), a
+  foreign hand, a second person (Owner, 19 Oct: "markieren, was nicht
+  getrackt wird"). Red and hatched in the editor, as many as the scene needs,
+  and they move and vanish like any other object. Exported as a class of its
+  own, so the model learns "this is not it"; the Generator keeps its tip
+  search out of these boxes (`ExcludeZonesAt`, replaces 0.7's black
+  "+ Ignore region").
 - **Next uncertain.** A button and a key jump to the next frame where the
   teachers disagree or the tracker is unsure (active learning): the user spends
   time where it matters.
@@ -120,13 +140,46 @@ user's computer (D-027, D-028).
 | Training | Python, a separate process with progress and Cancel |
 | Benchmark | the second page of the mode |
 
+### 2.6 Phases (D-157)
+
+A clip has a story, not only objects. A **phase lane** sits above the object
+lanes; its stretches are dragged and named like chapters:
+
+| Phase | What it is | What the device does |
+|---|---|---|
+| `intro` | titles, talk, undressing before the action | holds at 0; the Training's video stage skips it |
+| `empty` | black, a title card, nobody in the picture | holds at 0; skipped like the intro |
+| `oral` | blowjob | the Oral feel: a steady seal, a pulse per stroke |
+| `hand` | handjob | the Hand feel: the grip follows speed |
+| `breast` | titjob | the Breast feel: softer, follows depth |
+| `intercourse` | penetration | the Intercourse feel: follows the rhythm |
+| `climax` | the peak, the cumshot | builds up to the peak; in Training the moment to pause or cool down |
+| `cool-down` | after the peak | fades out softly |
+
+- **Rules first.** Without any model the app proposes phases: dark or nearly
+  still pictures (empty), the start before the first steady rhythm (intro),
+  the stroke tempo and loudness rising to a peak and falling after it (climax,
+  cool-down), the scene type from the contact class (mouth → oral).
+- **Then learned.** Confirmed phases teach a small scene model of our own
+  (a classifier over frames and sound); teacher votes may join (§2.1).
+- **Used everywhere.** The Editor's scenes and their feel (Scene Map, D-145),
+  the Generator's *Optimize for*, and the Training's video stage. Suggestions
+  only: nothing changes a script or a session until the user confirms it.
+
 ## 3. Steps (one PR each, tests with synthetic clips only)
 
 1. **Plugin frame** (done): the `Plugins` singleton, the Settings switch, the
    fourth tab and the page with its two parts.
-2. **Label editor core:** label tracks in the core (keyframes, interpolation,
-   absent stretches, confirmed state, undo, save beside the clip), the editor
-   in QML on the shared stage with the label lanes, export of samples.
+2. **Label editor core** (done): label tracks in the core (`label_track.h`:
+   classes with several objects each, box and absent keys, interpolation,
+   confirmed keys and reviewed stretches, `<clip>.labels.json`, sample export
+   with negatives, YOLO lines), `LabelController` (undo, autosave, export of
+   images / labels / classes.txt) and `LabelEditor.qml` (classes and their
+   objects, drawing and moving boxes on the frame, scrubbing and play, lanes,
+   keys `1`–`9`, `,` `.`, arrows, `X`, `Delete`, Ctrl+Z).
+2d. **Phases** (D-157, §2.6): the phase lane in the editor and in
+   `<clip>.labels.json`, the rule-based suggestions, export for the scene
+   model; then phases into the Editor's scenes and the Training's video stage.
 3. **Tracking between keyframes:** CSRT forward and backward from each keyframe,
    blended; the uncertainty lane and *Next uncertain*.
 4. **Teachers:** ONNX Runtime in the build, NudeNet (one-click download),

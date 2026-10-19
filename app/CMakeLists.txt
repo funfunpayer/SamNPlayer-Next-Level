@@ -14,6 +14,8 @@ qt_add_qml_module(samn_app
   VERSION 1.0
   SOURCES
     src/theme.h
+    src/plugins.h src/plugins.cpp
+    src/label_controller.h src/label_controller.cpp
     src/curve_item.h src/curve_item.cpp
     src/heatmap_item.h src/heatmap_item.cpp
     src/wordmark_item.h src/wordmark_item.cpp
@@ -69,6 +71,8 @@ qt_add_qml_module(samn_app
     qml/FlowFigure.qml
     qml/VideoTransport.qml
     qml/GeneratorProjectPanel.qml
+    qml/AiTrainPage.qml
+    qml/LabelEditor.qml
     qml/SilkLayer.qml
     qml/PositionGauge.qml
     qml/LibraryPanel.qml
