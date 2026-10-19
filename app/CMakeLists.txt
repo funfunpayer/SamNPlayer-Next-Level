@@ -72,6 +72,7 @@ qt_add_qml_module(samn_app
     qml/VideoTransport.qml
     qml/GeneratorProjectPanel.qml
     qml/AiTrainPage.qml
+    qml/LabelEditor.qml
     qml/SilkLayer.qml
     qml/PositionGauge.qml
     qml/LibraryPanel.qml

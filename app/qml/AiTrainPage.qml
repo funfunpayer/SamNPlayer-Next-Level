@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import SamN
 
@@ -10,6 +11,15 @@ Item {
     id: page
     property bool overlayOpen: false
     property int tab: 0
+    property alias labels: labelCtl
+
+    LabelController { id: labelCtl }
+    FileDialog {
+        id: clipDialog
+        title: qsTr("Open a clip or an image to label")
+        nameFilters: [qsTr("Video or image (*.mp4 *.mkv *.webm *.mov *.avi *.m4v *.png *.jpg *.jpeg)"), qsTr("All files (*)")]
+        onAccepted: labelCtl.openVideo(selectedFile.toString())
+    }
 
     component Step: GlassCard {
         id: step
@@ -62,13 +72,30 @@ Item {
             Text {
                 textFormat: Text.PlainText
                 Layout.fillWidth: true; elide: Text.ElideRight
-                text: qsTr("Preview — turn it off in Settings → General.")
-                color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
+                text: labelCtl.hasVideo && page.tab === 0 ? labelCtl.videoName : qsTr("Preview — turn it off in Settings → General.")
+                color: labelCtl.hasVideo && page.tab === 0 ? Theme.text : Theme.textMuted
+                font.family: Theme.fontSoft; font.pixelSize: 12
             }
+            FlowButton {
+                objectName: "openLabelClip"
+                visible: page.tab === 0
+                primary: !labelCtl.hasVideo
+                text: labelCtl.hasVideo ? qsTr("Open another…") : qsTr("Open a clip or image…")
+                onClicked: clipDialog.open()
+            }
+        }
+
+        LabelEditor {
+            objectName: "labelEditor"
+            visible: page.tab === 0 && labelCtl.hasVideo
+            active: visible && !page.overlayOpen
+            Layout.fillWidth: true; Layout.fillHeight: true
+            labels: labelCtl
         }
 
         Flickable {
             objectName: "aiTrainPageBody"
+            visible: !(page.tab === 0 && labelCtl.hasVideo)
             Layout.fillWidth: true; Layout.fillHeight: true
             contentHeight: body.implicitHeight
             clip: true
@@ -99,7 +126,7 @@ Item {
                     visible: page.tab === 0
                     number: "1"; title: qsTr("Label")
                     text: qsTr("Open a clip or an image. Each label (glans, mouth, hand …) is a track through the clip with its own lane under the video. Scrub or play: the boxes ride along. Where one drifts, drag it back; the tracker fills the stretch to the next correction. Mark where a label is not visible, and jump to the next unsure frame.")
-                    status: qsTr("Comes next (D-155 steps 2 and 3).")
+                    status: qsTr("Open a clip or image above to start. The tracker that fills between your corrections comes next (D-155 step 3).")
                 }
                 Step {
                     visible: page.tab === 0
