@@ -365,10 +365,11 @@ int LabelController::exportDataset(const QString& dirOrUrl, double everyMs) {
     std::ofstream classesOut(Fs(dir + "/classes.txt"), std::ios::binary);
     for (const auto& c : classes) classesOut << c << '\n';
     // The confirmed phases for the scene model (D-157); clips exported into
-    // the same folder add their lines.
+    // the same folder add their lines. Binary: "\n" on every system, as
+    // the labels and classes.txt.
     QFile phasesOut(dir + "/phases.csv");
     const bool fresh = !phasesOut.exists();
-    if (phasesOut.open(QIODevice::Append | QIODevice::Text)) {
+    if (phasesOut.open(QIODevice::Append)) {
         if (fresh) phasesOut.write("clip,start_ms,end_ms,phase\n");
         for (const auto& p : project_.phases)
             if (p.confirmed)

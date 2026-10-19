@@ -142,7 +142,7 @@ private slots:
         QVERIFY(c.setPhase(0, 1000, "intro"));
         QVERIFY(c.setPhase(1000, 99999, "oral"));  // clamped to the clip
         QCOMPARE(c.phases().size(), 2);
-        QCOMPARE(c.phases()[1].toMap().value("endMs").toDouble(), c.durationMs());
+        QCOMPARE(c.phases()[1].toMap().value("endMs").toDouble(), double(qRound64(c.durationMs())));  // whole ms
         c.seek(500);
         QCOMPARE(c.phaseAtPreview(), QString("intro"));
         QVERIFY(c.undo());
