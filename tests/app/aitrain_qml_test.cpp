@@ -115,6 +115,13 @@ private slots:
         QVERIFY(labels->setBox(QRectF(140, 100, 16, 16)));
         QCOMPARE(labels->lanes().size(), 4);
         QCOMPARE(labels->lanes()[2].toMap().value("classIndex").toInt(), 1);  // breast 2 shares the colour of breast
+        // "Not this": the exclusion chip adds a zone the tracker stays out of.
+        QQuickItem* ex = nullptr;
+        QTRY_VERIFY((ex = named(root.get(), "addLabel_exclude")));
+        QTest::mouseClick(&window, Qt::LeftButton, {}, ex->mapToScene(QPointF(ex->width() / 2, ex->height() / 2)).toPoint());
+        QTRY_COMPARE(labels->currentLabel(), QString("exclude"));
+        QVERIFY(labels->setBox(QRectF(200, 160, 90, 60)));
+        QCOMPARE(labels->lanes().size(), 5);
         if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT"); !shot.isEmpty()) {
                         QTest::qWait(300);
             window.grabWindow().save(QString::fromLocal8Bit(shot));

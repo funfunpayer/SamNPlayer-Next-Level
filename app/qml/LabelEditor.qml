@@ -15,9 +15,13 @@ Item {
     // 0.7's tag colours, in label order.
     readonly property var colors: ["#3dccc0", "#f2b03d", "#5ecf8a", "#e8eaed", "#7aa2ff", "#ff7a9a", "#c9a0ff", "#9ad6ff", "#ffd27a"]
     function colorOf(i) { return colors[i % colors.length] }
+    // Exclusion zones ("not this": a thigh, a foreign hand, a second person)
+    // are red and hatched, whatever their place in the list.
+    readonly property color excludeColor: "#ff5a5a"
+    function toneOf(m) { return m && m.cls === "exclude" ? excludeColor : colorOf(m ? m.classIndex : 0) }
     function fmt(ms) { return Math.floor(ms / 60000) + ":" + String(Math.floor(ms / 1000) % 60).padStart(2, "0") + "." + String(Math.floor(ms / 100) % 10) }
     readonly property int currentIndex: labels.labels.indexOf(labels.currentLabel)
-    readonly property int currentClassIndex: currentIndex >= 0 && labels.lanes[currentIndex] ? labels.lanes[currentIndex].classIndex : 0
+    readonly property var currentLane: currentIndex >= 0 ? labels.lanes[currentIndex] : null
     // "hand" reads "hand 1" once there is a "hand 2".
     function displayName(lane) {
         if (lane.label !== lane.cls) return lane.label
@@ -82,7 +86,7 @@ Item {
                         readonly property bool current: modelData.label === labels.currentLabel
                         color: current ? Qt.rgba(0, 120 / 255, 1, 0.22) : la.containsMouse ? Qt.rgba(1, 1, 1, 0.05) : "transparent"
                         border.color: current ? Theme.cyan : "transparent"
-                        Rectangle { x: 10; anchors.verticalCenter: parent.verticalCenter; width: 12; height: 12; radius: modelData.cls === "contact" ? 6 : 3; color: root.colorOf(modelData.classIndex) }
+                        Rectangle { x: 10; anchors.verticalCenter: parent.verticalCenter; width: 12; height: 12; radius: modelData.cls === "contact" ? 6 : 3; color: root.toneOf(modelData) }
                         Text {
                             textFormat: Text.PlainText
                             x: 30; anchors.verticalCenter: parent.verticalCenter; width: parent.width - 64; elide: Text.ElideRight
@@ -120,7 +124,7 @@ Item {
                             height: 24; width: chipText.implicitWidth + 16; radius: 12
                             color: ca.containsMouse ? Qt.rgba(1, 1, 1, 0.08) : Qt.rgba(1, 1, 1, 0.03)
                             border.color: Theme.cardBorder
-                            Text { id: chipText; textFormat: Text.PlainText; anchors.centerIn: parent; text: "+ " + modelData; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11 }
+                            Text { id: chipText; textFormat: Text.PlainText; anchors.centerIn: parent; text: "+ " + (modelData === "exclude" ? qsTr("not this (exclude)") : modelData); color: modelData === "exclude" ? root.excludeColor : Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11 }
                             MouseArea { id: ca; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: labels.addLabel(modelData) }
                         }
                     }
@@ -167,7 +171,7 @@ Item {
                     model: labels.boxes
                     delegate: Rectangle {
                         required property var modelData
-                        readonly property color tone: root.colorOf(modelData.classIndex)
+                        readonly property color tone: root.toneOf(modelData)
                         readonly property bool current: modelData.label === labels.currentLabel
                         visible: modelData.present && !(draw.active && current)
                         x: frameView.imageRect.x + modelData.x * stage.scaleX
@@ -180,8 +184,23 @@ Item {
                         Text {
                             textFormat: Text.PlainText
                             x: 4; y: 2
-                            text: modelData.label + (modelData.keyed ? " ◆" : "")
+                            text: (modelData.cls === "exclude" ? qsTr("not this · ") : "") + modelData.label + (modelData.keyed ? " ◆" : "")
                             color: parent.tone; font.family: Theme.fontSoft; font.pixelSize: 11
+                        }
+                        // An exclusion zone is hatched: the tracker stays out.
+                        Item {
+                            visible: modelData.cls === "exclude"
+                            anchors.fill: parent; anchors.margins: 1; clip: true
+                            Repeater {
+                                model: modelData.cls === "exclude" ? Math.ceil((parent.width + parent.height) / 12) : 0
+                                delegate: Rectangle {
+                                    required property int index
+                                    x: index * 12 - parent.height; y: parent.height / 2 - height / 2
+                                    width: 2; height: parent.height * 1.5
+                                    rotation: 45
+                                    color: Qt.rgba(1, 0.35, 0.35, 0.35)
+                                }
+                            }
                         }
                         // The contact point: where the stroke touches (vibration).
                         Rectangle { visible: modelData.cls === "contact"; anchors.centerIn: parent; width: 18; height: 2; color: parent.tone }
@@ -193,7 +212,7 @@ Item {
                     x: frameView.imageRect.x + draw.rect.x * stage.scaleX
                     y: frameView.imageRect.y + draw.rect.y * stage.scaleY
                     width: draw.rect.width * stage.scaleX; height: draw.rect.height * stage.scaleY
-                    readonly property color tone: root.colorOf(root.currentClassIndex)
+                    readonly property color tone: root.toneOf(root.currentLane)
                     color: Qt.rgba(tone.r, tone.g, tone.b, 0.18)
                     border.color: tone; border.width: 2
                 }
@@ -275,7 +294,7 @@ Item {
                                 id: lane
                                 required property var modelData
                                 width: lanesArea.width; height: 26
-                                readonly property color tone: root.colorOf(modelData.classIndex)
+                                readonly property color tone: root.toneOf(modelData)
                                 Text {
                                     textFormat: Text.PlainText
                                     width: lanesArea.nameW - 8; anchors.verticalCenter: parent.verticalCenter; elide: Text.ElideRight

@@ -92,6 +92,14 @@ The centre is the Player (the shared stage and transport, D-154); a label is a
   "nothing here" where something is. Partly visible: mark the part you see.
 - **Contact point.** A class `contact` marks where the stroke touches: the
   point the contact vibration follows (0.8 teacher plan).
+- **Not this (exclusion zones).** A class `exclude` marks what must not be
+  tracked: a thigh that looks like the tip (0.7's "thigh wins" error), a
+  foreign hand, a second person (Owner, 19 Oct: "markieren, was nicht
+  getrackt wird"). Red and hatched in the editor, as many as the scene needs,
+  and they move and vanish like any other object. Exported as a class of its
+  own, so the model learns "this is not it"; the Generator keeps its tip
+  search out of these boxes (`ExcludeZonesAt`, replaces 0.7's black
+  "+ Ignore region").
 - **Next uncertain.** A button and a key jump to the next frame where the
   teachers disagree or the tracker is unsure (active learning): the user spends
   time where it matters.

@@ -171,6 +171,29 @@ TEST_CASE("a covered object leaves its frames out of the samples") {
     CHECK(back.tracks[0].keys()[1].covered);
 }
 
+TEST_CASE("exclusion zones are a class of their own") {
+    CHECK(samn::IsExcludeClass("exclude"));
+    CHECK_FALSE(samn::IsExcludeClass("hand"));
+    samn::LabelProject p;
+    p.duration_ms = 1000;
+    p.AddObject("glans").SetKey(Box(0, 0));
+    p.AddObject(samn::kExcludeClass).SetKey(Box(0, 40));
+    p.AddObject(samn::kExcludeClass).SetKey(Box(0, 80));
+    p.Track("exclude 2")->SetKey(Absent(500));
+    CHECK(p.Classes() == std::vector<std::string>{"glans", "exclude"});
+    // The Generator sees both zones at first, then only the one still there.
+    REQUIRE(samn::ExcludeZonesAt(p, 0).size() == 2);
+    REQUIRE(samn::ExcludeZonesAt(p, 600).size() == 1);
+    CHECK(samn::ExcludeZonesAt(p, 600)[0].x == doctest::Approx(40));
+    // Exported as class 1: the model learns "this is not it".
+    const auto s = samn::ExportSamples(p, p.Classes(), 1000);
+    REQUIRE(s.size() == 2);
+    REQUIRE(s[0].items.size() == 3);
+    CHECK(s[1].items.size() == 2);  // exclude 2 has left the picture
+    CHECK(s[0].items[1].class_id == 1);
+    CHECK(s[0].items[2].class_id == 1);
+}
+
 TEST_CASE("YOLO lines are normalised and clipped to the frame") {
     samn::LabelSample s;
     s.items.push_back({2, LabelBox{90, 40, 20, 20}});  // runs over the right edge

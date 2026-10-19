@@ -142,6 +142,18 @@ int LabelProject::ObjectCount(const std::string& cls) const {
     return int(std::count_if(tracks.begin(), tracks.end(), [&](const LabelTrack& t) { return t.cls() == cls; }));
 }
 
+bool IsExcludeClass(const std::string& cls) { return cls == kExcludeClass; }
+
+std::vector<LabelBox> ExcludeZonesAt(const LabelProject& p, int64_t ms) {
+    std::vector<LabelBox> out;
+    for (const auto& t : p.tracks) {
+        if (!IsExcludeClass(t.cls())) continue;
+        const LabelState s = t.At(ms);
+        if (s.present) out.push_back(s.box);
+    }
+    return out;
+}
+
 std::filesystem::path LabelProjectPath(const std::filesystem::path& clip) {
     std::filesystem::path p = clip;
     p.replace_extension(".labels.json");

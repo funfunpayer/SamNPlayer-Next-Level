@@ -81,6 +81,13 @@ struct LabelProject {
 // "hand 2" → "hand"; "hand" → "hand".
 std::string LabelClassOf(const std::string& label);
 
+// The exclusion class (Owner, 19 Oct: "mark what is not tracked"): areas the
+// tracker must not follow, e.g. a thigh that looks like the tip, a foreign
+// hand, a second person. Exported as its own class, so the model learns
+// "this is not it", and the Generator keeps its tip search out of them.
+inline constexpr const char* kExcludeClass = "exclude";
+bool IsExcludeClass(const std::string& cls);
+
 // <clip>.labels.json beside the clip.
 std::filesystem::path LabelProjectPath(const std::filesystem::path& clip);
 std::string SerializeLabelProject(const LabelProject& p);
@@ -106,6 +113,10 @@ struct LabelSample {
 // other classes are skipped).
 std::vector<LabelSample> ExportSamples(const LabelProject& p, const std::vector<std::string>& classes,
                                        int64_t every_ms);
+
+// The exclusion boxes visible at ms (all "exclude" objects), for the
+// Generator to avoid.
+std::vector<LabelBox> ExcludeZonesAt(const LabelProject& p, int64_t ms);
 
 // "class cx cy w h" lines, normalised to the frame size, boxes clipped to it.
 std::string YoloLines(const LabelSample& s, double frame_w, double frame_h);

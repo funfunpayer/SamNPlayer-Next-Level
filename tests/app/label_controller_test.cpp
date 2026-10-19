@@ -105,23 +105,31 @@ private slots:
         QVERIFY(c.openVideo(hands));
         QVERIFY(c.presetLabels().contains("hand"));
         QVERIFY(c.presetLabels().contains("contact"));
+        QVERIFY(c.presetLabels().contains("exclude"));
         QVERIFY(c.addLabel("hand"));
         QVERIFY(c.setBox(QRectF(10, 10, 30, 30)));
         QVERIFY(c.addLabel("hand"));
         QCOMPARE(c.currentLabel(), QString("hand 2"));
         QVERIFY(c.setBox(QRectF(100, 10, 30, 30)));
+        // A thigh the tracker must not follow: an exclusion zone.
+        QVERIFY(c.addLabel("exclude"));
+        QVERIFY(c.setBox(QRectF(0, 40, 60, 20)));
         const QVariantList lanes = c.lanes();
-        QCOMPARE(lanes.size(), 2);
+        QCOMPARE(lanes.size(), 3);
         QCOMPARE(lanes[1].toMap().value("cls").toString(), QString("hand"));
         QCOMPARE(lanes[1].toMap().value("classIndex").toInt(), 0);
+        QCOMPARE(lanes[2].toMap().value("cls").toString(), QString("exclude"));
+        QCOMPARE(lanes[2].toMap().value("classIndex").toInt(), 1);
         const QString out = dir_.filePath("hands_ds");
         QVERIFY(c.exportDataset(out, 1000) > 0);
         QFile classes(out + "/classes.txt");
         QVERIFY(classes.open(QIODevice::ReadOnly));
-        QCOMPARE(QString::fromUtf8(classes.readAll()), QString("hand\n"));
+        QCOMPARE(QString::fromUtf8(classes.readAll()), QString("hand\nexclude\n"));
         QFile first(out + "/labels/hands_00000000.txt");
         QVERIFY(first.open(QIODevice::ReadOnly));
-        QCOMPARE(QString::fromUtf8(first.readAll()).count(QRegularExpression("^0 ", QRegularExpression::MultilineOption)), 2);
+        const QString lines = QString::fromUtf8(first.readAll());
+        QCOMPARE(lines.count(QRegularExpression("^0 ", QRegularExpression::MultilineOption)), 2);
+        QCOMPARE(lines.count(QRegularExpression("^1 ", QRegularExpression::MultilineOption)), 1);
     }
 
     void anImageIsAClipOfOneFrame() {

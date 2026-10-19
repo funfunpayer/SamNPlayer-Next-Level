@@ -30,8 +30,10 @@ QUrl LabelController::videoUrl() const { return video_path_.isEmpty() ? QUrl() :
 
 QStringList LabelController::presetLabels() const {
     // 0.7's body parts as classes (one class, several objects), and the
-    // contact point where the stroke touches (0.8 teacher plan).
-    return {"glans", "penis", "mouth", "hand", "breast", "nipple", "vagina", "face", "contact"};
+    // contact point where the stroke touches (0.8 teacher plan), and the
+    // exclusion zones the tracker must not follow ("not this").
+    return {"glans", "penis", "mouth", "hand", "breast", "nipple", "vagina", "face", "contact",
+            QString::fromLatin1(samn::kExcludeClass)};
 }
 
 QStringList LabelController::labels() const {
