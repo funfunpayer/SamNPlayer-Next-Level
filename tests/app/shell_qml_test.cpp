@@ -1,4 +1,4 @@
-// The QML shell (Main.qml with the top bar, the mode deck and the Player page)
+// The QML shell (Main.qml with the top bar, the mode tabs and the Player page)
 // and the bundled vector assets. Ports of the 0.7 UI tests flow_assets_test,
 // flow_wiring_test, pb_tools_toggle_test and tools_nav_test (TEST_PARITY 52-55).
 // Synthetic data only; no video is opened.
@@ -118,7 +118,6 @@ struct Shell {
         return all.isEmpty() ? nullptr : all.first();
     }
     int mode() const { return window->property("mode").toInt(); }
-    bool deckOpen() const { return one("ModeDeck")->property("open").toBool(); }
     QString pillName() const { return one("TopBar")->property("modeName").toString(); }
 };
 
@@ -147,25 +146,12 @@ class ShellQmlTest : public QObject {
     Q_OBJECT
     QTemporaryDir config_;
 
-    // The mode pill of the top bar, in window coordinates.
-    static QPoint pillCentre(const Shell& s) { return QPoint(s.window->width() / 2, 43); }
-    // The four cards of the open deck, left to right (window coordinates).
-    static QList<QPoint> cardCentres(const Shell& s) {
-        QList<QPoint> out;
-        QQuickItem* deck = s.one("ModeDeck");
-        for (QQuickItem* i : descendants(deck))
-            if (QString(i->metaObject()->className()).startsWith("QQuickMouseArea") && i->cursor().shape() == Qt::PointingHandCursor)
-                out << i->mapToScene(QPointF(i->width() / 2, i->height() / 2)).toPoint();
-        std::sort(out.begin(), out.end(), [](const QPoint& a, const QPoint& b) { return a.x() < b.x(); });
-        return out;
-    }
-    // Opens the deck with the pill and waits until it is shown.
-    static void openDeckWithPill(Shell& s) {
-        // A deck still fading out covers the pill: wait until it is gone.
-        QTRY_VERIFY_WITH_TIMEOUT(!s.one("ModeDeck")->isVisible(), kWait);
-        QTest::mouseClick(s.window, Qt::LeftButton, Qt::NoModifier, pillCentre(s));
-        QTRY_VERIFY_WITH_TIMEOUT(s.deckOpen(), kWait);
-        QTRY_VERIFY_WITH_TIMEOUT(s.one("ModeDeck")->isVisible(), kWait);
+    // The centre of mode tab i in the top bar (window coordinates).
+    static QPoint tabCentre(const Shell& s, int i) {
+        QQuickItem* tab = nullptr;
+        for (QQuickItem* t : descendants(s.one("TopBar")))
+            if (t->objectName() == QStringLiteral("modeTab_%1").arg(i)) tab = t;
+        return tab ? tab->mapToScene(QPointF(tab->width() / 2, tab->height() / 2)).toPoint() : QPoint();
     }
 
     void serveRelease(const char* tag) {
@@ -251,11 +237,9 @@ private slots:
             loadShell(s);
             QVERIFY(s.window);
             QTest::qWait(300);
-            QCOMPARE(s.window->title(), QString("SamNPlayer 2"));
+            QCOMPARE(s.window->title(), QString("SamNPlayer Next"));
             QCOMPARE(s.mode(), 0);
-            QVERIFY(!s.deckOpen());
             QCOMPARE(s.pillName(), QString("Player"));
-            QCOMPARE(s.one("TopBar")->property("modeIcon").toString(), QString("player"));
             QVERIFY(s.one("PlayerPage"));
             QVERIFY(s.one("LibraryPanel"));
             QVERIFY(s.one("InspectorPanel"));
@@ -277,27 +261,25 @@ private slots:
                 ++shown;
                 QTRY_COMPARE_WITH_TIMEOUT(icon->property("status").toInt(), 1, kWait);  // Image.Ready
                 for (QQuickItem* p = icon; p; p = p->parentItem())
-                    for (const char* part : {"TopBar", "ModeDeck", "LibraryPanel", "InspectorPanel", "PlayerPage"})
+                    for (const char* part : {"TopBar", "LibraryPanel", "InspectorPanel", "PlayerPage"})
                         if (isType(p, part)) ++perPart[part];
             }
             QVERIFY(shown > 10);
-            // The top bar (pill icon and chevron), the library and the player show icons.
-            QVERIFY2(perPart["TopBar"] >= 2, qPrintable(QString::number(perPart["TopBar"])));
+            // The top bar (the three mode tabs and more), the library and the player show icons.
+            QVERIFY2(perPart["TopBar"] >= 3, qPrintable(QString::number(perPart["TopBar"])));
             QVERIFY2(perPart["LibraryPanel"] >= 5, qPrintable(QString::number(perPart["LibraryPanel"])));
             QVERIFY2(perPart["PlayerPage"] >= 5, qPrintable(QString::number(perPart["PlayerPage"])));
 
-            // The three mode cards each have their own icon: the ones of the modes list.
-            openDeckWithPill(s);
-            const QVariantList modes = s.one("ModeDeck")->property("modes").toList();
+            // The three mode tabs each have their own icon: the ones of the modes list.
+            const QVariantList modes = s.one("TopBar")->property("modes").toList();
             QCOMPARE(modes.size(), 3);
-            QStringList deckIcons;
-            for (QQuickItem* icon : itemsOfType(s.one("ModeDeck"), "Icon")) deckIcons << icon->property("name").toString();
+            QStringList tabIcons;
+            for (QQuickItem* icon : itemsOfType(s.one("TopBar"), "Icon"))
+                for (QQuickItem* p = icon; p; p = p->parentItem())
+                    if (p->objectName().startsWith(QLatin1String("modeTab_"))) { tabIcons << icon->property("name").toString(); break; }
             QStringList expected;
-            for (const QVariant& m : modes) {
-                QVERIFY(!m.toMap().value("icon").toString().isEmpty());
-                expected << m.toMap().value("icon").toString();
-            }
-            QCOMPARE(deckIcons, expected);
+            for (const QVariant& m : modes) expected << m.toMap().value("icon").toString();
+            QCOMPARE(tabIcons, expected);
             QCOMPARE(expected, (QStringList{"player", "create", "training"}));
         }
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
@@ -317,116 +299,36 @@ private slots:
         }
     }
 
-    void modeDeckOpensWithMAndPicksWithNumbers() {
+    // D-150: the modes are a tab row (the target images); Ctrl+1…3 switch.
+    void modeTabsSwitchWithCtrlNumbers() {
         {
             Shell s;
             loadShell(s);
             QVERIFY(s.window);
             const QStringList names = s.window->property("modeNames").toStringList();
             QCOMPARE(names, (QStringList{"Player", "Generator", "Training"}));
-            QVERIFY(!s.deckOpen());
-            // M opens, M again closes (it is a toggle).
-            QTest::keyClick(s.window, Qt::Key_M);
-            QTRY_VERIFY_WITH_TIMEOUT(s.deckOpen(), kWait);
-            QTRY_VERIFY_WITH_TIMEOUT(s.one("ModeDeck")->isVisible(), kWait);
-            QTest::keyClick(s.window, Qt::Key_M);
-            QTRY_VERIFY_WITH_TIMEOUT(!s.deckOpen(), kWait);
-            // Esc closes an open deck; with no deck it does nothing.
-            QTest::keyClick(s.window, Qt::Key_M);
-            QTRY_VERIFY_WITH_TIMEOUT(s.deckOpen(), kWait);
-            QTest::keyClick(s.window, Qt::Key_Escape);
-            QTRY_VERIFY_WITH_TIMEOUT(!s.deckOpen(), kWait);
-            QTRY_VERIFY_WITH_TIMEOUT(!s.one("ModeDeck")->isVisible(), kWait);  // faded out
-            QTest::keyClick(s.window, Qt::Key_Escape);
-            QVERIFY(!s.deckOpen());
-            QCOMPARE(s.mode(), 0);
-
-            // The number keys pick a mode only while the deck is open: they close it.
+            // A plain number belongs to the page, not to the mode switch.
             QTest::keyClick(s.window, Qt::Key_3);
             QTest::qWait(150);
-            QCOMPARE(s.mode(), 0);  // closed deck: the key belongs to the Player
+            QCOMPARE(s.mode(), 0);
             for (int key : {Qt::Key_3, Qt::Key_2, Qt::Key_1}) {
-                QTest::keyClick(s.window, Qt::Key_M);
-                QTRY_VERIFY_WITH_TIMEOUT(s.deckOpen(), kWait);
-                QTest::keyClick(s.window, Qt::Key(key));
+                QTest::keyClick(s.window, Qt::Key(key), Qt::ControlModifier);
                 const int want = key - Qt::Key_1;
                 QTRY_COMPARE_WITH_TIMEOUT(s.mode(), want, kWait);
-                QTRY_VERIFY_WITH_TIMEOUT(!s.deckOpen(), kWait);
                 QCOMPARE(s.pillName(), names[want]);
-                QCOMPARE(s.one("TopBar")->property("modeIcon").toString(),
-                         s.one("ModeDeck")->property("modes").toList()[want].toMap().value("icon").toString());
+                QCOMPARE(s.one("TopBar")->property("currentMode").toInt(), want);
             }
-            // There is no fourth mode (the 0.7 Editor is the Generator, the Scene Map a
-            // view in it, D-145): key 4 leaves the deck open.
-            QTest::keyClick(s.window, Qt::Key_M);
-            QTRY_VERIFY_WITH_TIMEOUT(s.deckOpen(), kWait);
-            QTest::keyClick(s.window, Qt::Key_4);
+            // There is no fourth mode (D-145): Ctrl+4 changes nothing.
+            QTest::keyClick(s.window, Qt::Key_4, Qt::ControlModifier);
             QTest::qWait(150);
-            QVERIFY(s.deckOpen());
             QCOMPARE(s.mode(), 0);
-        }
-        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
-    }
-
-    // --- item 55: tools_nav_test, the parts the mode deck has ---
-    // 0.7 tools_nav_test.py (roving tabs) for the mode deck: arrows and
-    // Home/End move the focus ring, Tab stays inside, Enter or Space picks,
-    // and focus returns where it was. While the deck is open the Player's
-    // keys (Space, arrows) do not act behind it.
-    void modeDeckKeyboard() {
-        {
-            Shell s;
-            loadShell(s);
-            QVERIFY(s.window);
-            QQuickItem* deck = s.one("ModeDeck");
-            QVERIFY(deck);
-            auto ringAt = [&]() {
-                int at = -1, n = 0;
-                for (QQuickItem* i : descendants(deck))
-                    if (i->objectName() == QLatin1String("focusRing")) {
-                        if (i->isVisible()) at = n;
-                        ++n;
-                    }
-                return at;
-            };
-            QQuickItem* before = s.window->activeFocusItem();
-            QTest::keyClick(s.window, Qt::Key_M);
-            QTRY_VERIFY_WITH_TIMEOUT(s.deckOpen(), kWait);
-            QTRY_VERIFY_WITH_TIMEOUT(deck->hasActiveFocus(), kWait);
-            QCOMPARE(deck->property("focusIndex").toInt(), 0);  // starts on the current mode
-            QTRY_COMPARE_WITH_TIMEOUT(ringAt(), 0, kWait);
-            QTest::keyClick(s.window, Qt::Key_Right);
-            QTest::keyClick(s.window, Qt::Key_Right);
-            QCOMPARE(deck->property("focusIndex").toInt(), 2);
-            QCOMPARE(ringAt(), 2);
-            QTest::keyClick(s.window, Qt::Key_Left);
-            QCOMPARE(deck->property("focusIndex").toInt(), 1);
-            QTest::keyClick(s.window, Qt::Key_End);
-            QCOMPARE(deck->property("focusIndex").toInt(), 2);  // the last of three
-            QTest::keyClick(s.window, Qt::Key_Right);  // wraps
-            QCOMPARE(deck->property("focusIndex").toInt(), 0);
-            QTest::keyClick(s.window, Qt::Key_Home);
-            QTest::keyClick(s.window, Qt::Key_Tab);  // Tab stays inside the deck
-            QCOMPARE(deck->property("focusIndex").toInt(), 1);
-            QVERIFY(deck->hasActiveFocus());
-            QTest::keyClick(s.window, Qt::Key_Backtab);
-            QCOMPARE(deck->property("focusIndex").toInt(), 0);
-            // Space picks while the deck is open (it does not toggle play behind it).
-            QTest::keyClick(s.window, Qt::Key_Down);
-            QTest::keyClick(s.window, Qt::Key_Down);
-            QTest::keyClick(s.window, Qt::Key_Space);
-            QTRY_COMPARE_WITH_TIMEOUT(s.mode(), 2, kWait);
-            QTRY_VERIFY_WITH_TIMEOUT(!s.deckOpen(), kWait);
-            QCOMPARE(s.window->activeFocusItem(), before);  // focus came back
-            // Enter picks too, starting on the current mode (2).
-            QTest::keyClick(s.window, Qt::Key_M);
-            QTRY_VERIFY_WITH_TIMEOUT(s.deckOpen(), kWait);
-            QCOMPARE(deck->property("focusIndex").toInt(), 2);
-            QTest::keyClick(s.window, Qt::Key_Left);
-            QTest::keyClick(s.window, Qt::Key_Left);
-            QTest::keyClick(s.window, Qt::Key_Return);
-            QTRY_COMPARE_WITH_TIMEOUT(s.mode(), 0, kWait);
-            QTRY_VERIFY_WITH_TIMEOUT(!s.deckOpen(), kWait);
+            // While Settings is open the Player's keys do not act behind it.
+            QQuickItem* player = s.one("PlayerPage");
+            QQuickItem* settings = s.one("SettingsPage");
+            QVERIFY(!player->property("overlayOpen").toBool());
+            settings->setProperty("open", true);
+            QVERIFY(player->property("overlayOpen").toBool());
+            settings->setProperty("open", false);
         }
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }
@@ -478,50 +380,32 @@ private slots:
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }
 
-    void modeDeckPillCardsAndCurrentMark() {
+    void modeTabsClickAndCurrentMark() {
         {
             Shell s;
             loadShell(s);
             QVERIFY(s.window);
-            QVERIFY(!s.deckOpen());
             QCOMPARE(s.pillName(), QString("Player"));
-            openDeckWithPill(s);
-            // Four cards; the current mode is marked (a thicker, coloured frame), the others are not.
-            auto cards = [&] {
-                QList<QQuickItem*> out;
-                for (QQuickItem* i : descendants(s.one("ModeDeck")))
-                    if (i->property("modelData").isValid() && i->property("index").isValid() && i->width() > 100) out << i;
-                std::sort(out.begin(), out.end(), [](QQuickItem* a, QQuickItem* b) { return a->property("index").toInt() < b->property("index").toInt(); });
-                return out;
+            auto tab = [&](int i) {
+                for (QQuickItem* t : descendants(s.one("TopBar")))
+                    if (t->objectName() == QStringLiteral("modeTab_%1").arg(i)) return t;
+                return static_cast<QQuickItem*>(nullptr);
             };
-            auto borderWidth = [](QQuickItem* card) {
-                return qvariant_cast<QObject*>(card->property("border"))->property("width").toDouble();
-            };
-            QCOMPARE(cards().size(), 3);
-            QCOMPARE(s.one("ModeDeck")->property("current").toInt(), 0);
-            QTRY_VERIFY_WITH_TIMEOUT(borderWidth(cards()[0]) > borderWidth(cards()[1]), kWait);
-            for (int i = 1; i < 3; ++i) QCOMPARE(borderWidth(cards()[i]), borderWidth(cards()[1]));
-            QCOMPARE(cardCentres(s).size(), 3);
-
-            // A click outside the card closes the deck and changes nothing.
-            QTest::mouseClick(s.window, Qt::LeftButton, Qt::NoModifier, QPoint(40, s.window->height() - 40));
-            QTRY_VERIFY_WITH_TIMEOUT(!s.deckOpen(), kWait);
-            QCOMPARE(s.mode(), 0);
-
-            // A click on a card picks that mode, closes the deck and marks the card.
-            openDeckWithPill(s);
-            QTest::mouseClick(s.window, Qt::LeftButton, Qt::NoModifier, cardCentres(s)[2]);
+            for (int i = 0; i < 3; ++i) QVERIFY(tab(i) && tab(i)->isVisible());
+            QVERIFY(tab(0)->property("current").toBool());
+            QVERIFY(!tab(1)->property("current").toBool());
+            // A click on a tab picks that mode and marks the tab.
+            QTest::mouseClick(s.window, Qt::LeftButton, Qt::NoModifier, tabCentre(s, 2));
             QTRY_COMPARE_WITH_TIMEOUT(s.mode(), 2, kWait);
-            QTRY_VERIFY_WITH_TIMEOUT(!s.deckOpen(), kWait);
             QCOMPARE(s.pillName(), QString("Training"));
-            QCOMPARE(s.one("ModeDeck")->property("current").toInt(), 2);
-            QTRY_VERIFY_WITH_TIMEOUT(borderWidth(cards()[2]) > borderWidth(cards()[0]), kWait);
+            QVERIFY(tab(2)->property("current").toBool());
+            QVERIFY(!tab(0)->property("current").toBool());
+            QTRY_VERIFY_WITH_TIMEOUT(s.one("TrainingPage")->isVisible(), kWait);
             // Back to the Player: its page is shown again.
-            openDeckWithPill(s);
-            QTest::mouseClick(s.window, Qt::LeftButton, Qt::NoModifier, cardCentres(s)[0]);
+            QTest::mouseClick(s.window, Qt::LeftButton, Qt::NoModifier, tabCentre(s, 0));
             QTRY_COMPARE_WITH_TIMEOUT(s.mode(), 0, kWait);
-            QCOMPARE(s.pillName(), QString("Player"));
             QTRY_VERIFY_WITH_TIMEOUT(s.one("PlayerPage")->isVisible(), kWait);
+            if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT_TABS"); !shot.isEmpty()) s.window->grabWindow().save(QString::fromLocal8Bit(shot));
         }
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }
@@ -742,9 +626,7 @@ private slots:
             QVERIFY(player && training);
             QVERIFY(player->isVisible());
             QVERIFY(!training->isVisible());
-            QTest::keyClick(s.window, Qt::Key_M);
-            QTRY_VERIFY_WITH_TIMEOUT(s.deckOpen(), kWait);
-            QTest::keyClick(s.window, Qt::Key_3);
+            QTest::keyClick(s.window, Qt::Key_3, Qt::ControlModifier);
             QTRY_COMPARE_WITH_TIMEOUT(s.mode(), 2, kWait);
             QTRY_VERIFY_WITH_TIMEOUT(training->isVisible() && !player->isVisible(), kWait);
         }

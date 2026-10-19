@@ -45,7 +45,6 @@ qt_add_qml_module(samn_app
     qml/Main.qml
     qml/GlassCard.qml
     qml/TopBar.qml
-    qml/ModeDeck.qml
     qml/PlayButton.qml
     qml/PlayerPage.qml
     qml/GeneratorPage.qml

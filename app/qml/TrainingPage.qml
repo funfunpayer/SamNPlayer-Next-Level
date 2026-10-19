@@ -14,7 +14,7 @@ Item {
     property alias controller: ctl
     required property DeviceController device
     // The mode deck uses Esc while it is open.
-    property bool deckOpen: false
+    property bool overlayOpen: false
     // Test hook (SAMN_TRAINING_START in main.cpp): start this program ("custom" = the form) at once.
     property string autostart: ""
 
@@ -43,7 +43,7 @@ Item {
 
     Shortcut {
         sequence: "Esc"
-        enabled: page.visible && !page.deckOpen && !editor.open && ctl.state === "running"
+        enabled: page.visible && !page.overlayOpen && !editor.open && ctl.state === "running"
         onActivated: ctl.interrupt()
     }
     Component.onCompleted: {
