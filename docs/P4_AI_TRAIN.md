@@ -4,7 +4,7 @@ Owner, 19 Oct: AI training was in the released 0.7, so it comes back in full,
 as **its own plugin with its own mode**. It is in every build now and is
 released to users later. First it is ported exactly as 0.7 had it; after that
 come the improvements that were planned for it. This is the plan; the build
-starts after the Owner has read it.
+starts with step 1; the Owner's answers are in §5.
 
 ## 1. What 0.7 shipped (release commit `73bf0b6`)
 
@@ -91,9 +91,12 @@ Each step ticks its lines in `docs/PARITY.md` §6.
   about first.
 - **Personal motion profiles** (CAP-08): opt-in, with rollback.
 
-## 5. Open questions for the Owner
+## 5. The Owner's answers (19 Oct)
 
-1. The switch: off by default in Settings (recommended), or always visible?
-2. Benchmark in the same mode (recommended), or as a separate tool?
-3. The teacher: a local model only (recommended, D-028), or also an AI server
-   on the LAN when the user sets one up (D-031)?
+1. **The switch:** off by default; *Settings → General → AI Train (preview)*
+   shows the fourth tab.
+2. **Benchmark:** in the same mode, as its second page.
+3. **The teacher:** a local model, or a model server in the user's own
+   network, for example a Mac that runs larger models (LM Studio or another
+   OpenAI-compatible server). The server is used only when the user enters
+   its address (D-031); nothing goes to the internet.
