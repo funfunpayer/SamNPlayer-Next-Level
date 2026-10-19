@@ -272,10 +272,10 @@ private slots:
             QVERIFY2(perPart["LibraryPanel"] >= 5, qPrintable(QString::number(perPart["LibraryPanel"])));
             QVERIFY2(perPart["PlayerPage"] >= 5, qPrintable(QString::number(perPart["PlayerPage"])));
 
-            // The four mode cards each have their own icon: the ones of the modes list.
+            // The three mode cards each have their own icon: the ones of the modes list.
             openDeckWithPill(s);
             const QVariantList modes = s.one("ModeDeck")->property("modes").toList();
-            QCOMPARE(modes.size(), 4);
+            QCOMPARE(modes.size(), 3);
             QStringList deckIcons;
             for (QQuickItem* icon : itemsOfType(s.one("ModeDeck"), "Icon")) deckIcons << icon->property("name").toString();
             QStringList expected;
@@ -284,13 +284,13 @@ private slots:
                 expected << m.toMap().value("icon").toString();
             }
             QCOMPARE(deckIcons, expected);
-            QCOMPARE(expected, (QStringList{"player", "create", "training", "scenemap"}));
+            QCOMPARE(expected, (QStringList{"player", "create", "training"}));
         }
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }
 
     void everyModeLoadsWithoutWarnings() {
-        for (int mode = 0; mode < 4; ++mode) {
+        for (int mode = 0; mode < 3; ++mode) {
             {
                 Shell s;
                 loadShell(s, mode);  // the SAMN_MODE test hook
@@ -309,7 +309,7 @@ private slots:
             loadShell(s);
             QVERIFY(s.window);
             const QStringList names = s.window->property("modeNames").toStringList();
-            QCOMPARE(names, (QStringList{"Player", "Generator", "Training", "Scene Map"}));
+            QCOMPARE(names, (QStringList{"Player", "Generator", "Training"}));
             QVERIFY(!s.deckOpen());
             // M opens, M again closes (it is a toggle).
             QTest::keyClick(s.window, Qt::Key_M);
@@ -331,7 +331,7 @@ private slots:
             QTest::keyClick(s.window, Qt::Key_3);
             QTest::qWait(150);
             QCOMPARE(s.mode(), 0);  // closed deck: the key belongs to the Player
-            for (int key : {Qt::Key_4, Qt::Key_2, Qt::Key_3, Qt::Key_1}) {
+            for (int key : {Qt::Key_3, Qt::Key_2, Qt::Key_1}) {
                 QTest::keyClick(s.window, Qt::Key_M);
                 QTRY_VERIFY_WITH_TIMEOUT(s.deckOpen(), kWait);
                 QTest::keyClick(s.window, Qt::Key(key));
@@ -342,10 +342,11 @@ private slots:
                 QCOMPARE(s.one("TopBar")->property("modeIcon").toString(),
                          s.one("ModeDeck")->property("modes").toList()[want].toMap().value("icon").toString());
             }
-            // There is no fifth mode (the 0.7 Editor is the Generator now): key 5 leaves the deck open.
+            // There is no fourth mode (the 0.7 Editor is the Generator, the Scene Map a
+            // view in it, D-145): key 4 leaves the deck open.
             QTest::keyClick(s.window, Qt::Key_M);
             QTRY_VERIFY_WITH_TIMEOUT(s.deckOpen(), kWait);
-            QTest::keyClick(s.window, Qt::Key_5);
+            QTest::keyClick(s.window, Qt::Key_4);
             QTest::qWait(150);
             QVERIFY(s.deckOpen());
             QCOMPARE(s.mode(), 0);
@@ -387,7 +388,7 @@ private slots:
             QTest::keyClick(s.window, Qt::Key_Left);
             QCOMPARE(deck->property("focusIndex").toInt(), 1);
             QTest::keyClick(s.window, Qt::Key_End);
-            QCOMPARE(deck->property("focusIndex").toInt(), 3);
+            QCOMPARE(deck->property("focusIndex").toInt(), 2);  // the last of three
             QTest::keyClick(s.window, Qt::Key_Right);  // wraps
             QCOMPARE(deck->property("focusIndex").toInt(), 0);
             QTest::keyClick(s.window, Qt::Key_Home);
@@ -482,11 +483,11 @@ private slots:
             auto borderWidth = [](QQuickItem* card) {
                 return qvariant_cast<QObject*>(card->property("border"))->property("width").toDouble();
             };
-            QCOMPARE(cards().size(), 4);
+            QCOMPARE(cards().size(), 3);
             QCOMPARE(s.one("ModeDeck")->property("current").toInt(), 0);
             QTRY_VERIFY_WITH_TIMEOUT(borderWidth(cards()[0]) > borderWidth(cards()[1]), kWait);
-            for (int i = 1; i < 4; ++i) QCOMPARE(borderWidth(cards()[i]), borderWidth(cards()[1]));
-            QCOMPARE(cardCentres(s).size(), 4);
+            for (int i = 1; i < 3; ++i) QCOMPARE(borderWidth(cards()[i]), borderWidth(cards()[1]));
+            QCOMPARE(cardCentres(s).size(), 3);
 
             // A click outside the card closes the deck and changes nothing.
             QTest::mouseClick(s.window, Qt::LeftButton, Qt::NoModifier, QPoint(40, s.window->height() - 40));
@@ -501,11 +502,6 @@ private slots:
             QCOMPARE(s.pillName(), QString("Training"));
             QCOMPARE(s.one("ModeDeck")->property("current").toInt(), 2);
             QTRY_VERIFY_WITH_TIMEOUT(borderWidth(cards()[2]) > borderWidth(cards()[0]), kWait);
-            // The not-yet-ported modes show their page (a Scene Map placeholder).
-            openDeckWithPill(s);
-            QTest::mouseClick(s.window, Qt::LeftButton, Qt::NoModifier, cardCentres(s)[3]);
-            QTRY_COMPARE_WITH_TIMEOUT(s.mode(), 3, kWait);
-            QCOMPARE(s.pillName(), QString("Scene Map"));
             // Back to the Player: its page is shown again.
             openDeckWithPill(s);
             QTest::mouseClick(s.window, Qt::LeftButton, Qt::NoModifier, cardCentres(s)[0]);

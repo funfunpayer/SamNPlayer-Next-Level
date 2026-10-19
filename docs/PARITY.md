@@ -486,7 +486,9 @@ Note: the Generator panel (`#tab-generator`) is also the "Create" workspace; the
 
 ## 7. Scene Map mode (Player "scenemap" view + Generator "rhythm" view)
 
-- [ ] Scene Map is a top-level mode (mode deck card 5, teal): it shows the Player panel with the bottom tab "Scene Map" forced, scene strip and chapter bands visible, curve edit off; leaving restores the previous bottom tab (player_layout.js:616-632; main.js:44-58,91-114)
+In SamNPlayer 2 the Scene Map is a view in the Editor, not a mode (D-145): the items below are ported into the Generator/Editor page; the mode card is dropped on purpose.
+
+- [ ] ~~Scene Map is a top-level mode~~ (dropped, D-145: shown in the Editor) — was: mode deck card 5, teal: it shows the Player panel with the bottom tab "Scene Map" forced, scene strip and chapter bands visible, curve edit off; leaving restores the previous bottom tab (player_layout.js:616-632; main.js:44-58,91-114)
 - [ ] Bottom tabs in the Player: Timeline · Chapters · Bookmarks · Scene Map · Audio Analysis; last tab remembered (`pb.bottomTab`); Inspector tabs Devices · Audio · Playback · View remembered (`pb.inspectorTab`) (player_layout.js:174-185,485-548)
 - [ ] Scene cards grid (one per chapter, listbox): thumbnail nearest the scene start (inside the scene preferred), name, "m:ss – m:ss · duration", feel badge, colour class c0-c4, `is-selected`, `is-current` (playing scene, refreshed every 500 ms); click selects, double-click or Enter seeks, arrows move selection; count "N scene(s)"; empty text "No scenes yet. Scenes are the script's chapters — add one with "+" on the scene strip or in the Chapters tab." (scene_panel.js:222-300)
 - [ ] Details pane — title, Range, Duration, "Scene n / N", Prev / Go to scene / Next, Sam Neo 2 feel select (Classic, Oral, Intercourse, Breast, Hand) saved per chapter via `SaveChapterScenes`, "Suggested: <feel> · <source> NN%" + Use, "No suggestion — no scene detection for this part.", technical block (video name, Resolution, Frame rate "(variable)", Codec via `ProbeCreateVideo`) (scene_panel.js:144-220)

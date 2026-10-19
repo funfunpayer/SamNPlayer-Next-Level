@@ -87,7 +87,7 @@
 2. **P3.3 rest:** Settings persistence of the Generator's choices (contact span and curve included); the contact-marks overlay in the Player (PARITY §3 "Contact marks overlay on video").
 3. **P3.6** Quality Doctor on the dense curve, the signal auto-retry and the stroke preview (feeds the adaptive detrend); then the controller reports Quality as its second number (GD-04).
 4. **P3.4** two-point / multi-point, rhythm grid, follow marks; **P3.9** improvements, each measured with `samn_compare` (first lever: memory templates of the subject, not the box, GD-10).
-5. Player finish (`PARITY.md` §1–3), donation pages (manifest), devices for Svakom and other toys, Scene Map, Settings / Tools; bug hunt; release.
+5. Player finish (`PARITY.md` §1–3), donation pages (manifest), devices for Svakom and other toys, the Scene Map as a view in the Editor (D-145, no own mode), Settings / Tools; bug hunt; release.
 
 Owner reminders (16–17 Oct): the Generator is the Editor; detection better than 0.7 but measured against it; curves stay real curves (audio too); every function of 0.7 and all earlier versions and plans comes along, what was removed on purpose stays out (and why is in `VERSIONS_AND_PLANS.md`).
 
