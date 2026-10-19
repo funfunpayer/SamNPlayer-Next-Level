@@ -1,0 +1,136 @@
+// Label tracks for AI Train (D-155 §2.2).
+#include <doctest/doctest.h>
+
+#include <filesystem>
+#include <stdexcept>
+
+#include "samn/label_track.h"
+
+using samn::LabelBox;
+using samn::LabelKey;
+using samn::LabelTrack;
+
+namespace {
+LabelKey Box(int64_t ms, double x, bool confirmed = true, const char* source = "user") {
+    LabelKey k;
+    k.ms = ms;
+    k.box = {x, 10, 20, 20};
+    k.confirmed = confirmed;
+    k.source = source;
+    return k;
+}
+LabelKey Absent(int64_t ms, bool confirmed = true) {
+    LabelKey k;
+    k.ms = ms;
+    k.absent = true;
+    k.confirmed = confirmed;
+    return k;
+}
+}  // namespace
+
+TEST_CASE("a label track interpolates between box keys") {
+    LabelTrack t("glans");
+    t.SetKey(Box(1000, 100));
+    t.SetKey(Box(0, 0));  // out of order: kept sorted
+    REQUIRE(t.keys().size() == 2);
+    CHECK(t.keys().front().ms == 0);
+    CHECK_FALSE(t.At(-10).present);
+    const auto mid = t.At(500);
+    CHECK(mid.present);
+    CHECK(mid.box.x == doctest::Approx(50));
+    CHECK(mid.reviewed);
+    // After the last key the box is held.
+    CHECK(t.At(5000).present);
+    CHECK(t.At(5000).box.x == doctest::Approx(100));
+}
+
+TEST_CASE("an absent key hides the label until the next box key") {
+    LabelTrack t("mouth");
+    t.SetKey(Box(0, 0));
+    t.SetKey(Absent(1000));
+    t.SetKey(Box(2000, 50));
+    CHECK(t.At(900).present);
+    CHECK(t.At(900).box.x == doctest::Approx(0));  // no sliding into the absent key
+    CHECK_FALSE(t.At(1500).present);
+    CHECK(t.At(1500).reviewed);  // reviewed and empty: a negative sample
+    CHECK(t.At(2000).present);
+}
+
+TEST_CASE("reviewed needs confirmed keys on both sides") {
+    LabelTrack t("hand_1");
+    t.SetKey(Box(0, 0, true));
+    t.SetKey(Box(1000, 100, false, "tracker"));
+    CHECK_FALSE(t.At(500).reviewed);
+    CHECK(t.At(0).reviewed);
+    CHECK(t.Confirm(0, 2000) == 1);
+    CHECK(t.At(500).reviewed);
+}
+
+TEST_CASE("keys are replaced, found and removed within a tolerance") {
+    LabelTrack t("glans");
+    t.SetKey(Box(1000, 0));
+    t.SetKey(Box(1010, 30), 20);  // the same frame: replaced
+    REQUIRE(t.keys().size() == 1);
+    CHECK(t.keys()[0].box.x == doctest::Approx(30));
+    CHECK(t.KeyAt(1015, 20) != nullptr);
+    CHECK(t.KeyAt(1100, 20) == nullptr);
+    CHECK_FALSE(t.RemoveKey(1100, 20));
+    CHECK(t.RemoveKey(1000, 20));
+    CHECK(t.keys().empty());
+}
+
+TEST_CASE("a label project survives save and load") {
+    samn::LabelProject p;
+    p.video = "clip.mp4";
+    p.duration_ms = 3000;
+    auto& g = p.AddTrack("glans");
+    g.SetKey(Box(0, 0));
+    g.SetKey(Absent(1000, false));
+    p.AddTrack("glans");  // no second track of the same label
+    p.AddTrack("mouth").SetKey(Box(500, 5, false, "teacher:nudenet"));
+    REQUIRE(p.tracks.size() == 2);
+    const auto dir = std::filesystem::temp_directory_path() / "samn_label_track_test";
+    std::filesystem::create_directories(dir);
+    const auto path = samn::LabelProjectPath(dir / "clip.mp4");
+    CHECK(path.filename() == "clip.labels.json");
+    samn::SaveLabelProject(path, p);
+    const auto back = samn::LoadLabelProject(path);
+    CHECK(back.video == "clip.mp4");
+    CHECK(back.duration_ms == 3000);
+    REQUIRE(back.tracks.size() == 2);
+    REQUIRE(back.tracks[0].keys().size() == 2);
+    CHECK(back.tracks[0].keys()[1].absent);
+    CHECK_FALSE(back.tracks[0].keys()[1].confirmed);
+    CHECK(back.tracks[1].keys()[0].source == "teacher:nudenet");
+    CHECK_THROWS_AS(samn::ParseLabelProject("{}"), std::runtime_error);
+    CHECK_THROWS_AS(samn::ParseLabelProject("not json"), std::runtime_error);
+    std::filesystem::remove_all(dir);
+}
+
+TEST_CASE("samples come from reviewed stretches only, negatives included") {
+    samn::LabelProject p;
+    p.duration_ms = 4000;
+    auto& g = p.AddTrack("glans");
+    g.SetKey(Box(0, 0));
+    g.SetKey(Box(1000, 100));
+    g.SetKey(Absent(2000));
+    g.SetKey(Absent(3000));
+    p.AddTrack("hand_1").SetKey(Box(0, 0, false, "tracker"));  // never reviewed
+    p.AddTrack("other").SetKey(Box(0, 0));                      // not a class
+    const auto samples = samn::ExportSamples(p, {"glans", "hand_1"}, 500);
+    // 0..4000 every 500 ms; glans is reviewed from 0 to the end (absent 2000..).
+    REQUIRE(samples.size() == 9);
+    CHECK(samples[1].ms == 500);
+    REQUIRE(samples[1].items.size() == 1);
+    CHECK(samples[1].items[0].class_id == 0);
+    CHECK(samples[1].items[0].box.x == doctest::Approx(50));
+    CHECK(samples[6].items.empty());  // 3000 ms: a negative sample
+    CHECK(samn::ExportSamples(p, {"glans"}, 0).empty());
+}
+
+TEST_CASE("YOLO lines are normalised and clipped to the frame") {
+    samn::LabelSample s;
+    s.items.push_back({2, LabelBox{90, 40, 20, 20}});  // runs over the right edge
+    s.items.push_back({0, LabelBox{200, 200, 5, 5}});  // fully outside
+    CHECK(samn::YoloLines(s, 100, 100) == "2 0.950000 0.500000 0.100000 0.200000\n");
+}
