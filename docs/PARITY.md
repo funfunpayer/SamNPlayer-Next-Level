@@ -10,12 +10,12 @@
 
 ## Status (19 Oct 2026)
 
-Checked against the code on `main` after #68, plus the Settings page (General, Device, Log, About) and the update check (D-147); the Tools Home page is dropped (D-148) (`python3 ci/parity_status.py` prints this table; "partly" counts as half). Items marked partly say what is in and what is missing.
+Checked against the code on `main` after #68, plus the Settings page (General, Device, Log, About) the update check (D-147) and the open-media flow (Create script → Generator, always-create); the Tools Home page is dropped (D-148) (`python3 ci/parity_status.py` prints this table; "partly" counts as half). Items marked partly say what is in and what is missing.
 
 | Section | Done | Partly | Dropped on purpose | Open | Share |
 |---|---|---|---|---|---|
 | 1. App shell, navigation, global behaviour | 15 | 8 | 5 | 11 | 62 % |
-| 2. Tools Home, Settings, Log, Legal, Update, Open-media/Library entry | 22 | 15 | 15 | 18 | 64 % |
+| 2. Tools Home, Settings, Log, Legal, Update, Open-media/Library entry | 26 | 12 | 15 | 17 | 67 % |
 | 3. Player and Editor | 53 | 43 | 0 | 31 | 59 % |
 | 4. Generator | 5 | 27 | 1 | 36 | 28 % |
 | 5. Training | 25 | 0 | 0 | 5 | 83 % |
@@ -28,9 +28,9 @@ Checked against the code on `main` after #68, plus the Settings page (General, D
 | 12. Help, handbook, legal, notifications | 0 | 0 | 0 | 4 | 0 % |
 | 13. Wails-bound backend methods | 96 | 5 | 15 | 108 | 51 % |
 | 9. After 0.7.0: what landed in the old repo since | 6 | 1 | 0 | 8 | 43 % |
-| **All 676** | 246 | 115 | 40 | 275 | **51 %** |
+| **All 676** | 250 | 112 | 40 | 274 | **51 %** |
 
-The core and the file formats are further than the table shows: many open lines in §13 are 0.7 backend methods for tools not ported yet (AI training, benchmark, updates, plugins), and one C++ function often covers several of them. The biggest open blocks are §2 (hardware info, handbook, EULA/donate, Open-media routing), the rest of §4 (Quality Doctor, review panel, rhythm grid, AI helpers) and §6 (AI Train, Benchmark).
+The core and the file formats are further than the table shows: many open lines in §13 are 0.7 backend methods for tools not ported yet (AI training, benchmark, updates, plugins), and one C++ function often covers several of them. The biggest open blocks are §2 (hardware info, handbook, donate, the beat bar), the rest of §4 (Quality Doctor, review panel, rhythm grid, AI helpers) and §6 (AI Train, Benchmark).
 
 Built from the 0.7.0 code by an inventory pass (16 Oct 2026). Gaps it names itself: the exact `data-help` texts and the Handbook body (port them verbatim from the cited files), `style.css` layout details, and the generator internals (CSRT, contact marks, `player/axes.go`) were only summarised; read those sources when porting.
 
