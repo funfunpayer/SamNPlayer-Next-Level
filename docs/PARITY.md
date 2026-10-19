@@ -834,11 +834,11 @@ Source: `funfunpayer/SamNPlayer` `main` up to #553, plus open branches. Everythi
 - [ ] Stroke filter fixes (#549): all four prefs saved in one write; pausing during the soft-start ramp stops and homes the stroker; input sorted and deduped (dedupe ✅ in `stroke_filter.cpp`; pause/home during the soft start ✅ → SamN2: test `homeOnPauseDuringSoftStart`)
 - [x] Cock Hero / Fap Hero beat bar → one stroke per beat (#552) → SamN2: `beatbar.h`, `beat_strokes.h` (UI "From the beat bar" in §2.7)
 - [ ] MEDIA-01 (#553): an MP4 whose codec cannot be read is "unknown", never assumed h264, so "Make playable" is offered (P1 open-media / P3 video layer)
-- [ ] D14 (#553): Suite files are never published with a public release (release workflow, when SamNPlayer 2 gets one)
+- [ ] D14 (#553), replaced by D-127 / D-141: there is no Suite any more. The release contract instead: only released artefacts are published, never private media, golden clips, user data or secrets, and the package is complete (release workflow, when SamNPlayer 2 gets one)
 - [x] Empty Player = round Play button + Open… (#550) → SamN2: PlayerPage (D-138)
 - [ ] Silk look (#550): slow drifting silk layers behind the Training stage and the Player video area, stronger glow on rings and lanes, a soft breathing pulse on the Mode pill; all off with reduced motion — partly: SilkLayer.qml drifts behind the Player video stage (32 s / 40 s as the CSS), breathing halo on the Play button (4.5 s, 2.4 s playing), Mode pill pulse (#21); Training stage and ring glow come with Training; no reduced-motion switch yet
 - [ ] Training rings closer to the mockup: glow gauges, silk between rings, centre name / % / wave (#550, P4 Training)
-- [ ] Training categories, level programs, body cues, session recap (branch `cursor/training-levels-recap-8d66`, not merged in the old repo yet; P4 Training)
+- [x] Training categories, level programs, body cues, session recap (branch `cursor/training-levels-recap-8d66`, 0.7 PR #551) → SamN2: `core/include/samn/training.h` and the Training mode (#37); no medical or biofeedback claims, as in the PR
 - [x] Generator with editor (0.7 #540, `gen_editor.js`) → SamN2: one mode, the Generator is the Editor (D-137)
 
 ### 9.1 Branch sweep of the old repo (99 branches, 16 Oct 2026)

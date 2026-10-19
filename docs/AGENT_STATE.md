@@ -92,7 +92,7 @@ Owner reminders (16–17 Oct): the Generator is the Editor; detection better tha
 
 ## Waiting on the Owner
 
-- The four open questions in `DECISIONS.md` § Resolutions: Suite-only features; SamNPlayer 2 as the one free app plus repo visibility; AI drafts of the curve; the role of C#.
+- Nothing open from `DECISIONS.md` § Resolutions: one version, no Suite (D-127); the one free SamNPlayer (D-128); AI drafts opt-in and verified (D-129); no C# for now (D-131); everything open under GPL-3.0-or-later (D-141, which replaces D-128's "source private"). Repo visibility follows D-141 with the `LICENSING.md` checklist below.
 - Golden clips for the generator (P3): run `samn_compare` locally with a manifest (video, box, reference, 0.7 output). They stay out of the repo.
 - Before the repo goes public: the checklist in `LICENSING.md`.
 - The v0.7.0 tag in the old repo.

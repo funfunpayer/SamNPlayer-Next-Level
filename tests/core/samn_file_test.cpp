@@ -854,3 +854,25 @@ TEST_CASE("samn_file: quality score and verdict are separate fields") {  // Test
         CHECK(d.quality_passed == c.passed);
     }
 }
+
+// 0.7 #303/#304 (scene_map_load_test.go TestSceneMarkReviewedConfidenceRoundTrip):
+// "not reviewed" must never turn into "reviewed" (or vanish) on save and load.
+TEST_CASE("samn_file: a scene mark's reviewed:false and confidence survive save and load") {
+    const Document d = ParseDocument(R"({"general":[{"at":0,"pos":10},{"at":500,"pos":90}],
+      "sceneMap":{"version":1,"marks":[
+        {"id":"a","kind":"tip","confidence":0.42,"reviewed":false},
+        {"id":"b","kind":"tip","confidence":0.9,"reviewed":true},
+        {"id":"c","kind":"tip"}]}})");
+    const Document back = ParseDocument(MarshalDocument(d));
+    REQUIRE(back.scene_map.has_value());
+    const auto& m = back.scene_map->marks;
+    REQUIRE(m.size() == 3);
+    REQUIRE(m[0].reviewed.has_value());
+    CHECK(*m[0].reviewed == false);
+    CHECK(m[0].confidence == doctest::Approx(0.42));
+    REQUIRE(m[1].reviewed.has_value());
+    CHECK(*m[1].reviewed == true);
+    CHECK(!m[2].reviewed.has_value());  // never set stays unset
+    const auto j = nlohmann::json::parse(MarshalDocument(back));
+    CHECK(j["sceneMap"]["marks"][0]["reviewed"] == false);  // written, not dropped
+}
