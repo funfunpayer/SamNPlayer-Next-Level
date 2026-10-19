@@ -29,6 +29,7 @@ std::string CutUtf8(const std::string& s, std::size_t max_len) {
 std::string LatestReleaseApiUrl() { return std::string("https://api.github.com/repos/") + kReleaseRepo + "/releases/latest"; }
 
 std::string ReleasesPageUrl() { return std::string("https://github.com/") + kReleaseRepo + "/releases"; }
+std::string ProjectPageUrl() { return std::string("https://github.com/") + kReleaseRepo; }
 
 std::optional<std::array<int, 3>> ParseReleaseTag(const std::string& tag) {
     std::string t = Trim(tag);

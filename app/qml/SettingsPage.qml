@@ -202,6 +202,31 @@ Item {
                             }
                         }
                     }
+                    // Support the project (D-153): the GitHub page for now.
+                    GlassCard {
+                        Layout.fillWidth: true; implicitHeight: supCol.implicitHeight + 28
+                        visible: root.updates !== null
+                        ColumnLayout {
+                            id: supCol
+                            anchors.fill: parent; anchors.margins: 14; spacing: 10
+                            Text { textFormat: Text.PlainText; text: qsTr("Support SamNPlayer"); color: Theme.text; font.family: Theme.font; font.pixelSize: 15 }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Text {
+                                    textFormat: Text.PlainText
+                                    Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                    text: qsTr("Show the support note at start")
+                                    color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                                }
+                                FlowToggle {
+                                    objectName: "supportNoteAtStart"
+                                    checked: root.updates !== null && root.updates.supportNoteAtStart
+                                    onToggled: (c) => root.updates.supportNoteAtStart = c
+                                }
+                            }
+                            FlowButton { icon: "heart"; text: qsTr("Open the GitHub page"); onClicked: root.updates.openProjectPage() }
+                        }
+                    }
                     // 0.7 Runtime & updates, check only (D-147).
                     GlassCard {
                         Layout.fillWidth: true; implicitHeight: updCol.implicitHeight + 28

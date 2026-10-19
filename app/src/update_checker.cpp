@@ -16,6 +16,7 @@ namespace samn::ui {
 namespace {
 
 constexpr const char* kKey = "update.check_on_startup";
+constexpr const char* kSupportKey = "ui.support_note_at_start";
 constexpr int kTimeoutMs = 10000;  // 0.7: 10 s
 
 QUrl ApiUrl() {
@@ -29,10 +30,27 @@ UpdateChecker::UpdateChecker(QObject* parent) : QObject(parent), net_(new QNetwo
     try {
         const auto v = samn::Settings().get(kKey);
         if (v.is_boolean()) check_on_startup_ = v.get<bool>();
+        const auto s = samn::Settings().get(kSupportKey);
+        if (s.is_boolean()) support_at_start_ = s.get<bool>();
     } catch (const std::exception&) {
         // Unreadable settings: the default stays.
     }
 }
+
+void UpdateChecker::setSupportNoteAtStart(bool on) {
+    if (on == support_at_start_) return;
+    support_at_start_ = on;
+    try {
+        samn::Settings().set(kSupportKey, on);
+    } catch (const std::exception& e) {
+        AppLog::instance().add(samn::LogSeverity::kWarn, tr("Setting %1 not saved: %2").arg(kSupportKey, e.what()));
+    }
+    emit supportNoteAtStartChanged();
+}
+
+QString UpdateChecker::projectPageUrl() const { return QString::fromStdString(samn::ProjectPageUrl()); }
+
+bool UpdateChecker::openProjectPage() { return QDesktopServices::openUrl(QUrl(projectPageUrl())); }
 
 UpdateChecker::~UpdateChecker() {
     if (reply_) reply_->abort();
