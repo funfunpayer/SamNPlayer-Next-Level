@@ -10,27 +10,27 @@
 
 ## Status (19 Oct 2026)
 
-Checked against the code on `main` after #68 (`python3 ci/parity_status.py` prints this table; "partly" counts as half). Items marked partly say what is in and what is missing.
+Checked against the code on `main` after #68, plus the Settings page (General, Device, Log, About) (`python3 ci/parity_status.py` prints this table; "partly" counts as half). Items marked partly say what is in and what is missing.
 
 | Section | Done | Partly | Dropped on purpose | Open | Share |
 |---|---|---|---|---|---|
-| 1. App shell, navigation, global behaviour | 14 | 8 | 5 | 12 | 59 % |
-| 2. Tools Home, Settings, Log, Legal, Update, Open-media/Library entry | 8 | 15 | 0 | 47 | 22 % |
+| 1. App shell, navigation, global behaviour | 15 | 8 | 5 | 11 | 62 % |
+| 2. Tools Home, Settings, Log, Legal, Update, Open-media/Library entry | 18 | 15 | 1 | 36 | 38 % |
 | 3. Player and Editor | 53 | 43 | 0 | 31 | 59 % |
 | 4. Generator | 5 | 27 | 1 | 36 | 28 % |
 | 5. Training | 25 | 0 | 0 | 5 | 83 % |
 | 6. Suite-only tools: AI Train and Benchmark | 0 | 0 | 0 | 16 | 0 % |
 | 7. Scene Map mode | 1 | 2 | 1 | 4 | 38 % |
-| 8. Devices | 14 | 9 | 0 | 6 | 64 % |
+| 8. Devices | 16 | 7 | 0 | 6 | 67 % |
 | 9. File formats, persistence and backend behaviours | 6 | 7 | 3 | 12 | 45 % |
 | 10. Keyboard shortcuts and hotkeys | 1 | 0 | 0 | 7 | 12 % |
 | 11. Visual and animation details that define behaviour | 0 | 0 | 0 | 9 | 0 % |
 | 12. Help, handbook, legal, notifications | 0 | 0 | 0 | 4 | 0 % |
 | 13. Wails-bound backend methods | 94 | 5 | 9 | 116 | 47 % |
 | 9. After 0.7.0: what landed in the old repo since | 6 | 1 | 0 | 8 | 43 % |
-| **All 676** | 227 | 117 | 19 | 313 | **45 %** |
+| **All 676** | 240 | 115 | 20 | 301 | **47 %** |
 
-The core and the file formats are further than the table shows: many open lines in §13 are 0.7 backend methods for tools not ported yet (AI training, benchmark, updates, plugins), and one C++ function often covers several of them. The biggest open blocks are §2 (Settings page, Tools, Log, Update, Legal), the rest of §4 (Quality Doctor, review panel, rhythm grid, AI helpers) and §6 (AI Train, Benchmark).
+The core and the file formats are further than the table shows: many open lines in §13 are 0.7 backend methods for tools not ported yet (AI training, benchmark, updates, plugins), and one C++ function often covers several of them. The biggest open blocks are §2 (Tools Home, Update, cache and hardware info), the rest of §4 (Quality Doctor, review panel, rhythm grid, AI helpers) and §6 (AI Train, Benchmark).
 
 Built from the 0.7.0 code by an inventory pass (16 Oct 2026). Gaps it names itself: the exact `data-help` texts and the Handbook body (port them verbatim from the cited files), `style.css` layout details, and the generator internals (CSRT, contact marks, `player/axes.go`) were only summarised; read those sources when porting.
 
@@ -527,9 +527,9 @@ In SamNPlayer 2 the Scene Map is a view in the Editor, not a mode (D-145): the i
 
 - [ ] Status block — vertical device shell graphic with amber/lilac vibration fill and teal suction fill (suction x 0.85), dot + status text ("Not connected", "Searching for device…" "Up to 20 seconds.", "Connected · name · address · Signal N dBm · Battery N%", "Mock device connected", "Playback or training is running — device test unavailable."), sub line, capability chips (transport: Direct BLE / Intiface / Mock; each channel capitalised, undriven ones "<Channel> · coming"; Battery N%; Raw values) (device.js:16-30,129-244) _(partly: status line, dot, chips and battery are in Inspector → Devices; the shell graphic with fills is still missing)_
 - [x] Connection type select — Direct via Bluetooth (ble), Via Intiface Central (intiface), TCode over Wi-Fi (OSR2 / SR6) (tcode), TCode over USB (tcode-serial), Mock device (mock); address fields shown per type (Intiface URL "e.g. 192.168.1.50 or empty = this machine"; TCode address "e.g. 192.168.1.50 or tcp://osr.local:8000"; serial port select + Refresh with "No serial port found"); per-type explanatory hint texts; last transport/address/port restored from settings; Connect (searches up to 20 s; Intiface 30 s), Disconnect (device.js:33-55,259-347) → SamN2: `InspectorPanel.qml` Devices → Device card (in the Player Inspector, not a Tools page yet); saved kind / target / port restored; screenshot check `tests/app/inspector_qml_test.cpp`
-- [ ] Function test fieldset (enabled when connected and no session): Vibration slider 0-100 "NN % (level 0-10)", Suction slider "NN % (level 0-5)" (levels = round(pct/100 x 10|5)), "Short test pulse" (0.5 vibration for 2 s then stop), "All off" (device.js:57-77,349-416) _(partly: sliders with levels and All off are in Inspector → Devices → Function test; "Short test pulse" is still missing)_
-- [ ] Raw value test (collapsible) — channel select, number 0-255, Send (`TestRawValue`; hint "above documented maximum (10|5)") (device.js:79-94,390-403) _(partly: `DeviceController::testRawValue` and the raw values view in the Inspector; missing: the 0.7 form)_
-- [ ] Diagnostics (collapsible) — "Run diagnostics" -> `RunDeviceDiagnostics` (raw acceptance, update rate, channel interaction; events `diagnostics:entry`, `diagnostics:done`), result table Phase / Commands / Errors / Avg latency / Max latency + notes + "Run was interrupted, incomplete.", history list "date (Mock|device) — N commands, M errors[, interrupted]" from JSONL (device.js:96-107,418-492) _(partly: `DeviceController::runDiagnostics` / `cancelDiagnostics` with the 0.7 phases (`device/diagnostics.h`, tests in `device_diagnostics_test.cpp`); missing: the result table in the UI)_
+- [x] Function test fieldset (enabled when connected and no session): Vibration slider 0-100 "NN % (level 0-10)", Suction slider "NN % (level 0-5)" (levels = round(pct/100 x 10|5)), "Short test pulse" (0.5 vibration for 2 s then stop), "All off" (device.js:57-77,349-416) → SamN2: Settings → Device → Function test (`SettingsPage.qml`, test `settingsDeviceTabTestsTheMockDevice`); the sliders are also in Inspector → Devices
+- [x] Raw value test (collapsible) — channel select, number 0-255, Send (`TestRawValue`; hint "above documented maximum (10|5)") (device.js:79-94,390-403) → SamN2: Settings → Device → Raw value test (`DeviceController::testRawValue`; test `settingsDeviceTabTestsTheMockDevice`)
+- [ ] Diagnostics (collapsible) — "Run diagnostics" -> `RunDeviceDiagnostics` (raw acceptance, update rate, channel interaction; events `diagnostics:entry`, `diagnostics:done`), result table Phase / Commands / Errors / Avg latency / Max latency + notes + "Run was interrupted, incomplete.", history list "date (Mock|device) — N commands, M errors[, interrupted]" from JSONL (device.js:96-107,418-492) _(partly: Settings → Device runs `DeviceController::runDiagnostics` / `cancelDiagnostics` with live status, the result table, notes and the interrupted note (test `settingsDeviceTabTestsTheMockDevice`); missing: the history list from JSONL)_
 - [ ] Status polled every 2 s; broadcasts `device:status` window event to top bar, sidebar, Tools home, Player inspector, Training, Generator (device.js:246-258,505-510)
 - [ ] Settings applied on connect: `device.connect_test` pulse (vib 0.3, 150 ms, suction 0.3, 150 ms, stop), saved per-motor levels re-applied (app_device.go:186-209,259-274) _(partly: `device.connect_test` (default off) and the saved motor levels on connect (`device_controller.cpp`))_
 - [ ] Session rules — one device connection: playback/training reuse the Tools connection ("Using existing connection from Tools → Device.") and never disconnect it; otherwise they connect (20 s) and disconnect afterwards; test controls blocked during sessions; second start refused "playback or training is already running — stop it first" (app.go:421-465; app_device.go:131-148) _(partly: `sessionActive` is true while playing and blocks connect / disconnect / tests; playback does not connect by itself yet and the "Using existing connection" text is missing)_ _(training part done: reuse of the connection, 20 s connect, disconnect only a connection Training made; test `anExistingConnectionIsReusedAndKept`. Open: a second start while Playback runs is not refused with that message.)_

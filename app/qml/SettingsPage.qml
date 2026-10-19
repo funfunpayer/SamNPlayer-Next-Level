@@ -11,6 +11,8 @@ Item {
     property bool open: false
     // The Player (script folders, reload after "Honor inverted").
     property PlayerController player: null
+    // The app's one device connection (Main.qml).
+    property DeviceController device: null
     property int tab: 0
     readonly property alias settings: ctl
     visible: opacity > 0
@@ -55,7 +57,7 @@ Item {
                 Item { width: 12 }
                 FlowTabs {
                     objectName: "settingsTabs"
-                    model: [qsTr("General"), qsTr("Log"), qsTr("About")]
+                    model: [qsTr("General"), qsTr("Device"), qsTr("Log"), qsTr("About")]
                     current: root.tab
                     onPicked: (i) => root.tab = i
                 }
@@ -201,10 +203,276 @@ Item {
                 }
             }
 
+            // ---- Device (0.7 Tools → Device: test, raw value, diagnostics) ----
+            Flickable {
+                id: devTab
+                objectName: "deviceTab"
+                visible: root.tab === 1
+                Layout.fillWidth: true; Layout.fillHeight: true
+                clip: true
+                contentHeight: devCol2.implicitHeight
+                readonly property var dev: root.device
+                readonly property bool connected: dev !== null && dev.state === "connected"
+                // 0.7: the test controls work only when connected and no playback / training runs.
+                readonly property bool canTest: connected && !dev.sessionActive
+                property var report: null
+                property string diagStatus: ""
+                // 0.7 levels: vibration 0-10, suction 0-5.
+                function level(pct, steps) { return Math.round(pct / 100 * steps) }
+                function showReport(json) {
+                    try { report = JSON.parse(json) } catch (e) { report = null }
+                    diagStatus = report ? qsTr("Done.") : ""
+                }
+                Connections {
+                    target: root.device
+                    function onDiagnosticsEntry(json) {
+                        try {
+                            const e = JSON.parse(json)
+                            const v = typeof e.sentRaw === "number" ? e.sentRaw : e.wantedValue
+                            devTab.diagStatus = qsTr("Running… %1").arg(e.phase.replace(/_/g, " "))
+                                + (e.channel ? " · " + e.channel : "") + (v !== undefined ? " · " + v : "")
+                                + (e.error ? " · " + qsTr("error: %1").arg(e.error) : "")
+                        } catch (err) {}
+                    }
+                    function onDiagnosticsFinished(json) { devTab.showReport(json) }
+                }
+                Timer {
+                    id: pulseTimer
+                    interval: 2000
+                    onTriggered: if (root.device) { root.device.setVibration(0); vibSlider.value = 0 }
+                }
+                ColumnLayout {
+                    id: devCol2
+                    width: parent.width; spacing: 14
+                    GlassCard {
+                        Layout.fillWidth: true; implicitHeight: statusRow.implicitHeight + 28
+                        RowLayout {
+                            id: statusRow
+                            anchors.fill: parent; anchors.margins: 14; spacing: 10
+                            Rectangle {
+                                width: 10; height: 10; radius: 5
+                                color: devTab.connected ? "#3ddc84" : (root.device && root.device.state === "connecting") ? Theme.orange : "#5d6b7a"
+                            }
+                            Text {
+                                objectName: "deviceStatus"
+                                textFormat: Text.PlainText
+                                Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                text: !root.device || root.device.state === "disconnected" ? qsTr("Not connected — connect with the device chip at the top or in the Player's Inspector → Devices.")
+                                      : root.device.state === "connecting" ? qsTr("Searching for device… Up to 20 seconds.")
+                                      : [qsTr("Connected"), root.device.mock ? qsTr("Mock device") : root.device.name, root.device.address,
+                                         root.device.batteryOk ? qsTr("Battery %1%").arg(root.device.batteryPercent) : ""].filter((t) => t !== "").join(" · ")
+                                color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 13
+                            }
+                        }
+                    }
+                    GlassCard {
+                        Layout.fillWidth: true; implicitHeight: testCol.implicitHeight + 28
+                        opacity: devTab.canTest ? 1 : 0.5
+                        ColumnLayout {
+                            id: testCol
+                            anchors.fill: parent; anchors.margins: 14; spacing: 10
+                            Text { textFormat: Text.PlainText; text: qsTr("Function test"); color: Theme.text; font.family: Theme.font; font.pixelSize: 15 }
+                            Text {
+                                textFormat: Text.PlainText
+                                visible: devTab.connected && root.device.sessionActive
+                                text: qsTr("Playback or training is running — the test waits until it stops.")
+                                color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                            RowLayout {
+                                Layout.fillWidth: true; spacing: 10
+                                Text { textFormat: Text.PlainText; text: qsTr("Vibration"); Layout.preferredWidth: 90; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13 }
+                                FlowSlider {
+                                    id: vibSlider
+                                    objectName: "testVibration"
+                                    Layout.fillWidth: true
+                                    enabled: devTab.canTest
+                                    from: 0; to: 100
+                                    onMoved: (v) => root.device.setVibration(v / 100)
+                                }
+                                Text {
+                                    objectName: "testVibrationLabel"
+                                    textFormat: Text.PlainText
+                                    Layout.preferredWidth: 120
+                                    text: qsTr("%1 % (level %2)").arg(Math.round(vibSlider.value)).arg(devTab.level(vibSlider.value, 10))
+                                    color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                                }
+                            }
+                            RowLayout {
+                                Layout.fillWidth: true; spacing: 10
+                                visible: !root.device || root.device.capSuction || !devTab.connected
+                                Text { textFormat: Text.PlainText; text: qsTr("Suction"); Layout.preferredWidth: 90; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13 }
+                                FlowSlider {
+                                    id: sucSlider
+                                    objectName: "testSuction"
+                                    Layout.fillWidth: true
+                                    enabled: devTab.canTest
+                                    from: 0; to: 100
+                                    onMoved: (v) => root.device.setSuction(v / 100)
+                                }
+                                Text {
+                                    textFormat: Text.PlainText
+                                    Layout.preferredWidth: 120
+                                    text: qsTr("%1 % (level %2)").arg(Math.round(sucSlider.value)).arg(devTab.level(sucSlider.value, 5))
+                                    color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                                }
+                            }
+                            Row {
+                                spacing: 8
+                                FlowButton {
+                                    objectName: "testPulse"
+                                    text: qsTr("Short test pulse")
+                                    enabled: devTab.canTest && !pulseTimer.running
+                                    // 0.7: two seconds of medium vibration, then off.
+                                    onClicked: { root.device.setVibration(0.5); vibSlider.value = 50; pulseTimer.restart() }
+                                }
+                                FlowButton {
+                                    objectName: "testAllOff"
+                                    text: qsTr("All off"); danger: true
+                                    enabled: devTab.connected
+                                    onClicked: { pulseTimer.stop(); root.device.stop(); vibSlider.value = 0; sucSlider.value = 0 }
+                                }
+                            }
+                        }
+                    }
+                    GlassCard {
+                        Layout.fillWidth: true; implicitHeight: rawCol.implicitHeight + 28
+                        visible: !devTab.connected || root.device.capRaw
+                        opacity: devTab.canTest ? 1 : 0.5
+                        ColumnLayout {
+                            id: rawCol
+                            anchors.fill: parent; anchors.margins: 14; spacing: 10
+                            Text { textFormat: Text.PlainText; text: qsTr("Raw value test"); color: Theme.text; font.family: Theme.font; font.pixelSize: 15 }
+                            Text {
+                                textFormat: Text.PlainText
+                                Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                text: qsTr("Sends the level value without conversion. 0–10 / 0–5 come from Buttplug — whether the firmware accepts more is unclear. Try 3 vs 4, then 20/50/100.")
+                                color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                            RowLayout {
+                                spacing: 8
+                                FlowCombo {
+                                    id: rawChannel
+                                    objectName: "rawChannel"
+                                    Layout.preferredWidth: 150
+                                    textRole: "label"; valueRole: "value"
+                                    model: [{ label: qsTr("Vibration"), value: "vibration" }, { label: qsTr("Suction"), value: "suction" }]
+                                }
+                                FlowTextField {
+                                    id: rawValue
+                                    objectName: "rawValue"
+                                    implicitWidth: 90
+                                    text: "0"
+                                    maxLength: 3
+                                }
+                                FlowButton {
+                                    objectName: "rawSend"
+                                    text: qsTr("Send")
+                                    enabled: devTab.canTest
+                                    onClicked: root.device.testRawValue(rawChannel.currentValue, Math.max(0, Math.min(255, parseInt(rawValue.text) || 0)))
+                                }
+                                Text {
+                                    objectName: "rawHint"
+                                    textFormat: Text.PlainText
+                                    readonly property int max: rawChannel.currentValue === "suction" ? 5 : 10
+                                    text: (parseInt(rawValue.text) || 0) > max ? qsTr("above documented maximum (%1)").arg(max) : ""
+                                    color: Theme.orange; font.family: Theme.fontSoft; font.pixelSize: 12
+                                }
+                            }
+                        }
+                    }
+                    GlassCard {
+                        Layout.fillWidth: true; implicitHeight: diagCol.implicitHeight + 28
+                        opacity: devTab.canTest || (root.device && root.device.diagnosticsRunning) ? 1 : 0.5
+                        ColumnLayout {
+                            id: diagCol
+                            anchors.fill: parent; anchors.margins: 14; spacing: 10
+                            Text { textFormat: Text.PlainText; text: qsTr("Device diagnostics"); color: Theme.text; font.family: Theme.font; font.pixelSize: 15 }
+                            Text {
+                                textFormat: Text.PlainText
+                                Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                text: qsTr("Automated test sequence (raw acceptance, update rate, channel interaction). Measures write latency and accepted values — not felt intensity. The device moves briefly several times.")
+                                color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                            Row {
+                                spacing: 8
+                                FlowButton {
+                                    objectName: "diagRun"
+                                    text: qsTr("Run diagnostics")
+                                    enabled: devTab.canTest && !root.device.diagnosticsRunning
+                                    onClicked: {
+                                        devTab.report = null
+                                        devTab.diagStatus = qsTr("Running… (vibration/suction move briefly several times)")
+                                        root.device.runDiagnostics()
+                                    }
+                                }
+                                FlowButton {
+                                    text: qsTr("Cancel")
+                                    visible: root.device !== null && root.device.diagnosticsRunning
+                                    onClicked: root.device.cancelDiagnostics()
+                                }
+                            }
+                            Text {
+                                objectName: "diagStatus"
+                                textFormat: Text.PlainText
+                                visible: text !== ""
+                                text: devTab.diagStatus
+                                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                            Text {
+                                textFormat: Text.PlainText
+                                visible: devTab.report !== null && devTab.report.interrupted === true
+                                text: qsTr("Run was interrupted, incomplete.")
+                                color: Theme.orange; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                            // 0.7 result table: Phase · Commands · Errors · Avg latency · Max latency.
+                            GridLayout {
+                                objectName: "diagTable"
+                                visible: devTab.report !== null
+                                columns: 5; columnSpacing: 18; rowSpacing: 4
+                                Repeater {
+                                    model: [qsTr("Phase"), qsTr("Commands"), qsTr("Errors"), qsTr("Avg latency"), qsTr("Max latency")]
+                                    delegate: Text {
+                                        required property string modelData
+                                        textFormat: Text.PlainText; text: modelData
+                                        color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12; font.weight: Font.Medium
+                                    }
+                                }
+                                Repeater {
+                                    objectName: "diagRows"
+                                    model: {
+                                        const out = []
+                                        for (const p of (devTab.report ? devTab.report.phases || [] : []))
+                                            out.push(p.phase.replace(/_/g, " "), String(p.commands), String(p.errors),
+                                                     p.meanLatencyMs.toFixed(1) + " ms", p.maxLatencyMs.toFixed(1) + " ms")
+                                        return out
+                                    }
+                                    delegate: Text {
+                                        required property string modelData
+                                        required property int index
+                                        textFormat: Text.PlainText; text: modelData
+                                        color: index % 5 === 2 && modelData !== "0" ? Theme.danger : Theme.text
+                                        font.family: Theme.fontSoft; font.pixelSize: 12
+                                    }
+                                }
+                            }
+                            Repeater {
+                                model: devTab.report ? devTab.report.notes || [] : []
+                                delegate: Text {
+                                    required property string modelData
+                                    Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                    textFormat: Text.PlainText; text: modelData
+                                    color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // ---- Log (0.7 log.js) ----
             ColumnLayout {
                 objectName: "logTab"
-                visible: root.tab === 1
+                visible: root.tab === 2
                 Layout.fillWidth: true; Layout.fillHeight: true
                 spacing: 10
                 RowLayout {
@@ -262,7 +530,7 @@ Item {
             // ---- About ----
             ColumnLayout {
                 objectName: "aboutTab"
-                visible: root.tab === 2
+                visible: root.tab === 3
                 Layout.fillWidth: true; Layout.fillHeight: true
                 spacing: 12
                 RowLayout {
