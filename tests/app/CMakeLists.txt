@@ -50,7 +50,7 @@ add_executable(generator_qml_test generator_qml_test.cpp)
 target_link_libraries(generator_qml_test PRIVATE samn_app samn_appplugin Qt6::Test)
 target_include_directories(generator_qml_test PRIVATE ${CMAKE_SOURCE_DIR}/tests/engine)
 add_test(NAME generator_qml_test COMMAND generator_qml_test)
-set_tests_properties(generator_qml_test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+set_tests_properties(generator_qml_test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_MEDIA_BACKEND=ffmpeg")
 
 add_executable(script_clock_test script_clock_test.cpp)
 target_link_libraries(script_clock_test PRIVATE samn_app Qt6::Test)
