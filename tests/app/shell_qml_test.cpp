@@ -601,6 +601,48 @@ private slots:
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }
 
+    // D-153: the support link bottom left, and the card once at start; the
+    // card closes and stays off at the next start when Settings turns it off.
+    void supportNoteShowsAtStartAndCanBeTurnedOff() {
+        {
+            Shell s;
+            loadShell(s);
+            QVERIFY(s.window);
+            auto* updates = s.window->findChild<samn::ui::UpdateChecker*>();
+            QVERIFY(updates && updates->supportNoteAtStart());
+            QCOMPARE(updates->projectPageUrl(), QStringLiteral("https://github.com/funfunpayer/SamNPlayer-Next-Level"));
+            QQuickItem* card = nullptr;
+            QQuickItem* link = nullptr;
+            for (QQuickItem* i : descendants(s.root())) {
+                if (i->objectName() == QLatin1String("supportCard")) card = i;
+                if (i->objectName() == QLatin1String("supportLink")) link = i;
+            }
+            QVERIFY(card && link);
+            QVERIFY(link->isVisible());
+            QTRY_VERIFY_WITH_TIMEOUT(card->isVisible() && card->property("opacity").toDouble() > 0.99, kWait);
+            QQuickItem* close = nullptr;
+            for (QQuickItem* i : descendants(card))
+                if (i->objectName() == QLatin1String("supportCardClose")) close = i;
+            QVERIFY(close);
+            QTest::mouseClick(s.window, Qt::LeftButton, {}, close->mapToScene(QPointF(close->width() / 2, close->height() / 2)).toPoint());
+            QTRY_VERIFY_WITH_TIMEOUT(!card->isVisible(), kWait);
+            updates->setSupportNoteAtStart(false);
+        }
+        {
+            Shell s;
+            loadShell(s);
+            QVERIFY(s.window);
+            QQuickItem* card = nullptr;
+            for (QQuickItem* i : descendants(s.root()))
+                if (i->objectName() == QLatin1String("supportCard")) card = i;
+            QVERIFY(card);
+            QTest::qWait(2500);
+            QVERIFY(!card->isVisible());
+            s.window->findChild<samn::ui::UpdateChecker*>()->setSupportNoteAtStart(true);
+        }
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
+
     void createScriptOpensTheGenerator() {
         {
             Shell s;

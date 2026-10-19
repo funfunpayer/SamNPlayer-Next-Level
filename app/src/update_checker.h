@@ -28,6 +28,10 @@ class UpdateChecker : public QObject {
     Q_PROPERTY(QString currentVersion READ currentVersion CONSTANT)
     // A startup check found an update the banner has not been closed for.
     Q_PROPERTY(bool bannerVisible READ bannerVisible NOTIFY changed)
+    // The support note (D-153): a link bottom left, and a card once at start
+    // while "ui.support_note_at_start" is on (default on).
+    Q_PROPERTY(bool supportNoteAtStart READ supportNoteAtStart WRITE setSupportNoteAtStart NOTIFY supportNoteAtStartChanged)
+    Q_PROPERTY(QString projectPageUrl READ projectPageUrl CONSTANT)
 
 public:
     explicit UpdateChecker(QObject* parent = nullptr);
@@ -41,6 +45,9 @@ public:
     QString notesPreview() const { return notes_preview_; }
     QString currentVersion() const;
     bool bannerVisible() const { return banner_ && state_ == QLatin1String("available"); }
+    bool supportNoteAtStart() const { return support_at_start_; }
+    void setSupportNoteAtStart(bool on);
+    QString projectPageUrl() const;
 
     // `onStartup`: quiet — a failure goes to the log only and a found update
     // shows the banner (0.7 main.js).
@@ -50,9 +57,12 @@ public:
     // Opens the release page in the browser (only this project's pages).
     Q_INVOKABLE bool openReleasePage();
     Q_INVOKABLE void dismissBanner();
+    // The project's GitHub page (the support note).
+    Q_INVOKABLE bool openProjectPage();
 
 signals:
     void checkOnStartupChanged();
+    void supportNoteAtStartChanged();
     void changed();
 
 private:
@@ -62,6 +72,7 @@ private:
     QNetworkAccessManager* net_ = nullptr;
     QPointer<QNetworkReply> reply_;
     bool check_on_startup_ = true;
+    bool support_at_start_ = true;
     bool quiet_ = false;
     bool banner_ = false;
     QString state_ = QStringLiteral("idle");

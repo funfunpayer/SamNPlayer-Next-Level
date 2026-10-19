@@ -12,6 +12,7 @@ namespace samn {
 inline constexpr const char* kReleaseRepo = "funfunpayer/SamNPlayer-Next-Level";
 std::string LatestReleaseApiUrl();  // https://api.github.com/repos/<repo>/releases/latest
 std::string ReleasesPageUrl();      // https://github.com/<repo>/releases
+std::string ProjectPageUrl();       // https://github.com/<repo> (the support note, D-153)
 
 // "v1.2.3" or "1.2.3" exactly (0.7 isPlainVersionTag); patch or other
 // channel tags ("patch-v1.2.3-p1", "v1.2.3-rc1") are not releases.

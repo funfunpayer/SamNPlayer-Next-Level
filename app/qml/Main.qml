@@ -178,6 +178,78 @@ ApplicationWindow {
     }
 
 
+    // Support note (D-153, Owner: "links unten und einmal beim Öffnen"): a quiet
+    // link in the bottom-left margin, and once per start a small card above it
+    // (off in Settings → General). Both open the project's GitHub page for now.
+    Row {
+        id: supportLink
+        objectName: "supportLink"
+        anchors.left: parent.left; anchors.leftMargin: 24
+        anchors.bottom: parent.bottom; anchors.bottomMargin: 2
+        height: 16; spacing: 5
+        opacity: supportArea.containsMouse ? 1 : 0.6
+        Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
+        Icon { name: "heart"; width: 13; height: 13; color: Theme.orange; anchors.verticalCenter: parent.verticalCenter }
+        Text {
+            textFormat: Text.PlainText
+            anchors.verticalCenter: parent.verticalCenter
+            text: qsTr("Support SamNPlayer on GitHub")
+            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11
+        }
+    }
+    MouseArea {
+        id: supportArea
+        anchors.fill: supportLink
+        hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+        onClicked: updates.openProjectPage()
+    }
+    GlassCard {
+        id: supportCard
+        objectName: "supportCard"
+        property bool shown: false
+        anchors.left: parent.left; anchors.leftMargin: 20
+        anchors.bottom: parent.bottom; anchors.bottomMargin: 24
+        width: Math.min(parent.width - 40, 380)
+        implicitHeight: supportCol.implicitHeight + 24
+        z: 5
+        visible: opacity > 0
+        opacity: shown && !settingsPage.open ? 1 : 0
+        Behavior on opacity { NumberAnimation { duration: Theme.animNormal } }
+        Rectangle { anchors.fill: parent; radius: Theme.radius; color: Theme.bgBottom; z: -1 }
+        Timer {
+            // A moment after the window shows; it goes away by itself.
+            interval: 1500; running: updates.supportNoteAtStart && !trainingStart; repeat: false
+            onTriggered: { supportCard.shown = true; supportHide.start() }
+        }
+        Timer { id: supportHide; interval: 20000; onTriggered: supportCard.shown = false }
+        ColumnLayout {
+            id: supportCol
+            anchors.fill: parent; anchors.margins: 12; anchors.leftMargin: 16; spacing: 8
+            RowLayout {
+                Layout.fillWidth: true; spacing: 8
+                Icon { name: "heart"; width: 18; height: 18; color: Theme.orange }
+                Text {
+                    textFormat: Text.PlainText
+                    Layout.fillWidth: true
+                    text: qsTr("Enjoying SamNPlayer?")
+                    color: Theme.text; font.family: Theme.font; font.pixelSize: 14
+                }
+                IconButton { objectName: "supportCardClose"; icon: "close"; tip: qsTr("Hide"); onClicked: supportCard.shown = false }
+            }
+            Text {
+                textFormat: Text.PlainText
+                Layout.fillWidth: true; wrapMode: Text.WordWrap
+                text: qsTr("It is free and open source. A star, a bug report or an idea on GitHub helps it grow.")
+                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+            }
+            FlowButton {
+                objectName: "supportCardOpen"
+                primary: true; icon: "heart"; text: qsTr("Open GitHub")
+                onClicked: { updates.openProjectPage(); supportCard.shown = false }
+            }
+        }
+    }
+
     // Settings over the current mode (D-146); Esc closes it.
     SettingsPage {
         id: settingsPage
