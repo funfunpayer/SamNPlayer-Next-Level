@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 18 Oct 2026 (late), Claude, branch `claude/samn2-test-diagnostics`.
+**Last update:** 19 Oct 2026 (night), Claude, branch `claude/samn2-label-tracks` (PR #84).
 
 ## Rules
 
@@ -82,9 +82,20 @@
 - **P3.3 continued, 19 Oct** (#59–#63 and this branch): the Player's theatre mode with the curve strip switchable; Find tip (0.7 `auto_roi`, bit-exact on 3 clips) with candidates; the queue (0.7 "Create queue"); the audit sync (`docs/AUDIT_2026-10-19.md`); **contact marks**: tip and contact classes, contact areas on the frame, contact vibration on by default; Generate writes the 0.7 recipe, `contactMarks` and the tip path (`.samn`), and the Player turns the path into spatial contact vibration (`core/include/samn/contact_marks.h`, 0.7 `feel_spatial` tests ported).
 - **Scene Map in the Editor** (D-145): the mode card is gone (#65); the Generator's right panel has a "Scenes" tab (cards with frame, name, range, feel per scene, suggestion from `<clip>.scene.json` or the contact mark, Apply suggestions) and scene bands under the curve lanes (`core/include/samn/scenes.h`, `EditorController` scenes).
 
-**Parity (19 Oct):** about 45 % of 0.7/0.8 by the `PARITY.md` checklist (227 done, 117 partly, 19 dropped on purpose, 313 open of 676); `python3 ci/parity_status.py` recounts.
+- **Look and shell, 19 Oct** (#76–#79): the painted wordmark (D-151); the Training stage Rings · Flow figure · Video (D-152); the support link and start card to the GitHub page (D-153); the README as a product page with screenshots (`docs/media/`).
+- **Generator centre = Player** (#80, #83, D-154): the shared `VideoTransport.qml`, the Generator plays its video, the collapsible left column (`GeneratorProjectPanel.qml`: queue, recent videos, generated and edited scripts).
+- **Optimize for** (#81, D-156): `core/include/samn/improve.h` (trim, fill gaps, heal tracking gaps), the Editor's *Optimize for* any device / Sam Neo 2, *Optimize after Create*.
+- **AI Train as a plugin mode** (#82 plan, #84 open, D-155, `docs/P4_AI_TRAIN.md`): the `Plugins` singleton and Settings switch, the fourth tab, the label editor (`label_track.h`, `LabelController`, `LabelEditor.qml`): classes with several objects, the contact point, *not in the picture* (X), *there but covered* (H), exclusion zones ("not this", `ExcludeZonesAt`), lanes, undo, export as images / YOLO labels / classes.txt.
+
+**Parity (19 Oct):** about 53 % of 0.7/0.8 by the `PARITY.md` checklist (227 done, 117 partly, 19 dropped on purpose, 313 open of 676); `python3 ci/parity_status.py` recounts.
 
 ## Next (in order; the work list is `LESSONS.md` § Gaps, `TEST_PARITY.md` and `P3_GENERATOR.md`)
+
+0. **Now (AI Train, D-155 / D-157):** merge #84 on green CI; then the phase lane
+   (D-157: intro, empty picture, oral / hand / breast / intercourse, climax,
+   cool-down) in the label editor, the rule-based phase suggestions, and the
+   phases in the Editor's scenes and the Training's video stage; then
+   D-155 step 3 (tracking between keyframes, *Next uncertain*).
 
 1. **Windows CI:** some app tests failed now and then with no output (stdout fully buffered when piped). Every app test now writes unbuffered (`tests/app/unbuffered_stdout.cpp`); find the cause on the next red run.
 2. **P3.3 done** (19 Oct): the Generator remembers its choices (0.7 `generator.*` keys), contact sensitivity and curve; the Player shows the contact marks on the video (#67). Left for later: the feel probe, the body map, the partner path.

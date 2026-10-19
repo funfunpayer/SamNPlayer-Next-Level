@@ -140,6 +140,32 @@ user's computer (D-027, D-028).
 | Training | Python, a separate process with progress and Cancel |
 | Benchmark | the second page of the mode |
 
+### 2.6 Phases (D-157)
+
+A clip has a story, not only objects. A **phase lane** sits above the object
+lanes; its stretches are dragged and named like chapters:
+
+| Phase | What it is | What the device does |
+|---|---|---|
+| `intro` | titles, talk, undressing before the action | holds at 0; the Training's video stage skips it |
+| `empty` | black, a title card, nobody in the picture | holds at 0; skipped like the intro |
+| `oral` | blowjob | the Oral feel: a steady seal, a pulse per stroke |
+| `hand` | handjob | the Hand feel: the grip follows speed |
+| `breast` | titjob | the Breast feel: softer, follows depth |
+| `intercourse` | penetration | the Intercourse feel: follows the rhythm |
+| `climax` | the peak, the cumshot | builds up to the peak; in Training the moment to pause or cool down |
+| `cool-down` | after the peak | fades out softly |
+
+- **Rules first.** Without any model the app proposes phases: dark or nearly
+  still pictures (empty), the start before the first steady rhythm (intro),
+  the stroke tempo and loudness rising to a peak and falling after it (climax,
+  cool-down), the scene type from the contact class (mouth → oral).
+- **Then learned.** Confirmed phases teach a small scene model of our own
+  (a classifier over frames and sound); teacher votes may join (§2.1).
+- **Used everywhere.** The Editor's scenes and their feel (Scene Map, D-145),
+  the Generator's *Optimize for*, and the Training's video stage. Suggestions
+  only: nothing changes a script or a session until the user confirms it.
+
 ## 3. Steps (one PR each, tests with synthetic clips only)
 
 1. **Plugin frame** (done): the `Plugins` singleton, the Settings switch, the
@@ -151,6 +177,9 @@ user's computer (D-027, D-028).
    images / labels / classes.txt) and `LabelEditor.qml` (classes and their
    objects, drawing and moving boxes on the frame, scrubbing and play, lanes,
    keys `1`–`9`, `,` `.`, arrows, `X`, `Delete`, Ctrl+Z).
+2d. **Phases** (D-157, §2.6): the phase lane in the editor and in
+   `<clip>.labels.json`, the rule-based suggestions, export for the scene
+   model; then phases into the Editor's scenes and the Training's video stage.
 3. **Tracking between keyframes:** CSRT forward and backward from each keyframe,
    blended; the uncertainty lane and *Next uncertain*.
 4. **Teachers:** ONNX Runtime in the build, NudeNet (one-click download),
