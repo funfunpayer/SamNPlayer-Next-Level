@@ -1,0 +1,166 @@
+# P4 — AI Train and Benchmark as a plugin mode (D-155)
+
+Owner, 19 Oct: AI training was in the released 0.7, so it comes back in full,
+as **its own plugin with its own mode**. It is in every build now and is
+released to users later. First it is ported exactly as 0.7 had it; after that
+come the improvements that were planned for it. This is the plan; the build
+starts with step 1; the Owner's answers are in §5.
+
+## 1. What 0.7 shipped (release commit `73bf0b6`)
+
+0.7 had about 4 000 lines for this: `roi_training.js` (1 881), `app_roi_training.go`
+(691), `generator/roi_training.go` (483), `generator/roi_still.go` (455),
+`benchmark.js` (628), plus the Python helpers `bootstrap_yolo_dataset.py`,
+`train_yolo_model.py`, `export_yolo_onnx.py` and `contact_detector.py` with
+their tests. The full checklist is `docs/PARITY.md` §6 (16 items).
+
+**AI Train** (Tools → AI Train), four steps:
+
+1. **Collect.** Open a video or a still image, go to a time, draw up to 12
+   named boxes (face, mouth, breasts, nipples, hand_1, hand_2, penis, glans,
+   vagina or a custom tag; a tag may repeat). *Use for training* tracks every
+   box through the clip with CSRT and writes YOLO samples (every N-th frame,
+   box scale, optional audio as WAV). Progress, log and Cancel.
+2. **Review.** A grid of the new samples with their boxes; *Correct box* opens
+   a review editor (zoom 0.2–8×, pan, select, relabel, redraw, add, delete,
+   discard). The tracker can be wrong on real footage, so review is part of
+   the flow, not an extra.
+3. **Dataset.** Class counts per split and "ready to train".
+4. **Train.** Epochs (100), device (Auto, CUDA, DirectML, Apple MPS, CPU), start
+   and cancel; the result is `roi_detector.onnx` plus `classes.json` in the AI
+   model folder, which the Generator's tip finding then uses.
+
+Also there: the **learned generation profile** (a small model trained from
+remembered scenes with a style, which suggests a profile at Create), the setup
+check and one-click install of the Python packages, and writing the
+requirement files for a manual install.
+
+**Benchmark** (Tools → Bench): cut a clip (in / out, width, no audio), compare a
+candidate script against a reference (verdict GUT / REVIEW / …, save the label
+for AI), run the golden-clip manifest (success, Quality Doctor pass, average
+score and correlation per clip) and keep the history of runs.
+
+## 2. The better way: teachers, a label editor, our own student
+
+The old repository already went further than the 0.7 page (`docs/VLM_TEACHER_PLAN.md`,
+`docs/VLM_MODELS.md`, `contact_points.py`, `contact_detector.py`): **teachers**
+propose the boxes, several of them vote, the user only confirms or corrects, and
+**our own small model (the student)** learns from the confirmed boxes. Measured
+there with NudeNet alone, fully automatic, through the real tracker: on the
+multi-person clip the correlation went from 0.304 to **0.406**; the golden clips
+stayed the same. The Owner (19 Oct): build this in, and make marking better than
+0.7's twelve still boxes, "editor-like": scrub through the clip, watch the boxes
+move, and drag them back where they drift.
+
+### 2.1 Teachers
+
+| Teacher | Runs | Delivery (Owner, 19 Oct) |
+|---|---|---|
+| **NudeNet 320n** (18 body-part classes, fast) | ONNX Runtime in C++, CPU or GPU | one click in Settings (its weights were trained with YOLOv8: licence unclear, so not bundled) |
+| **Vision-language models** (Qwen2.5-VL 7B, Qwen3-VL, InternVL …) | an OpenAI-compatible server: Ollama, LM Studio, or a machine in the user's network such as a Mac with larger models | the user installs and starts the server and enters its address (D-031); nothing goes to the internet |
+| **Our student** (below), once it wins the benchmark | ONNX Runtime in C++ | trained here |
+| The engine itself (CSRT box, rhythm grid) | built in | built in |
+
+Every point carries **agree**: how many teachers put a box within 1.5 cells and
+1.5 s of it. Only consensus boxes are offered as proposals; a wrong teacher can
+not pull a working track away (the old gate: the engine uses a point only where
+the tracker is more than 3 cells from it).
+
+### 2.2 The label editor (replaces the 12 still boxes)
+
+The centre is the Player (the shared stage and transport, D-154); a label is a
+**track through the clip**, not a box on one picture.
+
+- **Lanes like the timeline.** One lane per label (glans, mouth, hand_1 …) under
+  the video: where the label is present, where it is confirmed, where it is
+  absent, and the keyframes as dots. Colour shows the teachers' agreement.
+- **Scrub and drag.** Play or scrub; the boxes ride along on the video. Where a
+  box drifts, drag it back: that frame becomes a confirmed keyframe, and the
+  tracker re-runs from it to the next keyframe (forward and backward, the two
+  results blended), so one correction fixes the whole stretch.
+- **Absent.** A key marks "not visible from here" until it shows again; those
+  frames become negative samples, not wrong boxes.
+- **Next uncertain.** A button and a key jump to the next frame where the
+  teachers disagree or the tracker is unsure (active learning): the user spends
+  time where it matters.
+- **Keys.** Space play, `,` `.` one frame, `1`–`9` pick the label, drag to draw,
+  `Delete` removes the keyframe, `X` absent, `N` next uncertain, Ctrl+Z undo.
+- **Images too.** A still image is a clip of one frame.
+- **Export.** Every N-th frame of the confirmed stretches (and the absent ones as
+  negatives) becomes a sample, split by clip so validation never sees a training
+  clip; the sound can be kept.
+
+### 2.3 Our student
+
+- **RF-DETR** (Apache-2.0, code and pretrained weights), fine-tuned on the
+  confirmed samples, exported to one ONNX file. It runs in C++ with ONNX
+  Runtime, so playing and creating need no Python.
+- Training needs Python and PyTorch: a separate environment that Settings sets up
+  with one click (as 0.7's `ai_setup.py install train`; it never touches the
+  app's own OpenCV). Devices: CUDA, DirectML, Apple MPS, CPU.
+- 0.7's `ultralytics` path (AGPL-3.0, its weights too) is not used.
+- When the student beats the teachers on the benchmark, it becomes the fast
+  teacher and the Generator's tip finding uses it.
+
+### 2.4 What is in the package
+
+Bundled (licence-clean): ONNX Runtime (MIT) and the RF-DETR base weights
+(Apache-2.0). One click in Settings: NudeNet, the training environment. The
+user's own servers: the vision-language models. Datasets and models stay on the
+user's computer (D-027, D-028).
+
+### 2.5 Where it lives
+
+| Part | Where |
+|---|---|
+| The mode | the fourth tab *AI Train* (plugin), shown when *Settings → General → Plugins → AI Train (preview)* is on |
+| Label tracks, keyframes, interpolation, export | C++ core (with tests), QML editor |
+| Tracking between keyframes | `vision/` (OpenCV CSRT, already there) |
+| Teachers | C++: ONNX Runtime for NudeNet and the student, Qt Network for the vision servers |
+| Training | Python, a separate process with progress and Cancel |
+| Benchmark | the second page of the mode |
+
+## 3. Steps (one PR each, tests with synthetic clips only)
+
+1. **Plugin frame** (done): the `Plugins` singleton, the Settings switch, the
+   fourth tab and the page with its two parts.
+2. **Label editor core:** label tracks in the core (keyframes, interpolation,
+   absent stretches, confirmed state, undo, save beside the clip), the editor
+   in QML on the shared stage with the label lanes, export of samples.
+3. **Tracking between keyframes:** CSRT forward and backward from each keyframe,
+   blended; the uncertainty lane and *Next uncertain*.
+4. **Teachers:** ONNX Runtime in the build, NudeNet (one-click download),
+   vision servers (Ollama, LM Studio, any OpenAI-compatible address, e.g. a
+   Mac), consensus into proposed tracks.
+5. **Student:** the training environment (one click), RF-DETR training and ONNX
+   export with progress and Cancel; the student as a teacher and in the
+   Generator's tip finding.
+6. **Benchmark:** clip cutter, script compare with labels, golden-clip run and
+   history; the gate for every model and engine change.
+7. **The smaller learners from 0.7:** the learned generation profile and the
+   quality model (logistic regression over the run's numbers, kept only when it
+   beats the rules in cross-validation).
+
+Each step ticks its lines in `docs/PARITY.md` §6.
+
+## 4. Later improvements
+
+- **Learning from corrections** everywhere: a corrected box in the Generator
+  or an edit after Create can become a sample (opt-in, D-031).
+- **Pose** (MediaPipe / RTMPose, 0.8 research) as one more teacher, once it
+  passes the benchmark.
+- **Personal motion profiles** (CAP-08): opt-in, with rollback.
+
+## 5. The Owner's answers (19 Oct)
+
+1. **The switch:** off by default; *Settings → General → AI Train (preview)*
+   shows the fourth tab.
+2. **Benchmark:** in the same mode, as its second page.
+3. **The teacher:** a local model, or a model server in the user's own
+   network, for example a Mac that runs larger models (LM Studio or another
+   OpenAI-compatible server). The server is used only when the user enters
+   its address (D-031); nothing goes to the internet.
+4. **The models:** bundle what is licence-clean, the rest with one click.
+5. **Marking:** keep marking by hand as a second source, but make it better
+   than twelve still boxes: a label editor where you scrub through the clip,
+   see the boxes and drag them where they drift (§2.2).
