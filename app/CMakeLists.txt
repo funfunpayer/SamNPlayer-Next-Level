@@ -16,6 +16,7 @@ qt_add_qml_module(samn_app
     src/theme.h
     src/curve_item.h src/curve_item.cpp
     src/heatmap_item.h src/heatmap_item.cpp
+    src/wordmark_item.h src/wordmark_item.cpp
     src/audio_level.h src/audio_level.cpp
     src/ruler_item.h src/ruler_item.cpp
     src/mapping_settings.h src/mapping_settings.cpp
