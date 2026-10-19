@@ -709,11 +709,40 @@ void EditorController::setView(samn::ViewWindow v) {
 
 void EditorController::loadSceneProposals() {
     proposals_.clear();
+    phases_.clear();
     if (video_path_.isEmpty()) return;
     const std::filesystem::path p = samn::SceneProposalsPath(FsPath(video_path_));
     std::error_code ec;
-    if (!std::filesystem::exists(p, ec)) return;
-    if (auto loaded = samn::LoadSceneProposals(p)) proposals_ = std::move(*loaded);
+    if (std::filesystem::exists(p, ec))
+        if (auto loaded = samn::LoadSceneProposals(p)) proposals_ = std::move(*loaded);
+    // The label editor's phases (D-157): their feels join the suggestions.
+    const std::filesystem::path labels = samn::LabelProjectPath(FsPath(video_path_));
+    if (std::filesystem::exists(labels, ec)) {
+        try {
+            phases_ = samn::LoadLabelProject(labels).phases;
+        } catch (const std::exception&) {
+            phases_.clear();  // a broken labels file only loses the phases here
+        }
+        const auto more = samn::PhaseProposals(phases_);
+        proposals_.insert(proposals_.end(), more.begin(), more.end());
+    }
+}
+
+bool EditorController::hasPhases() const {
+    return hasScript() && std::any_of(phases_.begin(), phases_.end(), [](const samn::LabelPhase& p) { return p.confirmed; });
+}
+
+int EditorController::scenesFromPhases() {
+    if (!hasScript()) return 0;
+    int added = 0;
+    auto next = samn::ChaptersFromPhases(chapters_, phases_, timelineMs(), &added);
+    if (added == 0) {
+        setStatus(tr("Every phase already has its scene."));
+        return 0;
+    }
+    if (!saveScenes(std::move(next), scene_ranges_)) return 0;
+    setStatus(tr("%n scene(s) from the phases.", "", added));
+    return added;
 }
 
 std::vector<samn::ChapterScene> EditorController::chapterScenes() const {

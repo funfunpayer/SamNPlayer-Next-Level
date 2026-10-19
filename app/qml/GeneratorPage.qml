@@ -783,6 +783,12 @@ Item {
                         }
                     }
                     FlowButton {
+                        objectName: "scenesFromPhases"
+                        visible: edit.hasPhases
+                        text: qsTr("Scenes from phases")
+                        onClicked: edit.scenesFromPhases()
+                    }
+                    FlowButton {
                         objectName: "applySuggestions"
                         visible: edit.hasSceneSuggestions
                         text: qsTr("Apply suggestions")

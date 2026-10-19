@@ -76,6 +76,8 @@ class EditorController : public QObject {
     Q_PROPERTY(QVariantList scenes READ scenes NOTIFY scenesChanged)
     Q_PROPERTY(QStringList sceneFeels READ sceneFeels CONSTANT)
     Q_PROPERTY(bool hasSceneSuggestions READ hasSceneSuggestions NOTIFY scenesChanged)
+    // Confirmed phases from the AI Train label editor (<clip>.labels.json, D-157).
+    Q_PROPERTY(bool hasPhases READ hasPhases NOTIFY scenesChanged)
 
 public:
     explicit EditorController(QObject* parent = nullptr);
@@ -114,6 +116,7 @@ public:
     QVariantList scenes() const;
     QStringList sceneFeels() const;
     bool hasSceneSuggestions() const;
+    bool hasPhases() const;
 
     // A .funscript (its companion .samn is read too) or a .samn path.
     Q_INVOKABLE bool open(const QString& path);
@@ -177,6 +180,8 @@ public:
     Q_INVOKABLE bool clearSceneFeel(int index);
     // Gives every scene with a suggestion that feel (0.7 "Apply suggestions").
     Q_INVOKABLE int applySceneSuggestions();
+    // A scene where each confirmed phase begins, named after it (D-157).
+    Q_INVOKABLE int scenesFromPhases();
 
     Q_INVOKABLE bool undo();
     Q_INVOKABLE bool redo();
@@ -239,6 +244,7 @@ private:
     std::vector<samn::Chapter> chapters_;          // sorted by start
     std::vector<samn::SceneFeelRange> scene_ranges_;
     std::vector<samn::SceneProposal> proposals_;
+    std::vector<samn::LabelPhase> phases_;
     std::optional<samn::ContactMarks> contact_marks_;
     bool busy_ = false;
     bool sound_with_contact_ = false;

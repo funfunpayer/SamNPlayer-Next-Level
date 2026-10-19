@@ -1,6 +1,7 @@
 #include "samn/scenes.h"
 
 #include <algorithm>
+#include <cctype>
 #include <fstream>
 #include <map>
 #include <type_traits>
@@ -115,6 +116,7 @@ std::vector<ChapterScene> ChapterScenes(const std::vector<Chapter>& chapters, in
         // Scene detection: overlap x confidence per feel. Ordered map, so a
         // tie picks the same feel every time.
         std::map<std::string, double> weight;
+        std::map<std::string, std::pair<double, std::string>> strongest;  // the source that gave most
         double total = 0;
         for (const SceneProposal& p : proposals) {
             const int64_t lo = std::max(p.start_ms, cs.start_ms), hi = std::min(p.end_ms, cs.end_ms);
@@ -122,7 +124,10 @@ std::vector<ChapterScene> ChapterScenes(const std::vector<Chapter>& chapters, in
             const double span = double(hi - lo);
             total += span;
             const std::string f = NormalizeSceneFeel(p.scene_type);
-            if (!f.empty()) weight[f] += span * std::clamp(p.confidence, 0.0, 1.0);
+            if (f.empty()) continue;
+            const double w = span * std::clamp(p.confidence, 0.0, 1.0);
+            weight[f] += w;
+            if (w > strongest[f].first) strongest[f] = {w, p.source};
         }
         std::string best;
         double best_w = 0;
@@ -133,7 +138,7 @@ std::vector<ChapterScene> ChapterScenes(const std::vector<Chapter>& chapters, in
             }
         if (!best.empty() && total > 0) {
             cs.suggested = best;
-            cs.source = "scene detection";
+            cs.source = strongest[best].second.empty() ? "scene detection" : strongest[best].second;
             cs.confidence = best_w / total;
         } else if (!mark_feel.empty()) {
             cs.suggested = mark_feel;
@@ -143,6 +148,51 @@ std::vector<ChapterScene> ChapterScenes(const std::vector<Chapter>& chapters, in
         out.push_back(std::move(cs));
     }
     return out;
+}
+
+std::vector<SceneProposal> PhaseProposals(const std::vector<LabelPhase>& phases) {
+    std::vector<SceneProposal> out;
+    for (const auto& ph : phases) {
+        if (NormalizeSceneFeel(ph.name).empty() || ph.end_ms <= ph.start_ms) continue;
+        SceneProposal p;
+        p.t_ms = (ph.start_ms + ph.end_ms) / 2;
+        p.start_ms = ph.start_ms;
+        p.end_ms = ph.end_ms;
+        p.scene_type = ph.name;
+        p.confidence = ph.confirmed ? 1.0 : 0.6;
+        p.source = "phases";
+        out.push_back(std::move(p));
+    }
+    return out;
+}
+
+std::vector<Chapter> ChaptersFromPhases(std::vector<Chapter> chapters, const std::vector<LabelPhase>& phases,
+                                        int64_t total_ms, int* added) {
+    int n = 0;
+    std::vector<LabelPhase> confirmed;
+    for (const auto& ph : phases)
+        if (ph.confirmed && ph.end_ms > ph.start_ms) confirmed.push_back(ph);
+    for (size_t i = 0; i < confirmed.size(); ++i) {
+        const LabelPhase& ph = confirmed[i];
+        if (auto next = AddSceneMarker(chapters, ph.start_ms)) {
+            chapters = std::move(*next);
+            std::string title = ph.name;
+            if (!title.empty()) title[0] = char(std::toupper(static_cast<unsigned char>(title[0])));
+            for (auto& c : chapters)
+                if (c.start_ms == ph.start_ms) c.name = title;
+            ++n;
+        }
+        // A stretch without a phase follows: its own scene.
+        const bool gap = i + 1 < confirmed.size() ? confirmed[i + 1].start_ms > ph.end_ms
+                                                  : ph.end_ms < total_ms - kSceneMarkerMinGapMs;
+        if (gap)
+            if (auto next = AddSceneMarker(chapters, ph.end_ms)) {
+                chapters = std::move(*next);
+                ++n;
+            }
+    }
+    if (added) *added = n;
+    return chapters;
 }
 
 std::vector<SceneFeelRange> SceneRangesOf(const std::vector<ChapterScene>& scenes) {
