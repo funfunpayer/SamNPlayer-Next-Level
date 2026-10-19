@@ -22,6 +22,7 @@
 #include "frame_provider.h"
 #include "icon_provider.h"
 #include "player_controller.h"
+#include "plugins.h"
 #include "update_checker.h"
 
 Q_IMPORT_QML_PLUGIN(SamNPlugin)
@@ -323,7 +324,7 @@ private slots:
                 QCOMPARE(s.pillName(), names[want]);
                 QCOMPARE(s.one("TopBar")->property("currentMode").toInt(), want);
             }
-            // There is no fourth mode (D-145): Ctrl+4 changes nothing.
+            // No fourth mode while no plugin is on (D-145, D-155): Ctrl+4 changes nothing.
             QTest::keyClick(s.window, Qt::Key_4, Qt::ControlModifier);
             QTest::qWait(150);
             QCOMPARE(s.mode(), 0);
@@ -639,6 +640,48 @@ private slots:
             QTest::qWait(2500);
             QVERIFY(!card->isVisible());
             s.window->findChild<samn::ui::UpdateChecker*>()->setSupportNoteAtStart(true);
+        }
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
+
+    // D-155: the AI Train plugin mode is off by default; the Settings switch
+    // adds the fourth tab, Ctrl+4 opens it, and switching it off while it is
+    // shown goes back to the Player. The choice is kept.
+    void aiTrainPluginModeComesAndGoes() {
+        {
+            Shell s;
+            loadShell(s);
+            QVERIFY(s.window);
+            auto* plugins = s.engine.singletonInstance<samn::ui::Plugins*>(qmlTypeId("SamN", 1, 0, "Plugins"));
+            QVERIFY(plugins);
+            QVERIFY(!plugins->aiTrainEnabled());
+            QCOMPARE(s.window->property("modeNames").toStringList().size(), 3);
+            plugins->setAiTrainEnabled(true);
+            QTRY_COMPARE_WITH_TIMEOUT(s.window->property("modeNames").toStringList(),
+                                      (QStringList{"Player", "Generator", "Training", "AI Train"}), kWait);
+            QTest::keyClick(s.window, Qt::Key_4, Qt::ControlModifier);
+            QTRY_COMPARE_WITH_TIMEOUT(s.mode(), 3, kWait);
+            QTRY_VERIFY_WITH_TIMEOUT(s.one("AiTrainPage") && s.one("AiTrainPage")->isVisible(), kWait);
+            QCOMPARE(s.pillName(), QStringLiteral("AI Train"));
+            plugins->setAiTrainEnabled(false);
+            QTRY_COMPARE_WITH_TIMEOUT(s.mode(), 0, kWait);
+            QCOMPARE(s.window->property("modeNames").toStringList().size(), 3);
+            QVERIFY(!s.one("AiTrainPage"));
+            plugins->setAiTrainEnabled(true);  // kept for the next start
+        }
+        {
+            Shell s;
+            loadShell(s, 3);
+            QVERIFY(s.window);
+            QCOMPARE(s.mode(), 3);
+            QTRY_VERIFY_WITH_TIMEOUT(s.one("AiTrainPage") && s.one("AiTrainPage")->isVisible(), kWait);
+            s.engine.singletonInstance<samn::ui::Plugins*>(qmlTypeId("SamN", 1, 0, "Plugins"))->setAiTrainEnabled(false);
+        }
+        {
+            Shell s;
+            loadShell(s, 3);  // off: a start in the plugin mode falls back to the Player
+            QVERIFY(s.window);
+            QCOMPARE(s.mode(), 0);
         }
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }

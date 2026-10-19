@@ -62,8 +62,11 @@ click. Test media for our own tests stay in `SamNPlayer-TestMedia` (D-150).
 
 ## 3. Steps (one PR each, tests with synthetic clips only)
 
-1. **Plugin frame.** The plugin interface for modes (a mode = a QML page plus a
-   controller, registered at start), the Settings switch, the fourth tab.
+1. **Plugin frame** (done). `Plugins` (a QML singleton) lists the plugin modes
+   that are on; *Settings → General → Plugins → AI Train (preview)*
+   (`plugins.aitrain.enabled`, default off) adds the fourth tab; the page
+   (`AiTrainPage.qml`) has the AI Train and Benchmark pages with the 0.7
+   texts and the steps still to come.
 2. **Collect.** Video / still, 12 named boxes, tag list and custom tags, track
    with CSRT, write YOLO samples and the audio; progress and Cancel.
 3. **Review.** The grid and the review editor; *Discard*, *Correct box*.

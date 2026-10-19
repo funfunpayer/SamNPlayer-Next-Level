@@ -6,14 +6,15 @@ Item {
     id: root
     // The app's one device connection (Main.qml); null hides the chip.
     property DeviceController device: null
-    // Player, Generator, Training (D-144, D-145); the tab row picks one.
+    // Player, Generator, Training (D-144, D-145), then the plugin modes that
+    // are switched on (D-155); the tab row picks one.
     readonly property var modes: [
         { name: qsTr("Player"), color: Theme.cyan, icon: "player" },
         { name: qsTr("Generator"), color: Theme.orange, icon: "create" },
         { name: qsTr("Training"), color: Theme.blue, icon: "training" }
-    ]
+    ].concat(Plugins.modes.map((m) => ({ name: m.name, color: Theme.orange, icon: m.icon })))
     property int currentMode: 0
-    readonly property string modeName: modes[currentMode].name
+    readonly property string modeName: modes[Math.min(currentMode, modes.length - 1)].name
     signal modeChosen(int index)
     // Open a video or script (0.7 top-bar folder button, Ctrl+O).
     signal openRequested()
