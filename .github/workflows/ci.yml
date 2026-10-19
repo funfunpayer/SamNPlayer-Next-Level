@@ -130,6 +130,58 @@ jobs:
           SAMN_SCREENSHOT=smoke.png SAMN_SCREENSHOT_DELAY_MS=2500 timeout 60 "$exe" smoke.funscript
           test -s smoke.png
 
+      # A portable Windows build to try on a real PC (D-149): the app, the
+      # vcpkg DLLs (OpenCV, FFmpeg) the build put beside it, Qt with its QML,
+      # multimedia and Bluetooth parts, and the MSVC runtime.
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          dist=dist/SamNPlayer2
+          mkdir -p "$dist"
+          cp build/app/Release/samnplayer.exe "$dist/SamNPlayer2.exe"
+          cp build/app/Release/*.dll "$dist/"
+          qt=$(cygpath -u "$QT_ROOT_DIR")
+          "$qt/bin/windeployqt.exe" --release --qmldir app/qml --compiler-runtime --no-translations "$dist/SamNPlayer2.exe"
+          cp LICENSE THIRD_PARTY.md ci/windows/README.txt "$dist/"
+          echo "Files: $(find "$dist" -type f | wc -l), size: $(du -sh "$dist" | cut -f1)"
+          ls "$dist"
+
+      # The package must run on its own: no Qt, vcpkg or build folder on the
+      # PATH. It opens a script and a video, draws and quits; the log must not
+      # name a library or media backend that failed to load.
+      - name: Package smoke test (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          cfg=$(mktemp -d)
+          cd dist/SamNPlayer2
+          # The real Windows platform, as on a PC: the package carries only that
+          # plugin, and a missing one makes Qt wait on an error box.
+          rc=0
+          env -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH -u QT_ROOT_DIR -u QT_QPA_PLATFORM \
+            PATH="/c/Windows/system32:/c/Windows:/usr/bin" SAMN_CONFIG_DIR="$cfg" \
+            SAMN_SCREENSHOT="$GITHUB_WORKSPACE/package.png" SAMN_SCREENSHOT_DELAY_MS=4000 \
+            /usr/bin/timeout 90 ./SamNPlayer2.exe "$GITHUB_WORKSPACE/smoke.funscript" "$GITHUB_WORKSPACE/tests/app/data/testpattern_4s.mp4" || rc=$?
+          log="$cfg/logs/samnplayer2.log"
+          [ -f "$log" ] && cat "$log" || echo "(no log written)"
+          if [ "$rc" -ne 0 ]; then echo "::error::The package exited with $rc (124 = hung)."; exit 1; fi
+          test -s "$GITHUB_WORKSPACE/package.png"
+          if grep -Eiq "no QtMultimedia backends|could not be loaded|cannot load library|failed to load plugin|module .* is not installed" "$log"; then
+            echo "::error::The package is missing a library or plugin (see the log above)."
+            exit 1
+          fi
+
+      - name: Upload the package (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: SamNPlayer2-windows-x64
+          path: |
+            dist/
+            package.png
+          retention-days: 14
+
   # Memory and undefined-behaviour checks of the core (no Qt). 0.7's native
   # layer had a heap-corrupting argument and a double free that only showed
   # far from their cause (LESSONS GD-23); this job catches such bugs early.
