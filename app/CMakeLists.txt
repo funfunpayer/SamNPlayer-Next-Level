@@ -15,6 +15,7 @@ qt_add_qml_module(samn_app
   SOURCES
     src/theme.h
     src/plugins.h src/plugins.cpp
+    src/label_controller.h src/label_controller.cpp
     src/curve_item.h src/curve_item.cpp
     src/heatmap_item.h src/heatmap_item.cpp
     src/wordmark_item.h src/wordmark_item.cpp

@@ -178,7 +178,7 @@ LabelProject LoadLabelProject(const std::filesystem::path& path) {
 std::vector<LabelSample> ExportSamples(const LabelProject& p, const std::vector<std::string>& classes,
                                        int64_t every_ms) {
     std::vector<LabelSample> out;
-    if (every_ms <= 0 || p.duration_ms <= 0) return out;
+    if (every_ms <= 0 || p.duration_ms < 0) return out;  // duration 0: a still image, one sample
     for (int64_t ms = 0; ms <= p.duration_ms; ms += every_ms) {
         LabelSample s;
         s.ms = ms;

@@ -45,6 +45,13 @@ target_include_directories(generator_controller_test PRIVATE ${CMAKE_SOURCE_DIR}
 add_test(NAME generator_controller_test COMMAND generator_controller_test)
 set_tests_properties(generator_controller_test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
+# The AI Train label editor's controller (D-155).
+add_executable(label_controller_test label_controller_test.cpp)
+target_link_libraries(label_controller_test PRIVATE samn_app Qt6::Test)
+target_include_directories(label_controller_test PRIVATE ${CMAKE_SOURCE_DIR}/tests/engine)
+add_test(NAME label_controller_test COMMAND label_controller_test)
+set_tests_properties(label_controller_test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
 # The Generator page's QML, loaded the way the app loads it.
 add_executable(generator_qml_test generator_qml_test.cpp)
 target_link_libraries(generator_qml_test PRIVATE samn_app samn_appplugin Qt6::Test)
