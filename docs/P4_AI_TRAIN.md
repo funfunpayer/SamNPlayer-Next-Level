@@ -186,7 +186,7 @@ lanes; its stretches are dragged and named like chapters:
    confirmed); the Editor's scenes (done: the feel phases suggest a scene's
    feel, *Scenes from phases* adds a scene where each confirmed phase
    begins); next the device shaping per phase (hold over intro and empty,
-   build-up, fade) and phases into the Editor's scenes and the Training's video stage.
+   build-up, fade) and the Training's video stage.
 3. **Tracking between keyframes:** CSRT forward and backward from each keyframe,
    blended; the uncertainty lane and *Next uncertain*.
 4. **Teachers:** ONNX Runtime in the build, NudeNet (one-click download),
