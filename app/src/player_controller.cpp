@@ -145,7 +145,11 @@ bool PlayerController::openPath(const QString& pathOrUrl) {
     variantIndex_ = -1;
     for (size_t i = 0; i < match.variants.size(); ++i) {
         const auto& v = match.variants[i];
-        variants_.append(QVariantMap{{"path", q(v.path)}, {"label", q(v.label)}, {"beside", v.beside}});
+        // 0.7 #pb-variant: "Soft", "By someone" or "Main script", and where it lies.
+        QString name = q(v.label);
+        name = name.isEmpty() ? tr("Main script") : name.left(1).toUpper() + name.mid(1);
+        if (!v.beside) name += tr(" · script folder");
+        variants_.append(QVariantMap{{"path", q(v.path)}, {"label", q(v.label)}, {"display", name}, {"beside", v.beside}});
         if (v.path == match.script_path) variantIndex_ = static_cast<int>(i);
     }
     emit variantsChanged();
@@ -310,6 +314,28 @@ void PlayerController::removeScriptFolder(const QString& path) {
         return;
     }
     emit scriptFoldersChanged();
+}
+
+bool PlayerController::isVideoFile(const QString& pathOrUrl) const { return isVideo(toLocalPath(pathOrUrl)); }
+
+bool PlayerController::autoCreate() const {
+    try {
+        const auto v = const_cast<PlayerController*>(this)->settings().get(kAutoCreateKey);
+        return v.is_boolean() && v.get<bool>();
+    } catch (const std::exception&) {
+        return false;
+    }
+}
+
+void PlayerController::setAutoCreate(bool on) {
+    if (on == autoCreate()) return;
+    try {
+        settings().set(kAutoCreateKey, on);
+    } catch (const std::exception& e) {
+        setError(tr("Could not save the setting: %1").arg(q(e.what())));
+        return;
+    }
+    emit autoCreateChanged();
 }
 
 void PlayerController::addScriptFolder(const QString& pathOrUrl) {

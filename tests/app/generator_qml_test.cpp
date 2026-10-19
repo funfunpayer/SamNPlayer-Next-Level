@@ -274,6 +274,55 @@ private slots:
         if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT_EDIT"); !shot.isEmpty()) window.grabWindow().save(QString::fromLocal8Bit(shot));
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
     }
+
+    // 0.7 "always create": the Player hands a video over; the page finds
+    // the tip and starts as soon as Create can.
+    void createForFindsTipAndRuns() {
+        QTemporaryDir out;
+        const QString video = out.filePath("auto.mp4");
+        QVERIFY(samn::engine::testclips::WriteMoving(std::filesystem::path(video.toStdU16String()), 6, 80.0, 1.0));
+        QQmlEngine engine;
+        engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
+        engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+        engine.addImageProvider(QStringLiteral("frames"), new samn::ui::FrameProvider);
+        QQmlComponent comp(&engine);
+        comp.setData(R"(
+            import QtQuick
+            import SamN
+            Rectangle {
+                width: 1400; height: 820; color: "#021024"
+                property alias page: gp
+                GeneratorPage { id: gp; anchors.fill: parent; anchors.margins: 20 }
+            })",
+                     QUrl("qrc:/test/Wrapper2.qml"));
+        QVERIFY2(comp.status() == QQmlComponent::Ready, qPrintable(comp.errorString()));
+        QQuickWindow window;
+        window.resize(1400, 820);
+        std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
+        QVERIFY(root);
+        root->setParentItem(window.contentItem());
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto* page = root->property("page").value<QQuickItem*>();
+        auto* gen = page->property("controller").value<GeneratorController*>();
+        QVERIFY(gen);
+        QVariant ok;
+        QVERIFY(QMetaObject::invokeMethod(page, "createFor", Q_RETURN_ARG(QVariant, ok),
+                                          Q_ARG(QVariant, QUrl::fromLocalFile(video)), Q_ARG(QVariant, true)));
+        QVERIFY(ok.toBool());
+        QVERIFY(gen->hasVideo());
+        // The tip search, then the run, without a click.
+        QTRY_VERIFY_WITH_TIMEOUT(!gen->finding() && !page->property("autoCreatePending").toBool(), 30000);
+        QVERIFY(gen->hasBox());
+        QTRY_VERIFY_WITH_TIMEOUT(QFile::exists(out.filePath("auto.funscript")) && !gen->running(), 60000);
+        // Without `start` it only opens the video.
+        QVERIFY(QMetaObject::invokeMethod(page, "createFor", Q_RETURN_ARG(QVariant, ok),
+                                          Q_ARG(QVariant, QUrl::fromLocalFile(video)), Q_ARG(QVariant, false)));
+        QVERIFY(!page->property("autoCreatePending").toBool());
+        QTest::qWait(200);
+        QVERIFY(!gen->running() && !gen->finding());
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
+    }
 };
 
 QTEST_MAIN(GeneratorQmlTest)

@@ -58,6 +58,32 @@ Item {
         buttons: MessageDialog.Ok | MessageDialog.Cancel
         onAccepted: gen.create(true)
     }
+    // A video from the Player (0.7 "Create script" / "always create"): open
+    // it here; with `start`, find the tip and run as soon as Create can
+    // (0.7 waited for the Generate button, at most 120 s).
+    property bool autoCreatePending: false
+    function createFor(video, start) {
+        if (gen.running || gen.queueRunning) return false
+        autoCreatePending = false
+        if (!gen.openVideo(video.toString())) return false
+        if (start) {
+            autoCreatePending = true
+            autoCreateTimer.restart()
+            if (!gen.findTip()) autoCreatePending = false
+        }
+        return true
+    }
+    Timer { id: autoCreateTimer; interval: 120000; onTriggered: page.autoCreatePending = false }
+    Connections {
+        target: gen
+        function onFindingChanged() {
+            if (gen.finding || !page.autoCreatePending) return
+            page.autoCreatePending = false
+            autoCreateTimer.stop()
+            // The box is set right after the search reports done.
+            Qt.callLater(() => { if (gen.hasVideo && gen.hasBox && !gen.running) page.startCreate() })
+        }
+    }
     function startCreate() {
         if (gen.scriptExists) overwriteDialog.open()
         else gen.create(false)

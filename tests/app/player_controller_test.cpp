@@ -177,6 +177,44 @@ private slots:
         QCOMPARE(c.pointCount(), 11);
         QCOMPARE(c.videoName(), QStringLiteral("Clip.mp4"));
         QCOMPARE(c.variantIndex(), soft);
+        // 0.7 #pb-variant names: "Main script", the label with a capital.
+        QStringList shown;
+        for (const auto& v : c.variants()) shown << v.toMap().value("display").toString();
+        QVERIFY(shown.contains(QStringLiteral("Main script")));
+        QVERIFY(shown.contains(QStringLiteral("Soft")));
+    }
+
+    void variantInScriptFolderSaysSo() {
+        QTemporaryDir d;
+        QDir().mkpath(d.filePath("videos"));
+        QDir().mkpath(d.filePath("scripts"));
+        writeFile(d.filePath("videos/Clip.mp4"), "");
+        writeFile(d.filePath("videos/Clip.funscript"), zigzag());
+        writeFile(d.filePath("scripts/Clip (Hard).funscript"), zigzag(11));
+        PlayerController c;
+        c.addScriptFolder(d.filePath("scripts"));
+        QVERIFY(c.openPath(d.filePath("videos/Clip.mp4")));
+        QStringList shown;
+        for (const auto& v : c.variants()) shown << v.toMap().value("display").toString();
+        QVERIFY2(shown.contains(QStringLiteral("Hard · script folder")), qPrintable(shown.join(", ")));
+        c.removeScriptFolder(d.filePath("scripts"));
+    }
+
+    void autoCreateAndVideoFiles() {
+        {
+            PlayerController c;
+            QVERIFY(!c.autoCreate());  // 0.7 default off
+            QSignalSpy spy(&c, &PlayerController::autoCreateChanged);
+            c.setAutoCreate(true);
+            c.setAutoCreate(true);
+            QCOMPARE(spy.count(), 1);
+        }
+        PlayerController again;
+        QVERIFY(again.autoCreate());
+        again.setAutoCreate(false);
+        QVERIFY(again.isVideoFile(QStringLiteral("file:///x/Clip.M2TS")));
+        QVERIFY(again.isVideoFile(QStringLiteral("/x/a.ogv")));
+        QVERIFY(!again.isVideoFile(QStringLiteral("/x/a.funscript")));
     }
 
     void offsetSavedPerScriptAndPlayhead() {

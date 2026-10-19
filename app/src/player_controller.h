@@ -77,6 +77,10 @@ class PlayerController : public QObject {
     Q_PROPERTY(double bpm READ bpm WRITE setBpm NOTIFY bpmChanged)
     Q_PROPERTY(bool bpmGrid READ bpmGrid WRITE setBpmGrid NOTIFY bpmChanged)
     Q_PROPERTY(QStringList scriptFolders READ scriptFolders NOTIFY scriptFoldersChanged)
+    // 0.7 "Always create right away when a video has no script" (open.autoCreate;
+    // here the setting "open.auto_create", default off).
+    Q_PROPERTY(bool autoCreate READ autoCreate WRITE setAutoCreate NOTIFY autoCreateChanged)
+    Q_PROPERTY(QString videoPath READ videoPath NOTIFY videoChanged)
     // The marked range (0.7: drag on the heatmap), in script time; saved
     // beside the script. Loop, zoom selection and the range tools use it.
     Q_PROPERTY(bool hasMarker READ hasMarker NOTIFY markerChanged)
@@ -145,6 +149,7 @@ public:
     static constexpr int kOffsetLimitMs = 10000;
     static constexpr int kHeatmapBuckets = 300;  // 0.7 HEATMAP_BUCKETS
     static constexpr const char* kScriptFoldersKey = "library.script_folders";
+    static constexpr const char* kAutoCreateKey = "open.auto_create";
 
     explicit PlayerController(QObject* parent = nullptr);
     ~PlayerController() override;
@@ -235,6 +240,10 @@ public:
     // (0 = none), or -1 with lastError.
     Q_INVOKABLE qint64 loadProject(const QString& pathOrUrl);
     Q_INVOKABLE QString localPath(const QString& pathOrUrl) const { return toLocalPath(pathOrUrl); }
+    // Whether the file is a video by its extension (0.7 VIDEO_EXTS).
+    Q_INVOKABLE bool isVideoFile(const QString& pathOrUrl) const;
+    bool autoCreate() const;
+    void setAutoCreate(bool on);
     // Snapshot of the current frame at full video resolution (0.7 saves a
     // PNG named "<video>_MM-SS.png"). videoSink is the VideoOutput's sink.
     Q_INVOKABLE QString snapshotName(qint64 videoMs) const;
@@ -363,6 +372,7 @@ signals:
     void lastErrorChanged();
     void variantsChanged();
     void scriptFoldersChanged();
+    void autoCreateChanged();
     void loopChanged();
     void viewChanged();
     void markerChanged();

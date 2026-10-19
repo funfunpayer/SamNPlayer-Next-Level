@@ -60,7 +60,11 @@ ApplicationWindow {
         anchors.left: parent.left; anchors.right: parent.right
         anchors.margins: 20; anchors.topMargin: 6
         currentIndex: win.mode
-        PlayerPage { id: player; deckOpen: deck.open; device: deviceCtl }
+        PlayerPage {
+            id: player; deckOpen: deck.open; device: deviceCtl
+            // 0.7: "Create script" goes to the Generator with this video.
+            onCreateRequested: (video, start) => { win.mode = 1; generator.createFor(video, start) }
+        }
         // Generator and Editor are one mode: the Generator is the Editor (D-137).
         GeneratorPage {
             id: generator
@@ -79,6 +83,11 @@ ApplicationWindow {
         anchors.fill: parent
         onDropped: (d) => {
             if (!d.hasUrls) return
+            // 0.7: one video dropped in the Generator stays there.
+            if (win.mode === 1 && d.urls.length === 1 && player.controller.isVideoFile(d.urls[0].toString())) {
+                generator.createFor(d.urls[0], false)
+                return
+            }
             win.mode = 0
             player.controller.openPaths(d.urls.map(u => u.toString()))
         }
