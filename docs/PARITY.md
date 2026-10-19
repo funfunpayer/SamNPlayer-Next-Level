@@ -10,12 +10,12 @@
 
 ## Status (19 Oct 2026)
 
-Checked against the code on `main` after #68, plus the Settings page (General, Device, Log, About) (`python3 ci/parity_status.py` prints this table; "partly" counts as half). Items marked partly say what is in and what is missing.
+Checked against the code on `main` after #68, plus the Settings page (General, Device, Log, About) and the update check (D-147); the Tools Home page is dropped (D-148) (`python3 ci/parity_status.py` prints this table; "partly" counts as half). Items marked partly say what is in and what is missing.
 
 | Section | Done | Partly | Dropped on purpose | Open | Share |
 |---|---|---|---|---|---|
 | 1. App shell, navigation, global behaviour | 15 | 8 | 5 | 11 | 62 % |
-| 2. Tools Home, Settings, Log, Legal, Update, Open-media/Library entry | 18 | 15 | 1 | 36 | 38 % |
+| 2. Tools Home, Settings, Log, Legal, Update, Open-media/Library entry | 22 | 15 | 15 | 18 | 64 % |
 | 3. Player and Editor | 53 | 43 | 0 | 31 | 59 % |
 | 4. Generator | 5 | 27 | 1 | 36 | 28 % |
 | 5. Training | 25 | 0 | 0 | 5 | 83 % |
@@ -26,11 +26,11 @@ Checked against the code on `main` after #68, plus the Settings page (General, D
 | 10. Keyboard shortcuts and hotkeys | 1 | 0 | 0 | 7 | 12 % |
 | 11. Visual and animation details that define behaviour | 0 | 0 | 0 | 9 | 0 % |
 | 12. Help, handbook, legal, notifications | 0 | 0 | 0 | 4 | 0 % |
-| 13. Wails-bound backend methods | 94 | 5 | 9 | 116 | 47 % |
+| 13. Wails-bound backend methods | 96 | 5 | 15 | 108 | 51 % |
 | 9. After 0.7.0: what landed in the old repo since | 6 | 1 | 0 | 8 | 43 % |
-| **All 676** | 240 | 115 | 20 | 301 | **47 %** |
+| **All 676** | 246 | 115 | 40 | 275 | **51 %** |
 
-The core and the file formats are further than the table shows: many open lines in §13 are 0.7 backend methods for tools not ported yet (AI training, benchmark, updates, plugins), and one C++ function often covers several of them. The biggest open blocks are §2 (Tools Home, Update, cache and hardware info), the rest of §4 (Quality Doctor, review panel, rhythm grid, AI helpers) and §6 (AI Train, Benchmark).
+The core and the file formats are further than the table shows: many open lines in §13 are 0.7 backend methods for tools not ported yet (AI training, benchmark, updates, plugins), and one C++ function often covers several of them. The biggest open blocks are §2 (hardware info, handbook, EULA/donate, Open-media routing), the rest of §4 (Quality Doctor, review panel, rhythm grid, AI helpers) and §6 (AI Train, Benchmark).
 
 Built from the 0.7.0 code by an inventory pass (16 Oct 2026). Gaps it names itself: the exact `data-help` texts and the Handbook body (port them verbatim from the cited files), `style.css` layout details, and the generator internals (CSRT, contact marks, `player/axes.go`) were only summarised; read those sources when porting.
 
@@ -86,34 +86,34 @@ Source of truth: `cmd/gui-wails/main.go`, `frontend/index.html`, `frontend/src/m
 
 ### 2.1 Tools -> Home (`tools_home.js`)
 
-- [ ] Status card with "Check again" button (disabled while running); summary line "Checking…" -> "N problem(s) found — see the red rows." / "No problems found in the checks below." (tools_home.js:41-46,82-85,112)
-- [ ] Status rows (dot + label + value, states ok/warn/bad/off) — Device ("Connected · <name>[ (simulated)]" / "Not connected" / "Not checked"); updated live on `device:status` (tools_home.js:30-37,131-135)
-- [ ] Status rows — one per runtime dependency from `GetRuntimeHealth`: ffmpeg (required, red if missing), ffprobe (optional), Python 3 / "python" on Windows (optional); "Found · <path>" / "Missing" / "Not installed (optional)" (tools_home.js:55-61, app_runtime.go:150-190)
-- [ ] Status row "App folders" — "Ready" or "N folder(s) could not be created" (bad) (tools_home.js:62-65)
-- [ ] Status row "Runtime check" failure case "Failed: …" (tools_home.js:66-69)
-- [ ] Status row "Last device diagnostics" — newest history entry "Completed|Interrupted · <date, medium/short> · <device> (simulated)"; warn when interrupted; "Never run" (off) (tools_home.js:70-78)
-- [ ] Status row "Cache" — "<human size> · N file(s)" (tools_home.js:79)
-- [ ] Status row "Version" — "<version> · Suite|Free" (tools_home.js:80)
-- [ ] Quick tools grid — "Device & diagnostics", "Open script…" (-> Player + triggers `#pb-choose`), "Show log", "Open log folder", "Settings", "Check for updates" (-> Settings and clicks `#st-update-now`) (tools_home.js:48-59,113-124)
+- [ ] Status card with "Check again" button (disabled while running); summary line "Checking…" -> "N problem(s) found — see the red rows." / "No problems found in the checks below." (tools_home.js:41-46,82-85,112) _(dropped: D-148, no Tools Home status page)_
+- [ ] Status rows (dot + label + value, states ok/warn/bad/off) — Device ("Connected · <name>[ (simulated)]" / "Not connected" / "Not checked"); updated live on `device:status` (tools_home.js:30-37,131-135) _(dropped: D-148, no Tools Home status page)_
+- [ ] Status rows — one per runtime dependency from `GetRuntimeHealth`: ffmpeg (required, red if missing), ffprobe (optional), Python 3 / "python" on Windows (optional); "Found · <path>" / "Missing" / "Not installed (optional)" (tools_home.js:55-61, app_runtime.go:150-190) _(dropped: D-148, no Tools Home status page)_
+- [ ] Status row "App folders" — "Ready" or "N folder(s) could not be created" (bad) (tools_home.js:62-65) _(dropped: D-148, no Tools Home status page)_
+- [ ] Status row "Runtime check" failure case "Failed: …" (tools_home.js:66-69) _(dropped: D-148, no Tools Home status page)_
+- [ ] Status row "Last device diagnostics" — newest history entry "Completed|Interrupted · <date, medium/short> · <device> (simulated)"; warn when interrupted; "Never run" (off) (tools_home.js:70-78) _(dropped: D-148, no Tools Home status page)_
+- [ ] Status row "Cache" — "<human size> · N file(s)" (tools_home.js:79) _(dropped: D-148, no Tools Home status page)_
+- [ ] Status row "Version" — "<version> · Suite|Free" (tools_home.js:80) _(dropped: D-148, no Tools Home status page)_
+- [ ] Quick tools grid — "Device & diagnostics", "Open script…" (-> Player + triggers `#pb-choose`), "Show log", "Open log folder", "Settings", "Check for updates" (-> Settings and clicks `#st-update-now`) (tools_home.js:48-59,113-124) _(dropped: D-148, no Tools Home status page)_
 - [ ] Recent scripts card — newest 6 entries from the Player's recent list (button per file name, tooltip = full path; click switches to Player and loads it); empty text "Nothing yet — scripts you open appear here." (tools_home.js:93-110,125-130) _(partly: Player → Library → Recent lists the newest 8 scripts, a click opens one, the tooltip shows the path, empty text "No recent scripts" (`app/qml/LibraryPanel.qml`, `app/src/library_controller.cpp`, tests `tests/app/library_controller_test.cpp`, `tests/core/library_test.cpp`); missing: the card on a Tools home page (0.7: 6 entries, wording "Nothing yet"))_
-- [ ] Page re-checks every time it is shown (`show()` -> renderRecent + check) (tools_home.js:137-139)
-- [ ] Runtime health Go: creates user dirs (config/SamNPlayer, logs, logs/sessions, models, tools, plugins, roi_training_dataset(+images/train, labels/train), cache dir, AI ROI model dir, ROI dataset dir); emits `runtime:health`; reports `numCPU, GOMAXPROCS, goos, goarch` (app_runtime.go:50-148)
+- [ ] Page re-checks every time it is shown (`show()` -> renderRecent + check) (tools_home.js:137-139) _(dropped: D-148, no Tools Home status page)_
+- [ ] Runtime health Go: creates user dirs (config/SamNPlayer, logs, logs/sessions, models, tools, plugins, roi_training_dataset(+images/train, labels/train), cache dir, AI ROI model dir, ROI dataset dir); emits `runtime:health`; reports `numCPU, GOMAXPROCS, goos, goarch` (app_runtime.go:50-148) _(dropped: D-148, no Tools Home status page)_
 
 ### 2.2 Settings page (`settings.js`) — controls in on-screen order
 
 - [ ] "Open user handbook" primary button -> handbook overlay; hint "FAQ + how to use every Everyday control. Also on Create." (settings.js:96-98,332)
-- [ ] Check for updates on startup (`update.check_on_startup`, default ON) (settings.js:100-103,439)
+- [x] Check for updates on startup (`update.check_on_startup`, default ON) (settings.js:100-103,439) → SamN2: `UpdateChecker::checkOnStartup` (Settings → General → Updates; startup check from `Main.qml`, quiet: failures go to the log, a newer release shows the banner); tests `update_checker_test`, `shell_qml_test.updateBannerAndSettingsCard`
 - [x] On connect, run a short connection test (`device.connect_test`, default OFF) — brief vib/suction pulse after successful connect (settings.js:104-108,440) _(partly: the check runs after a connect when `device.connect_test` is set (`app/src/device_controller.cpp`, no test); missing: the Settings checkbox)_ → SamN2: Settings → General → Device toggle (`SettingsController::connectTest`, test `defaultsAndTheyAreRemembered`); the pulse runs in `DeviceController` after a connect
 - [x] Play: "Honor inverted flag" (`playback.honor_inverted`, default ON) — top-level `"inverted": true` flips positions (100-pos); changing it reloads the open script (settings.js:111-116,441; app_settings.go SetSetting) _(partly: core `PlaybackActions` flips an inverted script (`core/src/mapper.cpp`, test `tests/core/samn_file_test.cpp`); missing: the `playback.honor_inverted` setting and use of it in the Player)_ → SamN2: Settings → General → Play; off plays the script as written; changing it reloads the open script (`PlayerController::reloadScript`, tests `honorInvertedAndRemoveScriptFolder`, `defaultsAndTheyAreRemembered`)
 - [ ] Play: "Audio vibration" (`playback.audio_vibration`, default OFF) — vibration follows video sound loudness, suction still follows script; mirrors the Player toggle `#pb-audio-vibration`; takes effect at next Play start (settings.js:117-122,443-447)
 - [x] Script folders card (Settings -> Play): list with path + Remove button, "Add folder…" (OS dir picker), empty text "No folders yet — only the video's own folder is searched."; stored in `library.script_folders` (newline list) (script_folders.js:9-57) _(partly: folders are stored in `library.script_folders` and searched by `find_script_for_video` (depth 6, 50 000 files; test `videoWithoutScriptThenFolderAdded`); "Add a script folder…" is on the no-script card; missing: the list with Remove and the Settings card)_ → SamN2: Settings → General → Play: list, Remove, "Add folder…", the 0.7 empty text (`PlayerController::removeScriptFolder`, test `honorInvertedAndRemoveScriptFolder`)
-- [ ] "What you need" collapsible — portable Play+Create, video tools, Python only for classic generator + AI Train (suite-only line) (settings.js:124-132)
+- [ ] "What you need" collapsible — portable Play+Create, video tools, Python only for classic generator + AI Train (suite-only line) (settings.js:124-132) _(dropped: D-148, no Tools Home status page)_
 - [ ] Support SamNPlayer section (`[data-donate-section]`) — appeal text + one "♥ Donate via <name>" button per configured link, or "Donation page coming soon." (settings.js:134-140; legal.js:63-80)
 - [x] Licence section — "Show licence agreement (EULA)" and "Third-party notices" buttons (modal with scrollable `<pre>`, Close) (settings.js:142-147; legal.js:50-59) → SamN2: Settings → About: "Licence" (GPL-3.0-or-later, D-141, no EULA) and "Third-party notices" from the bundled `LICENSE` / `THIRD_PARTY.md` (test `aboutShowsTheLicenceTexts`)
 - [ ] Plugins collapsible — plugins folder path, installed packs list "name vX · name vY" / "No packs installed.", "Install pack…" (shows "Installed <name> v<ver>." / "Install cancelled or no pack selected."), "Open Plugins folder", "Refresh" (settings.js:150-162,381-434)
-- [ ] Runtime & updates — "Check folders & dependencies" (status "✓/⚠ N folder(s) created · missing: … | Dependencies OK · os/arch · N CPU · GOMAXPROCS n") (settings.js:166,448-466)
-- [ ] "Install video tools" (downloads static ffmpeg into tools dir, live progress via `runtime:tools`, success "✓ ffmpeg: <path>", else "Install finished but ffmpeg still missing — use the portable release.") (settings.js:167-168,467-491)
-- [ ] "Check for updates now" -> status "Version <tag> available (current: x). <notes>" + "Download & restart" (full release first; else patch channel "Patch <id> available…"; else "No update available (current: x)."); apply button text "Downloading…" and restore on error (settings.js:172-175,492-559)
+- [ ] Runtime & updates — "Check folders & dependencies" (status "✓/⚠ N folder(s) created · missing: … | Dependencies OK · os/arch · N CPU · GOMAXPROCS n") (settings.js:166,448-466) _(dropped: D-148, no Tools Home status page)_
+- [ ] "Install video tools" (downloads static ffmpeg into tools dir, live progress via `runtime:tools`, success "✓ ffmpeg: <path>", else "Install finished but ffmpeg still missing — use the portable release.") (settings.js:167-168,467-491) _(dropped: D-148, no Tools Home status page)_
+- [x] "Check for updates now" -> status "Version <tag> available (current: x). <notes>" + "Download & restart" (full release first; else patch channel "Patch <id> available…"; else "No update available (current: x)."); apply button text "Downloading…" and restore on error (settings.js:172-175,492-559) → SamN2: Settings → General → Updates: "Check for updates now", status "Version <tag> available (current: x)." / "No update available (current: x)." / "Update check failed: …", notes preview, "Open download page" (changed: D-147 — the release page opens in the browser; no download, replace, restart or patch channel); tests as above
 - [x] Logs collapsible — log level select (debug, info, warn, error; `log.level`, default info, applied live), log file path label ("(no log file written yet)"), "Open log folder" (settings.js:176-190,560-561) → SamN2: Settings → General → Logs and files: level (applied live, saved), log file path or "(no log file written yet)", Open log folder (`SettingsController`, `AppLog`; tests `defaultsAndTheyAreRemembered`, `theLogFileGetsEveryKeptLine`)
 - [ ] Optional AI & learning collapsible (all defaults off; Everyday Create/Play need none) (settings.js:192-258)
 - [ ] AI region detection: model path text (`generator.aiRoiModelPath`, empty = default folder), "Check availability" ("Available — the Generator tab now offers smarter tip find." / "Not available — onnxruntime missing or no .onnx at …"), "Open AI training" (suite) (settings.js:198-205,586-587,699-723)
@@ -128,7 +128,7 @@ Source of truth: `cmd/gui-wails/main.go`, `frontend/index.html`, `frontend/src/m
 
 ### 2.3 Settings keys (Go store, all of them; default in brackets) — every key must round-trip
 
-- [ ] `update.check_on_startup` [true]; `log.level` [info]; `generator.reportPath` [""]; `cache.clearOnExit` [false] (app_settings.go:15-18,243-330) _(partly: `log.level` ✅ (`SettingsController`); missing: update check, report path, cache)_
+- [ ] `update.check_on_startup` [true]; `log.level` [info]; `generator.reportPath` [""]; `cache.clearOnExit` [false] (app_settings.go:15-18,243-330) _(partly: `log.level` ✅ (`SettingsController`), `update.check_on_startup` ✅ (`UpdateChecker`); `cache.clearOnExit` dropped (D-148, no disk cache); missing: `generator.reportPath`)_
 - [ ] `device.transport` [ble]; `device.intifaceUrl` [""]; `device.tcodeAddress` [""]; `device.tcodeSerialPort` [""]; `device.connect_test` [false]; `device.diagnosticsHistoryPath` [default config/SamNPlayer/device_diagnostics_history.jsonl] (app_settings.go:19-23,28) _(partly: `device.transport`, `device.intifaceUrl`, `device.tcodeAddress`, `device.tcodeSerialPort`, `device.connect_test` are read and written (`app/src/device_controller.cpp`, test `savedChoiceSurvives`); missing: `device.diagnosticsHistoryPath`)_
 - [ ] `generator.aiRoiModelPath` [""]; `generator.aiPreferredClasses` [bodyparts default]; `generator.aiBaseUrl` [""]; `generator.benchmarkManifestPath` [""]; `generator.benchmarkHistoryPath` [default golden_clip_history.jsonl]; `generator.roiTrainingDatasetDir` [default]; `generator.collectLearningData` [false]; `generator.applyAISetupAutomatically` [false] (app_settings.go:24-35)
 - [ ] `generator.contact_vibration_span` [75] ✅; `generator.contact_vibration_curve` ["soft"] ✅ (`GeneratorController`, with `generator.profile`, `.camera_compensation`, `.scene_cuts`, `.auto_ozone`, `.contact_vibration`, `.tip_class`, `.contact_class`); `generator.smooth_window` [11]; `generator.min_peak_distance_ms` [150]; `generator.peak_prominence` [0]; `generator.rdp_tolerance` [0]; `generator.max_speed` [0]; `generator.adaptive_keyframe` [true]; `generator.roi_sample_every` [12]; `generator.roi_box_scale` [1.0] (app_settings.go:37-48)
@@ -160,8 +160,8 @@ Source of truth: `cmd/gui-wails/main.go`, `frontend/index.html`, `frontend/src/m
 
 ### 2.6 Update system
 
-- [ ] `CheckForUpdate` (GitHub release compare) / `CheckForPatch` (additive patch channel) / `ApplyUpdate` / `ApplyPatch` (download, replace, restart via os.Exit) / `CurrentVersion` (app_update.go:31-135)
-- [ ] Release helper formatting: tag from `tag_name|TagName`, notes preview max 220 chars (first 4 non-comment lines, markup stripped, joined " · "), error text never empty/"//" (update_ui.js:4-42)
+- [x] `CheckForUpdate` (GitHub release compare) / `CheckForPatch` (additive patch channel) / `ApplyUpdate` / `ApplyPatch` (download, replace, restart via os.Exit) / `CurrentVersion` (app_update.go:31-135) → SamN2: `UpdateChecker::check` + `core/include/samn/update_check.h` (`ParseLatestRelease`, `IsNewerRelease`, plain `vX.Y.Z` tags only, draft/prerelease ignored, 404 = nothing newer); version from `QCoreApplication::applicationVersion` (changed: D-147 — `CheckForPatch` / `ApplyUpdate` / `ApplyPatch` dropped)
+- [x] Release helper formatting: tag from `tag_name|TagName`, notes preview max 220 chars (first 4 non-comment lines, markup stripped, joined " · "), error text never empty/"//" (update_ui.js:4-42) → SamN2: `samn::ReleaseNotesPreview` (220 code points, never cut inside a UTF-8 character), `ParseLatestRelease` (tag from `tag_name`), error text "unknown error" when empty (`UpdateChecker`); test `update_check_test.cpp`
 
 ### 2.7 Open media / Library entry (`open_media.js`, `app_open_media.go`)
 
@@ -658,8 +658,8 @@ Note: `BootstrapRoiTrainingSampleEx` / `BootstrapRoiTrainingRegions` have multi-
 - [ ] `SuggestBenchmarkClipOutput(source, start, end string) (string, error)` — SuggestBenchmarkClipOutput proposes a sibling path next to the source video. (cmd/gui-wails/app_benchmark_clip_prep.go:70)
 - [ ] `ExportBenchmarkClip(req BenchmarkClipExportRequest) (BenchmarkClipExportResult, error)` — ExportBenchmarkClip cuts + Lanczos-downscales a short clip via ffmpeg (same defaults as scripts/benchmark-prep/cut_clip.py: ~1280-wide / CRF 20). (cmd/gui-wails/app_benchmark_clip_prep.go:114)
 - [ ] `EstimatePlaybackAudioBPM() (float64, error)` — EstimatePlaybackAudioBPM measures the loaded video's audio tempo for the Play BPM grid (Owner UX ask "BPM-auto"). (cmd/gui-wails/app_bpm.go:18)
-- [ ] `GetCacheInfo() CacheInfo` — get cache info (cmd/gui-wails/app_cache.go:42)
-- [ ] `ClearCache() (CacheInfo, error)` — clear cache (cmd/gui-wails/app_cache.go:69)
+- [ ] `GetCacheInfo() CacheInfo` — get cache info (cmd/gui-wails/app_cache.go:42) _(dropped: D-148, no Tools Home status page)_
+- [ ] `ClearCache() (CacheInfo, error)` — clear cache (cmd/gui-wails/app_cache.go:69) _(dropped: D-148, no Tools Home status page)_
 - [ ] `SuggestBackend(w, h int) string` — suggest backend (cmd/gui-wails/app_chapters.go:10)
 - [ ] `SuggestPipeline(w, h, w2, h2 int) funscript.PipelineSuggestion` — suggest pipeline (cmd/gui-wails/app_chapters.go:14) _(partly: one engine, nothing to choose)_
 - [ ] `ScriptChapters() ([]motionx.Chapter, error)` — script chapters (cmd/gui-wails/app_chapters.go:18)
@@ -792,7 +792,7 @@ Note: `BootstrapRoiTrainingSampleEx` / `BootstrapRoiTrainingRegions` have multi-
 - [ ] `UpdateRoiTrainingSample(datasetDir, split, name string, boxes []RoiTrainingBox) error` — update roi training sample (cmd/gui-wails/app_roi_training.go:528)
 - [ ] `DiscardRoiTrainingSample(datasetDir, split, name string) error` — discard roi training sample (cmd/gui-wails/app_roi_training.go:584)
 - [ ] `GetRoiDatasetSummary(datasetDir string) (RoiDatasetSummary, error)` — get roi dataset summary (cmd/gui-wails/app_roi_training.go:622)
-- [ ] `GetRuntimeHealth() RuntimeHealth` — get runtime health (cmd/gui-wails/app_runtime.go:98)
+- [ ] `GetRuntimeHealth() RuntimeHealth` — get runtime health (cmd/gui-wails/app_runtime.go:98) _(dropped: D-148, no Tools Home status page)_
 - [ ] `EnsureVideoTools() error` — EnsureVideoTools installs ffmpeg/ffprobe into the user tools dir when missing (opt-in; downloads a static build). (cmd/gui-wails/app_runtime.go:106) _(replaced: FFmpeg is built in)_
 - [ ] `ExportLoadedFunscript(destPath string) (string, error)` — ExportLoadedFunscript writes a community .funscript (no Neo-2 axes embedded). (cmd/gui-wails/app_samn.go:58)
 - [ ] `SaveLoadedAsSamn() (string, error)` — SaveLoadedAsSamn writes the native .samn (companion path when loaded from funscript). (cmd/gui-wails/app_samn.go:78)
@@ -844,11 +844,11 @@ Note: `BootstrapRoiTrainingSampleEx` / `BootstrapRoiTrainingRegions` have multi-
 - [ ] `SetTrainingVideo(path string) (string, error)` — SetTrainingVideo selects the film for the Training stage and returns the URL the <video> element loads. (cmd/gui-wails/app_training_video.go:18)
 - [ ] `ClearTrainingVideo()` — ClearTrainingVideo goes back to the pixel clip. (cmd/gui-wails/app_training_video.go:35)
 - [ ] `TrainingVideoURL() string` — TrainingVideoURL is the local URL of the Training film ("" = none). (cmd/gui-wails/app_training_video.go:43)
-- [ ] `CheckForUpdate() UpdateCheckResult` — check for update (cmd/gui-wails/app_update.go:31)
-- [ ] `CheckForPatch() UpdateCheckResult` — CheckForPatch looks for an unapplied hotfix for the current base version. (cmd/gui-wails/app_update.go:52)
-- [ ] `ApplyUpdate() error` — apply update (cmd/gui-wails/app_update.go:85)
-- [ ] `ApplyPatch() error` — ApplyPatch downloads the latest applicable patch (same safety as ApplyUpdate) and restarts. (cmd/gui-wails/app_update.go:107)
-- [ ] `CurrentVersion() string` — current version (cmd/gui-wails/app_update.go:135)
+- [x] `CheckForUpdate() UpdateCheckResult` — check for update (cmd/gui-wails/app_update.go:31) → SamN2: `UpdateChecker::check` (D-147)
+- [ ] `CheckForPatch() UpdateCheckResult` — CheckForPatch looks for an unapplied hotfix for the current base version. (cmd/gui-wails/app_update.go:52) _(dropped: D-147, check only)_
+- [ ] `ApplyUpdate() error` — apply update (cmd/gui-wails/app_update.go:85) _(dropped: D-147, check only)_
+- [ ] `ApplyPatch() error` — ApplyPatch downloads the latest applicable patch (same safety as ApplyUpdate) and restarts. (cmd/gui-wails/app_update.go:107) _(dropped: D-147, check only)_
+- [x] `CurrentVersion() string` — current version (cmd/gui-wails/app_update.go:135) → SamN2: `UpdateChecker::currentVersion` / `Qt.application.version`
 - [ ] `SuggestBenchmarkPairBesideVideo(videoPath string) (BenchmarkPairSuggestion, error)` — SuggestBenchmarkPairBesideVideo looks next to a clip (and one level of subdirs like mit_yolo/) for related .funscript files and picks a Ref + Candidate pair using golden naming. (cmd/gui-wails/benchmark_pair_suggest.go:32)
 
 ## 9. After 0.7.0: what landed in the old repo since (checked 16 Oct 2026)

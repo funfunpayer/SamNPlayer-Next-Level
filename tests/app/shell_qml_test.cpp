@@ -21,6 +21,7 @@
 
 #include "icon_provider.h"
 #include "player_controller.h"
+#include "update_checker.h"
 
 Q_IMPORT_QML_PLUGIN(SamNPlugin)
 
@@ -165,10 +166,21 @@ class ShellQmlTest : public QObject {
         QTRY_VERIFY_WITH_TIMEOUT(s.one("ModeDeck")->isVisible(), kWait);
     }
 
+    void serveRelease(const char* tag) {
+        QFile f(config_.path() + "/latest.json");
+        QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        f.write(QByteArray("{\"tag_name\":\"") + tag + "\",\"body\":\"Faster start\"}");
+        f.close();
+        qputenv("SAMN_UPDATE_URL", QUrl::fromLocalFile(f.fileName()).toString().toUtf8());
+    }
+
 private slots:
     void initTestCase() {
         QVERIFY(config_.isValid());
         qputenv("SAMN_CONFIG_DIR", config_.path().toUtf8());
+        // The startup update check reads a local answer, never the network;
+        // a patch tag is no release, so no test sees the banner by chance.
+        serveRelease("patch-v1.0.0-p1");
         g_previous = qInstallMessageHandler(capture);
     }
     void cleanupTestCase() { qInstallMessageHandler(g_previous); }
@@ -635,6 +647,66 @@ private slots:
             dev->disconnectDevice();
             QTRY_VERIFY_WITH_TIMEOUT(!vib->isEnabled(), kWait);
         }
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
+
+    void updateBannerAndSettingsCard() {
+        QCoreApplication::setApplicationVersion("2.0.0-dev");
+        serveRelease("v1.0.0");
+        {
+            Shell s;
+            loadShell(s);
+            QVERIFY(s.window);
+            auto byName = [&](const char* name) -> QQuickItem* {
+                for (QQuickItem* i : descendants(s.root()))
+                    if (i->objectName() == QLatin1String(name)) return i;
+                return nullptr;
+            };
+            auto* updates = s.window->findChild<samn::ui::UpdateChecker*>();
+            QVERIFY(updates);
+            QQuickItem* banner = byName("updateBanner");
+            QVERIFY(banner);
+            // The startup check found v1.0.0: nothing newer, no banner.
+            QTRY_COMPARE_WITH_TIMEOUT(updates->state(), QStringLiteral("current"), kWait);
+            QVERIFY(!banner->isVisible());
+
+            serveRelease("v99.0.0");
+            updates->check(true);
+            QTRY_VERIFY_WITH_TIMEOUT(banner->isVisible() && banner->property("opacity").toDouble() > 0.99, kWait);
+            QVERIFY(byName("updateBannerText")->property("text").toString().startsWith(QStringLiteral("SamNPlayer v99.0.0 is available")));
+            if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT_BANNER"); !shot.isEmpty()) s.window->grabWindow().save(QString::fromLocal8Bit(shot));
+            QQuickItem* close = byName("updateBannerClose");
+            QTest::mouseClick(s.window, Qt::LeftButton, {}, close->mapToScene(QPointF(close->width() / 2, close->height() / 2)).toPoint());
+            QTRY_VERIFY_WITH_TIMEOUT(!banner->isVisible(), kWait);
+
+            // Settings → General: the toggle, "Check now", the status and notes.
+            QQuickItem* page = s.one("SettingsPage");
+            page->setProperty("open", true);
+            QTRY_VERIFY_WITH_TIMEOUT(page->property("opacity").toDouble() > 0.99 && byName("updateCheckNow")->isVisible(), kWait);
+            // The Updates card is the last one: scroll it into view.
+            QQuickItem* general = byName("generalTab");
+            general->setProperty("contentY", qMax(0.0, general->property("contentHeight").toDouble() - general->height()));
+            QTest::qWait(50);
+            QVERIFY(byName("updateCheckOnStartup")->property("checked").toBool());
+            serveRelease("v1.0.0");
+            QQuickItem* now = byName("updateCheckNow");
+            QVERIFY(now->isEnabled());
+            QVERIFY(now->mapToScene(QPointF(0, now->height())).y() < general->mapToScene(QPointF(0, general->height())).y());
+            QTest::mouseClick(s.window, Qt::LeftButton, {}, now->mapToScene(QPointF(now->width() / 2, now->height() / 2)).toPoint());
+            QTRY_VERIFY_WITH_TIMEOUT(byName("updateStatus")->property("text").toString().startsWith(QStringLiteral("No update available")), kWait);
+            QVERIFY(!byName("updateOpenPage")->isVisible());
+            serveRelease("v99.0.0");
+            updates->check();
+            QTRY_VERIFY_WITH_TIMEOUT(byName("updateOpenPage")->isVisible(), kWait);
+            QCOMPARE(byName("updateNotes")->property("text").toString(), QStringLiteral("Faster start"));
+            QVERIFY(!banner->isVisible());  // a manual check does not bring the banner back
+            if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT_UPDATE"); !shot.isEmpty()) {
+                QTest::qWait(300);
+                s.window->grabWindow().save(QString::fromLocal8Bit(shot));
+            }
+        }
+        serveRelease("patch-v1.0.0-p1");
+        QCoreApplication::setApplicationVersion(QString());
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }
 
