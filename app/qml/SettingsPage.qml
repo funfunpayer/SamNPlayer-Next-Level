@@ -202,6 +202,35 @@ Item {
                             }
                         }
                     }
+                    // Plugin modes (D-155): previews that are in every build.
+                    GlassCard {
+                        Layout.fillWidth: true; implicitHeight: plugCol.implicitHeight + 28
+                        ColumnLayout {
+                            id: plugCol
+                            anchors.fill: parent; anchors.margins: 14; spacing: 10
+                            Text { textFormat: Text.PlainText; text: qsTr("Plugins"); color: Theme.text; font.family: Theme.font; font.pixelSize: 15 }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Text {
+                                    textFormat: Text.PlainText
+                                    Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                    text: qsTr("AI Train (preview)")
+                                    color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                                }
+                                FlowToggle {
+                                    objectName: "aiTrainEnabled"
+                                    checked: Plugins.aiTrainEnabled
+                                    onToggled: (c) => Plugins.aiTrainEnabled = c
+                                }
+                            }
+                            Text {
+                                textFormat: Text.PlainText
+                                Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                text: qsTr("Adds the AI Train tab: collect and review samples, train a tip-finding model, run the benchmark. Everything stays on this computer.")
+                                color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                        }
+                    }
                     // Support the project (D-153): the GitHub page for now.
                     GlassCard {
                         Layout.fillWidth: true; implicitHeight: supCol.implicitHeight + 28

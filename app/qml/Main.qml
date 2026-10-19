@@ -10,7 +10,7 @@ ApplicationWindow {
     visible: true
     title: "SamNPlayer Next"
     color: Theme.bgBottom
-    // Test hook: SAMN_MODE=1..3 opens that mode (the order of the tabs).
+    // Test hook: SAMN_MODE=1..4 opens that mode (the order of the tabs).
     property int mode: startMode
     readonly property var modeNames: top.modes.map(m => m.name)
 
@@ -104,6 +104,18 @@ ApplicationWindow {
             onReviewRequested: (path) => { win.mode = 0; player.controller.openPath(path) }
         }
         TrainingPage { id: training; overlayOpen: settingsPage.open; device: deviceCtl; autostart: trainingStart }
+        // Plugin modes (D-155): loaded only while switched on in Settings.
+        Loader {
+            id: aiTrain
+            objectName: "aiTrainLoader"
+            active: Plugins.aiTrainEnabled
+            sourceComponent: AiTrainPage { overlayOpen: settingsPage.open }
+        }
+    }
+    // A plugin mode switched off while it is shown: back to the Player.
+    Connections {
+        target: Plugins
+        function onChanged() { if (win.mode >= top.modes.length) win.mode = 0 }
     }
 
     // Drops anywhere in the window open in the Player (0.7 files:dropped,
@@ -271,6 +283,7 @@ ApplicationWindow {
     }
 
     Component.onCompleted: {
+        if (win.mode >= top.modes.length) win.mode = 0  // a plugin mode that is off
         if (startupPaths.length > 0) player.controller.openPaths(startupPaths)
         updates.checkIfEnabled()
     }
