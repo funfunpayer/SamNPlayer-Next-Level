@@ -100,6 +100,43 @@ private slots:
         QTRY_COMPARE_WITH_TIMEOUT(created.count(), 2, 60000);
     }
 
+    void findTipProposesTheBoxAndCandidates() {
+        GeneratorController g;
+        QVERIFY(!g.findTip());  // no video
+        QVERIFY(g.openVideo(clip("tip.mp4", 8)));
+        QVERIFY(g.findTip());
+        QVERIFY(g.finding());
+        QVERIFY(!g.findTip());  // one search at a time
+        QTRY_VERIFY_WITH_TIMEOUT(!g.finding(), 30000);
+        // 0.7 parity (docs/benchmarks/P3_TIP_FIND.md): the same clip gives this box.
+        QCOMPARE(g.box(), QRect(116, 96, 86, 48));
+        QVERIFY(g.status().startsWith("Tip found"));
+        QCOMPARE(g.tipCandidates().size(), 6);
+        const QVariantMap second = g.tipCandidates().at(1).toMap();
+        g.pickCandidate(1);
+        QCOMPARE(g.box(), QRect(second.value("x").toInt(), second.value("y").toInt(), second.value("w").toInt(),
+                                second.value("h").toInt()));
+        g.pickCandidate(99);  // ignored
+        QCOMPARE(g.box().x(), second.value("x").toInt());
+
+        // A new video drops the candidates; cancel ends a search.
+        QVERIFY(g.openVideo(clip("tip2.mp4", 8)));
+        QVERIFY(g.tipCandidates().isEmpty());
+        QVERIFY(g.findTip());
+        g.cancelFind();
+        QTRY_VERIFY_WITH_TIMEOUT(!g.finding(), 30000);
+        QVERIFY(g.status().contains("canceled") || g.status().startsWith("Tip found"));
+    }
+
+    void destroyingDuringAFindIsSafe() {
+        {
+            GeneratorController g;
+            QVERIFY(g.openVideo(clip("tip3.mp4", 8)));
+            QVERIFY(g.findTip());
+        }
+        QTest::qWait(50);
+    }
+
     void cancelStopsTheRunAndWritesNothing() {
         QTemporaryDir own;
         const QString video = own.filePath("long.mp4");
