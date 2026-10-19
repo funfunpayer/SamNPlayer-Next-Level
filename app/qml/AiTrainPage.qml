@@ -90,41 +90,34 @@ Item {
                         Text {
                             textFormat: Text.PlainText
                             Layout.fillWidth: true; wrapMode: Text.WordWrap
-                            text: qsTr("Free tag boxes → assign a body-part label → sample → review → train locally. Draw up to 12 boxes per image and give each a label; the same label may be used more than once (nipples need two boxes). “Use for training” tracks every labelled box through the clip. Everything stays on this computer.")
+                            text: qsTr("Teachers propose the boxes, you confirm or correct them, and our own small model learns from what you confirmed. It then finds the tip in the Generator: it only suggests, classic tracking still writes the script. Everything stays on this computer or on a server in your own network.")
                             color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
-                        }
-                        Text { textFormat: Text.PlainText; text: qsTr("From marks to a good script"); color: Theme.text; font.family: Theme.font; font.pixelSize: 14; topPadding: 4 }
-                        Text {
-                            textFormat: Text.PlainText
-                            Layout.fillWidth: true; wrapMode: Text.WordWrap
-                            text: qsTr("1. Train here: marks → Use for training → discard bad samples → train. The result is a tip-finding model.\n2. Then Create: the Generator's Find tip asks the model for the box. It only suggests.\n3. Check the box; never apply it blindly.\n4. Create: classic tracking writes the script. The AI does not track by itself.\n5. Play and review.")
-                            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13; lineHeight: 1.2
                         }
                     }
                 }
                 Step {
                     visible: page.tab === 0
-                    number: "1"; title: qsTr("Collect")
-                    text: qsTr("Open a video or an image, go to a moment, draw up to 12 named boxes and track them through the clip. Every N-th frame becomes a sample; the sound can be kept too.")
-                    status: qsTr("Comes next (D-155 step 2).")
+                    number: "1"; title: qsTr("Label")
+                    text: qsTr("Open a clip or an image. Each label (glans, mouth, hand …) is a track through the clip with its own lane under the video. Scrub or play: the boxes ride along. Where one drifts, drag it back; the tracker fills the stretch to the next correction. Mark where a label is not visible, and jump to the next unsure frame.")
+                    status: qsTr("Comes next (D-155 steps 2 and 3).")
                 }
                 Step {
                     visible: page.tab === 0
-                    number: "2"; title: qsTr("Review")
-                    text: qsTr("The new samples with their boxes. Correct a box, relabel it or discard the sample: tracking can be wrong on real footage, so review is part of the flow.")
-                    status: qsTr("D-155 step 3.")
-                }
-                Step {
-                    visible: page.tab === 0
-                    number: "3"; title: qsTr("Dataset")
-                    text: qsTr("How many boxes of each label are in training and validation, and whether the data is ready to train. The learned generation profile lives here too.")
+                    number: "2"; title: qsTr("Teachers")
+                    text: qsTr("NudeNet (one click to install) and vision models on Ollama, LM Studio or a server in your network, such as a Mac with larger models, propose boxes. Where several agree, the proposal is offered; you confirm it in the label editor.")
                     status: qsTr("D-155 step 4.")
                 }
                 Step {
                     visible: page.tab === 0
-                    number: "4"; title: qsTr("Train")
-                    text: qsTr("Epochs and device (automatic, NVIDIA CUDA, DirectML, Apple MPS, CPU). Training runs in your Python; the result is an ONNX model the Generator uses to find the tip.")
+                    number: "3"; title: qsTr("Train our model")
+                    text: qsTr("Every N-th frame of the confirmed stretches becomes a sample, split by clip. RF-DETR learns from them and is exported as one ONNX file; training runs in a separate Python set up with one click (CUDA, DirectML, Apple MPS or CPU).")
                     status: qsTr("D-155 step 5.")
+                }
+                Step {
+                    visible: page.tab === 0
+                    number: "4"; title: qsTr("Use it")
+                    text: qsTr("When our model beats the teachers on the benchmark, it becomes the fast teacher and the Generator's Find tip uses it.")
+                    status: qsTr("D-155 steps 5 and 6.")
                 }
 
                 // ---- Benchmark ----
