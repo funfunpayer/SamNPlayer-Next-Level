@@ -16,6 +16,7 @@
 #include "samn/marks.h"
 #include "samn/range_edit.h"
 #include "samn/samn_file.h"
+#include "samn/scenes.h"
 #include "samn/simplify.h"
 #include "samn/sound_vibration.h"
 #include "samn/beat_strokes.h"
@@ -66,6 +67,8 @@ void EditorController::setVideoPath(const QString& path) {
     if (path == video_path_) return;
     video_path_ = path;
     emit videoPathChanged();
+    loadSceneProposals();
+    emit scenesChanged();
 }
 
 void EditorController::setBusy(bool busy) {
@@ -148,12 +151,27 @@ bool EditorController::open(const QString& pathIn) {
         funscript = path.left(path.size() - 5) + QStringLiteral(".funscript");
     }
     samn::EditSession::Axes axes;
+    std::vector<samn::Chapter> chapters;
+    std::vector<samn::SceneFeelRange> scene_ranges;
+    std::optional<samn::ContactMarks> contact_marks;
     try {
         std::ifstream in(FsPath(funscript), std::ios::binary);
         if (!in) throw std::runtime_error("cannot read the file");
         std::stringstream ss;
         ss << in.rdbuf();
         axes["stroke"] = samn::Parse(ss.str()).actions;
+        try {
+            // Scene feels and the contact mark, for the scenes' suggestions.
+            const samn::FunscriptView view = samn::ParseFunscript(ss.str());
+            contact_marks = view.metadata.contact_marks;
+            if (view.metadata.device_recipe) scene_ranges = view.metadata.device_recipe->scene_ranges;
+        } catch (const std::exception&) {
+        }
+        try {
+            chapters = samn::LoadChapters(FsPath(funscript));
+        } catch (const std::exception&) {
+            // Unreadable chapters: the curves still open, with no scenes.
+        }
     } catch (const std::exception& e) {
         setStatus(tr("Cannot open %1: %2").arg(QFileInfo(funscript).fileName(), QString::fromUtf8(e.what())));
         return false;
@@ -166,6 +184,10 @@ bool EditorController::open(const QString& pathIn) {
             const samn::Document doc = samn::LoadDocument(FsPath(samn_path));
             if (!doc.vibration.empty()) axes["vibration"] = doc.vibration;
             if (!doc.suction.empty()) axes["suction"] = doc.suction;
+            // The Player plays the .samn, so its scenes count.
+            if (!doc.chapters.empty()) chapters = doc.chapters;
+            scene_ranges = doc.recipe.scene_ranges;
+            if (doc.contact_marks) contact_marks = doc.contact_marks;
         } catch (const std::exception& e) {
             // The stroke still opens; the companion is left alone.
             warning = tr("The .samn companion could not be read (%1); editing the stroke only.")
@@ -178,6 +200,13 @@ bool EditorController::open(const QString& pathIn) {
     session_ = samn::EditSession(std::move(axes));
     path_ = funscript;
     samn_path_ = samn_path;
+    std::stable_sort(chapters.begin(), chapters.end(),
+                     [](const samn::Chapter& a, const samn::Chapter& b) { return a.start_ms < b.start_ms; });
+    chapters_ = std::move(chapters);
+    scene_ranges_ = std::move(scene_ranges);
+    contact_marks_ = std::move(contact_marks);
+    loadSceneProposals();
+    emit scenesChanged();
     active_lane_ = QStringLiteral("stroke");
     marker_start_ = marker_end_ = 0;
     drag_index_ = -1;
@@ -199,8 +228,12 @@ void EditorController::close() {
     path_.clear();
     samn_path_.clear();
     marker_start_ = marker_end_ = 0;
+    chapters_.clear();
+    scene_ranges_.clear();
+    contact_marks_.reset();
     pushCurves();
     emit scriptChanged();
+    emit scenesChanged();
     emit markerChanged();
     emit historyChanged();
     setStatus({});
@@ -616,4 +649,153 @@ void EditorController::setView(samn::ViewWindow v) {
     emit viewChanged();
 }
 
+// ---- Scenes (D-145) ----
+
+void EditorController::loadSceneProposals() {
+    proposals_.clear();
+    if (video_path_.isEmpty()) return;
+    const std::filesystem::path p = samn::SceneProposalsPath(FsPath(video_path_));
+    std::error_code ec;
+    if (!std::filesystem::exists(p, ec)) return;
+    if (auto loaded = samn::LoadSceneProposals(p)) proposals_ = std::move(*loaded);
+}
+
+std::vector<samn::ChapterScene> EditorController::chapterScenes() const {
+    return samn::ChapterScenes(chapters_, timelineMs(), scene_ranges_, proposals_, contact_marks_);
+}
+
+QVariantList EditorController::scenes() const {
+    QVariantList out;
+    if (!hasScript()) return out;
+    for (const samn::ChapterScene& s : chapterScenes())
+        out << QVariantMap{{"index", s.index},
+                           {"name", QString::fromStdString(s.name)},
+                           {"startMs", double(s.start_ms)},
+                           {"endMs", double(s.end_ms)},
+                           {"feel", QString::fromStdString(s.feel)},
+                           {"hasFeel", s.has_feel},
+                           {"suggested", QString::fromStdString(s.suggested)},
+                           {"source", QString::fromStdString(s.source)},
+                           {"confidence", s.confidence}};
+    return out;
+}
+
+QStringList EditorController::sceneFeels() const {
+    QStringList out;
+    for (const std::string& f : samn::SceneFeelNames()) out << QString::fromStdString(f);
+    return out;
+}
+
+bool EditorController::hasSceneSuggestions() const {
+    if (!hasScript()) return false;
+    for (const samn::ChapterScene& s : chapterScenes())
+        if (!s.suggested.empty() && (!s.has_feel || s.feel != s.suggested)) return true;
+    return false;
+}
+
+bool EditorController::saveScenes(std::vector<samn::Chapter> chapters, std::vector<samn::SceneFeelRange> ranges) {
+    std::stable_sort(chapters.begin(), chapters.end(),
+                     [](const samn::Chapter& a, const samn::Chapter& b) { return a.start_ms < b.start_ms; });
+    // Feels belong to a scene's exact range; one whose scene moved or went
+    // is dropped (0.7 kept only the ranges of the current scenes).
+    std::vector<samn::SceneFeelRange> kept;
+    for (const samn::ChapterRange& r : samn::ChapterRanges(chapters, timelineMs()))
+        for (const samn::SceneFeelRange& f : ranges)
+            if (f.start_ms == r.start_ms && f.end_ms == r.end_ms) {
+                kept.push_back(f);
+                break;
+            }
+    try {
+        samn::SaveChapters(FsPath(path_), chapters);
+        const bool needs_samn = !kept.empty() || !scene_ranges_.empty();
+        if (!samn_path_.isEmpty() || needs_samn) {
+            samn::Document doc = companion();
+            doc.general = session_.Axis("stroke");
+            doc.chapters = chapters;
+            doc.recipe.scene_ranges = kept;
+            if (samn_path_.isEmpty()) {
+                samn_path_ = QString::fromStdString(samn::CompanionSamnPath(path_.toStdString()));
+                emit scriptChanged();
+            }
+            samn::SaveDocument(FsPath(samn_path_), doc);
+        }
+    } catch (const std::exception& e) {
+        setStatus(tr("Scenes not saved: %1").arg(QString::fromUtf8(e.what())));
+        return false;
+    }
+    chapters_ = std::move(chapters);
+    scene_ranges_ = std::move(kept);
+    emit scenesChanged();
+    return true;
+}
+
+bool EditorController::addScene(double ms) {
+    if (!hasScript()) return false;
+    const auto next = samn::AddSceneMarker(chapters_, std::llround(std::max(0.0, ms)));
+    if (!next) {
+        setStatus(tr("A scene already starts here."));
+        return false;
+    }
+    if (!saveScenes(*next, scene_ranges_)) return false;
+    setStatus(tr("Scene added at %1.").arg(QString::number(ms / 1000.0, 'f', 1) + QStringLiteral(" s")));
+    return true;
+}
+
+bool EditorController::renameScene(int index, const QString& name) {
+    if (index < 0 || index >= int(chapters_.size())) return false;
+    auto next = chapters_;
+    next[size_t(index)].name = name.trimmed().toStdString();
+    return saveScenes(std::move(next), scene_ranges_);
+}
+
+bool EditorController::deleteScene(int index) {
+    if (index < 0 || index >= int(chapters_.size())) return false;
+    auto next = chapters_;
+    next.erase(next.begin() + index);
+    return saveScenes(std::move(next), scene_ranges_);
+}
+
+bool EditorController::setSceneFeel(int index, const QString& feel) {
+    const std::string f = feel.toStdString();
+    if (!f.empty() && samn::NormalizeSceneFeel(f).empty()) return false;
+    const auto scenes = chapterScenes();
+    if (index < 0 || index >= int(scenes.size())) return false;
+    auto ranges = samn::SceneRangesOf(scenes);
+    const samn::ChapterScene& s = scenes[size_t(index)];
+    ranges.erase(std::remove_if(ranges.begin(), ranges.end(),
+                                [&](const samn::SceneFeelRange& r) { return r.start_ms == s.start_ms && r.end_ms == s.end_ms; }),
+                 ranges.end());
+    ranges.push_back({s.start_ms, s.end_ms, samn::NormalizeSceneFeel(f)});
+    if (!saveScenes(chapters_, std::move(ranges))) return false;
+    // A script that plays its written lanes keeps them: the feel shapes the
+    // recipe; "Vibration and suction from the stroke" writes it into the lanes.
+    if (!session_.Axis("vibration").empty() || !session_.Axis("suction").empty())
+        setStatus(tr("Scene feel saved. The script plays its written lanes; rebuild them with "
+                     "\"Vibration and suction from the stroke\" to feel it."));
+    return true;
+}
+
+bool EditorController::clearSceneFeel(int index) {
+    const auto scenes = chapterScenes();
+    if (index < 0 || index >= int(scenes.size()) || !scenes[size_t(index)].has_feel) return false;
+    auto copy = scenes;
+    copy[size_t(index)].has_feel = false;
+    return saveScenes(chapters_, samn::SceneRangesOf(copy));
+}
+
+int EditorController::applySceneSuggestions() {
+    auto scenes = chapterScenes();
+    int changed = 0;
+    for (samn::ChapterScene& s : scenes)
+        if (!s.suggested.empty() && (!s.has_feel || s.feel != s.suggested)) {
+            s.feel = s.suggested;
+            s.has_feel = true;
+            ++changed;
+        }
+    if (changed == 0 || !saveScenes(chapters_, samn::SceneRangesOf(scenes))) return 0;
+    setStatus(tr("%1 scene feel(s) applied.").arg(changed));
+    return changed;
+}
+
 }  // namespace samn::ui
+

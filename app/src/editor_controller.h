@@ -4,16 +4,19 @@
 #include <QPointer>
 #include <QString>
 #include <QStringList>
+#include <QVariantList>
 #include <QtQml/qqmlregistration.h>
 #include <atomic>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <thread>
 #include <vector>
 
 #include "samn/curve_geometry.h"
 #include "samn/edit_session.h"
 #include "samn/samn_file.h"
+#include "samn/scenes.h"
 
 namespace samn::ui {
 
@@ -65,6 +68,14 @@ class EditorController : public QObject {
     // New and dragged points snap to this frame rate; 0 = off (0.7 FPS-Snap).
     Q_PROPERTY(double fpsSnap READ fpsSnap WRITE setFpsSnap NOTIFY fpsSnapChanged)
     Q_PROPERTY(QString status READ status NOTIFY statusChanged)
+    // The Scene Map in the Editor (D-145, 0.7 scene_panel.js): the script's
+    // chapters as scenes, each {index, name, startMs, endMs, feel, hasFeel,
+    // suggested, source, confidence}; a feel per scene is a Sam Neo 2 feel
+    // ("" = Classic). Suggestions come from <clip>.scene.json beside the
+    // video or the contact mark's class; nothing is applied on its own.
+    Q_PROPERTY(QVariantList scenes READ scenes NOTIFY scenesChanged)
+    Q_PROPERTY(QStringList sceneFeels READ sceneFeels CONSTANT)
+    Q_PROPERTY(bool hasSceneSuggestions READ hasSceneSuggestions NOTIFY scenesChanged)
 
 public:
     explicit EditorController(QObject* parent = nullptr);
@@ -100,6 +111,9 @@ public:
     double fpsSnap() const { return fps_snap_; }
     void setFpsSnap(double fps);
     QString status() const { return status_; }
+    QVariantList scenes() const;
+    QStringList sceneFeels() const;
+    bool hasSceneSuggestions() const;
 
     // A .funscript (its companion .samn is read too) or a .samn path.
     Q_INVOKABLE bool open(const QString& path);
@@ -146,6 +160,18 @@ public:
     // Stops a running create tool (the beat bar).
     Q_INVOKABLE void cancelTool();
 
+    // Scenes: a new one starts at ms (0.7 addSceneMarkerAt; refused within
+    // 250 ms of another start), rename, delete. Saved at once into the
+    // .funscript and the .samn.
+    Q_INVOKABLE bool addScene(double ms);
+    Q_INVOKABLE bool renameScene(int index, const QString& name);
+    Q_INVOKABLE bool deleteScene(int index);
+    // The scene's feel ("" = Classic); clearSceneFeel leaves it to the script.
+    Q_INVOKABLE bool setSceneFeel(int index, const QString& feel);
+    Q_INVOKABLE bool clearSceneFeel(int index);
+    // Gives every scene with a suggestion that feel (0.7 "Apply suggestions").
+    Q_INVOKABLE int applySceneSuggestions();
+
     Q_INVOKABLE bool undo();
     Q_INVOKABLE bool redo();
 
@@ -170,6 +196,7 @@ signals:
     void markerChanged();
     void fpsSnapChanged();
     void statusChanged();
+    void scenesChanged();
 
 private:
     std::string laneKey(const CurveItem* curve) const;
@@ -187,6 +214,9 @@ private:
     void pushCurves();
     void setView(samn::ViewWindow v);
     void setStatus(const QString& s);
+    void loadSceneProposals();
+    std::vector<samn::ChapterScene> chapterScenes() const;
+    bool saveScenes(std::vector<samn::Chapter> chapters, std::vector<samn::SceneFeelRange> ranges);
 
     samn::EditSession session_;
     QString path_;          // the .funscript
@@ -200,6 +230,10 @@ private:
     std::vector<QPointer<CurveItem>> curves_;
     QStringList lanes_;
     QString video_path_;
+    std::vector<samn::Chapter> chapters_;          // sorted by start
+    std::vector<samn::SceneFeelRange> scene_ranges_;
+    std::vector<samn::SceneProposal> proposals_;
+    std::optional<samn::ContactMarks> contact_marks_;
     bool busy_ = false;
     bool sound_with_contact_ = false;
     AudioLevelDecoder* sound_ = nullptr;

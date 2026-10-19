@@ -80,6 +80,7 @@
     - stroke from the video's beat bar (`DetectBeatBarBeats`, streamed `BeatTimer`).
   - **Decisions:** D-143 (best component, licence follows) and D-144 (the Player plays, the Generator edits).
 - **P3.3 continued, 19 Oct** (#59–#63 and this branch): the Player's theatre mode with the curve strip switchable; Find tip (0.7 `auto_roi`, bit-exact on 3 clips) with candidates; the queue (0.7 "Create queue"); the audit sync (`docs/AUDIT_2026-10-19.md`); **contact marks**: tip and contact classes, contact areas on the frame, contact vibration on by default; Generate writes the 0.7 recipe, `contactMarks` and the tip path (`.samn`), and the Player turns the path into spatial contact vibration (`core/include/samn/contact_marks.h`, 0.7 `feel_spatial` tests ported).
+- **Scene Map in the Editor** (D-145): the mode card is gone (#65); the Generator's right panel has a "Scenes" tab (cards with frame, name, range, feel per scene, suggestion from `<clip>.scene.json` or the contact mark, Apply suggestions) and scene bands under the curve lanes (`core/include/samn/scenes.h`, `EditorController` scenes).
 
 ## Next (in order; the work list is `LESSONS.md` § Gaps, `TEST_PARITY.md` and `P3_GENERATOR.md`)
 

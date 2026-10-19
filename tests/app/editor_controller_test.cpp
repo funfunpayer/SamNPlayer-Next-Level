@@ -10,6 +10,7 @@
 #include "curve_item.h"
 #include "editor_controller.h"
 #include "samn/funscript.h"
+#include "samn/marks.h"
 #include "samn/samn_file.h"
 #include "synthetic_clips.h"
 
@@ -400,6 +401,85 @@ private slots:
         QVERIFY(!e.zoomed());
         e.zoomAt(2, 0.5);
         QVERIFY(e.zoomed());
+    }
+
+    // D-145: the Scene Map in the Editor (0.7 scene_panel.js, SuggestChapterScenes,
+    // SaveChapterScenes): scenes are chapters, a feel per scene, suggestions.
+    void scenesAreChaptersWithAFeelAndSuggestions() {
+        EditorController e;
+        const QString p = script("scenes.funscript");
+        QVERIFY(e.open(p));
+        QVERIFY(e.scenes().isEmpty());
+        QVERIFY(!e.hasSceneSuggestions());
+        QSignalSpy changed(&e, &EditorController::scenesChanged);
+        QVERIFY(e.addScene(0));
+        QVERIFY(e.addScene(2000));
+        QVERIFY(!e.addScene(2100));  // within 250 ms of a start
+        QVERIFY(e.status().contains("already"));
+        QCOMPARE(e.scenes().size(), 2);
+        QVERIFY(changed.count() >= 2);
+        // Saved into the .funscript as chapters, the stroke untouched.
+        auto chapters = samn::LoadChapters(Fs(p));
+        QCOMPARE(chapters.size(), size_t(2));
+        QCOMPARE(chapters[1].start_ms, int64_t(2000));
+        QCOMPARE(Actions(p).size(), size_t(5));
+        // The first ends where the second starts; the last at the script end.
+        const QVariantMap first = e.scenes().at(0).toMap();
+        QCOMPARE(first.value("endMs").toDouble(), 2000.0);
+        QCOMPARE(e.scenes().at(1).toMap().value("endMs").toDouble(), 4000.0);
+        QVERIFY(!first.value("hasFeel").toBool());
+
+        QVERIFY(e.renameScene(0, "  Intro "));
+        QCOMPARE(e.scenes().at(0).toMap().value("name").toString(), QStringLiteral("Intro"));
+
+        // A feel per scene goes into the .samn's recipe (made when missing).
+        QVERIFY(!e.setSceneFeel(0, "dance"));
+        QVERIFY(e.setSceneFeel(0, "oral"));
+        QVERIFY(!e.playPath().isEmpty() && e.playPath().endsWith(".samn"));
+        samn::Document d = samn::LoadDocument(Fs(e.playPath()));
+        QCOMPARE(d.chapters.size(), size_t(2));
+        QCOMPARE(d.recipe.scene_ranges.size(), size_t(1));
+        QCOMPARE(QString::fromStdString(d.recipe.scene_ranges[0].feel), QStringLiteral("oral"));
+        QCOMPARE(d.recipe.scene_ranges[0].end_ms, int64_t(2000));
+        QVERIFY(e.setSceneFeel(1, ""));  // Classic is a choice too
+        QCOMPARE(e.scenes().at(1).toMap().value("hasFeel").toBool(), true);
+        QVERIFY(e.clearSceneFeel(1));
+        QVERIFY(!e.scenes().at(1).toMap().value("hasFeel").toBool());
+        // The Player's mapping uses the scene feel.
+        d = samn::LoadDocument(Fs(e.playPath()));
+        QCOMPARE(samn::MapOptionsFromScript(d.ToFunscript()).scene_ranges.size(), size_t(1));
+
+        // Suggestions: <clip>.scene.json beside the video.
+        const QString video = dir_.filePath("scenes.mp4");
+        std::ofstream(Fs(dir_.filePath("scenes.scene.json")))
+            << R"({"version":1,"width":640,"height":360,"proposals":[)"
+               R"({"t_ms":3000,"start_ms":2000,"end_ms":4000,"scene_type":"titjob","confidence":0.8,)"
+               R"("primary":{"x":10,"y":10,"w":50,"h":50}}]})";
+        e.setVideoPath(video);
+        QVERIFY(e.hasSceneSuggestions());
+        const QVariantMap second = e.scenes().at(1).toMap();
+        QCOMPARE(second.value("suggested").toString(), QStringLiteral("breast"));
+        QCOMPARE(second.value("source").toString(), QStringLiteral("scene detection"));
+        QCOMPARE(e.applySceneSuggestions(), 1);
+        QVERIFY(!e.hasSceneSuggestions());
+        QCOMPARE(e.scenes().at(1).toMap().value("feel").toString(), QStringLiteral("breast"));
+        QCOMPARE(e.scenes().at(0).toMap().value("feel").toString(), QStringLiteral("oral"));  // kept
+
+        // A new scene inside the first cuts it: its feel no longer fits and goes.
+        QVERIFY(e.addScene(1000));
+        QCOMPARE(e.scenes().size(), 3);
+        QVERIFY(!e.scenes().at(0).toMap().value("hasFeel").toBool());
+        QCOMPARE(e.scenes().at(2).toMap().value("feel").toString(), QStringLiteral("breast"));
+        QVERIFY(e.deleteScene(1));
+        QCOMPARE(e.scenes().size(), 2);
+
+        // Opening again reads the scenes back from the .samn.
+        EditorController again;
+        QVERIFY(again.open(p));
+        QCOMPARE(again.scenes().size(), 2);
+        QCOMPARE(again.scenes().at(0).toMap().value("name").toString(), QStringLiteral("Intro"));
+        again.close();
+        QVERIFY(again.scenes().isEmpty());
     }
 };
 
