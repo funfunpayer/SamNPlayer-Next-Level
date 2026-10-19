@@ -14,6 +14,7 @@
 
 #include "icon_provider.h"
 #include "player_controller.h"
+#include "samn/samn_file.h"
 
 Q_IMPORT_QML_PLUGIN(SamNPlugin)
 
@@ -225,6 +226,40 @@ private:
             QSKIP("no media backend can decode the test clip here");
         QTRY_VERIFY_WITH_TIMEOUT(std::abs(media->position() - 2500) <= 150, 5000);
         QCOMPARE(media->property("pendingSeekMs").toDouble(), -1.0);
+
+        // A script with contact marks draws them on the picture (0.7 contact
+        // overlay): tip, contact area and extra; the switch hides them.
+        {
+            QTemporaryDir md;
+            samn::Document doc;
+            doc.version = samn::SamnCurrentVersion;
+            doc.kind = samn::SamnKind;
+            doc.general = {{0, 10}, {1000, 90}, {2000, 10}, {3000, 90}};
+            doc.duration_ms = 3000;
+            samn::ContactMarks cm;
+            cm.tip = samn::ContactMarkBox{10, 10, 30, 30, "glans", false};
+            cm.primary = samn::ContactMarkBox{60, 40, 40, 40, "nipples", false};
+            cm.extras = {samn::ContactMarkBox{120, 40, 30, 30, "mouth", true}};
+            doc.contact_marks = cm;
+            const QString marks = md.filePath(QStringLiteral("marks.samn"));
+            samn::SaveDocument(std::filesystem::u8path(marks.toStdString()), doc);
+            QVERIFY(ctrl->openScript(marks, QStringLiteral(SAMN_TEST_DATA "/testpattern_4s.mp4")));
+            auto* layer = page->findChild<QQuickItem*>(QStringLiteral("contactMarksLayer"));
+            QVERIFY(layer);
+            QTRY_VERIFY(layer->isVisible());
+            // Repeater items hang in the item tree, not under the page as QObjects.
+            const auto mark = [layer](const char* name) -> QQuickItem* {
+                for (QQuickItem* i : layer->childItems())
+                    if (i->objectName() == QLatin1String(name)) return i;
+                return nullptr;
+            };
+            QTRY_VERIFY(mark("contactMark_2"));
+            auto* primary = mark("contactMark_1");
+            QVERIFY(primary->width() > 5 && primary->height() > 5);
+            ctrl->setShowContactMarks(false);
+            QTRY_VERIFY(!layer->isVisible());
+            ctrl->setShowContactMarks(true);
+        }
 
         // A file that is no video: the error bar says so (0.7 0.5.41).
         QTemporaryDir dir;

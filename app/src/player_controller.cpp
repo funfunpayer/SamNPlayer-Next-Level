@@ -1,5 +1,7 @@
 #include "player_controller.h"
 
+#include <QCoreApplication>
+
 #include <QMediaPlayer>
 
 #include <QDateTime>
@@ -21,6 +23,7 @@
 #include "samn/mapper.h"
 #include "samn/marks.h"
 #include "samn/playback_mapping.h"
+#include "samn/contact_marks.h"
 #include "samn/samn_file.h"
 #include "samn/script_finder.h"
 
@@ -318,6 +321,46 @@ void PlayerController::addScriptFolder(const QString& pathOrUrl) {
     }
 }
 
+namespace {
+
+QVariantMap MarkBox(const samn::ContactMarkBox& b) {
+    return {{"x", qint64(b.x)}, {"y", qint64(b.y)}, {"w", qint64(b.w)}, {"h", qint64(b.h)},
+            {"cls", QString::fromStdString(b.cls)}, {"fixed", b.fixed}};
+}
+
+// 0.7 applyContactMarksInfo: what the marks are, for the hint under the video.
+QVariantMap MarksInfo(const samn::ContactMarks& m, const std::optional<samn::TrajectoryData>& path) {
+    QVariantMap out;
+    out["tipClass"] = QString::fromStdString(m.tip_class);
+    out["driveStroke"] = m.drive_stroke;
+    int boxes = 0;
+    if (m.tip && m.tip->w > 0 && m.tip->h > 0) {
+        out["tip"] = MarkBox(*m.tip);
+        ++boxes;
+    }
+    if (m.primary && m.primary->w > 0 && m.primary->h > 0) {
+        out["primary"] = MarkBox(*m.primary);
+        ++boxes;
+    }
+    QVariantList extras;
+    for (const samn::ContactMarkBox& e : m.extras)
+        if (e.w > 0 && e.h > 0) extras << MarkBox(e);
+    boxes += int(extras.size());
+    out["extras"] = extras;
+    out["width"] = path ? qint64(path->width) : 0;
+    out["height"] = path ? qint64(path->height) : 0;
+    QStringList hint;
+    if (!m.tip_class.empty()) hint << QCoreApplication::translate("PlayerController", "Tip: %1").arg(QString::fromStdString(m.tip_class));
+    if (boxes == 1) hint << QCoreApplication::translate("PlayerController", "1 marked box");
+    else if (boxes > 1) hint << QCoreApplication::translate("PlayerController", "%1 marked boxes").arg(boxes);
+    hint << (m.drive_stroke ? QCoreApplication::translate("PlayerController", "distance drives the stroke")
+                            : QCoreApplication::translate("PlayerController", "feel only (the tip tracker drives the stroke)"));
+    out["hint"] = hint.join(QStringLiteral(" · "));
+    return out;
+}
+
+}  // namespace
+
 bool PlayerController::openScript(const QString& pathIn, const QString& videoIn) {
     // A .samn beside a .funscript of the same name wins (as in 0.7).
     const QString path = q(samn::PreferSamnCompanion(u8(toLocalPath(pathIn))));
@@ -345,6 +388,10 @@ bool PlayerController::openScript(const QString& pathIn, const QString& videoIn)
     }
     profile_ = doc.profile;
     recipeHasContact_ = doc.recipe.contact_vibration;
+    contactMarks_ = doc.contact_marks && (samn::HasAnyArea(*doc.contact_marks) || !doc.contact_marks->tip_class.empty())
+                        ? MarksInfo(*doc.contact_marks, doc.trajectory)
+                        : QVariantMap{};
+    tipPath_ = doc.trajectory ? samn::SortedTipPath(*doc.trajectory) : std::vector<samn::TrajectoryPoint>{};
     // 0.7 showContact: contact in the recipe, Neo axes, or tf / tj.
     contactControls_ = recipeHasContact_ || !doc.vibration.empty() || !doc.suction.empty() ||
                        samn::IsDistanceProfile(doc.profile);
@@ -764,6 +811,8 @@ double PlayerController::beatPeriodMs() const { return bpmGrid_ && bpm_ > 0 ? 60
 void PlayerController::clearScript() {
     strength_.clear();
     activeStrength_.clear();
+    contactMarks_.clear();
+    tipPath_.clear();
     contactControls_ = contactKnobsLive_ = false;
     emit mappedChanged();
     stroke_.clear();
@@ -939,6 +988,23 @@ void PlayerController::setAudioLane(bool on) {
     setUiValue(QStringLiteral("player.audioLane"), on);
     emit viewOptionsChanged();
 }
+
+bool PlayerController::showContactMarks() const {
+    return const_cast<PlayerController*>(this)->uiValue(QStringLiteral("player.showContactMarks"), true).toBool();
+}
+
+void PlayerController::setShowContactMarks(bool on) {
+    if (on == showContactMarks()) return;
+    setUiValue(QStringLiteral("player.showContactMarks"), on);
+    emit viewOptionsChanged();
+}
+
+QVariantMap PlayerController::tipAt(double scriptMs) const {
+    const auto p = samn::TipPathAt(tipPath_, int64_t(std::llround(scriptMs)));
+    if (!p) return {};
+    return {{"x", p->x}, {"y", p->y}};
+}
+
 
 bool PlayerController::posOverlay() const {
     return const_cast<PlayerController*>(this)->uiValue(QStringLiteral("player.posOverlay"), true).toBool();
