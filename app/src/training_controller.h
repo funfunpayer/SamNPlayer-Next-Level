@@ -99,6 +99,18 @@ class TrainingController : public QObject {
     // {title, summary, hint} of the last session; empty map before the first one.
     Q_PROPERTY(QVariantMap recap READ recap NOTIFY historyChanged)
 
+    // ---- the stage (0.8 training_video.js, kept as training.stage.*) ----
+    // "rings" (the live rings), "figure" (the abstract Flow figure) or "video".
+    Q_PROPERTY(QString stage READ stage WRITE setStage NOTIFY stageChanged)
+    // The film that plays along on the Video stage; the Player's video is untouched.
+    Q_PROPERTY(QString videoPath READ videoPath NOTIFY stageChanged)
+    Q_PROPERTY(QString videoUrl READ videoUrl NOTIFY stageChanged)
+    Q_PROPERTY(QString videoName READ videoName NOTIFY stageChanged)
+    Q_PROPERTY(bool videoLoop READ videoLoop WRITE setVideoLoop NOTIFY stageChanged)
+    Q_PROPERTY(bool videoMuted READ videoMuted WRITE setVideoMuted NOTIFY stageChanged)
+    // The Player library's recent videos (shared list, newest first).
+    Q_PROPERTY(QStringList recentVideos READ recentVideos NOTIFY stageChanged)
+
 public:
     // The engine ticks every kTickMs (a ramp step is 50 ms).
     static constexpr int kTickMs = 20;
@@ -123,6 +135,8 @@ public:
     Q_INVOKABLE void pause();
     Q_INVOKABLE void resume();
     Q_INVOKABLE void togglePause();
+    // Use this film on the Video stage (a path or a file URL); it joins the recent videos.
+    Q_INVOKABLE void chooseVideo(const QString& pathOrUrl);
     // End the current cycle now; the session goes on (Esc).
     Q_INVOKABLE void interrupt();
     // Feedback 1-10; 9 and 10 also interrupt the running cycle. Returns false when not running or invalid.
@@ -221,6 +235,17 @@ public:
     const std::vector<float>& suctionSamples() const { return suc_samples_; }
     int sampleMs() const { return sample_ms_; }
 
+    QString stage() const { return stage_; }
+    void setStage(const QString& stage);
+    QString videoPath() const { return video_path_; }
+    QString videoUrl() const;
+    QString videoName() const;
+    bool videoLoop() const { return video_loop_; }
+    void setVideoLoop(bool on);
+    bool videoMuted() const { return video_muted_; }
+    void setVideoMuted(bool on);
+    QStringList recentVideos();
+
 signals:
     void deviceChanged();
     void formChanged();
@@ -234,6 +259,7 @@ signals:
     void logChanged();
     void historyChanged();
     void samplesChanged();
+    void stageChanged();
     // Start was refused because the device has neither vibration nor suction.
     void startBlocked();
     // The session ended (naturally, by the user, by an error or the safety limit).
@@ -266,6 +292,9 @@ private:
     void writeLog(const samn::training::LogEntry& e);
 
     std::unique_ptr<samn::Settings> settings_;
+    // stage
+    QString stage_ = QStringLiteral("rings"), video_path_;
+    bool video_loop_ = true, video_muted_ = true;
     QPointer<DeviceController> device_;
     // form
     bool mock_ = true, auto_adjust_ = true;
