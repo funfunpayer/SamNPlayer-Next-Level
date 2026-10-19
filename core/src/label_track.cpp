@@ -142,6 +142,50 @@ int LabelProject::ObjectCount(const std::string& cls) const {
     return int(std::count_if(tracks.begin(), tracks.end(), [&](const LabelTrack& t) { return t.cls() == cls; }));
 }
 
+const std::vector<std::string>& PhaseNames() {
+    static const std::vector<std::string> kNames{"intro", "empty", "oral", "hand", "breast", "intercourse", "climax",
+                                                 "cool-down"};
+    return kNames;
+}
+
+void LabelProject::SetPhase(int64_t start_ms, int64_t end_ms, const std::string& name, bool confirmed,
+                            const std::string& source) {
+    if (end_ms <= start_ms) return;
+    std::vector<LabelPhase> out;
+    for (const auto& p : phases) {
+        if (p.end_ms <= start_ms || p.start_ms >= end_ms) {
+            out.push_back(p);
+            continue;
+        }
+        if (p.start_ms < start_ms) {
+            LabelPhase left = p;
+            left.end_ms = start_ms;
+            out.push_back(left);
+        }
+        if (p.end_ms > end_ms) {
+            LabelPhase right = p;
+            right.start_ms = end_ms;
+            out.push_back(right);
+        }
+    }
+    if (!name.empty()) out.push_back({start_ms, end_ms, name, confirmed, source});
+    std::sort(out.begin(), out.end(), [](const LabelPhase& a, const LabelPhase& b) { return a.start_ms < b.start_ms; });
+    phases.clear();
+    for (const auto& p : out) {
+        if (!phases.empty() && phases.back().end_ms == p.start_ms && phases.back().name == p.name &&
+            phases.back().confirmed == p.confirmed)
+            phases.back().end_ms = p.end_ms;
+        else
+            phases.push_back(p);
+    }
+}
+
+const LabelPhase* LabelProject::PhaseAt(int64_t ms) const {
+    for (const auto& p : phases)
+        if (ms >= p.start_ms && ms < p.end_ms) return &p;
+    return nullptr;
+}
+
 bool IsExcludeClass(const std::string& cls) { return cls == kExcludeClass; }
 
 std::vector<LabelBox> ExcludeZonesAt(const LabelProject& p, int64_t ms) {
@@ -177,6 +221,15 @@ std::string SerializeLabelProject(const LabelProject& p) {
             keys.push_back(std::move(o));
         }
         j["tracks"].push_back({{"label", t.label()}, {"class", t.cls()}, {"keys", std::move(keys)}});
+    }
+    if (!p.phases.empty()) {
+        j["phases"] = nlohmann::json::array();
+        for (const auto& ph : p.phases)
+            j["phases"].push_back({{"startMs", ph.start_ms},
+                                   {"endMs", ph.end_ms},
+                                   {"phase", ph.name},
+                                   {"confirmed", ph.confirmed},
+                                   {"source", ph.source}});
     }
     return j.dump(2);
 }
@@ -216,6 +269,11 @@ LabelProject ParseLabelProject(const std::string& json) {
             }
             track.SetKey(k);
         }
+    }
+    for (const auto& o : j.value("phases", nlohmann::json::array())) {
+        if (!o.is_object()) continue;
+        p.SetPhase(o.value("startMs", int64_t(0)), o.value("endMs", int64_t(0)), o.value("phase", ""),
+                   o.value("confirmed", true), o.value("source", "user"));
     }
     return p;
 }

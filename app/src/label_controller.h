@@ -43,6 +43,10 @@ class LabelController : public QObject {
     // The classes offered (body parts and the contact point); any other name
     // is an own class. Each can have several objects ("hand", "hand 2").
     Q_PROPERTY(QStringList presetLabels READ presetLabels CONSTANT)
+    // The phase lane (D-157): [{startMs, endMs, phase, confirmed, source}].
+    Q_PROPERTY(QVariantList phases READ phases NOTIFY tracksChanged)
+    Q_PROPERTY(QStringList phaseNames READ phaseNames CONSTANT)
+    Q_PROPERTY(QString phaseAtPreview READ phaseAtPreview NOTIFY previewChanged)
 
 public:
     explicit LabelController(QObject* parent = nullptr);
@@ -86,7 +90,15 @@ public:
     Q_INVOKABLE bool redo();
     // Writes images/ and labels/ (YOLO) and classes.txt into dir; every_ms
     // apart. Returns the number of samples, -1 on error (status says why).
+    // Sets [startMs, endMs) to the phase; "" clears it.
+    Q_INVOKABLE bool setPhase(double startMs, double endMs, const QString& phase);
+    // Confirms every phase suggestion.
+    Q_INVOKABLE int confirmPhases();
     Q_INVOKABLE int exportDataset(const QString& dirOrUrl, double everyMs);
+
+    QVariantList phases() const;
+    QStringList phaseNames() const;
+    QString phaseAtPreview() const;
 
 signals:
     void videoChanged();

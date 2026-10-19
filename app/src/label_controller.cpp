@@ -1,6 +1,7 @@
 #include "label_controller.h"
 
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QImageReader>
 #include <algorithm>
@@ -185,6 +186,57 @@ int LabelController::confirmAll() {
     return n;
 }
 
+QVariantList LabelController::phases() const {
+    QVariantList out;
+    for (const auto& p : project_.phases)
+        out << QVariantMap{{"startMs", double(p.start_ms)},
+                           {"endMs", double(p.end_ms)},
+                           {"phase", QString::fromStdString(p.name)},
+                           {"confirmed", p.confirmed},
+                           {"source", QString::fromStdString(p.source)}};
+    return out;
+}
+
+QStringList LabelController::phaseNames() const {
+    QStringList out;
+    for (const auto& n : samn::PhaseNames()) out << QString::fromStdString(n);
+    return out;
+}
+
+QString LabelController::phaseAtPreview() const {
+    const auto* p = project_.PhaseAt(int64_t(std::llround(preview_ms_)));
+    return p ? QString::fromStdString(p->name) : QString();
+}
+
+bool LabelController::setPhase(double startMs, double endMs, const QString& phase) {
+    if (!hasVideo()) return false;
+    const double end = still_ ? std::max(endMs, startMs + 1) : std::min(endMs, duration_ms_);
+    const int64_t a = int64_t(std::llround(std::max(0.0, startMs))), b = int64_t(std::llround(end));
+    if (b <= a) return false;
+    change(phase.isEmpty() ? tr("Phase cleared") : tr("Phase: %1").arg(phase), [&](samn::LabelProject& p) {
+        p.SetPhase(a, b, phase.toStdString());
+        return true;
+    });
+    return true;
+}
+
+int LabelController::confirmPhases() {
+    int n = 0;
+    change(tr("Phases confirmed"), [&](samn::LabelProject& p) {
+        for (auto& ph : p.phases)
+            if (!ph.confirmed) {
+                ph.confirmed = true;
+                ++n;
+            }
+        if (n == 0) return false;
+        const auto copy = p.phases;
+        p.phases.clear();
+        for (const auto& ph : copy) p.SetPhase(ph.start_ms, ph.end_ms, ph.name, true, ph.source);
+        return true;
+    });
+    return n;
+}
+
 void LabelController::change(const QString& what, const std::function<bool(samn::LabelProject&)>& op) {
     samn::LabelProject next = project_;
     if (!op(next)) return;
@@ -312,6 +364,22 @@ int LabelController::exportDataset(const QString& dirOrUrl, double everyMs) {
     }
     std::ofstream classesOut(Fs(dir + "/classes.txt"), std::ios::binary);
     for (const auto& c : classes) classesOut << c << '\n';
+    // The confirmed phases for the scene model (D-157); clips exported into
+    // the same folder add their lines. Binary: "\n" on every system, as
+    // the labels and classes.txt.
+    QFile phasesOut(dir + "/phases.csv");
+    const bool fresh = !phasesOut.exists();
+    if (phasesOut.open(QIODevice::Append)) {
+        if (fresh) phasesOut.write("clip,start_ms,end_ms,phase\n");
+        for (const auto& p : project_.phases)
+            if (p.confirmed)
+                phasesOut.write(QStringLiteral("%1,%2,%3,%4\n")
+                                    .arg(QFileInfo(video_path_).fileName().replace(',', '_'))
+                                    .arg(p.start_ms)
+                                    .arg(p.end_ms)
+                                    .arg(QString::fromStdString(p.name))
+                                    .toUtf8());
+    }
     setStatus(tr("%n sample(s) written to %1", "", written).arg(dir));
     return written;
 }

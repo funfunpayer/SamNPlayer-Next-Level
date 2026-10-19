@@ -21,6 +21,13 @@ Item {
     function toneOf(m) { return m && m.cls === "exclude" ? excludeColor : colorOf(m ? m.classIndex : 0) }
     function fmt(ms) { return Math.floor(ms / 60000) + ":" + String(Math.floor(ms / 1000) % 60).padStart(2, "0") + "." + String(Math.floor(ms / 100) % 10) }
     readonly property int currentIndex: labels.labels.indexOf(labels.currentLabel)
+    // The phase lane (D-157): the phase a drag on the lane paints, and the
+    // phase colours (calm grey for intro and empty, the scene feels, warm
+    // red for the climax, cool blue after it).
+    property string paintPhase: "intro"
+    readonly property var phaseColors: ({ "intro": "#8a9ab5", "empty": "#6b7890", "oral": "#ff7a9a", "hand": "#3dccc0",
+                                          "breast": "#f2b03d", "intercourse": "#c9a0ff", "climax": "#ff5a3a", "cool-down": "#7ac8ff" })
+    function phaseColor(p) { return phaseColors[p] || Theme.textDim }
     readonly property var currentLane: currentIndex >= 0 ? labels.lanes[currentIndex] : null
     // "hand" reads "hand 1" once there is a "hand 2".
     function displayName(lane) {
@@ -159,6 +166,17 @@ Item {
                 objectName: "labelStage"
                 Layout.fillWidth: true; Layout.fillHeight: true
                 radius: Theme.radius; color: "#02070f"; clip: true
+                // The phase at the playhead.
+                Rectangle {
+                    objectName: "phaseBadge"
+                    visible: labels.phaseAtPreview !== ""
+                    z: 3
+                    anchors.right: parent.right; anchors.top: parent.top; anchors.margins: 10
+                    readonly property color tone: root.phaseColor(labels.phaseAtPreview)
+                    height: 24; width: badgeText.implicitWidth + 18; radius: 12
+                    color: Qt.rgba(tone.r, tone.g, tone.b, 0.30); border.color: tone
+                    Text { id: badgeText; textFormat: Text.PlainText; anchors.centerIn: parent; text: labels.phaseAtPreview; color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 12 }
+                }
                 FrameItem {
                     id: frameView
                     objectName: "labelFrame"
@@ -276,10 +294,37 @@ Item {
                 FlowButton { objectName: "exportSamples"; primary: true; text: qsTr("Export samples…"); enabled: labels.labels.length > 0; onClicked: exportDialog.open() }
             }
 
-            // Lanes: one per label; click or drag to scrub.
+            // Phases: pick one, then drag over the phase lane to paint it.
+            RowLayout {
+                Layout.fillWidth: true; spacing: 6
+                Text { textFormat: Text.PlainText; text: qsTr("Phase"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
+                Repeater {
+                    model: labels.phaseNames.concat([""])
+                    delegate: Rectangle {
+                        required property string modelData
+                        objectName: "phaseChip_" + (modelData || "clear")
+                        readonly property bool picked: root.paintPhase === modelData
+                        readonly property color tone: modelData ? root.phaseColor(modelData) : Theme.textDim
+                        height: 24; width: phaseText.implicitWidth + 16; radius: 12
+                        color: picked ? Qt.rgba(tone.r, tone.g, tone.b, 0.30) : pca.containsMouse ? Qt.rgba(1, 1, 1, 0.08) : Qt.rgba(1, 1, 1, 0.03)
+                        border.color: picked ? tone : Theme.cardBorder
+                        Text { id: phaseText; textFormat: Text.PlainText; anchors.centerIn: parent; text: modelData || qsTr("clear"); color: parent.picked ? Theme.text : parent.tone; font.family: Theme.fontSoft; font.pixelSize: 11 }
+                        MouseArea { id: pca; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.paintPhase = modelData }
+                    }
+                }
+                Item { Layout.fillWidth: true }
+                FlowButton {
+                    objectName: "confirmPhases"
+                    text: qsTr("Confirm phases")
+                    visible: labels.phases.some((p) => !p.confirmed)
+                    onClicked: labels.confirmPhases()
+                }
+            }
+
+            // Lanes: the phase lane, then one per label; click or drag to scrub.
             GlassCard {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Math.max(1, labels.lanes.length) * 30 + 24
+                Layout.preferredHeight: (Math.max(1, labels.lanes.length) + 1) * 30 + 24
                 Item {
                     id: lanesArea
                     anchors.fill: parent; anchors.margins: 12
@@ -288,6 +333,63 @@ Item {
                     function xOf(ms) { return nameW + (width - nameW) * Math.max(0, Math.min(1, ms / span)) }
                     Column {
                         anchors.fill: parent; spacing: 4
+                        // The phase lane: drag to paint the picked phase, click to scrub.
+                        Item {
+                            id: phaseLane
+                            objectName: "phaseLane"
+                            width: lanesArea.width; height: 26
+                            Text {
+                                textFormat: Text.PlainText
+                                width: lanesArea.nameW - 8; anchors.verticalCenter: parent.verticalCenter; elide: Text.ElideRight
+                                text: qsTr("Phases"); color: Theme.text
+                                font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                            Rectangle { x: lanesArea.nameW; width: lanesArea.width - lanesArea.nameW; height: parent.height; radius: 5; color: Qt.rgba(1, 1, 1, 0.04) }
+                            Repeater {
+                                model: labels.phases
+                                delegate: Rectangle {
+                                    required property var modelData
+                                    readonly property color tone: root.phaseColor(modelData.phase)
+                                    x: lanesArea.xOf(modelData.startMs); y: 3
+                                    width: Math.max(2, lanesArea.xOf(modelData.endMs) - x); height: phaseLane.height - 6; radius: 4
+                                    clip: true
+                                    // A suggestion is pale with a border until confirmed.
+                                    color: Qt.rgba(tone.r, tone.g, tone.b, modelData.confirmed ? 0.55 : 0.20)
+                                    border.color: modelData.confirmed ? "transparent" : tone; border.width: 1
+                                    Text {
+                                        textFormat: Text.PlainText
+                                        x: 6; anchors.verticalCenter: parent.verticalCenter
+                                        text: modelData.phase; color: Theme.text
+                                        font.family: Theme.fontSoft; font.pixelSize: 11
+                                    }
+                                }
+                            }
+                            Rectangle {
+                                visible: paint.painting
+                                x: lanesArea.xOf(Math.min(paint.fromMs, paint.toMs)); y: 1
+                                width: Math.abs(lanesArea.xOf(paint.toMs) - lanesArea.xOf(paint.fromMs)); height: phaseLane.height - 2; radius: 4
+                                readonly property color tone: root.paintPhase ? root.phaseColor(root.paintPhase) : Theme.textDim
+                                color: Qt.rgba(tone.r, tone.g, tone.b, 0.35); border.color: tone; border.width: 1.5
+                            }
+                            MouseArea {
+                                id: paint
+                                objectName: "phasePaint"
+                                x: lanesArea.nameW; width: parent.width - lanesArea.nameW; height: parent.height
+                                cursorShape: Qt.IBeamCursor
+                                property real fromMs: 0
+                                property real toMs: 0
+                                property real pressX: 0
+                                property bool painting: false
+                                function msAt(mx) { return Math.max(0, Math.min(1, mx / width)) * lanesArea.span }
+                                onPressed: (m) => { root.playing = false; pressX = m.x; fromMs = toMs = msAt(m.x); painting = false }
+                                onPositionChanged: (m) => { if (pressed) { toMs = msAt(m.x); painting = Math.abs(m.x - pressX) > 4 } }
+                                onReleased: (m) => {
+                                    if (painting) labels.setPhase(Math.min(fromMs, toMs), Math.max(fromMs, toMs), root.paintPhase)
+                                    else labels.seek(msAt(m.x))
+                                    painting = false
+                                }
+                            }
+                        }
                         Repeater {
                             model: labels.lanes
                             delegate: Item {
@@ -334,7 +436,7 @@ Item {
                         color: "white"; opacity: 0.85
                     }
                     MouseArea {
-                        x: lanesArea.nameW; width: parent.width - lanesArea.nameW; height: parent.height
+                        x: lanesArea.nameW; y: 30; width: parent.width - lanesArea.nameW; height: parent.height - 30
                         function seekAt(mx) { labels.seek(Math.max(0, Math.min(1, mx / width)) * lanesArea.span) }
                         onPressed: (m) => { root.playing = false; seekAt(m.x) }
                         onPositionChanged: (m) => { if (pressed) seekAt(m.x) }

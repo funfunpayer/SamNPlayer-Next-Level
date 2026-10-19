@@ -194,6 +194,42 @@ TEST_CASE("exclusion zones are a class of their own") {
     CHECK(s[0].items[2].class_id == 1);
 }
 
+TEST_CASE("phases cut back, split and merge like chapters") {
+    samn::LabelProject p;
+    p.duration_ms = 60000;
+    CHECK(samn::PhaseNames().front() == "intro");
+    p.SetPhase(0, 10000, "intro");
+    p.SetPhase(10000, 50000, "oral");
+    p.SetPhase(50000, 60000, "climax");
+    REQUIRE(p.phases.size() == 3);
+    CHECK(p.PhaseAt(5000)->name == "intro");
+    CHECK(p.PhaseAt(50000)->name == "climax");
+    CHECK(p.PhaseAt(60000) == nullptr);
+    // A hand stretch inside the oral one splits it.
+    p.SetPhase(20000, 30000, "hand");
+    REQUIRE(p.phases.size() == 5);
+    CHECK(p.PhaseAt(15000)->name == "oral");
+    CHECK(p.PhaseAt(25000)->name == "hand");
+    CHECK(p.PhaseAt(35000)->name == "oral");
+    // Back to oral: the three merge again.
+    p.SetPhase(20000, 30000, "oral");
+    REQUIRE(p.phases.size() == 3);
+    CHECK(p.phases[1].start_ms == 10000);
+    CHECK(p.phases[1].end_ms == 50000);
+    // A suggestion stays apart from a confirmed neighbour; clearing leaves a hole.
+    p.SetPhase(45000, 50000, "climax", false, "rules");
+    CHECK(p.PhaseAt(47000)->source == "rules");
+    CHECK_FALSE(p.PhaseAt(47000)->confirmed);
+    p.SetPhase(0, 5000, "");
+    CHECK(p.PhaseAt(1000) == nullptr);
+    CHECK(p.PhaseAt(6000)->name == "intro");
+    const auto back = samn::ParseLabelProject(samn::SerializeLabelProject(p));
+    REQUIRE(back.phases.size() == p.phases.size());
+    CHECK(back.PhaseAt(47000)->source == "rules");
+    CHECK_FALSE(back.PhaseAt(47000)->confirmed);
+    CHECK(back.PhaseAt(25000)->name == "oral");
+}
+
 TEST_CASE("YOLO lines are normalised and clipped to the frame") {
     samn::LabelSample s;
     s.items.push_back({2, LabelBox{90, 40, 20, 20}});  // runs over the right edge
