@@ -7,7 +7,10 @@
 #include <QString>
 #include <QStringList>
 #include <QtQml/qqmlregistration.h>
+#include <QVariantList>
+#include <atomic>
 #include <memory>
+#include <thread>
 
 #include "samn/engine/generate.h"
 
@@ -48,6 +51,10 @@ class GeneratorController : public QObject {
     Q_PROPERTY(QString outputPath READ outputPath NOTIFY outputChanged)  // the .samn to open
     Q_PROPERTY(bool scriptExists READ scriptExists NOTIFY outputChanged)  // ask before replacing
     Q_PROPERTY(int step READ step NOTIFY stepChanged)  // 1 video, 2 tip, 3 feel, 4 create, 5 review
+    // Find tip (0.7 auto_roi): running, and the other proposals to pick from
+    // ({x, y, w, h, score} in video pixels, strongest first).
+    Q_PROPERTY(bool finding READ finding NOTIFY findingChanged)
+    Q_PROPERTY(QVariantList tipCandidates READ tipCandidates NOTIFY tipCandidatesChanged)
 
 public:
     explicit GeneratorController(QObject* parent = nullptr);
@@ -83,6 +90,8 @@ public:
     QString outputPath() const { return output_path_; }
     bool scriptExists() const;
     int step() const;
+    bool finding() const { return finding_; }
+    QVariantList tipCandidates() const { return tip_candidates_; }
 
     // A video path or file URL. false with the status set when it cannot be read.
     Q_INVOKABLE bool openVideo(const QString& pathOrUrl);
@@ -93,6 +102,13 @@ public:
     // asks first, 0.7 confirm). false when it cannot start.
     Q_INVOKABLE bool create(bool overwrite = false);
     Q_INVOKABLE void cancel();
+    // Proposes the tip box from the video's rhythmic motion, on its own
+    // thread; the box is set and the other candidates are offered. false
+    // when there is no video or a search or run is going.
+    Q_INVOKABLE bool findTip();
+    Q_INVOKABLE void cancelFind();
+    // Takes candidate i as the tip box.
+    Q_INVOKABLE void pickCandidate(int index);
     // Tests: waits for the run on the worker to end (events still arrive queued).
     void waitForRun();
 
@@ -107,6 +123,8 @@ signals:
     void logChanged();
     void outputChanged();
     void stepChanged();
+    void findingChanged();
+    void tipCandidatesChanged();
     // The script is written: the page opens it for review (D-137).
     void created(const QString& path);
 
@@ -134,6 +152,10 @@ private:
     uint64_t run_id_ = 0;
     QElapsedTimer run_clock_;
     std::unique_ptr<samn::engine::GenerateRunner> runner_;
+    bool finding_ = false;
+    QVariantList tip_candidates_;
+    std::shared_ptr<std::atomic<bool>> find_cancel_;
+    std::thread finder_;
 };
 
 }  // namespace samn::ui

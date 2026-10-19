@@ -141,6 +141,37 @@ Item {
                             color: Qt.rgba(61 / 255, 204 / 255, 192 / 255, 0.16)
                             border.color: "#3dccc0"; border.width: 2
                         }
+                        // Find tip's other proposals: dashed, a numbered chip picks one.
+                        Repeater {
+                            model: drag.active ? [] : gen.tipCandidates
+                            delegate: Item {
+                                id: cand
+                                required property int index
+                                required property var modelData
+                                x: frameView.imageRect.x + modelData.x * parent.scaleX
+                                y: frameView.imageRect.y + modelData.y * parent.scaleY
+                                width: modelData.w * parent.scaleX; height: modelData.h * parent.scaleY
+                                z: 2
+                                Rectangle {
+                                    anchors.fill: parent; color: "transparent"
+                                    border.color: Qt.rgba(1, 1, 1, 0.55); border.width: 1
+                                    opacity: 0.8
+                                }
+                                Rectangle {
+                                    objectName: "candidate_" + cand.index
+                                    width: 20; height: 20; radius: 10
+                                    color: Qt.rgba(0, 0, 0, 0.6); border.color: "#3dccc0"
+                                    Text {
+                                        anchors.centerIn: parent; textFormat: Text.PlainText
+                                        text: cand.index + 1; color: "white"; font.pixelSize: 11
+                                    }
+                                    MouseArea {
+                                        anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                                        onClicked: gen.pickCandidate(cand.index)
+                                    }
+                                }
+                            }
+                        }
                         MouseArea {
                             id: drag
                             objectName: "markArea"
@@ -175,6 +206,12 @@ Item {
                             textFormat: Text.PlainText
                             Layout.maximumWidth: 260; elide: Text.ElideRight
                             text: gen.boxLabel; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                        }
+                        FlowButton {
+                            objectName: "findTip"
+                            text: gen.finding ? qsTr("Stop finding") : qsTr("Find tip"); icon: "search"
+                            enabled: !gen.running
+                            onClicked: gen.finding ? gen.cancelFind() : gen.findTip()
                         }
                         IconButton { objectName: "frameBack"; icon: "back10"; tip: qsTr("10 s back"); onClicked: gen.seekPreview(gen.previewMs - 10000) }
                         FlowSlider {

@@ -2,6 +2,7 @@
 
 #include "frame_cache.h"
 
+#include <QCoreApplication>
 #include <QFileInfo>
 #include <QPointer>
 #include <QUrl>
@@ -10,6 +11,7 @@
 
 #include <opencv2/imgproc.hpp>
 
+#include "samn/engine/tip_find.h"
 #include "samn/samn_file.h"
 #include "samn/vision/frame_reader.h"
 
@@ -45,7 +47,66 @@ GeneratorController::GeneratorController(QObject* parent) : QObject(parent) {
 }
 
 // The runner cancels and joins first (GD-25: nothing outlives the app).
-GeneratorController::~GeneratorController() { runner_.reset(); }
+GeneratorController::~GeneratorController() {
+    cancelFind();
+    if (finder_.joinable()) finder_.join();
+    runner_.reset();
+}
+
+bool GeneratorController::findTip() {
+    if (video_path_.isEmpty() || running_ || finding_) return false;
+    if (finder_.joinable()) finder_.join();
+    find_cancel_ = std::make_shared<std::atomic<bool>>(false);
+    finding_ = true;
+    emit findingChanged();
+    setStatus(tr("Looking for the rhythmic motion…"));
+    QPointer<GeneratorController> self(this);
+    finder_ = std::thread([self, cancel = find_cancel_, forVideo = video_path_,
+                           video = std::filesystem::path(video_path_.toStdU16String())] {
+        samn::engine::TipFindOptions o;
+        o.cancel = [cancel] { return cancel->load(); };
+        std::string error;
+        std::optional<samn::engine::TipFindResult> r;
+        try {
+            r = samn::engine::FindTip(video, o, &error);
+        } catch (const std::exception& e) {
+            error = e.what();
+        }
+        QMetaObject::invokeMethod(qApp, [self, r = std::move(r), error, forVideo] {
+            if (!self) return;
+            self->finding_ = false;
+            emit self->findingChanged();
+            if (forVideo != self->video_path_) return;  // another video was opened meanwhile
+            if (!r) {
+                self->setStatus(error == "canceled" ? tr("Find tip: canceled.")
+                                                    : tr("Find tip: %1").arg(QString::fromStdString(error)));
+                return;
+            }
+            QVariantList list;
+            for (const auto& c : r->candidates)
+                list.append(QVariantMap{{"x", c.box.x}, {"y", c.box.y}, {"w", c.box.width}, {"h", c.box.height}, {"score", c.score}});
+            self->tip_candidates_ = list;
+            emit self->tipCandidatesChanged();
+            self->setBox(QRect(r->box.x, r->box.y, r->box.width, r->box.height));
+            // Below this the "rhythm" is compression noise (a still clip
+            // scores about 0.002, a clear stroke above 1).
+            const bool weak = r->candidates.empty() || r->candidates.front().score < 0.05;
+            self->setStatus(weak ? tr("Only weak motion found: check the box, or drag it by hand.")
+                                 : tr("Tip found. The dashed boxes are other candidates; click one to use it."));
+        }, Qt::QueuedConnection);
+    });
+    return true;
+}
+
+void GeneratorController::cancelFind() {
+    if (find_cancel_) *find_cancel_ = true;
+}
+
+void GeneratorController::pickCandidate(int index) {
+    if (index < 0 || index >= tip_candidates_.size()) return;
+    const QVariantMap c = tip_candidates_.at(index).toMap();
+    setBox(QRect(c.value("x").toInt(), c.value("y").toInt(), c.value("w").toInt(), c.value("h").toInt()));
+}
 
 QString GeneratorController::videoName() const { return QFileInfo(video_path_).fileName(); }
 
@@ -70,6 +131,9 @@ bool GeneratorController::openVideo(const QString& pathOrUrl) {
                       .arg(video_size_.height())
                       .arg(std::round(reader->fps() * 100) / 100);
     box_ = QRect();
+    cancelFind();  // a search on the old video ends; its result is not used
+    tip_candidates_.clear();
+    emit tipCandidatesChanged();
     output_path_.clear();
     log_.clear();
     percent_ = 0;

@@ -91,6 +91,14 @@ private slots:
         QTRY_VERIFY(gen->hasVideo());
         QCOMPARE(named(root.get(), "videoLabel")->property("text").toString(), QStringLiteral("clip.mp4"));
 
+        // Find tip sets a box and shows the other candidates as numbered chips.
+        QMetaObject::invokeMethod(named(root.get(), "findTip"), "clicked");
+        QTRY_VERIFY(gen->finding());
+        QTRY_VERIFY_WITH_TIMEOUT(!gen->finding(), 30000);
+        QVERIFY(gen->hasBox());
+        QTRY_VERIFY(named(root.get(), "candidate_1"));
+        QVERIFY(named(root.get(), "candidate_1")->isVisible());
+
         // A drag over the frame becomes the tip box in video pixels. The seek
         // row and box label appear with the video and shrink the frame, so
         // wait until the layout has settled.

@@ -914,7 +914,8 @@ private slots:
             clk = c;
             o->update(t);
             QTRY_COMPARE_WITH_TIMEOUT(log.last("vibration"), QString(want), kWait);
-            QCOMPARE(log.last("suction"), QString(want).replace("vibration", "suction"));
+            // Suction is written right after vibration: wait for it too.
+            QTRY_COMPARE_WITH_TIMEOUT(log.last("suction"), QString(want).replace("vibration", "suction"), kWait);
         };
         at(250, 1250, "[mock] vibration=0.46");   // step 6 down
         at(600, 1600, "[mock] vibration=0.10");   // hold
