@@ -68,6 +68,7 @@ qt_add_qml_module(samn_app
     qml/FlowStage.qml
     qml/FlowFigure.qml
     qml/VideoTransport.qml
+    qml/GeneratorProjectPanel.qml
     qml/SilkLayer.qml
     qml/PositionGauge.qml
     qml/LibraryPanel.qml
