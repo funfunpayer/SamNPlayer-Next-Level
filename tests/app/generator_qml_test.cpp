@@ -151,6 +151,12 @@ private slots:
         QTRY_COMPARE(gen->contactCurve(), QStringLiteral("peak"));
         QMetaObject::invokeMethod(named(root.get(), "contactSpan"), "moved", Q_ARG(double, 0.5));
         QTRY_COMPARE(gen->contactSpan(), 0.5);
+        // 0.7 labels: low = earlier, high = deep strokes only.
+        QTRY_COMPARE(named(root.get(), "contactSpanLabel")->property("text").toString(), QStringLiteral("earlier"));
+        gen->setContactSpan(0.9);
+        QTRY_COMPARE(named(root.get(), "contactSpanLabel")->property("text").toString(), QStringLiteral("deep only"));
+        gen->setContactSpan(0.7);
+        QTRY_COMPARE(named(root.get(), "contactSpanLabel")->property("text").toString(), QStringLiteral("0.70"));
         QMetaObject::invokeMethod(named(root.get(), "markContact"), "clicked");
         QTRY_VERIFY(gen->markContact());
         const QRect tip = gen->box();
