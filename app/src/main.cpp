@@ -7,7 +7,10 @@
 #include <QTimer>
 #include <QtQml/QQmlExtensionPlugin>
 
+#include "app_log.h"
 #include "frame_provider.h"
+#include "samn/settings.h"
+#include "settings_controller.h"
 #include "icon_provider.h"
 
 // The SamN QML module is a static library: import its plugin explicitly.
@@ -19,6 +22,12 @@ int main(int argc, char** argv) {
     // Shown in the top bar; "-dev" unless a release build (0.7 "dev" label).
     QGuiApplication::setApplicationVersion(QStringLiteral(SAMN_VERSION));
     QGuiApplication::setOrganizationName("SamNPlayer");
+    // The log (Settings → Log): Qt's messages and the device log, also in
+    // <config>/logs/samnplayer2.log, at the saved level (0.7 log.level).
+    samn::ui::AppLog::installMessageHandler();
+    samn::ui::SettingsController::applySavedLogLevel();
+    samn::ui::AppLog::instance().enableFile(samn::config_dir() / "logs" / "samnplayer2.log");
+    qInfo().noquote() << "SamNPlayer" << QGuiApplication::applicationVersion() << "started";
     QFontDatabase::addApplicationFont(":/qt/qml/SamN/qml/fonts/Sora.ttf");
     QFontDatabase::addApplicationFont(":/qt/qml/SamN/qml/fonts/Figtree.ttf");
 
