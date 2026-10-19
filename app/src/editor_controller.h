@@ -146,6 +146,12 @@ public:
     // Vibration and suction from the stroke with the script's feel recipe
     // (0.7 BakeNeoAxes; a plain funscript uses the standard recipe).
     Q_INVOKABLE bool axesFromStroke();
+    // "Optimize for" (0.8 OptimizeLoadedFor, D-156): "general" heals the
+    // tracker-loss windows and fills long gaps in the stroke so the script works
+    // on any device; "neo2" also turns contact vibration on (soft, 0.75) and
+    // writes vibration and suction from the stroke. One undo step; returns the
+    // message (empty when nothing could be done).
+    Q_INVOKABLE QString optimizeFor(const QString& target);
     // Vibration from the video's sound (0.7 "Write as vibration curve");
     // withContact keeps the script's own vibration where it is stronger.
     // Asynchronous: busy until the sound is decoded. A script without a

@@ -306,6 +306,43 @@ private slots:
         QCOMPARE(QString::fromStdString(doc.playback_source), QStringLiteral("recipe"));
     }
 
+    // D-156 (0.8 OptimizeLoadedFor): "Any device" heals the tracker-loss
+    // windows and fills long holes; "Sam Neo 2" also writes vibration and
+    // suction; each is one undo step and saved at once.
+    void optimizeForFillsHealsAndWritesTheNeo2Feel() {
+        const QString path = dir_.filePath("opt.funscript");
+        {
+            std::ofstream f(Fs(path));
+            f << R"({"version":"1.0","actions":[)";
+            for (int t = 0; t <= 1000; t += 100) f << R"({"at":)" << t << R"(,"pos":)" << (t / 100 % 2 ? 90 : 10) << "},";
+            f << R"({"at":1500,"pos":99},{"at":4000,"pos":90},{"at":4100,"pos":10},{"at":4200,"pos":90}],)"
+              << R"("metadata":{"tracking_gaps":[{"start_ms":1100,"end_ms":1900}]}})";
+        }
+        EditorController e;
+        QVERIFY(e.open(path));
+        const size_t before = e.session().Axis("stroke").size();
+        QVERIFY(e.optimizeFor("nonsense").isEmpty());
+        const QString msg = e.optimizeFor("general");
+        QVERIFY2(msg.startsWith("Ready for any device"), qPrintable(msg));
+        QVERIFY2(msg.contains("healed 1 tracking gap"), qPrintable(msg));
+        QVERIFY2(msg.contains("filled"), qPrintable(msg));
+        const auto& stroke = e.session().Axis("stroke");
+        QVERIFY(stroke.size() > before);
+        for (const auto& a : stroke) QVERIFY(!(a.at == 1500 && a.pos == 99));  // the junk inside the loss window
+        QCOMPARE(e.undoText(), QStringLiteral("Undo: Optimize for any device"));
+        QCOMPARE(int(samn::LoadFunscript(Fs(path)).actions.size()), int(stroke.size()));  // saved
+        QVERIFY(e.undo());
+        QCOMPARE(e.session().Axis("stroke").size(), before);
+
+        const QString neo = e.optimizeFor("neo2");
+        QVERIFY2(neo.startsWith("Neo 2 ready") && neo.contains("vibration and suction written"), qPrintable(neo));
+        QCOMPARE(e.lanes(), (QStringList{"stroke", "vibration", "suction"}));
+        QVERIFY(e.session().Axis("stroke").size() > before);
+        QVERIFY(e.undo());  // one step back: stroke, vibration and suction
+        QCOMPARE(e.lanes(), QStringList{"stroke"});
+        QCOMPARE(e.session().Axis("stroke").size(), before);
+    }
+
     void vibrationFollowsTheSound() {
         const QString path = script("h.funscript");
         EditorController e;
