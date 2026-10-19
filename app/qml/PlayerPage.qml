@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Window
 import QtQuick.Dialogs
+import QtQuick.Layouts
 import QtMultimedia
 import SamN
 
@@ -29,11 +30,30 @@ Item {
     // Side panels away: fullscreen or theatre.
     readonly property bool bare: fullStage || theatre
     property bool muted: false
+    readonly property string videoGlobs: "*.mp4 *.mkv *.avi *.mov *.wmv *.m4v *.webm *.ts *.m2ts *.flv *.mpg *.mpeg *.3gp *.ogv"
     // The mode deck uses its number keys while it is open.
     property bool deckOpen: false
 
     // The device connection of the app (Main.qml); the Player drives it.
     required property DeviceController device
+    // "Create script" for a video without one (0.7 open_media.js): Main.qml
+    // opens the Generator with the video; `start` runs it right away.
+    signal createRequested(url video, bool start)
+    // The last script that was open, for "Back to the script" (0.7).
+    property string lastScript: ""
+    property url lastVideo
+    property url autoCreatedFor  // once per video, scriptChanged comes more than once
+    Connections {
+        target: ctrl
+        function onScriptChanged() {
+            if (ctrl.hasScript) {
+                page.lastScript = ctrl.scriptPath; page.lastVideo = ctrl.videoUrl
+            } else if (ctrl.noScriptForVideo && ctrl.autoCreate && ctrl.videoUrl !== page.autoCreatedFor) {
+                page.autoCreatedFor = ctrl.videoUrl
+                page.createRequested(ctrl.videoUrl, true)
+            }
+        }
+    }
 
     PlayerController {
         id: ctrl
@@ -108,7 +128,9 @@ Item {
     FileDialog {
         id: openDialog
         title: qsTr("Open video or script")
-        nameFilters: [qsTr("Video or script (*.mp4 *.mkv *.webm *.mov *.avi *.m4v *.funscript *.samn)"), qsTr("All files (*)")]
+        // 0.7 PickMediaFile: one dialog, the extensions of VIDEO_EXTS.
+        nameFilters: [qsTr("Video or script (%1 *.samn *.funscript)").arg(page.videoGlobs), qsTr("Videos (%1)").arg(page.videoGlobs),
+                      qsTr("Scripts (*.samn *.funscript)"), qsTr("All files (*)")]
         onAccepted: ctrl.openPath(selectedFile.toString())
     }
     FileDialog {
@@ -120,7 +142,7 @@ Item {
     FileDialog {
         id: videoDialog
         title: qsTr("Select a video file")
-        nameFilters: [qsTr("Video (*.mp4 *.mkv *.webm *.mov *.avi *.m4v)"), qsTr("All files (*)")]
+        nameFilters: [qsTr("Videos (%1)").arg(page.videoGlobs), qsTr("All files (*)")]
         onAccepted: ctrl.attachVideo(selectedFile.toString())
     }
     FileDialog {
@@ -257,10 +279,13 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 width: 240
                 visible: ctrl.variants.length > 1
-                model: ctrl.variants
-                textRole: "label"
-                currentIndex: ctrl.variantIndex
-                onActivated: (i) => ctrl.chooseVariant(i)
+                objectName: "variantBox"
+                // 0.7: a script that is not one of the variants shows first as itself.
+                readonly property bool other: ctrl.variants.findIndex((v) => v.path === ctrl.scriptPath) < 0
+                model: (other ? [{ display: ctrl.scriptName !== "" ? ctrl.scriptName : qsTr("Other script"), path: "" }] : []).concat(ctrl.variants)
+                textRole: "display"
+                currentIndex: other ? 0 : ctrl.variants.findIndex((v) => v.path === ctrl.scriptPath)
+                onActivated: (i) => { if (!other || i > 0) ctrl.chooseVariant(other ? i - 1 : i) }
             }
             // Video bar (0.7 v1): link a video, bookmark, snapshot.
             Row {
@@ -463,47 +488,103 @@ Item {
                         color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 14
                     }
                 }
-                // Video first: a video without a script says so and offers the ways on.
+                // Video first: a video without a script says so and offers the ways on (0.7 open_media.js).
                 Rectangle {
+                    objectName: "noScriptCard"
                     anchors.centerIn: parent
+                    z: 2  // over the time label
                     visible: ctrl.noScriptForVideo
-                    width: Math.min(parent.width - 40, 460); height: noScript.implicitHeight + 40
+                    width: Math.min(parent.width - 40, 520)
+                    // A small window: the card fits the stage and scrolls.
+                    height: Math.min(noScript.implicitHeight + 40, parent.height - 16)
                     radius: Theme.radius
-                    color: Qt.rgba(4 / 255, 14 / 255, 28 / 255, 0.86); border.color: Theme.cardBorder
+                    color: Qt.rgba(4 / 255, 14 / 255, 28 / 255, 0.92); border.color: Theme.cardBorder
+                    Flickable {
+                        anchors.fill: parent; anchors.margins: 20
+                        clip: true
+                        contentHeight: noScript.implicitHeight
+                        boundsBehavior: Flickable.StopAtBounds
                     Column {
                         id: noScript
-                        anchors.centerIn: parent; width: parent.width - 40
+                        width: parent.width
                         spacing: 12
-                        Image { source: "assets/empty-script.svg"; width: 64; height: 64; sourceSize: Qt.size(128, 128); anchors.horizontalCenter: parent.horizontalCenter }
-                        Text {
-                            textFormat: Text.PlainText
-                            width: parent.width; horizontalAlignment: Text.AlignHCenter
-                            text: qsTr("No script found for this video"); color: Theme.text
-                            font.family: Theme.font; font.pixelSize: 17; font.weight: Font.DemiBold
+                        Row {
+                            spacing: 14
+                            width: parent.width
+                            // 0.7: a still frame 3 s in.
+                            Rectangle {
+                                width: 128; height: 72; radius: 8; color: "black"; clip: true
+                                border.color: Theme.cardBorder
+                                Image {
+                                    objectName: "noScriptStill"
+                                    anchors.fill: parent
+                                    fillMode: Image.PreserveAspectFit
+                                    asynchronous: true
+                                    source: ctrl.noScriptForVideo && ctrl.videoPath !== "" ? "image://frames/3000/144/" + encodeURIComponent(ctrl.videoPath) : ""
+                                }
+                            }
+                            Column {
+                                width: parent.width - 142; spacing: 4
+                                anchors.verticalCenter: parent.verticalCenter
+                                Text {
+                                    textFormat: Text.PlainText
+                                    text: qsTr("New video"); color: Theme.cyan
+                                    font.family: Theme.fontSoft; font.pixelSize: 12; font.weight: Font.Medium
+                                }
+                                Text {
+                                    textFormat: Text.PlainText
+                                    width: parent.width; elide: Text.ElideMiddle
+                                    text: ctrl.videoName; color: Theme.text
+                                    font.family: Theme.font; font.pixelSize: 16; font.weight: Font.DemiBold
+                                }
+                            }
                         }
                         Text {
                             textFormat: Text.PlainText
-                            width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap
+                            width: parent.width; wrapMode: Text.Wrap
+                            text: qsTr("No script for this video yet. SamNPlayer can create one — in the Generator, with this video.")
+                            color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 14
+                        }
+                        Text {
+                            textFormat: Text.PlainText
+                            width: parent.width; wrapMode: Text.Wrap
                             text: ctrl.scriptFolders.length
                                   ? qsTr("Searched beside the video and in %n script folder(s).", "", ctrl.scriptFolders.length)
                                   : qsTr("Searched beside the video. Add a script folder to search there too.")
-                            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                         }
-                        Row {
-                            anchors.horizontalCenter: parent.horizontalCenter; spacing: 10
-                            FlowButton { primary: true; text: qsTr("Choose script…"); onClicked: scriptDialog.open() }
-                            FlowButton { text: qsTr("Add a script folder…"); onClicked: folderDialog.open() }
+                        Flow {
+                            width: parent.width; spacing: 8
+                            FlowButton {
+                                objectName: "noScriptCreate"
+                                primary: true; text: qsTr("Create script")
+                                onClicked: page.createRequested(ctrl.videoUrl, false)
+                            }
+                            FlowButton { objectName: "noScriptChoose"; text: qsTr("Choose script…"); onClicked: scriptDialog.open() }
+                            FlowButton { objectName: "noScriptOpenOther"; text: qsTr("Open other…"); onClicked: openDialog.open() }
+                            FlowButton { objectName: "noScriptAddFolder"; text: qsTr("Add a script folder…"); onClicked: folderDialog.open() }
+                            FlowButton {
+                                objectName: "noScriptBack"
+                                visible: page.lastScript !== ""
+                                text: qsTr("Back to the script")
+                                onClicked: ctrl.openScript(page.lastScript, page.lastVideo.toString())
+                            }
                         }
-                        FlowButton {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            text: qsTr("Create script"); enabled: false
+                        RowLayout {
+                            width: parent.width; spacing: 10
+                            FlowToggle {
+                                objectName: "noScriptAutoCreate"
+                                checked: ctrl.autoCreate
+                                onToggled: (c) => ctrl.autoCreate = c
+                            }
+                            Text {
+                                textFormat: Text.PlainText
+                                Layout.fillWidth: true; wrapMode: Text.Wrap
+                                text: qsTr("Always create right away when a video has no script")
+                                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                            }
                         }
-                        Text {
-                            textFormat: Text.PlainText
-                            width: parent.width; horizontalAlignment: Text.AlignHCenter
-                            text: qsTr("Creating scripts comes with the Generator (P3).")
-                            color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
-                        }
+                    }
                     }
                 }
                 Text {

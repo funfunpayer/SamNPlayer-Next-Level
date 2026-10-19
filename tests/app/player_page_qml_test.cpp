@@ -12,6 +12,7 @@
 #include <QtQml/QQmlExtensionPlugin>
 #include <QtTest>
 
+#include "frame_provider.h"
 #include "icon_provider.h"
 #include "player_controller.h"
 #include "samn/samn_file.h"
@@ -60,7 +61,105 @@ private slots:
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }
 
+    void noScriptCardCreatesAndGoesBack() {
+        g_messages.clear();
+        g_previous = qInstallMessageHandler(capture);
+        runNoScript();
+        qInstallMessageHandler(g_previous);
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
+
 private:
+    // Repeater delegates and Flow children: walk childItems() too.
+    static QQuickItem* named(QQuickItem* root, const char* name) {
+        for (QQuickItem* child : root->childItems()) {
+            if (child->objectName() == QLatin1String(name)) return child;
+            if (auto* hit = named(child, name)) return hit;
+        }
+        return nullptr;
+    }
+
+    void runNoScript() {
+        QQmlEngine engine;
+        engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
+        engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+        engine.addImageProvider(QStringLiteral("frames"), new samn::ui::FrameProvider);
+        QQmlComponent comp(&engine);
+        comp.setData(R"(
+            import QtQuick
+            import SamN
+            Item {
+                width: 1000; height: 700
+                property alias page: pp
+                property var asked: []
+                DeviceController { id: dev }
+                PlayerPage {
+                    id: pp; anchors.fill: parent; device: dev
+                    onCreateRequested: (video, start) => asked = asked.concat([video.toString() + "|" + start])
+                }
+            })",
+                     QUrl("qrc:/test/Wrapper.qml"));
+        QVERIFY2(comp.status() == QQmlComponent::Ready, qPrintable(comp.errorString()));
+        QQuickWindow window;
+        window.resize(1000, 700);
+        std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
+        QVERIFY(root);
+        root->setParentItem(window.contentItem());
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto* page = root->property("page").value<QQuickItem*>();
+        auto* ctrl = page->property("controller").value<PlayerController*>();
+        QVERIFY(page && ctrl);
+        auto asked = [&] { return root->property("asked").toStringList(); };
+
+        QTemporaryDir dir;
+        const QString video = dir.filePath("New clip.mp4");
+        QVERIFY(QFile::copy(QStringLiteral(SAMN_TEST_DATA "/testpattern_4s.mp4"), video));
+        const QString other = dir.filePath("Other.funscript");
+        QFile f(other);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(R"({"actions":[{"at":0,"pos":0},{"at":1000,"pos":100}]})");
+        f.close();
+
+        // A script first, then a video without one: the card, with "Back".
+        QVERIFY(ctrl->openPath(other));
+        QVERIFY(ctrl->openPath(video));
+        QQuickItem* card = named(page, "noScriptCard");
+        QVERIFY(card);
+        QTRY_VERIFY(card->isVisible());
+        QVERIFY(named(page, "noScriptBack")->isVisible());
+        QQuickItem* still = named(page, "noScriptStill");
+        QVERIFY(still->property("source").toString().startsWith(QStringLiteral("image://frames/3000/")));
+        QTRY_COMPARE_WITH_TIMEOUT(still->property("status").toInt(), 1, 10000);  // Image.Ready
+        if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT_NOSCRIPT"); !shot.isEmpty()) {
+            QTest::qWait(200);
+            window.grabWindow().save(QString::fromLocal8Bit(shot));
+        }
+
+        // "Create script" asks Main to open the Generator with the video.
+        QMetaObject::invokeMethod(named(page, "noScriptCreate"), "clicked");
+        // Compared as URLs: Qt versions differ in how a space is written.
+        auto same = [&](const QString& entry, const char* start) {
+            const QString url = entry.section('|', 0, -2);
+            return QUrl(url).toLocalFile() == video && entry.section('|', -1) == QLatin1String(start);
+        };
+        QCOMPARE(asked().size(), 1);
+        QVERIFY2(same(asked().at(0), "false"), qPrintable(asked().at(0)));
+
+        // "Back to the script" opens the last one again.
+        QMetaObject::invokeMethod(named(page, "noScriptBack"), "clicked");
+        QTRY_COMPARE(ctrl->scriptName(), QStringLiteral("Other.funscript"));
+        QVERIFY(!card->isVisible());
+
+        // "Always create right away": the next video without a script starts it.
+        QMetaObject::invokeMethod(named(page, "noScriptAutoCreate"), "toggled", Q_ARG(bool, true));
+        QVERIFY(ctrl->autoCreate());
+        QVERIFY(ctrl->openPath(video));
+        QTRY_COMPARE(asked().size(), 2);
+        QVERIFY2(same(asked().at(1), "true"), qPrintable(asked().at(1)));
+        ctrl->setAutoCreate(false);
+    }
+
     void runScriptOnly() {
         QQmlEngine engine;
         engine.addImportPath(QStringLiteral("qrc:/qt/qml"));

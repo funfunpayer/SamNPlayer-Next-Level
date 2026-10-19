@@ -19,6 +19,7 @@
 #include "device_controller.h"
 #include <memory>
 
+#include "frame_provider.h"
 #include "icon_provider.h"
 #include "player_controller.h"
 #include "update_checker.h"
@@ -124,6 +125,7 @@ struct Shell {
 void loadShell(Shell& s, int startMode = 0) {
     s.engine.addImportPath(QStringLiteral("qrc:/qt/qml"));  // Qt 6.4 does not add it
     s.engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+    s.engine.addImageProvider(QStringLiteral("frames"), new samn::ui::FrameProvider);
     s.engine.rootContext()->setContextProperty("startupPaths", QStringList());
     s.engine.rootContext()->setContextProperty("startMode", startMode);
     s.engine.rootContext()->setContextProperty("trainingStart", QString());
@@ -707,6 +709,26 @@ private slots:
         }
         serveRelease("patch-v1.0.0-p1");
         QCoreApplication::setApplicationVersion(QString());
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
+
+    void createScriptOpensTheGenerator() {
+        {
+            Shell s;
+            loadShell(s);
+            QVERIFY(s.window);
+            QQuickItem* player = s.one("PlayerPage");
+            QQuickItem* generator = s.one("GeneratorPage");
+            QTemporaryDir dir;
+            const QString video = dir.filePath("clip.mp4");
+            QVERIFY(QFile::copy(QStringLiteral(SAMN_APP_QML_DIR "/../../tests/app/data/testpattern_4s.mp4"), video));
+            QVERIFY(QMetaObject::invokeMethod(player, "createRequested", Q_ARG(QUrl, QUrl::fromLocalFile(video)), Q_ARG(bool, false)));
+            QTRY_COMPARE_WITH_TIMEOUT(s.mode(), 1, kWait);
+            auto* gen = generator->property("controller").value<QObject*>();
+            QVERIFY(gen);
+            QTRY_VERIFY_WITH_TIMEOUT(gen->property("hasVideo").toBool(), kWait);
+            QCOMPARE(QFileInfo(gen->property("videoPath").toString()).fileName(), QStringLiteral("clip.mp4"));
+        }
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }
 
