@@ -21,6 +21,7 @@
 #include "heatmap_item.h"
 #include "player_controller.h"
 #include "samn/playback_mapping.h"
+#include "samn/contact_marks.h"
 #include "samn/samn_file.h"
 
 using samn::ui::AudioLevelDecoder;
@@ -774,6 +775,64 @@ private slots:
         QVERIFY(c.openPath(axesPath));
         QVERIFY(c.contactControls());
         QVERIFY(!c.contactKnobsLive());
+    }
+
+    // 0.7 contact overlay and spatial contact: the marks show on the video,
+    // the tip box follows the recorded path, and the tip in a contact area
+    // makes the toy vibrate even on a shallow stroke.
+    void contactMarksShowAndDriveTheVibration() {
+        QTemporaryDir d;
+        samn::Document doc;
+        doc.version = samn::SamnCurrentVersion;
+        doc.kind = samn::SamnKind;
+        doc.general = {{0, 20}, {1000, 30}, {2000, 20}, {3000, 30}};
+        doc.duration_ms = 3000;
+        doc.profile = "standard";
+        doc.recipe.sync = "independent";
+        doc.recipe.smoothing = 0.3;
+        doc.recipe.contact_vibration = true;
+        samn::ContactMarks cm;
+        cm.tip_class = "glans";
+        cm.tip = samn::ContactMarkBox{0, 0, 20, 20, "glans", false};
+        cm.primary = samn::ContactMarkBox{40, 40, 40, 40, "nipples", false};
+        cm.extras = {samn::ContactMarkBox{150, 10, 20, 20, "mouth", true}};
+        doc.contact_marks = cm;
+        samn::TrajectoryData path;
+        path.width = 320;
+        path.height = 240;
+        path.tip = {{0, 0, 0}, {1000, 60, 60}, {2000, 0, 0}, {3000, 0, 0}};
+        doc.trajectory = path;
+        const QString file = d.filePath("marks.samn");
+        samn::SaveDocument(std::filesystem::u8path(file.toStdString()), doc);
+
+        PlayerController c;
+        QVERIFY(c.openPath(file));
+        const QVariantMap m = c.contactMarks();
+        QCOMPARE(m.value("tipClass").toString(), QString("glans"));
+        QCOMPARE(m.value("primary").toMap().value("cls").toString(), QString("nipples"));
+        QCOMPARE(m.value("extras").toList().size(), 1);
+        QCOMPARE(m.value("width").toInt(), 320);
+        QCOMPARE(m.value("hint").toString(), QString("Tip: glans · 3 marked boxes · feel only (the tip tracker drives the stroke)"));
+        QCOMPARE(c.tipAt(1100).value("x").toDouble(), 60.0);
+        QVERIFY(c.tipAt(5000).isEmpty());  // past the path
+        QVERIFY(c.showContactMarks());
+        c.setShowContactMarks(false);
+        QVERIFY(!c.showContactMarks());
+        c.setShowContactMarks(true);
+
+        // Spatial contact: shallow everywhere, but the tip is in the area at 1 s.
+        c.setVideoPositionMs(1000);
+        const int inArea = c.vibrationNow();
+        c.setVideoPositionMs(2500);
+        const int away = c.vibrationNow();
+        QVERIFY2(inArea > away + 20, qPrintable(QString("%1 vs %2").arg(inArea).arg(away)));
+
+        // A plain script has no marks.
+        const QString plain = d.filePath("plain.funscript");
+        writeFile(plain, QByteArray(R"({"actions":)") + kRefActions + "}");
+        QVERIFY(c.openPath(plain));
+        QVERIFY(c.contactMarks().isEmpty());
+        QVERIFY(c.tipAt(1000).isEmpty());
     }
 
     // 0.7 Strength (soft / normal / strong): an Emotion Script's preset

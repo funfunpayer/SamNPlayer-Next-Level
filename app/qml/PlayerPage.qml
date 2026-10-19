@@ -392,6 +392,55 @@ Item {
                     anchors.fill: parent
                     visible: ctrl.videoName !== ""
                 }
+                // The script's contact marks on the picture (0.7 playback.js
+                // contact overlay): tip blue and moving with the recorded tip
+                // path, contact areas gold (first) and magenta (more) where
+                // contact vibration measures them.
+                Item {
+                    id: marksLayer
+                    objectName: "contactMarksLayer"
+                    readonly property var m: ctrl.contactMarks
+                    readonly property rect area: videoOut.contentRect
+                    // Video pixels: the frame size from the media, or the tip path's frame.
+                    readonly property size res: media.metaData.value(MediaMetaData.Resolution) || Qt.size(0, 0)
+                    readonly property real srcW: res.width > 0 ? res.width : (m.width || 0)
+                    readonly property real srcH: res.height > 0 ? res.height : (m.height || 0)
+                    readonly property var tipNow: m.tip ? ctrl.tipAt(ctrl.playheadMs) : ({})
+                    visible: ctrl.showContactMarks && ctrl.videoName !== "" && m.hint !== undefined && srcW > 0 && srcH > 0
+                    x: area.x; y: area.y; width: area.width; height: area.height
+                    function boxes() {
+                        const out = []
+                        if (m.tip) {
+                            const b = Object.assign({}, m.tip)
+                            // The tip is tracked: centre the box on the path.
+                            if (tipNow.x !== undefined) { b.x = tipNow.x - b.w / 2; b.y = tipNow.y - b.h / 2 }
+                            out.push({ b: b, color: "#50b4ff", label: b.cls || m.tipClass || qsTr("tip") })
+                        }
+                        if (m.primary) out.push({ b: m.primary, color: "#f2b03d", label: m.primary.cls || qsTr("contact") })
+                        for (let i = 0; i < (m.extras || []).length; ++i)
+                            out.push({ b: m.extras[i], color: "#e070a0", label: m.extras[i].cls || qsTr("extra %1").arg(i + 1) })
+                        return out
+                    }
+                    Repeater {
+                        model: marksLayer.visible ? marksLayer.boxes() : []
+                        delegate: Rectangle {
+                            required property var modelData
+                            required property int index
+                            objectName: "contactMark_" + index
+                            x: modelData.b.x / marksLayer.srcW * marksLayer.width
+                            y: modelData.b.y / marksLayer.srcH * marksLayer.height
+                            width: modelData.b.w / marksLayer.srcW * marksLayer.width
+                            height: modelData.b.h / marksLayer.srcH * marksLayer.height
+                            color: "transparent"; border.color: modelData.color; border.width: 2
+                            Text {
+                                textFormat: Text.PlainText
+                                x: 3; y: -height - 2
+                                text: parent.modelData.label
+                                color: parent.modelData.color; font.family: Theme.fontSoft; font.pixelSize: 11
+                            }
+                        }
+                    }
+                }
                 MouseArea {
                     anchors.fill: parent
                     enabled: ctrl.videoName !== ""

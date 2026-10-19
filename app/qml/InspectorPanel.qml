@@ -852,6 +852,21 @@ GlassCard {
                             onClicked: root.ctrl.posOverlay = !root.ctrl.posOverlay
                         }
                     }
+                    // 0.7 "Show contact areas" with its hint, when the script stores marks.
+                    FlowButton {
+                        objectName: "showContactMarks"
+                        visible: root.ctrl.contactMarks.hint !== undefined
+                        text: qsTr("Show contact areas"); checked: root.ctrl.showContactMarks
+                        onClicked: root.ctrl.showContactMarks = !root.ctrl.showContactMarks
+                    }
+                    Text {
+                        objectName: "contactMarksHint"
+                        textFormat: Text.PlainText
+                        visible: root.ctrl.contactMarks.hint !== undefined
+                        width: parent.width; wrapMode: Text.WordWrap
+                        text: root.ctrl.contactMarks.hint !== undefined ? root.ctrl.contactMarks.hint : ""
+                        color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 11
+                    }
                     // Speed highlights (0.7 pb-speed-hl): red bands over too fast strokes.
                     Row {
                         spacing: 10
