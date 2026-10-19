@@ -431,7 +431,7 @@ Item {
             GlassCard {
                 objectName: "editorCard"
                 Layout.fillWidth: true
-                Layout.preferredHeight: (edit.hasScript ? 344 : 96) + (gen.hasVideo ? 62 : 0)
+                Layout.preferredHeight: (edit.hasScript ? 344 : 96) + (gen.hasVideo ? 62 : 0) + (audioLane.visible ? 36 : 0)
                 ColumnLayout {
                     anchors.fill: parent; anchors.margins: 12; spacing: 6
                     RowLayout {
@@ -590,6 +590,22 @@ Item {
                                     onDoubleClicked: (m) => edit.deleteAt(laneCurve, m.x, m.y)
                                 }
                             }
+                        }
+                    }
+                    // The video's sound on the same time scale, as the Player's
+                    // audio lane (D-154).
+                    AudioLevelItem {
+                        id: audioLane
+                        objectName: "generatorAudioLane"
+                        Layout.fillWidth: true; Layout.preferredHeight: 34
+                        visible: edit.hasScript && gen.hasVideo && !empty
+                        source: gen.videoUrl
+                        viewStartMs: edit.viewStartMs; viewEndMs: edit.viewEndMs
+                        playheadMs: page.playheadMs
+                        label: qsTr("Audio")
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: (m) => page.seekTo(edit.viewStartMs + m.x / width * (edit.viewEndMs - edit.viewStartMs))
                         }
                     }
                     // The scenes (the script's chapters) as bands on the shown
