@@ -23,17 +23,48 @@ ApplicationWindow {
             GradientStop { position: 1; color: Theme.bgBottom }
         }
     }
+    // The silk bands of the Flow look in their corners, large and slowly
+    // drifting: blue from the top right, orange from the bottom left, behind
+    // every mode (Owner, 19 Oct: as strong as on the Training stage).
     Image {
+        id: silkTop
         anchors.right: parent.right; anchors.top: parent.top
-        width: parent.width * 0.44; fillMode: Image.PreserveAspectFit
-        source: "assets/bg-top.svg"; sourceSize.width: 1400
+        anchors.rightMargin: -parent.width * 0.04 + driftX; anchors.topMargin: -parent.height * 0.03 + driftY
+        width: parent.width * 0.66; fillMode: Image.PreserveAspectFit
+        source: "assets/bg-top.svg"; sourceSize.width: 2000
         asynchronous: true
+        property real driftX: 0
+        property real driftY: 0
+        SequentialAnimation on driftX {
+            running: win.visible; loops: Animation.Infinite
+            NumberAnimation { to: -win.width * 0.025; duration: 32000; easing.type: Easing.InOutSine }
+            NumberAnimation { to: 0; duration: 32000; easing.type: Easing.InOutSine }
+        }
+        SequentialAnimation on driftY {
+            running: win.visible; loops: Animation.Infinite
+            NumberAnimation { to: win.height * 0.02; duration: 32000; easing.type: Easing.InOutSine }
+            NumberAnimation { to: 0; duration: 32000; easing.type: Easing.InOutSine }
+        }
     }
     Image {
+        id: silkBottom
         anchors.left: parent.left; anchors.bottom: parent.bottom
-        width: parent.width * 0.38; fillMode: Image.PreserveAspectFit
-        source: "assets/bg-bottom.svg"; sourceSize.width: 1200
+        anchors.leftMargin: -parent.width * 0.03 + driftX; anchors.bottomMargin: -parent.height * 0.02 + driftY
+        width: parent.width * 0.58; fillMode: Image.PreserveAspectFit
+        source: "assets/bg-bottom.svg"; sourceSize.width: 2000
         asynchronous: true
+        property real driftX: 0
+        property real driftY: 0
+        SequentialAnimation on driftX {
+            running: win.visible; loops: Animation.Infinite
+            NumberAnimation { to: win.width * 0.03; duration: 40000; easing.type: Easing.InOutSine }
+            NumberAnimation { to: 0; duration: 40000; easing.type: Easing.InOutSine }
+        }
+        SequentialAnimation on driftY {
+            running: win.visible; loops: Animation.Infinite
+            NumberAnimation { to: win.height * 0.02; duration: 40000; easing.type: Easing.InOutSine }
+            NumberAnimation { to: 0; duration: 40000; easing.type: Easing.InOutSine }
+        }
     }
 
     // The one connection to the toy / stroker, shared by every mode (0.7: one
