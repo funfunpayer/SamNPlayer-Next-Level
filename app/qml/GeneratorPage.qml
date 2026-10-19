@@ -28,12 +28,22 @@ Item {
     GeneratorController {
         id: gen
         // 0.8 "Optimize after Create" (D-156): the new script is optimized right away.
-        onCreated: (path) => { if (edit.open(path) && gen.optimizeTarget !== "") edit.optimizeFor(gen.optimizeTarget) }
+        onCreated: (path) => {
+            library.noteScriptGenerated(path)
+            if (edit.open(path) && gen.optimizeTarget !== "") edit.optimizeFor(gen.optimizeTarget)
+        }
+        onVideoChanged: if (gen.hasVideo) library.noteVideoOpened(gen.videoPath)
     }
     EditorController {
         id: edit
         durationMs: gen.durationMs
         videoPath: gen.videoPath
+    }
+    // The lists of the left column, shared with the Player's Library.
+    LibraryController { id: library }
+    Connections {
+        target: edit
+        function onHistoryChanged() { if (edit.hasScript && edit.canUndo) library.noteScriptEdited(edit.path) }
     }
 
     // Playback (D-154). Paused, the playhead is the decoded preview frame;
@@ -158,6 +168,21 @@ Item {
     RowLayout {
         anchors.fill: parent
         spacing: 16
+
+        // ---- left column: project, source clips, scripts (D-154) ----
+        GeneratorProjectPanel {
+            id: projectPanel
+            objectName: "projectPanel"
+            Layout.fillHeight: true
+            Layout.preferredWidth: width
+            library: library
+            generator: gen
+            currentScript: edit.hasScript ? edit.path : ""
+            onChooseVideo: videoDialog.open()
+            onAddVideos: queueDialog.open()
+            onOpenVideo: (p) => { if (!gen.running) gen.openVideo(p) }
+            onOpenScript: (p) => edit.open(p)
+        }
 
         // ---- main column: video, curves ----
         ColumnLayout {

@@ -91,6 +91,17 @@ private slots:
         QTRY_VERIFY(gen->hasVideo());
         QCOMPARE(named(root.get(), "videoLabel")->property("text").toString(), QStringLiteral("clip.mp4"));
 
+        // D-154: the left column names the video and lists it under Recent videos;
+        // it collapses to a strip.
+        auto* panel = named(root.get(), "projectPanel");
+        QVERIFY(panel);
+        QCOMPARE(named(root.get(), "projectChooseVideo")->property("text").toString(), QStringLiteral("clip.mp4"));
+        QTRY_COMPARE(named(root.get(), "projectRecentVideos")->property("model").toList().size(), 1);
+        panel->setProperty("collapsed", true);
+        QTRY_COMPARE(panel->width(), 44.0);
+        panel->setProperty("collapsed", false);
+        QTRY_COMPARE(panel->width(), 248.0);
+
         // D-154: the video plays as in the Player and pausing shows that frame.
         QVERIFY(named(root.get(), "generatorTransport")->isEnabled());
         QVERIFY(!named(root.get(), "generatorEmpty")->isVisible());
