@@ -32,6 +32,8 @@ qt_add_qml_module(samn_app
     src/frame_provider.h src/frame_provider.cpp
     src/generator_controller.h src/generator_controller.cpp
     src/editor_controller.h src/editor_controller.cpp
+    src/app_log.h src/app_log.cpp
+    src/settings_controller.h src/settings_controller.cpp
     src/device_io/waiter.h
     src/device_io/qt_transport.h
     src/device_io/socket_line_transport.h src/device_io/socket_line_transport.cpp
@@ -68,6 +70,7 @@ qt_add_qml_module(samn_app
     qml/LibraryPanel.qml
     qml/InspectorPanel.qml
     qml/ToolTipText.qml
+    qml/SettingsPage.qml
   RESOURCES
     ${SAMN_ICONS}
     qml/assets/bg-top.svg
@@ -82,6 +85,9 @@ qt_add_qml_module(samn_app
     qml/fonts/Sora.ttf
     qml/fonts/Figtree.ttf
 )
+# The licence texts for Settings → About (D-141).
+qt_add_resources(samn_app "legal" PREFIX /legal BASE ${PROJECT_SOURCE_DIR}
+  FILES ${PROJECT_SOURCE_DIR}/LICENSE ${PROJECT_SOURCE_DIR}/THIRD_PARTY.md)
 target_include_directories(samn_app PUBLIC src src/device_io)
 target_link_libraries(samn_app PUBLIC samn_core samn_engine Qt6::Gui Qt6::Quick Qt6::Qml Qt6::Multimedia Qt6::Svg
   Qt6::Network Qt6::WebSockets Qt6::SerialPort Qt6::Bluetooth)

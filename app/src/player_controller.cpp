@@ -300,6 +300,18 @@ bool PlayerController::chooseVariant(int index) {
     return true;
 }
 
+void PlayerController::removeScriptFolder(const QString& path) {
+    QStringList folders = scriptFolders();
+    if (!folders.removeAll(toLocalPath(path))) return;
+    try {
+        settings().set(kScriptFoldersKey, u8(folders.join('\n')));
+    } catch (const std::exception& e) {
+        setError(tr("Could not save the script folders: %1").arg(q(e.what())));
+        return;
+    }
+    emit scriptFoldersChanged();
+}
+
 void PlayerController::addScriptFolder(const QString& pathOrUrl) {
     const QString dir = toLocalPath(pathOrUrl);
     QStringList folders = scriptFolders();
@@ -361,6 +373,12 @@ QVariantMap MarksInfo(const samn::ContactMarks& m, const std::optional<samn::Tra
 
 }  // namespace
 
+bool PlayerController::reloadScript() {
+    if (scriptPath_.isEmpty()) return false;
+    const QString script = scriptPath_, video = videoPath_;
+    return openScript(script, video);
+}
+
 bool PlayerController::openScript(const QString& pathIn, const QString& videoIn) {
     // A .samn beside a .funscript of the same name wins (as in 0.7).
     const QString path = q(samn::PreferSamnCompanion(u8(toLocalPath(pathIn))));
@@ -371,6 +389,23 @@ bool PlayerController::openScript(const QString& pathIn, const QString& videoIn)
     } catch (const std::exception& e) {
         setError(tr("Could not open %1: %2").arg(QFileInfo(path).fileName(), q(e.what())));
         return false;
+    }
+    // 0.7 "Honor inverted flag" (playback.honor_inverted, on by default): off
+    // plays a funscript's "inverted": true script as written.
+    if (!samn::IsSamnPath(u8(path))) {
+        bool honor = true;
+        try {
+            const auto v = settings().get("playback.honor_inverted");
+            if (v.is_boolean()) honor = v.get<bool>();
+        } catch (const std::exception&) {
+        }
+        if (!honor) {
+            try {
+                const samn::FunscriptView view = samn::LoadFunscript(std::filesystem::u8path(u8(path)));
+                if (view.inverted) doc.general = view.actions;
+            } catch (const std::exception&) {
+            }
+        }
     }
     if (doc.general.empty()) {
         setError(tr("Could not open %1: the script has no points.").arg(QFileInfo(path).fileName()));

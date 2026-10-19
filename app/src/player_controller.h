@@ -169,8 +169,13 @@ public:
     // page then starts playing it).
     Q_INVOKABLE bool playlistFinished();
     Q_INVOKABLE bool openScript(const QString& path, const QString& video = {});
+    // Opens the script again with its video (a setting that changes how it
+    // loads, 0.7 honor_inverted). false when no script is open.
+    Q_INVOKABLE bool reloadScript();
     Q_INVOKABLE bool chooseVariant(int index);
     Q_INVOKABLE void addScriptFolder(const QString& pathOrUrl);
+    // Settings → General → Script folders "Remove" (0.7).
+    Q_INVOKABLE void removeScriptFolder(const QString& path);
     Q_INVOKABLE void setVideoPositionMs(qint64 videoMs);
     // Where the player should seek to (video time): the marked range's start
     // once its end is reached while the loop is on, else -1.

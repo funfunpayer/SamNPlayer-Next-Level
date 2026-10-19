@@ -49,6 +49,7 @@ ApplicationWindow {
         onModeDeckRequested: deck.open = true
         onOpenRequested: { win.mode = 0; player.openFile() }
         onDeviceRequested: { win.mode = 0; player.showDevices() }
+        onSettingsRequested: settingsPage.open = true
     }
 
     StackLayout {
@@ -103,7 +104,16 @@ ApplicationWindow {
         onChosen: (i) => win.mode = i
     }
 
-    Shortcut { sequence: "M"; onActivated: deck.open = !deck.open }
+    // Settings over the current mode (D-146); Esc closes it.
+    SettingsPage {
+        id: settingsPage
+        anchors.fill: parent
+        player: player.controller
+    }
+    Shortcut { sequence: "Ctrl+,"; onActivated: settingsPage.open = !settingsPage.open }
+    Shortcut { sequence: "Esc"; enabled: settingsPage.open; onActivated: settingsPage.open = false }
+
+    Shortcut { sequence: "M"; enabled: !settingsPage.open; onActivated: deck.open = !deck.open }
     Shortcut { sequence: "Esc"; enabled: deck.open; onActivated: deck.open = false }
     Repeater {
         model: deck.modes.length

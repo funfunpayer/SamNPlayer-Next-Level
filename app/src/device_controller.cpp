@@ -1,5 +1,7 @@
 #include "device_controller.h"
 
+#include "app_log.h"
+
 #include <QCoreApplication>
 #include <QElapsedTimer>
 #include <QMetaObject>
@@ -43,7 +45,7 @@ constexpr const char* kPrefConnectTest = "device.connect_test";
 constexpr int kConnectTimeoutMs = 20000;
 constexpr int kIntifaceConnectTimeoutMs = 30000;
 
-constexpr const char* kNoDevice = "no device connected \xE2\x80\x94 connect in Tools \xE2\x86\x92 Device first";
+constexpr const char* kNoDevice = "no device connected \xE2\x80\x94 connect in Settings \xE2\x86\x92 Device first";
 
 QString Q(const std::string& s) { return QString::fromStdString(s); }
 
@@ -268,9 +270,18 @@ dev::LogSink DeviceWorker::LogSink() {
     return [this](dev::LogLevel level, const std::string& text) { EmitLog(level, text); };
 }
 
-void DeviceWorker::EmitLog(dev::LogLevel, const std::string& text) {
+void DeviceWorker::EmitLog(dev::LogLevel level, const std::string& text) {
     DeviceController* ctl = ctl_;
     const QString line = Q(text);
+    // Into the app log (Settings → Log). The mock device echoes every level
+    // it gets (about 20 a second while playing): those lines are debug, or
+    // they would push everything else out of the log.
+    const bool echo = line.startsWith(QLatin1String("[mock] ")) && line.contains(QLatin1Char('='));
+    const samn::LogSeverity sev = echo || level == dev::LogLevel::kDebug ? samn::LogSeverity::kDebug
+                                  : level == dev::LogLevel::kWarn        ? samn::LogSeverity::kWarn
+                                  : level == dev::LogLevel::kError       ? samn::LogSeverity::kError
+                                                                         : samn::LogSeverity::kInfo;
+    AppLog::instance().add(sev, line);
     QMetaObject::invokeMethod(ctl, [ctl, line] { emit ctl->logMessage(line); }, Qt::QueuedConnection);
 }
 

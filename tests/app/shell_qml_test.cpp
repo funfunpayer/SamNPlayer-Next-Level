@@ -513,6 +513,51 @@ private slots:
     }
 
     // 0.7: the pages of the other modes are hidden while one mode shows.
+    // D-146: the gear opens Settings over the current mode (0.7 Tools →
+    // Settings / Log / About); tabs switch, Esc and × close, the mode stays.
+    void gearOpensSettingsOverTheMode() {
+        {
+            Shell s;
+            loadShell(s, 2);  // Training
+            QVERIFY(s.window);
+            auto byName = [&](const char* name) -> QQuickItem* {
+                for (QQuickItem* i : descendants(s.root()))
+                    if (i->objectName() == QLatin1String(name)) return i;
+                return nullptr;
+            };
+            QQuickItem* page = s.one("SettingsPage");
+            QVERIFY(page);
+            QVERIFY(!page->isVisible());
+            QQuickItem* gear = byName("topSettingsButton");
+            QVERIFY(gear && gear->isVisible());
+            QTest::mouseClick(s.window, Qt::LeftButton, {}, gear->mapToScene(QPointF(gear->width() / 2, gear->height() / 2)).toPoint());
+            QTRY_VERIFY_WITH_TIMEOUT(page->isVisible() && page->property("opacity").toDouble() > 0.99, kWait);
+            QVERIFY(byName("generalTab")->isVisible());
+            QVERIFY(!byName("logTab")->isVisible());
+            page->setProperty("tab", 1);
+            QTRY_VERIFY_WITH_TIMEOUT(byName("logTab")->isVisible(), kWait);
+            page->setProperty("tab", 2);
+            QTRY_VERIFY_WITH_TIMEOUT(byName("aboutTab")->isVisible(), kWait);
+            QVERIFY(byName("legalText")->property("text").toString().contains("GNU GENERAL PUBLIC LICENSE"));
+            if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT_SETTINGS"); !shot.isEmpty()) {
+                page->setProperty("tab", 0);
+                QTest::qWait(300);
+                s.window->grabWindow().save(QString::fromLocal8Bit(shot));
+            }
+            // Esc closes; the mode underneath is unchanged, and M is not taken by the page.
+            QTest::keyClick(s.window, Qt::Key_Escape);
+            QTRY_VERIFY_WITH_TIMEOUT(!page->isVisible(), kWait);
+            QCOMPARE(s.mode(), 2);
+            // Ctrl+, opens it again; × closes.
+            QTest::keyClick(s.window, Qt::Key_Comma, Qt::ControlModifier);
+            QTRY_VERIFY_WITH_TIMEOUT(page->isVisible(), kWait);
+            QQuickItem* close = byName("settingsClose");
+            QTest::mouseClick(s.window, Qt::LeftButton, {}, close->mapToScene(QPointF(close->width() / 2, close->height() / 2)).toPoint());
+            QTRY_VERIFY_WITH_TIMEOUT(!page->isVisible(), kWait);
+        }
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
+
     void onlyTheChosenModesPageShows() {
         {
             Shell s;

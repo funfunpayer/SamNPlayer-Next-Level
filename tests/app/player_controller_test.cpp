@@ -23,6 +23,7 @@
 #include "samn/playback_mapping.h"
 #include "samn/contact_marks.h"
 #include "samn/samn_file.h"
+#include "samn/settings.h"
 
 using samn::ui::AudioLevelDecoder;
 using samn::ui::CurveItem;
@@ -833,6 +834,37 @@ private slots:
         QVERIFY(c.openPath(plain));
         QVERIFY(c.contactMarks().isEmpty());
         QVERIFY(c.tipAt(1000).isEmpty());
+    }
+
+    // 0.7 Settings → Play "Honor inverted flag" (on by default) and the
+    // script folders' Remove.
+    void honorInvertedAndRemoveScriptFolder() {
+        QTemporaryDir d;
+        const QString path = d.filePath("inv.funscript");
+        writeFile(path, R"({"inverted":true,"actions":[{"at":0,"pos":10},{"at":1000,"pos":80}]})");
+        PlayerController c;
+        QVERIFY(c.openPath(path));
+        c.setVideoPositionMs(0);
+        QCOMPARE(c.strokeNow(), 90);  // flipped: 100 - 10
+        samn::Settings().set("playback.honor_inverted", false);
+        QVERIFY(c.reloadScript());
+        c.setVideoPositionMs(0);
+        QCOMPARE(c.strokeNow(), 10);  // as written
+        samn::Settings().set("playback.honor_inverted", true);
+        QVERIFY(c.reloadScript());
+        c.setVideoPositionMs(0);
+        QCOMPARE(c.strokeNow(), 90);
+        PlayerController none;
+        QVERIFY(!none.reloadScript());
+
+        c.addScriptFolder(d.path());
+        QVERIFY(c.scriptFolders().contains(d.path()));
+        QSignalSpy folders(&c, &PlayerController::scriptFoldersChanged);
+        c.removeScriptFolder(d.path());
+        QVERIFY(!c.scriptFolders().contains(d.path()));
+        QCOMPARE(folders.count(), 1);
+        c.removeScriptFolder(d.path());  // not there: nothing happens
+        QCOMPARE(folders.count(), 1);
     }
 
     // 0.7 Strength (soft / normal / strong): an Emotion Script's preset

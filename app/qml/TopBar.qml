@@ -13,6 +13,8 @@ Item {
     signal openRequested()
     // The chip was clicked: show the device controls.
     signal deviceRequested()
+    // The gear: Settings, Log, About (D-146).
+    signal settingsRequested()
     height: 86
 
     Row {
@@ -182,6 +184,14 @@ Item {
             icon: "folder"; tip: qsTr("Open a video or script (Ctrl+O)")
             color: Qt.rgba(6 / 255, 22 / 255, 42 / 255, 0.92)
             onClicked: root.openRequested()
+        }
+        IconButton {
+            objectName: "topSettingsButton"
+            anchors.verticalCenter: parent.verticalCenter
+            width: 36; height: 36
+            icon: "settings"; tip: qsTr("Settings, log and about (Ctrl+,)")
+            color: Qt.rgba(6 / 255, 22 / 255, 42 / 255, 0.92)
+            onClicked: root.settingsRequested()
         }
         Text {
             textFormat: Text.PlainText
