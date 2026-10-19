@@ -238,6 +238,11 @@ private slots:
             QVERIFY(s.window);
             QTest::qWait(300);
             QCOMPARE(s.window->title(), QString("SamNPlayer Next"));
+            // The two-colour wordmark (D-151) is painted at a real size.
+            auto* mark = s.window->findChild<QQuickItem*>("wordmark");
+            QVERIFY(mark);
+            QCOMPARE(mark->property("text").toString(), QString("SamNPlayer Next"));
+            QVERIFY(mark->width() > 200 && mark->height() > 30);
             QCOMPARE(s.mode(), 0);
             QCOMPARE(s.pillName(), QString("Player"));
             QVERIFY(s.one("PlayerPage"));

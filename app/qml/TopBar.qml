@@ -27,7 +27,7 @@ Item {
         id: brand
         anchors.left: parent.left; anchors.leftMargin: 20
         anchors.verticalCenter: parent.verticalCenter
-        spacing: 14
+        spacing: 6
         Image {
             source: "assets/logo.png"
             width: 58; height: 58
@@ -36,16 +36,18 @@ Item {
         }
         Column {
             anchors.verticalCenter: parent.verticalCenter
-            Text {
-                textFormat: Text.PlainText
-                text: "SamNPlayer"
-                font.family: Theme.font; font.pixelSize: 34; font.weight: Font.DemiBold
-                font.letterSpacing: -0.6
-                color: Theme.orange
+            // The wordmark keeps room for its glow; pull the tagline under the letters.
+            spacing: -10
+            // The banner's wordmark (D-151).
+            WordmarkItem {
+                objectName: "wordmark"
+                width: implicitWidth; height: implicitHeight
+                pixelSize: 34
             }
             Text {
                 textFormat: Text.PlainText
                 text: qsTr("GENERATE  ·  PLAY  ·  TRAIN")
+                leftPadding: 9
                 font.family: Theme.fontSoft; font.pixelSize: 11; font.letterSpacing: 3.7
                 color: "#b9cde0"
             }
