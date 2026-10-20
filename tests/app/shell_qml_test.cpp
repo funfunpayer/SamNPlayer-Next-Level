@@ -239,7 +239,8 @@ private slots:
     void helpKeysInTheQmlSourcesExist() {
         QFile cat(QStringLiteral(SAMN_APP_QML_DIR) + "/HelpTexts.js");
         QVERIFY(cat.open(QIODevice::ReadOnly));
-        const QString js = QString::fromUtf8(cat.readAll());
+        // A Windows checkout has CRLF line ends; the entries are matched per line.
+        const QString js = QString::fromUtf8(cat.readAll()).remove(QLatin1Char('\r'));
         QSet<QString> keys;
         static const QRegularExpression entry(QStringLiteral("^    \"([^\"]+)\": \"(.+)\",$"), QRegularExpression::MultilineOption);
         auto e = entry.globalMatch(js);
