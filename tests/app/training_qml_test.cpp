@@ -205,10 +205,24 @@ private slots:
             ctl->setHoldMs(200);
             ctl->setRestMs(100);
             ctl->setProgression(0);
+            // On the Figure stage, 0.7's dual ring shows both levels.
+            QVERIFY(ctl->setProperty("stage", "figure"));
+            auto* dual = page->findChild<QQuickItem*>("dualRing");
+            QVERIFY(dual);
+            QTRY_VERIFY(dual->isVisible());
+            QVERIFY(!dual->property("live").toBool());
             QVERIFY(ctl->start());
             QTRY_COMPARE(ctl->state(), QString("running"));
             QTRY_VERIFY(ctl->vibration() > 0.3);
+            QTRY_VERIFY(dual->property("live").toBool());
+            auto* vibValue = dual->findChild<QQuickItem*>("dualRingVibrationValue");
+            QVERIFY(vibValue);
+            QTRY_VERIFY(vibValue->property("text").toString() != "0%");
+            QVERIFY(dual->findChild<QQuickItem*>("dualRingVibration")->property("opacity").toDouble() > 0.45);
+            if (const QString shot = qEnvironmentVariable("SAMN_TEST_SHOT_FIGURE"); !shot.isEmpty()) window.grabWindow().save(shot);
             QTRY_COMPARE(ctl->state(), QString("idle"));  // a short session ends by itself
+            QTRY_VERIFY(!dual->property("live").toBool());
+            QVERIFY(ctl->setProperty("stage", "rings"));
             QCOMPARE(ctl->recap().value("title").toString(), QString("Stop-Start"));
 
             QTRY_COMPARE(dev->state(), QString("disconnected"));  // Training closes the Mock it opened

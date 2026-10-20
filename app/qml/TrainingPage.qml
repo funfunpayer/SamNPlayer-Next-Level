@@ -396,6 +396,16 @@ Item {
                         tint: page.heat(0.25 + figureStage.level * 0.55)
                     }
                 }
+                // 0.7's dual ring beside the clip: both levels in one ring.
+                DualRing {
+                    objectName: "dualRing"
+                    visible: figureStage.visible
+                    anchors.left: parent.left; anchors.leftMargin: 18
+                    anchors.bottom: parent.bottom; anchors.bottomMargin: 14
+                    vibration: ctl.vibrationAvailable ? ctl.vibration : 0
+                    suction: ctl.suctionAvailable ? ctl.suction : 0
+                    running: ctl.state === "running"
+                }
                 Column {
                     visible: figureStage.visible
                     anchors.horizontalCenter: parent.horizontalCenter
