@@ -6,7 +6,11 @@
 #include <QTimer>
 #include <QFile>
 #include <QFileInfo>
+#include <QBuffer>
 #include <QImageReader>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QNetworkRequest>
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
@@ -16,6 +20,8 @@
 #include "frame_cache.h"
 #include "samn/engine/label_tracking.h"
 #include "samn/phase_rules.h"
+#include "samn/settings.h"
+#include "samn/teacher.h"
 #include "samn/vision/picture_signals.h"
 #include "samn/vision/frame_reader.h"
 
@@ -32,13 +38,166 @@ std::filesystem::path Fs(const QString& p) { return std::filesystem::path(p.toSt
 constexpr size_t kUndoMax = 200;
 }  // namespace
 
-LabelController::LabelController(QObject* parent) : QObject(parent) {}
+LabelController::LabelController(QObject* parent) : QObject(parent) {
+    try {
+        const auto text = [this](const char* key) {
+            const auto v = settings().get(key, "");
+            return v.is_string() ? QString::fromStdString(v.get<std::string>()) : QString();
+        };
+        teacher_url_ = text("aitrain.teacher.url");
+        teacher_model_ = text("aitrain.teacher.model");
+        teacher_key_ = text("aitrain.teacher.key");
+    } catch (const std::exception&) {
+        // Unreadable settings: start without a teacher.
+    }
+}
+
+samn::Settings& LabelController::settings() {
+    if (!settings_) settings_ = std::make_unique<samn::Settings>();
+    return *settings_;
+}
+
+void LabelController::saveSetting(const char* key, const QString& value) {
+    try {
+        settings().set(key, value.toStdString());
+    } catch (const std::exception&) {
+    }
+}
+
+void LabelController::setTeacherUrl(const QString& url) {
+    QString u = url.trimmed();
+    while (u.endsWith('/')) u.chop(1);
+    if (u == teacher_url_) return;
+    teacher_url_ = u;
+    saveSetting("aitrain.teacher.url", u);
+    emit teacherChanged();
+}
+
+void LabelController::setTeacherModel(const QString& model) {
+    if (model.trimmed() == teacher_model_) return;
+    teacher_model_ = model.trimmed();
+    saveSetting("aitrain.teacher.model", teacher_model_);
+    emit teacherChanged();
+}
+
+void LabelController::setTeacherKey(const QString& key) {
+    if (key.trimmed() == teacher_key_) return;
+    teacher_key_ = key.trimmed();
+    saveSetting("aitrain.teacher.key", teacher_key_);
+    emit teacherChanged();
+}
+
+void LabelController::setTeacherStatus(const QString& s) {
+    teacher_status_ = s;
+    emit teacherChanged();
+    setStatus(s);  // the editor's line shows it too
+}
+
+QNetworkReply* LabelController::teacherRequest(const QString& path, const QByteArray& body) {
+    const QUrl url(teacher_url_ + path);
+    if (teacher_url_.isEmpty() || !url.isValid() || (url.scheme() != "http" && url.scheme() != "https")) {
+        setTeacherStatus(tr("Enter the server's address, e.g. http://192.168.1.20:11434/v1 (Ollama) or :1234/v1 (LM Studio)."));
+        return nullptr;
+    }
+    if (!net_) net_ = new QNetworkAccessManager(this);
+    QNetworkRequest req(url);
+    req.setTransferTimeout(kTeacherTimeoutMs);
+    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    if (!teacher_key_.isEmpty()) req.setRawHeader("Authorization", "Bearer " + teacher_key_.toUtf8());
+    return body.isEmpty() ? net_->get(req) : net_->post(req, body);
+}
+
+bool LabelController::testTeacher() {
+    if (teacher_reply_) return false;
+    QNetworkReply* r = teacherRequest(QStringLiteral("/models"), {});
+    if (!r) return false;
+    teacher_reply_ = r;
+    setTeacherStatus(tr("Asking %1 …").arg(teacher_url_));
+    connect(r, &QNetworkReply::finished, this, [this, r] {
+        r->deleteLater();
+        teacher_reply_ = nullptr;
+        if (r->error() != QNetworkReply::NoError) {
+            setTeacherStatus(tr("No answer: %1").arg(r->errorString()));
+            return;
+        }
+        QStringList models;
+        for (const auto& m : samn::ParseModelList(r->readAll().toStdString())) models << QString::fromStdString(m);
+        teacher_models_ = models;
+        if (teacher_model_.isEmpty() && !models.isEmpty()) setTeacherModel(models.front());
+        setTeacherStatus(models.isEmpty() ? tr("The server answers but lists no models.")
+                                          : tr("Connected: %n model(s).", "", int(models.size())));
+    });
+    return true;
+}
+
+bool LabelController::askTeacher() {
+    if (teacher_reply_ || !hasVideo() || frame_.isNull()) return false;
+    if (teacher_model_.isEmpty()) {
+        setTeacherStatus(tr("Choose a model first (Test connection lists them)."));
+        return false;
+    }
+    std::vector<std::string> classes;
+    for (const auto& c : project_.Classes())
+        if (c != "contact" && !samn::IsExcludeClass(c)) classes.push_back(c);
+    if (classes.empty())
+        for (const auto& c : presetLabels())
+            if (c != "contact" && c != QLatin1String(samn::kExcludeClass)) classes.push_back(c.toStdString());
+    // The frame at most 1024 px; the boxes come back in its fractions.
+    QImage img = frame_;
+    if (std::max(img.width(), img.height()) > 1024) img = img.scaled(1024, 1024, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    QByteArray jpeg;
+    QBuffer buf(&jpeg);
+    buf.open(QIODevice::WriteOnly);
+    img.save(&buf, "JPG", 88);
+    const std::string body =
+        samn::TeacherRequestBody(teacher_model_.toStdString(), samn::TeacherPrompt(classes), jpeg.toBase64().toStdString());
+    QNetworkReply* r = teacherRequest(QStringLiteral("/chat/completions"), QByteArray::fromStdString(body));
+    if (!r) return false;
+    teacher_reply_ = r;
+    const int64_t ms = int64_t(std::llround(preview_ms_));
+    const double w = frame_.width(), h = frame_.height();
+    setTeacherStatus(tr("%1 is looking at %2 …").arg(teacher_model_, QString::number(ms / 1000.0, 'f', 1) + " s"));
+    connect(r, &QNetworkReply::finished, this, [this, r, ms, w, h, classes] {
+        r->deleteLater();
+        teacher_reply_ = nullptr;
+        const QByteArray data = r->readAll();
+        std::string error;
+        const auto content = samn::ChatContent(data.toStdString(), &error);
+        if (r->error() != QNetworkReply::NoError && !content) {
+            setTeacherStatus(tr("No answer: %1").arg(error.empty() ? r->errorString() : QString::fromStdString(error)));
+            return;
+        }
+        if (!content) {
+            setTeacherStatus(tr("The teacher: %1").arg(QString::fromStdString(error)));
+            return;
+        }
+        const auto boxes = samn::ParseTeacherBoxes(*content, w, h, classes);
+        if (boxes.empty()) {
+            setTeacherStatus(tr("The teacher sees nothing it was asked for here."));
+            return;
+        }
+        int set = 0;
+        const std::string source = "teacher:" + teacher_model_.toStdString();
+        change(tr("Teacher proposals"), [&](samn::LabelProject& p) {
+            set = samn::ApplyTeacherBoxes(p, ms, boxes, source, tolerance());
+            return set > 0;
+        });
+        setTeacherStatus(set > 0 ? tr("%n proposal(s) from %1: check them, drag or confirm.", "", set).arg(teacher_model_)
+                                 : tr("The teacher's boxes are all where you already confirmed one."));
+    });
+    emit teacherChanged();
+    return true;
+}
 
 LabelController::~LabelController() {
     if (suggest_cancel_) *suggest_cancel_ = true;
     if (suggest_worker_.joinable()) suggest_worker_.join();
     if (track_cancel_) *track_cancel_ = true;
     if (track_worker_.joinable()) track_worker_.join();
+    if (teacher_reply_) {
+        teacher_reply_->disconnect(this);  // no answer handling while going away
+        teacher_reply_->abort();
+    }
 }
 
 QString LabelController::videoName() const { return QFileInfo(video_path_).fileName(); }

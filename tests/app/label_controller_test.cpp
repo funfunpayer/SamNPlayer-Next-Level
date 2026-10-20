@@ -1,6 +1,12 @@
 // The AI Train label editor's controller (D-155 §2.2): tracks, keys, undo,
 // saving beside the clip and the dataset export. Synthetic clips only.
 #include <QDir>
+#include <memory>
+#include <QJsonObject>
+#include <QJsonDocument>
+#include <QJsonArray>
+#include <QTcpSocket>
+#include <QTcpServer>
 #include <cmath>
 #include <QFile>
 #include <QImage>
@@ -15,6 +21,47 @@
 
 using samn::ui::LabelController;
 
+// A model server for the tests: /v1/models and /v1/chat/completions answer
+// what the test sets; the last request body is kept.
+class FakeModelServer : public QObject {
+public:
+    QTcpServer server;
+    QByteArray answer;  // the chat completion's content
+    QByteArray lastBody, lastAuth;
+    explicit FakeModelServer() {
+        server.listen(QHostAddress::LocalHost, 0);
+        connect(&server, &QTcpServer::newConnection, this, [this] {
+            while (QTcpSocket* c = server.nextPendingConnection()) {
+                auto buffer = std::make_shared<QByteArray>();
+                connect(c, &QTcpSocket::readyRead, c, [this, c, buffer] {
+                    *buffer += c->readAll();
+                    const int head = int(buffer->indexOf("\r\n\r\n"));
+                    if (head < 0) return;
+                    const QList<QByteArray> lines = buffer->left(head).split('\n');
+                    int length = 0;
+                    for (const QByteArray& l : lines) {
+                        if (l.toLower().startsWith("content-length:")) length = l.mid(15).trimmed().toInt();
+                        if (l.toLower().startsWith("authorization:")) lastAuth = l.mid(14).trimmed();
+                    }
+                    if (buffer->size() < head + 4 + length) return;
+                    lastBody = buffer->mid(head + 4, length);
+                    QByteArray body;
+                    if (lines.front().contains("/v1/models"))
+                        body = R"({"data":[{"id":"vision-b"},{"id":"vision-a"}]})";
+                    else {
+                        QJsonObject msg{{"role", "assistant"}, {"content", QString::fromUtf8(answer)}};
+                        body = QJsonDocument(QJsonObject{{"choices", QJsonArray{QJsonObject{{"message", msg}}}}}).toJson();
+                    }
+                    c->write("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: " +
+                             QByteArray::number(body.size()) + "\r\n\r\n" + body);
+                    c->disconnectFromHost();
+                });
+            }
+        });
+    }
+    QString url() const { return QStringLiteral("http://127.0.0.1:%1/v1/").arg(server.serverPort()); }
+};
+
 class LabelControllerTest : public QObject {
     Q_OBJECT
     QTemporaryDir dir_;
@@ -23,6 +70,7 @@ class LabelControllerTest : public QObject {
 private slots:
     void initTestCase() {
         QVERIFY(dir_.isValid());
+        qputenv("SAMN_CONFIG_DIR", dir_.filePath("config").toUtf8());  // never the user's settings
         clip_ = dir_.filePath("clip.mp4");
         QVERIFY(samn::engine::testclips::WriteMoving(std::filesystem::path(clip_.toStdU16String()), 4, 80.0, 1.0));
     }
@@ -244,6 +292,54 @@ private slots:
         QVERIFY(c.undo());
         QCOMPARE(c.lanes()[0].toMap().value("keys").toList().size(), before);
         QVERIFY(!c.nextUncertain() || c.status().contains("Uncertain"));
+    }
+
+    void aTeacherOnAModelServerProposesBoxes() {
+        FakeModelServer fake;
+        const QString path = dir_.filePath("teacher.mp4");
+        QVERIFY(QFile::copy(clip_, path));
+        LabelController c;
+        QVERIFY(c.openVideo(path));
+        QVERIFY(!c.askTeacher());  // no model yet
+        c.setTeacherUrl(fake.url());
+        QCOMPARE(c.teacherUrl(), fake.url().chopped(1));  // without the trailing slash
+        c.setTeacherKey("secret");
+        QVERIFY(c.testTeacher());
+        QVERIFY(c.teacherBusy());
+        QTRY_VERIFY(!c.teacherBusy());
+        QCOMPARE(c.teacherModels(), QStringList({"vision-a", "vision-b"}));
+        QCOMPARE(c.teacherModel(), QString("vision-a"));  // the first one, when none was chosen
+        QCOMPARE(fake.lastAuth, QByteArray("Bearer secret"));
+
+        // The disc at frame 0 sits at 160 / 120 in a 320 x 240 picture.
+        fake.answer = R"(Here you go: {"objects": [{"label": "glans", "box": [0.39, 0.354, 0.22, 0.292]}]})";
+        c.seek(0);
+        QVERIFY(c.askTeacher());
+        QTRY_VERIFY(!c.teacherBusy());
+        QVERIFY2(c.labels().contains("glans"), qPrintable(c.teacherStatus()));
+        const QVariantMap key = c.lanes()[0].toMap().value("keys").toList().value(0).toMap();
+        QCOMPARE(key.value("source").toString(), QString("teacher:vision-a"));
+        QVERIFY(!key.value("confirmed").toBool());
+        const QVariantMap box = c.boxes().value(0).toMap();
+        QVERIFY(std::abs(box.value("x").toDouble() - 124.8) < 1);
+        // The request asked for the classes and carried the frame.
+        const QJsonObject req = QJsonDocument::fromJson(fake.lastBody).object();
+        QCOMPARE(req.value("model").toString(), QString("vision-a"));
+        const QString sent = QString::fromUtf8(fake.lastBody);
+        QVERIFY(sent.contains("data:image/jpeg;base64,"));
+        QVERIFY(sent.contains("glans"));
+        QVERIFY(!sent.contains("exclude"));  // not asked of a teacher
+        // Nothing seen: said, nothing changed; one undo takes the proposal back.
+        fake.answer = R"({"objects": []})";
+        QVERIFY(c.askTeacher());
+        QTRY_VERIFY(!c.teacherBusy());
+        QVERIFY(c.teacherStatus().contains("nothing"));
+        QVERIFY(c.undo());
+        QVERIFY(c.labels().isEmpty());  // the teacher had made the object
+        // Remembered.
+        LabelController again;
+        QCOMPARE(again.teacherModel(), QString("vision-a"));
+        QCOMPARE(again.teacherKey(), QString("secret"));
     }
 
     void anImageIsAClipOfOneFrame() {
