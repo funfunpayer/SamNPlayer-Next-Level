@@ -125,6 +125,15 @@ Item {
         function onContactChanged() { if (page.selectedMark >= gen.contactAreas.length) page.selectedMark = -2 }
         function onBoxChanged() { if (page.selectedMark === -1 && !gen.hasBox) page.selectedMark = -2 }
     }
+    // From the Player: edit its script here, with its video (and the
+    // Scenes tab when asked).
+    function editScript(path, video, scenes) {
+        if (video.toString() !== "" && video.toString() !== gen.videoUrl.toString() && !gen.running && !gen.queueRunning)
+            gen.openVideo(video.toString())
+        if (!edit.open(path)) return false
+        page.sidePanel = scenes ? 1 : 0
+        return true
+    }
     function createFor(video, start) {
         if (gen.running || gen.queueRunning) return false
         autoCreatePending = false

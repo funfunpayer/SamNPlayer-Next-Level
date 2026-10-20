@@ -39,6 +39,7 @@ Item {
     // "Create script" for a video without one (0.7 open_media.js): Main.qml
     // opens the Generator with the video; `start` runs it right away.
     signal createRequested(url video, bool start)
+    signal editRequested(string script, url video, bool scenes)
     // The last script that was open, for "Back to the script" (0.7).
     property string lastScript: ""
     property url lastVideo
@@ -251,6 +252,7 @@ Item {
         onAddToListRequested: addListDialog.open()
         videoPositionMs: page.player.position
         onProjectLoadRequested: projectDialog.open()
+        onEditRequested: (scenes) => page.editRequested(ctrl.scriptPath, ctrl.videoUrl, scenes)
     }
     Item {
         id: center
@@ -966,15 +968,25 @@ Item {
                     onRemove: (i) => ctrl.removeBookmark(i)
                 }
             }
-            // Scene Map comes as its own mode (P4); said plainly, no fake view.
+            // The Scene Map lives in the Editor (D-145): the way there.
             Item {
                 visible: bottomTabs.current === 3
                 x: 16; y: 46; width: parent.width - 32; height: parent.height - 58
-                Text {
-                    textFormat: Text.PlainText
-                    anchors.centerIn: parent
-                    text: qsTr("Scene Map (scenes, thumbnails, rhythm) comes with the Scene Map mode in P4.")
-                    color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 13
+                Column {
+                    anchors.centerIn: parent; spacing: 10
+                    Text {
+                        textFormat: Text.PlainText
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: qsTr("Scenes with their frame, feel and suggestions are in the Editor (Generator → Scenes).")
+                        color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 13
+                    }
+                    FlowButton {
+                        objectName: "openScenes"
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: qsTr("Open the scenes in the Editor")
+                        enabled: ctrl.hasScript
+                        onClicked: page.editRequested(ctrl.scriptPath, ctrl.videoUrl, true)
+                    }
                 }
             }
             // Audio Analysis (0.7): the whole video's sound with the beat grid; click seeks.
