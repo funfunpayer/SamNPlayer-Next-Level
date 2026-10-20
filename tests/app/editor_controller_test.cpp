@@ -465,6 +465,23 @@ private slots:
         QCOMPARE(e.scenesFromPhases(), 0);  // nothing twice
         QVERIFY(e.applySceneSuggestions() >= 1);
         QCOMPARE(e.scenes().at(1).toMap().value("feel").toString(), QStringLiteral("oral"));
+
+        // The confirmed intro shapes the playback (the climax is only a suggestion).
+        QCOMPARE(e.playbackPhases(), 0);
+        QCOMPARE(e.phasesToPlayback(), 1);
+        QCOMPARE(e.playbackPhases(), 1);
+        samn::Document d = samn::LoadDocument(Fs(e.playPath()));
+        QCOMPARE(d.recipe.phase_ranges.size(), size_t(1));
+        QCOMPARE(QString::fromStdString(d.recipe.phase_ranges[0].phase), QStringLiteral("intro"));
+        QCOMPARE(d.recipe.scene_ranges.size(), size_t(1));  // the scene feel stays
+        QCOMPARE(Actions(dir_.filePath("phases.funscript")).size(), size_t(5));  // the stroke untouched
+        // Saving scenes keeps the phases; a reopen reads them.
+        QVERIFY(e.addScene(3500));
+        EditorController again;
+        QVERIFY(again.open(dir_.filePath("phases.funscript")));
+        QCOMPARE(again.playbackPhases(), 1);
+        QVERIFY(again.clearPlaybackPhases());
+        QCOMPARE(samn::LoadDocument(Fs(again.playPath())).recipe.phase_ranges.size(), size_t(0));
     }
 
     void scenesAreChaptersWithAFeelAndSuggestions() {

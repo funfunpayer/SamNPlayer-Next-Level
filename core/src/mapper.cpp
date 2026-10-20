@@ -322,4 +322,43 @@ std::optional<std::vector<Frame>> ToIntensityCurve(const std::vector<Action>& ac
     return frames;
 }
 
+std::vector<PhaseRange> NormalizePhaseRanges(const std::vector<PhaseRange>& rs) {
+    std::vector<PhaseRange> out;
+    for (const auto& r : rs)
+        if (r.end_ms > r.start_ms &&
+            (r.phase == "intro" || r.phase == "empty" || r.phase == "climax" || r.phase == "cool-down"))
+            out.push_back(r);
+    std::sort(out.begin(), out.end(), [](const PhaseRange& a, const PhaseRange& b) { return a.start_ms < b.start_ms; });
+    return out;
+}
+
+void ApplyPhaseShape(std::vector<Frame>& frames, const std::vector<PhaseRange>& phases) {
+    if (phases.empty()) return;
+    const auto ranges = NormalizePhaseRanges(phases);
+    size_t k = 0;
+    for (auto& f : frames) {  // frames are in time order
+        while (k < ranges.size() && ranges[k].end_ms <= f.at) ++k;
+        if (k >= ranges.size() || f.at < ranges[k].start_ms) continue;
+        const PhaseRange& r = ranges[k];
+        const double len = double(r.end_ms - r.start_ms);
+        const double t = double(f.at - r.start_ms) / len;  // 0..1 through the phase
+        if (r.phase == "intro" || r.phase == "empty") {
+            // At rest, with a soft edge in and out (half the phase at most).
+            const double fade = std::min(double(kPhaseFadeMs), len / 2);
+            const double edge = std::min(double(f.at - r.start_ms), double(r.end_ms - f.at));
+            const double keep = fade > 0 ? 1.0 - Clamp01(edge / fade) : 0.0;
+            f.vibration *= keep;
+            f.suction *= keep;
+        } else if (r.phase == "climax") {
+            const double lift = kClimaxLift * t;
+            if (f.vibration > 0) f.vibration += (1.0 - f.vibration) * lift;
+            if (f.suction > 0) f.suction += (1.0 - f.suction) * lift;
+        } else if (r.phase == "cool-down") {
+            const double keep = 1.0 - t;
+            f.vibration *= keep;
+            f.suction *= keep;
+        }
+    }
+}
+
 }  // namespace samn

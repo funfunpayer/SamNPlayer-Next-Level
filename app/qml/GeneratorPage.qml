@@ -788,6 +788,20 @@ Item {
                         text: qsTr("Scenes from phases")
                         onClicked: edit.scenesFromPhases()
                     }
+                    // D-157: the phases shape what the device gets when the
+                    // .samn plays; the curve itself stays as it is.
+                    FlowButton {
+                        objectName: "phasesToPlayback"
+                        visible: edit.hasPhases
+                        text: edit.playbackPhases > 0 ? qsTr("Update phase playback") : qsTr("Phases shape playback")
+                        onClicked: edit.phasesToPlayback()
+                    }
+                    FlowButton {
+                        objectName: "clearPlaybackPhases"
+                        visible: edit.playbackPhases > 0
+                        text: qsTr("Play without phases (%1)").arg(edit.playbackPhases)
+                        onClicked: edit.clearPlaybackPhases()
+                    }
                     FlowButton {
                         objectName: "applySuggestions"
                         visible: edit.hasSceneSuggestions

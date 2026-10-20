@@ -876,3 +876,14 @@ TEST_CASE("samn_file: a scene mark's reviewed:false and confidence survive save 
     const auto j = nlohmann::json::parse(MarshalDocument(back));
     CHECK(j["sceneMap"]["marks"][0]["reviewed"] == false);  // written, not dropped
 }
+
+TEST_CASE("samn_file: phase ranges (D-157) survive a round trip; none write nothing") {
+    Document d;
+    d.general = Acts({{0, 0}, {1000, 100}});
+    CHECK(MarshalDocument(d).find("phase_ranges") == std::string::npos);
+    d.recipe.phase_ranges = {PhaseRange{0, 5000, "intro"}, PhaseRange{60000, 75000, "climax"}};
+    const Document back = ParseDocument(MarshalDocument(d));
+    REQUIRE(back.recipe.phase_ranges.size() == 2);
+    CHECK(back.recipe.phase_ranges[1].phase == "climax");
+    CHECK(back.recipe.phase_ranges[1].end_ms == 75000);
+}

@@ -78,6 +78,8 @@ class EditorController : public QObject {
     Q_PROPERTY(bool hasSceneSuggestions READ hasSceneSuggestions NOTIFY scenesChanged)
     // Confirmed phases from the AI Train label editor (<clip>.labels.json, D-157).
     Q_PROPERTY(bool hasPhases READ hasPhases NOTIFY scenesChanged)
+    // How many phases shape the playback (the .samn recipe's phase_ranges).
+    Q_PROPERTY(int playbackPhases READ playbackPhases NOTIFY scenesChanged)
 
 public:
     explicit EditorController(QObject* parent = nullptr);
@@ -117,6 +119,7 @@ public:
     QStringList sceneFeels() const;
     bool hasSceneSuggestions() const;
     bool hasPhases() const;
+    int playbackPhases() const { return int(playback_phases_.size()); }
 
     // A .funscript (its companion .samn is read too) or a .samn path.
     Q_INVOKABLE bool open(const QString& path);
@@ -182,6 +185,10 @@ public:
     Q_INVOKABLE int applySceneSuggestions();
     // A scene where each confirmed phase begins, named after it (D-157).
     Q_INVOKABLE int scenesFromPhases();
+    // The confirmed intro, empty, climax and cool-down phases shape what the
+    // device gets when the .samn plays (D-157); the script stays as it is.
+    Q_INVOKABLE int phasesToPlayback();
+    Q_INVOKABLE bool clearPlaybackPhases();
 
     Q_INVOKABLE bool undo();
     Q_INVOKABLE bool redo();
@@ -245,6 +252,8 @@ private:
     std::vector<samn::SceneFeelRange> scene_ranges_;
     std::vector<samn::SceneProposal> proposals_;
     std::vector<samn::LabelPhase> phases_;
+    std::vector<samn::PhaseRange> playback_phases_;
+    bool savePlaybackPhases(std::vector<samn::PhaseRange> ranges);
     std::optional<samn::ContactMarks> contact_marks_;
     bool busy_ = false;
     bool sound_with_contact_ = false;
