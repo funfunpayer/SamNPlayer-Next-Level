@@ -1128,6 +1128,16 @@ QVariantList LabelController::lanes() const {
     return out;
 }
 
+int LabelController::addToTrainingSet(double everyMs) {
+    if (!hasVideo()) return -1;
+    const QString dir = QString::fromStdU16String((samn::config_dir() / "ai" / "datasets").u16string()) + "/" +
+                        QFileInfo(video_path_).completeBaseName();
+    QDir(dir).removeRecursively();
+    const int n = exportDataset(dir, everyMs);
+    if (n >= 0) setStatus(tr("%n sample(s) of %1 in the training set.", "", n).arg(QFileInfo(video_path_).fileName()));
+    return n;
+}
+
 int LabelController::exportDataset(const QString& dirOrUrl, double everyMs) {
     if (!hasVideo()) return -1;
     const QString dir = LocalPath(dirOrUrl);

@@ -341,7 +341,8 @@ Item {
                 Text { textFormat: Text.PlainText; text: qsTr("Sample every"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
                 FlowSlider { id: everyMs; objectName: "sampleEvery"; from: 100; to: 4000; value: 500; Layout.preferredWidth: 110 }
                 Text { textFormat: Text.PlainText; text: Math.round(everyMs.value) + " ms"; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
-                FlowButton { objectName: "exportSamples"; primary: true; text: qsTr("Export samples…"); enabled: labels.labels.length > 0; onClicked: exportDialog.open() }
+                FlowButton { objectName: "addToTraining"; primary: true; text: qsTr("Add to training set"); enabled: labels.labels.length > 0; onClicked: labels.addToTrainingSet(everyMs.value) }
+                FlowButton { objectName: "exportSamples"; text: qsTr("Export samples…"); enabled: labels.labels.length > 0; onClicked: exportDialog.open() }
             }
 
             // Phases: pick one, then drag over the phase lane to paint it.

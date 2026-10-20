@@ -17,6 +17,7 @@ qt_add_qml_module(samn_app
     src/plugins.h src/plugins.cpp
     src/label_controller.h src/label_controller.cpp
     src/model_download.h src/model_download.cpp
+    src/train_controller.h src/train_controller.cpp
     src/curve_item.h src/curve_item.cpp
     src/heatmap_item.h src/heatmap_item.cpp
     src/wordmark_item.h src/wordmark_item.cpp
@@ -103,6 +104,9 @@ target_link_libraries(samn_app PUBLIC samn_core samn_engine Qt6::Gui Qt6::Quick 
 # OpenCV already brings it on every platform.
 find_package(ZLIB REQUIRED)
 target_link_libraries(samn_app PRIVATE ZLIB::ZLIB)
+# Development builds find ai/train_student.py in the sources; the package
+# carries it beside the executable.
+target_compile_definitions(samn_app PRIVATE SAMN_SOURCE_AI_DIR="${PROJECT_SOURCE_DIR}/ai")
 
 qt_add_executable(samnplayer WIN32 src/main.cpp)
 target_link_libraries(samnplayer PRIVATE samn_app samn_appplugin)

@@ -59,6 +59,13 @@ add_executable(model_download_test model_download_test.cpp)
 target_link_libraries(model_download_test PRIVATE samn_app Qt6::Test ZLIB::ZLIB)
 add_test(NAME model_download_test COMMAND model_download_test)
 
+# The student's training with stand-ins for uv and the training script.
+add_executable(train_controller_test train_controller_test.cpp)
+target_link_libraries(train_controller_test PRIVATE samn_app Qt6::Test)
+target_compile_definitions(train_controller_test PRIVATE SAMN_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data"
+  SAMN_VISION_TESTDATA="${CMAKE_SOURCE_DIR}/tests/vision/data")
+add_test(NAME train_controller_test COMMAND train_controller_test)
+
 # The AI Train page's QML, loaded the way the app loads it (D-155).
 add_executable(aitrain_qml_test aitrain_qml_test.cpp)
 target_link_libraries(aitrain_qml_test PRIVATE samn_app samn_appplugin Qt6::Test)
