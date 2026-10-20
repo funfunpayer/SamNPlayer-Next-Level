@@ -28,6 +28,8 @@ std::unique_ptr<FrameReader> FrameReader::Open(const std::filesystem::path& path
     if (!r->impl_->cap.open(path.u8string(), cv::CAP_FFMPEG) || !r->impl_->cap.isOpened())
         return fail("video cannot be opened");
     r->fps_ = r->impl_->cap.get(cv::CAP_PROP_FPS);
+    const double tag = r->impl_->cap.get(cv::CAP_PROP_FOURCC);
+    r->fourcc_ = tag > 0 && tag < 4294967296.0 ? static_cast<uint32_t>(tag) : 0;
     r->frame_count_ = static_cast<int64_t>(std::llround(r->impl_->cap.get(cv::CAP_PROP_FRAME_COUNT)));
     r->size_ = cv::Size(static_cast<int>(r->impl_->cap.get(cv::CAP_PROP_FRAME_WIDTH)),
                         static_cast<int>(r->impl_->cap.get(cv::CAP_PROP_FRAME_HEIGHT)));

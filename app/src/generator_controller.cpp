@@ -11,6 +11,7 @@
 
 #include <opencv2/imgproc.hpp>
 
+#include "samn/video_info.h"
 #include "samn/engine/generate_queue.h"
 #include "samn/engine/tip_find.h"
 #include "samn/contact_marks.h"
@@ -300,11 +301,14 @@ bool GeneratorController::openVideo(const QString& pathOrUrl) {
     video_path_ = path;
     video_size_ = QSize(reader->size().width, reader->size().height);
     duration_ms_ = reader->frameCount() > 0 ? reader->frameCount() * 1000.0 / reader->fps() : 0;
-    video_info_ = QStringLiteral("%1 · %2×%3 · %4 fps")
+    // An unknown codec says so (issue #4); it is never guessed.
+    const std::string codec = samn::CodecName(reader->fourcc());
+    video_info_ = QStringLiteral("%1 · %2×%3 · %4 fps · %5")
                       .arg(Clock(duration_ms_))
                       .arg(video_size_.width())
                       .arg(video_size_.height())
-                      .arg(std::round(reader->fps() * 100) / 100);
+                      .arg(std::round(reader->fps() * 100) / 100)
+                      .arg(codec.empty() ? tr("codec unknown") : QString::fromStdString(codec));
     box_ = QRect();
     contact_areas_.clear();  // drawn on the old video
     mark_contact_ = false;

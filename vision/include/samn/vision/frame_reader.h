@@ -31,6 +31,9 @@ public:
     double fps() const { return fps_; }
     int64_t frameCount() const { return frame_count_; }
     cv::Size size() const { return size_; }
+    // The stream's FourCC as the decoder reports it; 0 when it did not say
+    // (unknown, not guessed: samn::CodecName gives the name).
+    uint32_t fourcc() const { return fourcc_; }
 
     // The next frame; false at the end or on a decode error.
     bool Read(VideoFrame& out);
@@ -43,6 +46,7 @@ private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
     double fps_ = 0;
+    uint32_t fourcc_ = 0;
     int64_t frame_count_ = 0;
     cv::Size size_;
 };

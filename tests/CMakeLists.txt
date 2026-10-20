@@ -17,7 +17,7 @@ add_test(NAME identifiers COMMAND ${CMAKE_COMMAND} -DROOT=${PROJECT_SOURCE_DIR} 
 if(SAMN_BUILD_VISION)
   file(GLOB VISION_TESTS CONFIGURE_DEPENDS vision/*_test.cpp)
   add_executable(vision_tests core/main.cpp ${VISION_TESTS})
-  target_link_libraries(vision_tests PRIVATE samn_vision doctest)
+  target_link_libraries(vision_tests PRIVATE samn_vision samn_core doctest)
   add_test(NAME vision_tests COMMAND vision_tests)
 
   file(GLOB ENGINE_TESTS CONFIGURE_DEPENDS engine/*_test.cpp)
