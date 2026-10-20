@@ -24,6 +24,7 @@ Every piece of code copied or adapted from another project is listed here with i
 | Component | How | Licence |
 |---|---|---|
 | uv 0.13.4 (Astral) | *AI Train → Train → Set up* fetches the PyPI wheel (hash pinned); it installs Python 3.12, PyTorch and rfdetr into the AI folder | MIT / Apache-2.0 |
+| ffmpeg 7 (from imageio-ffmpeg 0.6.0) | *AI Train → Benchmark → Cut a clip → Fetch ffmpeg* fetches the PyPI wheel and checks the wheel and the program against pinned SHA-256 hashes; kept in the config folder's `tools/`, run as a separate program | ffmpeg: GPL-3.0 build (with libx264); imageio-ffmpeg: BSD-2-Clause |
 | rfdetr 1.11.2 (Roboflow) and its RF-DETR weights | installed by uv into that environment; trains the student | Apache-2.0 |
 | NudeNet 3.4.2 `320n.onnx` (AI Train teacher, D-155) | *AI Train → Teachers → Download NudeNet* fetches the PyPI wheel and checks the wheel and the model against pinned SHA-256 hashes | the wheel carries an AGPL-3.0 licence file (PyPI lists MIT); the weights were trained with YOLOv8, so their licence is unclear and they are not bundled |
 | pybind11 | Python bindings of the core | BSD-3-Clause |

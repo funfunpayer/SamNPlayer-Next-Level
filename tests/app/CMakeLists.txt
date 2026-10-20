@@ -70,6 +70,7 @@ add_test(NAME train_controller_test COMMAND train_controller_test)
 add_executable(aitrain_qml_test aitrain_qml_test.cpp)
 target_link_libraries(aitrain_qml_test PRIVATE samn_app samn_appplugin Qt6::Test)
 target_include_directories(aitrain_qml_test PRIVATE ${CMAKE_SOURCE_DIR}/tests/engine)
+target_compile_definitions(aitrain_qml_test PRIVATE SAMN_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data")
 add_test(NAME aitrain_qml_test COMMAND aitrain_qml_test)
 set_tests_properties(aitrain_qml_test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
@@ -98,6 +99,15 @@ target_include_directories(frame_cache_test PRIVATE ${CMAKE_SOURCE_DIR}/tests/en
 add_test(NAME frame_cache_test COMMAND frame_cache_test)
 set_tests_properties(frame_cache_test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
+# Clip prep (D-155 step 6) with a stand-in for ffmpeg and a local download.
+add_executable(clip_prep_controller_test clip_prep_controller_test.cpp)
+target_link_libraries(clip_prep_controller_test PRIVATE samn_app Qt6::Test ZLIB::ZLIB)
+target_compile_definitions(clip_prep_controller_test PRIVATE SAMN_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data")
+add_test(NAME clip_prep_controller_test COMMAND clip_prep_controller_test)
+# By hand only (needs the real wheel and ffmpeg; see the file).
+add_executable(clip_prep_real_check clip_prep_real_check.cpp)
+target_link_libraries(clip_prep_real_check PRIVATE samn_app Qt6::Test)
+
 # Every test above writes its output unbuffered (see unbuffered_stdout.cpp)
 # and finds ONNX Runtime beside it on Windows (no rpath there).
 get_property(_samn_app_tests DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
@@ -108,3 +118,4 @@ foreach(_t IN LISTS _samn_app_tests)
     samn_copy_runtime_dlls(${_t})
   endif()
 endforeach()
+

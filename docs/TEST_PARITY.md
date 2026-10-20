@@ -36,9 +36,9 @@
 
 | | Tests | ported | covered | todo-now | todo-later | n/a |
 |---|---:|---:|---:|---:|---:|---:|
-| **All** | **1141** | 229 | 66 | **0** | 794 | 52 |
-| Go | 821 | 210 | 32 | 0 | 532 | 47 |
-| Python | 320 | 19 | 34 | 0 | 262 | 5 |
+| **All** | **1141** | 247 | 66 | **0** | 776 | 52 |
+| Go | 821 | 220 | 32 | 0 | 522 | 47 |
+| Python | 320 | 27 | 34 | 0 | 254 | 5 |
 
 ### Per old package
 
@@ -49,7 +49,7 @@
 | `player` | 7 | 61 | 5 | 9 | 0 | 44 | 3 |
 | `samn` | 2 | 5 | 5 | 0 | 0 | 0 | 0 |
 | `sam` | 7 | 37 | 9 | 0 | 0 | 28 | 0 |
-| `videox` | 6 | 26 | 0 | 0 | 0 | 17 | 9 |
+| `videox` | 6 | 26 | 5 | 0 | 0 | 12 | 9 |
 | `update` | 3 | 14 | 0 | 0 | 0 | 14 | 0 |
 | `motionx` | 2 | 10 | 4 | 0 | 0 | 6 | 0 |
 | `pluginhost` | 2 | 10 | 0 | 0 | 0 | 10 | 0 |
@@ -57,13 +57,13 @@
 | `legal` | 1 | 2 | 0 | 0 | 0 | 2 | 0 |
 | `logging` | 1 | 1 | 0 | 0 | 0 | 1 | 0 |
 | `cmd/cli` | 7 | 18 | 0 | 0 | 0 | 12 | 6 |
-| `cmd/gui-wails (Go)` | 68 | 188 | 16 | 18 | 0 | 141 | 13 |
+| `cmd/gui-wails (Go)` | 68 | 188 | 21 | 18 | 0 | 136 | 13 |
 | `generator (Go)` | 72 | 237 | 37 | 2 | 0 | 185 | 13 |
 | `generator (Python)` | 56 | 151 | 0 | 0 | 0 | 151 | 0 |
 | `native/tests (Python)` | 4 | 13 | 13 | 0 | 0 | 0 | 0 |
-| `scripts/benchmark-prep (Python)` | 1 | 8 | 0 | 0 | 0 | 8 | 0 |
+| `scripts/benchmark-prep (Python)` | 1 | 8 | 8 | 0 | 0 | 0 | 0 |
 | `frontend (Python/Playwright UI tests)` | 148 | 148 | 6 | 34 | 0 | 103 | 5 |
-| **Total** | **431** | **1141** | **229** | **66** | **0** | **794** | **52** |
+| **Total** | **431** | **1141** | **247** | **66** | **0** | **776** | **52** |
 
 `generator (Go)` includes the sub-packages `aiscript`, `bodyparts`, `posttrack`, `profilemodel`, `simpletrack`, `strokepreview`, `trackcv`, `trackutil`.
 
@@ -277,12 +277,12 @@ One row per old test function (grouped when a whole file shares the same answer)
 
 ### 2.6 `videox`
 
-6 files, 26 tests: 0 ported, 0 covered, 0 todo-now, 17 todo-later, 9 n/a.
+6 files, 26 tests: 5 ported, 0 covered, 0 todo-now, 12 todo-later, 9 n/a.
 
 | Old file | Test function(s) | Status | Where / why |
 |---|---|---|---|
 | `bin_test.go` | `TestResolveToolPrefersEnv`, `TestResolveToolSiblingDir`, `TestCommandFFmpeg` | n/a | Finds the ffmpeg/ffprobe binaries (env, sibling dir). SamNPlayer 2 decodes with Qt Multimedia / OpenCV and has no ffmpeg dependency (see `audio_envelope.h`, `PLAN.md` Dependencies). |
-| `cut_clip_test.go` | `TestParseClipPrepTime`, `TestResolveClipPrepMaxWidth`, `TestBuildClipPrepArgsMatchesScriptDefaults`, `TestBuildClipPrepArgsNoAudioAndRejectsBadWindow`, `TestExportClipPrepCut` | todo-later | P4 (Bench clip prep, Suite): `ExportClipPrepCut` builds an ffmpeg command line; decide with the Bench port whether ffmpeg stays for this. |
+| `cut_clip_test.go` | `TestParseClipPrepTime`, `TestResolveClipPrepMaxWidth`, `TestBuildClipPrepArgsMatchesScriptDefaults`, `TestBuildClipPrepArgsNoAudioAndRejectsBadWindow`, `TestExportClipPrepCut` | ported | `tests/core/clip_prep_test.cpp` (times, presets, 0.7's arguments, no audio, bad window) and `tests/app/clip_prep_controller_test.cpp` `aCutUsesTheSettingsAndCutsTheScript` (the cut through a stand-in ffmpeg); ffmpeg stays, fetched with one click. |
 | `exec_windows_test.go` | `TestCommandContextHidesConsoleOnWindows` | n/a | Hides the console window of ffmpeg child processes on Windows; no child processes in the C++ app. |
 | `mp4probe_test.go` | `TestProbeISOBMFFLean`, `TestProbeFallsBackWithoutFFprobe`, `TestProbeISOBMFFRejectsWebM`, `TestProbeISOBMFFMatchesFFprobeOnClip`, `TestProbePrefersFFprobeWhenPresent`, `TestProbeISOBMFFUnknownCodec` | todo-later | P3.0 (`samn/video/FrameReader`, video info): lean MP4/ISOBMFF header probe and ffprobe fallback are not ported. |
 | `playable_test.go` | `TestInfoLikelyPlayable`, `TestProxyPath`, `TestIsH264Family`, `TestEnsurePlayableProxyRemuxMKV`, `TestEnsurePlayableProxyConcurrent` | n/a | Decides whether the Chromium webview can play a file and remuxes a proxy (MKV -> MP4). Qt Multimedia with the FFmpeg backend plays the file directly. |
@@ -357,7 +357,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 
 ### 2.14 `cmd/gui-wails (Go)`
 
-68 files, 188 tests: 16 ported, 18 covered, 0 todo-now, 141 todo-later, 13 n/a.
+68 files, 188 tests: 21 ported, 18 covered, 0 todo-now, 136 todo-later, 13 n/a.
 
 | Old file | Test function(s) | Status | Where / why |
 |---|---|---|---|
@@ -372,7 +372,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 | `app_autosync_test.go` | `TestEstimateSyncLagFindsDelay`, `TestEstimateSyncLagNoMatch`, `TestEstimateSyncLagPeriodicIsNotHigh`, `TestEstimateAudioSyncOffsetNeedsScriptAndVideo` | todo-later | P1 open item "auto sync (audio)" / P3.6: `EstimateSyncLag` is not ported. |
 | `app_beatbar_test.go` | `TestCreateBeatBarScript` | todo-later | P3 (needs the video frame reader P3.0): `CreateBeatBarScript`; the pure parts `FindBeatBar`/`BeatStrokes` are ported. |
 | `app_benchmark_cancel_test.go` | `TestBenchmarkRunClaimCancel`, `TestBenchmarkRunClaimIsExclusive` | todo-later | P4 (Bench, Suite) / P3.8. |
-| `app_benchmark_clip_prep_test.go` | `TestSuggestBenchmarkClipOutput`, `TestResolveClipWindowFromStrings`, `TestExportBenchmarkClipRejectsMissingSource`, `TestExportBenchmarkClipRunsFFmpeg`, `TestParseBenchmarkClipTime` | todo-later | P4 (Bench clip prep, Suite). |
+| `app_benchmark_clip_prep_test.go` | `TestSuggestBenchmarkClipOutput`, `TestResolveClipWindowFromStrings`, `TestExportBenchmarkClipRejectsMissingSource`, `TestExportBenchmarkClipRunsFFmpeg`, `TestParseBenchmarkClipTime` | ported | `tests/app/clip_prep_controller_test.cpp`: `aCutUsesTheSettingsAndCutsTheScript` (suggested name, the run), `badTimesSayWhy` (missing source, bad window, bad times), `tests/core/clip_prep_test.cpp` (time parsing). |
 | `app_benchmark_test.go` | `TestGetBenchmarkHistorySortsNewestFirst`, `TestGetBenchmarkHistorySkipsBrokenLinesKeepsRest`, `TestGetBenchmarkHistoryMissingFileIsNotAnError`, `TestGetBenchmarkHistoryLimitsToMaxEntries`, `TestScoreScriptPairIdentical` | todo-later | P4 (Bench, Suite) / P3.8 (comparison). |
 | `app_bookmarks_test.go` | `TestGetSaveScriptBookmarksFunscript` | covered | tests/core/omarker_test.cpp "script marks: .funscript metadata and .samn document", tests/core/marks_test.cpp (bookmarks); tests/app/player_controller_test.cpp `editMarks` |
 | `app_bpm_test.go` | `TestBpmFromHzFoldsIntoInputRange`, `TestEstimatePlaybackAudioBPM` | todo-later | P3.6 (Audio Analysis: BPM from audio): not ported. The manual BPM grid is (`bpmGrid`). |
@@ -623,11 +623,11 @@ One row per old test function (grouped when a whole file shares the same answer)
 
 ### 2.18 `scripts/benchmark-prep (Python)`
 
-1 files, 8 tests: 0 ported, 0 covered, 0 todo-now, 8 todo-later, 0 n/a.
+1 files, 8 tests: 8 ported, 0 covered, 0 todo-now, 0 todo-later, 0 n/a.
 
 | Old file | Test function(s) | Status | Where / why |
 |---|---|---|---|
-| `cut_clip_test.py` | `test_seconds_and_hms`, `test_scale_never_upscales_pattern`, `test_argv_matches_proxy_style`, `test_no_audio`, `test_rejects_bad_window`, `test_load_and_window`, `test_dry_run_marks`, `test_cut_synthetic` | todo-later | P4 (Bench clip prep): developer script that stays Python tooling; port its tests with the script if it is kept. |
+| `cut_clip_test.py` | `test_seconds_and_hms`, `test_scale_never_upscales_pattern`, `test_argv_matches_proxy_style`, `test_no_audio`, `test_rejects_bad_window`, `test_load_and_window`, `test_dry_run_marks`, `test_cut_synthetic` | ported | The script became the app's *Cut a clip*: `tests/core/clip_prep_test.cpp` (times, never upscale, arguments, no audio, bad window, marks file) and `tests/app/clip_prep_controller_test.cpp` `aBatchFromAMarksFile`; `test_cut_synthetic` is `clip_prep_real_check` (by hand, needs ffmpeg). |
 
 ### 2.19 `frontend (Python/Playwright UI tests)`
 

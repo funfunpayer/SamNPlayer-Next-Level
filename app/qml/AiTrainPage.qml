@@ -18,6 +18,36 @@ Item {
     LabelController { id: labelCtl }
     TrainController { id: trainCtl }
     property alias trainer: trainCtl
+    ClipPrepController { id: clipCtl }
+    property alias clipPrep: clipCtl
+    property string clipSource
+    // Save as …; "" for 0.7's name beside the source.
+    property string clipOutput
+    onClipSourceChanged: clipOutput = ""
+    FileDialog {
+        id: clipSourceDialog
+        title: qsTr("Open a video to cut")
+        nameFilters: [qsTr("Video (*.mp4 *.mkv *.webm *.mov *.avi *.m4v *.wmv)"), qsTr("All files (*)")]
+        onAccepted: page.clipSource = clipCtl.localPath(selectedFile.toString())
+    }
+    FileDialog {
+        id: clipSaveDialog
+        title: qsTr("Save the clip as")
+        fileMode: FileDialog.SaveFile
+        nameFilters: [qsTr("MP4 video (*.mp4)")]
+        onAccepted: page.clipOutput = clipCtl.localPath(selectedFile.toString())
+    }
+    FileDialog {
+        id: marksDialog
+        title: qsTr("Cut every clip of a marks file")
+        nameFilters: [qsTr("Marks (*.json)"), qsTr("All files (*)")]
+        onAccepted: clipCtl.cutMarks(selectedFile.toString())
+    }
+    FileDialog {
+        id: ffmpegDialog
+        title: qsTr("Choose ffmpeg")
+        onAccepted: clipCtl.chooseFfmpeg(selectedFile.toString())
+    }
     FileDialog {
         id: clipDialog
         title: qsTr("Open a clip or an image to label")
@@ -452,11 +482,160 @@ Item {
                         }
                     }
                 }
-                Step {
+                // D-155 step 6: 0.7's Clip-Prep, ffmpeg fetched with one click.
+                GlassCard {
+                    objectName: "clipPrepCard"
                     visible: page.tab === 1
-                    number: "1"; title: qsTr("Cut a clip")
-                    text: qsTr("In and out point, width, with or without sound: short clips for Compare and the golden list.")
-                    status: qsTr("D-155 step 6.")
+                    Layout.fillWidth: true
+                    implicitHeight: clipCol.implicitHeight + 28
+                    ColumnLayout {
+                        id: clipCol
+                        anchors.fill: parent; anchors.margins: 14; spacing: 8
+                        Text { textFormat: Text.PlainText; text: qsTr("Cut a clip"); color: Theme.text; font.family: Theme.font; font.pixelSize: 15 }
+                        Text {
+                            textFormat: Text.PlainText
+                            Layout.fillWidth: true; wrapMode: Text.WordWrap
+                            text: qsTr("A short, smaller clip out of a long video, for Compare, the golden clips and test media: in and out point, width, with or without sound. A script beside the video is cut along. A marks.json from 0.7 cuts a whole list at once.")
+                            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true; spacing: 8
+                            visible: !clipCtl.ffmpegReady || clipCtl.fetching
+                            FlowButton {
+                                objectName: "ffmpegFetch"
+                                visible: !clipCtl.fetching
+                                primary: true
+                                text: qsTr("Fetch ffmpeg (one click)")
+                                icon: "download"
+                                onClicked: clipCtl.fetchFfmpeg()
+                            }
+                            FlowButton {
+                                visible: clipCtl.fetching
+                                text: qsTr("Stop")
+                                onClicked: clipCtl.cancelFetch()
+                            }
+                            FlowButton {
+                                objectName: "ffmpegChoose"
+                                visible: !clipCtl.fetching
+                                text: qsTr("Choose ffmpeg …")
+                                onClicked: ffmpegDialog.open()
+                            }
+                            Text {
+                                objectName: "ffmpegStatus"
+                                Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                textFormat: Text.PlainText
+                                text: clipCtl.toolStatus !== "" ? clipCtl.toolStatus
+                                      : qsTr("Cutting needs ffmpeg: about 30 MB, fetched once from PyPI (imageio-ffmpeg), checked against a fixed hash.")
+                                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true; spacing: 8
+                            FlowButton {
+                                objectName: "clipOpen"
+                                text: qsTr("Open video …")
+                                icon: "folder"
+                                enabled: !clipCtl.cutting
+                                onClicked: clipSourceDialog.open()
+                            }
+                            Text {
+                                objectName: "clipSource"
+                                Layout.fillWidth: true; elide: Text.ElideMiddle
+                                textFormat: Text.PlainText
+                                text: page.clipSource !== "" ? page.clipSource : qsTr("No video yet.")
+                                color: page.clipSource !== "" ? Theme.text : Theme.textMuted
+                                font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true; spacing: 8
+                            Text { textFormat: Text.PlainText; text: qsTr("In"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
+                            FlowTextField {
+                                id: clipIn
+                                objectName: "clipIn"
+                                Layout.preferredWidth: 110
+                                maxLength: 16
+                                placeholder: "1:25"
+                            }
+                            Text { textFormat: Text.PlainText; text: qsTr("Out"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
+                            FlowTextField {
+                                id: clipOut
+                                objectName: "clipOut"
+                                Layout.preferredWidth: 110
+                                maxLength: 16
+                                placeholder: "2:05"
+                            }
+                            FlowCombo {
+                                objectName: "clipWidth"
+                                Layout.preferredWidth: 190; height: 32
+                                readonly property var values: ["720p", "960w", "1080p"]
+                                model: [qsTr("At most 1280 wide"), qsTr("At most 960 wide"), qsTr("At most 1920 wide")]
+                                currentIndex: Math.max(0, values.indexOf(clipCtl.preset))
+                                enabled: !clipCtl.cutting
+                                onActivated: (i) => clipCtl.preset = values[i]
+                            }
+                            FlowToggle {
+                                objectName: "clipNoAudio"
+                                checked: clipCtl.noAudio
+                                onToggled: (on) => clipCtl.noAudio = on
+                            }
+                            Text { textFormat: Text.PlainText; text: qsTr("Without sound"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
+                            Item { Layout.fillWidth: true }
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true; spacing: 8
+                            visible: page.clipSource !== ""
+                            Text {
+                                id: clipTargetText
+                                objectName: "clipTarget"
+                                readonly property bool timesOk: clipCtl.suggestOutput(page.clipSource, clipIn.text, clipOut.text) !== ""
+                                readonly property string target: !timesOk ? "" : page.clipOutput !== "" ? page.clipOutput
+                                                                 : clipCtl.suggestOutput(page.clipSource, clipIn.text, clipOut.text)
+                                Layout.fillWidth: true; elide: Text.ElideMiddle
+                                textFormat: Text.PlainText
+                                text: target !== "" ? qsTr("Becomes %1").arg(target)
+                                                    : qsTr("Type the in and out point: seconds (85), MM:SS (1:25) or HH:MM:SS.")
+                                color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                            FlowButton {
+                                objectName: "clipSaveAs"
+                                text: qsTr("Save as …")
+                                enabled: !clipCtl.cutting
+                                onClicked: clipSaveDialog.open()
+                            }
+                            FlowButton {
+                                objectName: "clipCopyCommand"
+                                text: qsTr("Copy command")
+                                enabled: clipTargetText.target !== ""
+                                onClicked: clipCtl.copyCommand(page.clipSource, clipIn.text, clipOut.text, page.clipOutput)
+                            }
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true; spacing: 8
+                            FlowButton {
+                                objectName: "clipCut"
+                                primary: true
+                                text: clipCtl.cutting ? qsTr("Stop (%1 %)").arg(clipCtl.progress) : qsTr("Cut")
+                                icon: "video"
+                                enabled: clipCtl.cutting || (clipCtl.ffmpegReady && page.clipSource !== "")
+                                onClicked: clipCtl.cutting ? clipCtl.cancel() : clipCtl.cut(page.clipSource, clipIn.text, clipOut.text, page.clipOutput)
+                            }
+                            FlowButton {
+                                objectName: "clipMarks"
+                                text: qsTr("Cut a marks.json …")
+                                enabled: clipCtl.ffmpegReady && !clipCtl.cutting
+                                onClicked: marksDialog.open()
+                            }
+                            Text {
+                                objectName: "clipStatus"
+                                Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                textFormat: Text.PlainText
+                                visible: text !== ""
+                                text: clipCtl.status
+                                color: Theme.cyan; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                        }
+                    }
                 }
                 Step {
                     visible: page.tab === 1
