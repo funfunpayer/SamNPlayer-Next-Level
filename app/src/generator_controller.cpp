@@ -78,6 +78,7 @@ void GeneratorController::loadSettings() {
         contact_vibration_ = flag("generator.contact_vibration", contact_vibration_);
         setTipClass(str("generator.tip_class", tip_class_));
         setContactClass(str("generator.contact_class", contact_class_));
+        setExtraClass(str("generator.extra_class", extra_class_));
         // 0.7 stored the sensitivity in percent (75).
         const auto span = s.get("generator.contact_vibration_span");
         if (span.is_number()) setContactSpan(span.get<double>() / 100.0);
@@ -337,7 +338,7 @@ bool GeneratorController::openVideo(const QString& pathOrUrl) {
                       .arg(codec.empty() ? tr("codec unknown") : QString::fromStdString(codec));
     box_ = QRect();
     contact_areas_.clear();  // drawn on the old video
-    mark_contact_ = false;
+    mark_contact_ = mark_extra_ = false;
     emit contactChanged();
     cancelFind();  // a search on the old video ends; its result is not used
     tip_candidates_.clear();
@@ -474,9 +475,30 @@ void GeneratorController::setPosOverlay(bool on) {
     emit optionsChanged();
 }
 
+void GeneratorController::setExtraClass(const QString& c) {
+    if (c == extra_class_ || (!c.isEmpty() && !contactClasses().contains(c))) return;
+    extra_class_ = c;
+    saveSetting("generator.extra_class", c.toStdString());
+    emit optionsChanged();
+}
+
 void GeneratorController::setMarkContact(bool v) {
     if (v == mark_contact_) return;
     mark_contact_ = v;
+    if (v) {
+        mark_extra_ = false;
+        setStatus(tr("Contact area: drag on preview (gold)."));
+    }
+    emit contactChanged();
+}
+
+void GeneratorController::setMarkExtra(bool v) {
+    if (v == mark_extra_) return;
+    mark_extra_ = v;
+    if (v) {
+        mark_contact_ = false;
+        setStatus(tr("Another contact area: drag on preview (magenta)."));
+    }
     emit contactChanged();
 }
 
@@ -488,15 +510,45 @@ QVariantList GeneratorController::contactAreas() const {
     return out;
 }
 
+bool GeneratorController::markTip(const QRect& box) {
+    setBox(box);
+    if (!hasBox()) return false;
+    // 0.7 generator.js, after the tip box is painted.
+    setStatus(contact_vibration_
+                  ? tr("Snack 1 done — tip box is the stroke tracker (CSRT). Next: Mark contact (gold), or skip to "
+                       "Create.")
+                  : tr("Tip box set — CSRT follows this look; Find tip again after a big camera-angle change."));
+    return true;
+}
+
 bool GeneratorController::addContactArea(const QRect& area) {
     // The same rule as the tip box: inside the frame, at least 8 px.
     const QRect r = area.normalized().intersected(QRect(QPoint(0, 0), video_size_));
-    mark_contact_ = false;
+    // The first area is the primary whatever was asked: the engine reads it so.
+    const bool extra = mark_extra_ && !contact_areas_.empty();
+    mark_contact_ = mark_extra_ = false;
     if (!hasVideo() || r.width() < 8 || r.height() < 8) {
         emit contactChanged();
         return false;
     }
-    contact_areas_.push_back({r.x(), r.y(), r.width(), r.height(), contact_class_.toStdString(), false});
+    if (extra) {
+        // Only the tip is tracked (the engine follows no partner yet): an
+        // extra stays where it is drawn.
+        contact_areas_.push_back({r.x(), r.y(), r.width(), r.height(), extra_class_.toStdString(), true});
+        const int n = static_cast<int>(contact_areas_.size()) - 1;
+        setStatus(extra_class_.isEmpty() ? tr("Extra contact #%1 added, stay fixed.").arg(n)
+                                         : tr("Extra contact #%1 (%2) added, stay fixed.").arg(n).arg(extra_class_));
+    } else {
+        // 0.7 has one primary (gold); drawing it again moves it.
+        const samn::ContactMarkBox b{r.x(), r.y(), r.width(), r.height(), contact_class_.toStdString(), false};
+        if (contact_areas_.empty())
+            contact_areas_.push_back(b);
+        else
+            contact_areas_.front() = b;
+        setStatus(contact_vibration_
+                      ? tr("Snack 2 done — partner touch (gold). Optional: + Another, or continue to Feel → Create.")
+                      : tr("Optional contact zone set."));
+    }
     emit contactChanged();
     return true;
 }
@@ -504,14 +556,46 @@ bool GeneratorController::addContactArea(const QRect& area) {
 void GeneratorController::removeContactArea(int index) {
     if (index < 0 || index >= static_cast<int>(contact_areas_.size())) return;
     contact_areas_.erase(contact_areas_.begin() + index);
+    // An extra moved up to primary takes a class (the primary has one).
+    if (index == 0 && !contact_areas_.empty() && contact_areas_.front().cls.empty())
+        contact_areas_.front().cls = contact_class_.toStdString();
+    emit contactChanged();
+}
+
+void GeneratorController::setAreaClass(int index, const QString& cls) {
+    if (index < 0 || index >= static_cast<int>(contact_areas_.size())) return;
+    const bool primary = index == 0;
+    if (primary ? !contactClasses().contains(cls) : (!cls.isEmpty() && !contactClasses().contains(cls))) return;
+    if (contact_areas_[index].cls == cls.toStdString()) return;
+    contact_areas_[index].cls = cls.toStdString();
+    setStatus(primary ? tr("Contact type → %1").arg(cls)
+                      : tr("Extra contact class → %1").arg(cls.isEmpty() ? tr("any") : cls));
     emit contactChanged();
 }
 
 void GeneratorController::clearContactAreas() {
-    if (contact_areas_.empty() && !mark_contact_) return;
+    if (contact_areas_.empty() && !mark_contact_ && !mark_extra_) return;
     contact_areas_.clear();
-    mark_contact_ = false;
+    mark_contact_ = mark_extra_ = false;
     emit contactChanged();
+}
+
+void GeneratorController::clearExtras() {
+    mark_extra_ = false;
+    if (contact_areas_.size() > 1) contact_areas_.resize(1);
+    setStatus(tr("Extra contact areas cleared."));
+    emit contactChanged();
+}
+
+void GeneratorController::deleteMark(int index) {
+    if (index == -1) {
+        if (!hasBox()) return;
+        clearBox();
+        setStatus(tr("Tip mark cleared — Find tip area or paint again."));
+    } else if (index >= 0 && index < static_cast<int>(contact_areas_.size())) {
+        removeContactArea(index);
+        setStatus(index == 0 ? tr("Contact mark cleared.") : tr("Extra contact removed."));
+    }
 }
 
 std::filesystem::path GeneratorController::funscriptPath() const {

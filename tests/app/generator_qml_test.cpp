@@ -247,6 +247,64 @@ private slots:
         QCOMPARE(area.value("cls").toString(), QStringLiteral("nipples"));
         QTRY_VERIFY(named(root.get(), "contactArea_0"));
         QVERIFY(named(root.get(), "contactArea_0")->isVisible());
+        // 0.7 selects the mark just drawn: "Selected: …" with its class.
+        QTRY_COMPARE(gp->property("selectedMark").toInt(), 0);
+        QCOMPARE(named(root.get(), "boxLabel")->property("text").toString(), QStringLiteral("Selected: Contact (Nipples)"));
+        QVERIFY(named(root.get(), "deleteSelectedMark")->isVisible());
+        QVERIFY(gen->status().startsWith(QStringLiteral("Snack 2 done")));
+        const QRectF irBefore = frame->property("imageRect").toRectF();
+        // + Another contact area: magenta, with the extra type.
+        auto* extraType = named(root.get(), "extraClassCombo");
+        extraType->setProperty("currentIndex", 1);
+        QMetaObject::invokeMethod(extraType, "activated", Q_ARG(int, 1));
+        QTRY_COMPARE(gen->extraClass(), QStringLiteral("mouth"));
+        QMetaObject::invokeMethod(named(root.get(), "addExtra"), "clicked");
+        QTRY_VERIFY(gen->markExtra());
+        const QPointF e1 = frame->mapToScene(QPointF(ir.x() + 20 * s, ir.y() + 150 * s));
+        const QPointF e2 = frame->mapToScene(QPointF(ir.x() + 70 * s, ir.y() + 200 * s));
+        QTest::mousePress(&window, Qt::LeftButton, {}, e1.toPoint());
+        QTest::mouseMove(&window, ((e1 + e2) / 2).toPoint());
+        QTRY_VERIFY(named(root.get(), "contactDraft")->isVisible());
+        QTest::mouseMove(&window, e2.toPoint());
+        QTest::mouseRelease(&window, Qt::LeftButton, {}, e2.toPoint());
+        QTRY_COMPARE(gen->contactAreas().size(), 2);
+        QCOMPARE(gen->contactAreas().at(1).toMap().value("cls").toString(), QStringLiteral("mouth"));
+        QCOMPARE(gen->status(), QStringLiteral("Extra contact #1 (mouth) added, stay fixed."));
+        QTRY_COMPARE(gp->property("selectedMark").toInt(), 1);
+        QCOMPARE(named(root.get(), "boxLabel")->property("text").toString(), QStringLiteral("Selected: Extra contact #1 (Mouth)"));
+        QCOMPARE(frame->property("imageRect").toRectF(), irBefore);  // the frame keeps its size
+        // Its class from the row: (any).
+        auto* picked = named(root.get(), "selectedClassCombo");
+        picked->setProperty("currentIndex", 0);
+        QMetaObject::invokeMethod(picked, "activated", Q_ARG(int, 0));
+        QTRY_COMPARE(gen->contactAreas().at(1).toMap().value("cls").toString(), QString());
+        QVERIFY(named(root.get(), "clearExtras")->isVisible());
+        QMetaObject::invokeMethod(named(root.get(), "deleteSelectedMark"), "clicked");
+        QTRY_COMPARE(gen->contactAreas().size(), 1);
+        QCOMPARE(gen->status(), QStringLiteral("Extra contact removed."));
+        QCOMPARE(gp->property("selectedMark").toInt(), -2);
+        // Shift-drag draws the primary again (0.7 Shift = partner); the tip stays.
+        QTest::mousePress(&window, Qt::LeftButton, Qt::ShiftModifier, e1.toPoint());
+        QTest::mouseMove(&window, ((e1 + e2) / 2).toPoint());
+        QTest::mouseMove(&window, e2.toPoint());
+        QTest::mouseRelease(&window, Qt::LeftButton, Qt::ShiftModifier, e2.toPoint());
+        QTRY_VERIFY(qAbs(gen->contactAreas().first().toMap().value("y").toInt() - 150) <= 2);
+        QCOMPARE(gen->contactAreas().size(), 1);
+        QCOMPARE(gen->box(), tip);
+        // Shift-click on a candidate makes it the contact area (0.7), not the tip.
+        auto* chip1 = named(root.get(), "candidate_0");
+        QVERIFY(chip1);
+        const QVariantMap cand0 = gen->tipCandidates().first().toMap();
+        QTest::mouseClick(&window, Qt::LeftButton, Qt::ShiftModifier,
+                          chip1->mapToScene(QPointF(chip1->width() / 2, chip1->height() / 2)).toPoint());
+        QTRY_COMPARE(gen->contactAreas().first().toMap().value("x").toInt(), cand0.value("x").toInt());
+        QCOMPARE(gen->box(), tip);
+        QTRY_COMPARE(gp->property("selectedMark").toInt(), 0);
+        // Esc: "Mark deselected."
+        QTest::keyClick(&window, Qt::Key_Escape);
+        QTRY_COMPARE(gp->property("selectedMark").toInt(), -2);
+        QCOMPARE(gen->status(), QStringLiteral("Mark deselected."));
+        gen->setExtraClass("");
         // Off hides the classes and the areas; on brings them back.
         gen->setContactVibration(false);
         QTRY_VERIFY(!named(root.get(), "contactMarks")->isVisible());
