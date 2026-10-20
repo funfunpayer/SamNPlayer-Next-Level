@@ -73,6 +73,11 @@ class GeneratorController : public QObject {
     Q_PROPERTY(QStringList log READ log NOTIFY logChanged)
     Q_PROPERTY(QString outputPath READ outputPath NOTIFY outputChanged)  // the .samn to open
     Q_PROPERTY(bool scriptExists READ scriptExists NOTIFY outputChanged)  // ask before replacing
+    // After Create (0.7 quality box and post-generate review): {quality
+    // (0-100), qualityPassed, qualityWarnings, trackingReason, lostFrames,
+    // oStartS, oEndS (O-marker set; -1 none), direction, suggestInvert,
+    // ozone}; empty before a run.
+    Q_PROPERTY(QVariantMap review READ review NOTIFY outputChanged)
     Q_PROPERTY(int step READ step NOTIFY stepChanged)  // 1 video, 2 tip, 3 feel, 4 create, 5 review
     // Find tip (0.7 auto_roi): running, and the other proposals to pick from
     // ({x, y, w, h, score} in video pixels, strongest first).
@@ -134,6 +139,7 @@ public:
     QString status() const { return status_; }
     QStringList log() const { return log_; }
     QString outputPath() const { return output_path_; }
+    QVariantMap review() const { return review_; }
     bool scriptExists() const;
     int step() const;
     bool finding() const { return finding_; }
@@ -195,6 +201,7 @@ signals:
 
 private:
     void onEvent(const samn::engine::GenerateEvent& e);
+    void buildReview(const std::filesystem::path& funscript);
     void setStatus(const QString& s);
     void appendLog(const QString& line);
     std::filesystem::path funscriptPath() const;
@@ -227,6 +234,9 @@ private:
     QString status_;
     QStringList log_;
     QString output_path_;
+    QVariantMap review_;
+    // Create without a tip box finds the tip first (0.7 "Finding tip, then creating…").
+    bool create_after_find_ = false, create_overwrite_ = false;
     uint64_t run_id_ = 0;
     QElapsedTimer run_clock_;
     std::unique_ptr<samn::engine::GenerateRunner> runner_;

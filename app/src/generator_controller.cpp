@@ -4,10 +4,14 @@
 #include "frame_cache.h"
 
 #include <QCoreApplication>
+#include <QFile>
 #include <QFileInfo>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QPointer>
 #include <QUrl>
 #include <algorithm>
+#include <utility>
 #include <cmath>
 
 #include <opencv2/imgproc.hpp>
@@ -16,7 +20,10 @@
 #include "samn/engine/generate_queue.h"
 #include "samn/engine/tip_find.h"
 #include "samn/contact_marks.h"
+#include "samn/ozone.h"
+#include "samn/polarity.h"
 #include "samn/samn_file.h"
+#include "samn/script_quality.h"
 #include "samn/vision/frame_reader.h"
 
 namespace samn::ui {
@@ -122,10 +129,14 @@ bool GeneratorController::findTip() {
             if (!self) return;
             self->finding_ = false;
             emit self->findingChanged();
+            const bool thenCreate = std::exchange(self->create_after_find_, false);
             if (forVideo != self->video_path_) return;  // another video was opened meanwhile
             if (!r) {
-                self->setStatus(error == "canceled" ? tr("Find tip: canceled.")
-                                                    : tr("Find tip: %1").arg(QString::fromStdString(error)));
+                if (thenCreate && error != "canceled")
+                    self->setStatus(tr("Find tip failed: %1.").arg(QString::fromStdString(error)));
+                else
+                    self->setStatus(error == "canceled" ? tr("Find tip: canceled.")
+                                                        : tr("Find tip: %1").arg(QString::fromStdString(error)));
                 return;
             }
             QVariantList list;
@@ -137,6 +148,12 @@ bool GeneratorController::findTip() {
             // Below this the "rhythm" is compression noise (a still clip
             // scores about 0.002, a clear stroke above 1).
             const bool weak = r->candidates.empty() || r->candidates.front().score < 0.05;
+            if (thenCreate) {
+                // Create goes on only with a real find; a weak one waits for the user.
+                if (weak) self->setStatus(tr("Find tip failed: only weak motion found — check the box, or drag it by hand, then Create."));
+                else self->create(self->create_overwrite_);
+                return;
+            }
             self->setStatus(weak ? tr("Only weak motion found: check the box, or drag it by hand.")
                                  : tr("Tip found. The dashed boxes are other candidates; click one to use it."));
         }, Qt::QueuedConnection);
@@ -276,6 +293,7 @@ void GeneratorController::finishQueue() {
 }
 
 void GeneratorController::cancelFind() {
+    create_after_find_ = false;
     if (find_cancel_) *find_cancel_ = true;
 }
 
@@ -319,6 +337,7 @@ bool GeneratorController::openVideo(const QString& pathOrUrl) {
     tip_candidates_.clear();
     emit tipCandidatesChanged();
     output_path_.clear();
+    review_.clear();
     log_.clear();
     percent_ = 0;
     progress_text_.clear();
@@ -506,9 +525,17 @@ int GeneratorController::step() const {
 
 bool GeneratorController::create(bool overwrite) {
     if (running_ || queue_running_) return false;
-    if (!hasVideo() || !hasBox()) {
-        setStatus(hasVideo() ? tr("Drag a tip box on the frame first.") : tr("Choose a video first."));
+    if (!hasVideo()) {
+        setStatus(tr("Choose a video first."));
         return false;
+    }
+    if (!hasBox()) {
+        // 0.7: with no tip, Create finds the tip first, then creates.
+        if (!finding_ && !findTip()) return false;
+        create_after_find_ = true;
+        create_overwrite_ = overwrite;
+        setStatus(tr("Finding tip, then creating…"));
+        return true;
     }
     engine::GenerateRequest req;
     req.video = std::filesystem::path(video_path_.toStdU16String());
@@ -535,6 +562,7 @@ bool GeneratorController::create(bool overwrite) {
     percent_ = 0;
     progress_text_ = QStringLiteral("0 %");
     output_path_.clear();
+    review_.clear();
     log_.clear();
     run_clock_.start();
     emit runChanged();
@@ -547,6 +575,11 @@ bool GeneratorController::create(bool overwrite) {
 }
 
 void GeneratorController::cancel() {
+    if (finding_) {
+        cancelFind();
+        setStatus(tr("Tip find canceled."));
+        return;
+    }
     if (queue_running_ && queue_cancel_) {
         *queue_cancel_ = true;
         setStatus(tr("Cancel requested…"));
@@ -589,7 +622,13 @@ void GeneratorController::onEvent(const engine::GenerateEvent& e) {
             percent_ = 100;
             progress_text_ = QStringLiteral("100 %");
             appendLog(tr("Wrote %1 (%2 actions)").arg(msg).arg(e.actions));
-            setStatus(tr("Done — the script is open below for editing."));
+            buildReview(f);
+            {
+                QString done = tr("Done — Emotion Script ready in Play.");
+                if (review_.value("oStartS").toInt() >= 0)
+                    done += tr(" — O-marker set: %1s–%2s").arg(review_.value("oStartS").toInt()).arg(review_.value("oEndS").toInt());
+                setStatus(done + tr(". It is open below for editing."));
+            }
             break;
         }
         case engine::GenerateEventKind::kCanceled:
@@ -607,6 +646,52 @@ void GeneratorController::onEvent(const engine::GenerateEvent& e) {
     emit outputChanged();
     emit stepChanged();
     if (e.kind == engine::GenerateEventKind::kDone) emit created(output_path_);
+}
+
+// 0.7's quality box (Quality Doctor on the actions, the tracker's loss) and
+// postgen.js review (direction, O-zone) for the script just written.
+void GeneratorController::buildReview(const std::filesystem::path& funscript) {
+    review_.clear();
+    std::vector<samn::Action> actions;
+    QString reason;
+    int lost = 0;
+    try {
+        actions = samn::LoadFunscript(funscript).actions;
+    } catch (const std::exception&) {
+        return;
+    }
+    // The engine's tracking record (metadata.native_pipeline).
+    QFile f(QString::fromStdU16String(funscript.u16string()));
+    if (f.open(QIODevice::ReadOnly)) {
+        const QJsonObject pipe = QJsonDocument::fromJson(f.readAll()).object().value("metadata").toObject().value("native_pipeline").toObject();
+        reason = pipe.value("reason").toString();
+        lost = pipe.value("lost").toInt();
+    }
+    const auto q = samn::EvaluateScriptQuality(actions);
+    QStringList warnings;
+    for (const auto& w : q.warnings) warnings << QString::fromStdString(w);
+    review_["quality"] = int(std::lround(q.score * 100));
+    review_["qualityPassed"] = q.passed;
+    review_["qualityWarnings"] = warnings;
+    review_["trackingReason"] = reason;
+    review_["lostFrames"] = lost;
+    int o_start = -1, o_end = -1;
+    try {
+        const auto markers = samn::LoadOMarkers(funscript);
+        if (!markers.empty()) {
+            o_start = int(std::lround(markers.front().start_ms / 1000.0));
+            o_end = int(std::lround(markers.front().end_ms / 1000.0));
+        }
+    } catch (const std::exception&) {
+    }
+    review_["oStartS"] = o_start;
+    review_["oEndS"] = o_end;
+    const auto pol = samn::SuggestPolarity(actions);
+    review_["direction"] = QString::fromStdString(pol.reason);
+    review_["suggestInvert"] = pol.suggest_invert;
+    const auto oz = samn::SuggestOZone(actions);
+    review_["ozone"] = oz.ok ? tr("O-zone suggested: %1s–%2s").arg(std::lround(oz.start_ms / 1000.0)).arg(std::lround(oz.end_ms / 1000.0))
+                             : tr("O-zone: %1").arg(QString::fromStdString(oz.reason));
 }
 
 void GeneratorController::setStatus(const QString& s) {

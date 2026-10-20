@@ -83,6 +83,9 @@ private slots:
         QVERIFY(gen);
         QVERIFY(!named(root.get(), "createButton")->isEnabled());
         QVERIFY(!named(root.get(), "usePlayerVideo")->isVisible());
+        // 0.7's lede and step prompt, verbatim.
+        QVERIFY(named(root.get(), "createLede")->isVisible());
+        QVERIFY(named(root.get(), "stepPrompt")->property("text").toString().startsWith("Start here: choose a video."));
 
         // "Use Player video" appears with the Player's video and opens it.
         page->setProperty("playerVideoUrl", QUrl::fromLocalFile(video));
@@ -180,6 +183,9 @@ private slots:
         QTest::mouseRelease(&window, Qt::LeftButton, {}, b.toPoint());
         QTRY_VERIFY(gen->hasBox());
         QVERIFY(named(root.get(), "createButton")->isEnabled());
+        // The coach under the preview (0.7 roi_help.js) and the next step.
+        QVERIFY(named(root.get(), "previewCoach")->property("text").toString().contains("Tip box = CSRT stroke tracker."));
+        QVERIFY(!named(root.get(), "createLede")->isVisible());
 
         // Feel: the style combo and a toggle reach the controller.
         auto* combo = named(root.get(), "styleCombo");
@@ -248,6 +254,12 @@ private slots:
         QTRY_VERIFY_WITH_TIMEOUT(edit->property("hasScript").toBool(), 60000);
         QVERIFY(root->property("reviewed").toString().isEmpty());
         QCOMPARE(named(root.get(), "progressText")->property("text").toString(), QStringLiteral("100 %"));
+        // 0.7's quality box with the post-generate review.
+        QTRY_VERIFY(named(root.get(), "qualityBox")->isVisible());
+        QVERIFY(named(root.get(), "qualityLine")->property("text").toString().startsWith("Signal Quality (Quality Doctor): "));
+        QVERIFY(named(root.get(), "reviewLine")->property("text").toString().startsWith("Direction: "));
+        QVERIFY(named(root.get(), "stepPrompt")->property("text").toString().startsWith("Step 5: Improve, then Play"));
+        if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT_DONE"); !shot.isEmpty()) window.grabWindow().save(QString::fromLocal8Bit(shot));
         // The frame strip under the curves loads its frames off the UI thread.
         QVERIFY(named(root.get(), "frameStrip")->isVisible());
         QTRY_VERIFY(named(root.get(), "frameThumb"));
@@ -366,13 +378,19 @@ private slots:
         QVERIFY(ok.toBool());
         QVERIFY(gen->hasVideo());
         // The tip search, then the run, without a click.
-        QTRY_VERIFY_WITH_TIMEOUT(!gen->finding() && !page->property("autoCreatePending").toBool(), 30000);
-        QVERIFY(gen->hasBox());
+        QTRY_VERIFY_WITH_TIMEOUT(gen->hasBox() && !gen->finding(), 30000);
         QTRY_VERIFY_WITH_TIMEOUT(QFile::exists(out.filePath("auto.funscript")) && !gen->running(), 60000);
+        // 0.7's done line and review (quality, direction, O-zone).
+        QVERIFY2(gen->status().startsWith("Done — Emotion Script ready in Play."), qPrintable(gen->status()));
+        const QVariantMap review = gen->review();
+        QVERIFY(review.contains("quality"));
+        QVERIFY(review.value("quality").toInt() >= 0 && review.value("quality").toInt() <= 100);
+        QVERIFY(!review.value("direction").toString().isEmpty());
+        QVERIFY(review.value("ozone").toString().startsWith("O-zone"));
         // Without `start` it only opens the video.
         QVERIFY(QMetaObject::invokeMethod(page, "createFor", Q_RETURN_ARG(QVariant, ok),
                                           Q_ARG(QVariant, QUrl::fromLocalFile(video)), Q_ARG(QVariant, false)));
-        QVERIFY(!page->property("autoCreatePending").toBool());
+        QVERIFY(gen->review().isEmpty());  // a new video, no result yet
         QTest::qWait(200);
         QVERIFY(!gen->running() && !gen->finding());
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
