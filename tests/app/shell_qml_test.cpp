@@ -328,8 +328,23 @@ private slots:
             QTest::keyClick(s.window, Qt::Key_4, Qt::ControlModifier);
             QTest::qWait(150);
             QCOMPARE(s.mode(), 0);
-            // While Settings is open the Player's keys do not act behind it.
+            // The Player's keys stay with the Player: L in the Generator
+            // does not switch the Player's loop (and an "A" or "T" there
+            // never clashes with the label editor's keys).
             QQuickItem* player = s.one("PlayerPage");
+            QObject* ctrl = player->property("controller").value<QObject*>();
+            QVERIFY(ctrl);
+            const bool loop = ctrl->property("loopEnabled").toBool();
+            QTest::keyClick(s.window, Qt::Key_2, Qt::ControlModifier);
+            QTRY_COMPARE_WITH_TIMEOUT(s.mode(), 1, kWait);
+            QTest::keyClick(s.window, Qt::Key_L);
+            QTest::qWait(100);
+            QCOMPARE(ctrl->property("loopEnabled").toBool(), loop);
+            QTest::keyClick(s.window, Qt::Key_1, Qt::ControlModifier);
+            QTRY_COMPARE_WITH_TIMEOUT(s.mode(), 0, kWait);
+            QTest::keyClick(s.window, Qt::Key_L);
+            QTRY_COMPARE(ctrl->property("loopEnabled").toBool(), !loop);  // in the Player it does
+            // While Settings is open the Player's keys do not act behind it.
             QQuickItem* settings = s.one("SettingsPage");
             QVERIFY(!player->property("overlayOpen").toBool());
             settings->setProperty("open", true);

@@ -741,6 +741,22 @@ bool PlayerController::addOMarkerFromSelection(const QString& kind) {
     return commitMarks(marks_.o_markers, std::move(next), samn::SaveScriptOMarkers);
 }
 
+bool PlayerController::addOMarkerAt(qint64 videoMs) {
+    if (scriptPath_.isEmpty()) {
+        setError(tr("Open a script first."));
+        return false;
+    }
+    samn::OMarker m;
+    m.start_ms = std::max<int64_t>(0, samn::script_time(videoMs, offsetMs_));
+    m.end_ms = m.start_ms + 4000;
+    m.kind = samn::OMarkerPrimary;
+    m.intensity = 1.0;
+    auto next = marks_.o_markers;
+    next.push_back(m);
+    std::stable_sort(next.begin(), next.end(), [](const auto& a, const auto& b) { return a.start_ms < b.start_ms; });
+    return commitMarks(marks_.o_markers, std::move(next), samn::SaveScriptOMarkers);
+}
+
 bool PlayerController::removeOMarker(int index) {
     if (index < 0 || index >= int(marks_.o_markers.size())) return false;
     auto next = marks_.o_markers;

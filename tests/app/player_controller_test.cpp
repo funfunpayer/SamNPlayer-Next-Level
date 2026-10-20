@@ -322,6 +322,11 @@ private slots:
             QVERIFY(c.addOMarkerFromSelection("secondary"));
             QCOMPARE(c.oMarkers().size(), 2);
             QCOMPARE(c.oMarkers()[1].toMap()["label"].toString(), QString("Secondary: 5.0s - 6.0s · 25%"));
+            // Key O: 4 s primary from the playhead.
+            QVERIFY(c.addOMarkerAt(7000));
+            QCOMPARE(c.oMarkers().size(), 3);
+            QCOMPARE(c.oMarkers()[2].toMap()["label"].toString(), QString("Primary: 7.0s - 11.0s"));
+            QVERIFY(c.removeOMarker(2));
             QVERIFY(marks.count() >= 7);
         }
         {

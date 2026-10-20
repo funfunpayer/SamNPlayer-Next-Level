@@ -223,6 +223,8 @@ public:
     // "secondary" (oMarkerIntensity).
     Q_INVOKABLE bool addOMarkerFromSelection(const QString& kind);
     Q_INVOKABLE bool removeOMarker(int index);
+    // 0.7 key O: a 4 s primary O-marker from the playhead (video time).
+    Q_INVOKABLE bool addOMarkerAt(qint64 videoMs);
     // Link a video to the open script (0.7 "Select a video file…").
     Q_INVOKABLE bool attachVideo(const QString& pathOrUrl);
     // 0.7 ExportScriptHeatmapPNG: "<script>.heatmap.png" beside the script,
