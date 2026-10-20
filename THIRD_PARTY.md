@@ -16,4 +16,5 @@ Every piece of code copied or adapted from another project is listed here with i
 | OpenCV 4 (core, imgproc, videoio, video, tracking, dnn) | `vision/` | Apache-2.0 |
 | FFmpeg (through Qt Multimedia and OpenCV videoio) | decoding | LGPL-2.1+ (GPL builds where noted) |
 | nlohmann/json 3.11.3 | core | MIT |
+| ONNX Runtime 1.22.0 (official NuGet build, `Microsoft.ML.OnnxRuntime`; licence and notices ship beside it in the package) | `vision/` detectors (D-155 step 4) | MIT |
 | pybind11 | Python bindings of the core | BSD-3-Clause |

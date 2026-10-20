@@ -92,3 +92,12 @@ foreach(_t IN LISTS _samn_app_tests)
     target_sources(${_t} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/unbuffered_stdout.cpp)
   endif()
 endforeach()
+
+# ONNX Runtime beside every test executable on Windows (no rpath there).
+get_property(_app_tests DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
+foreach(t ${_app_tests})
+  get_target_property(_type ${t} TYPE)
+  if(_type STREQUAL "EXECUTABLE")
+    samn_copy_runtime_dlls(${t})
+  endif()
+endforeach()
