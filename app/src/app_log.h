@@ -22,6 +22,9 @@ public:
     static void installMessageHandler();
 
     void add(samn::LogSeverity level, const QString& text);
+    // A failure the user must see (0.7 uiError): logged as an error and,
+    // on the GUI thread, errorReported() for the toast (Notices).
+    void reportError(const QString& text);
     samn::LogBuffer& buffer() { return buffer_; }
     // Appends every kept entry to path (logs/samnplayer2.log); a file over
     // 2 MB is moved to .1 first. An empty path stops writing.
@@ -30,6 +33,7 @@ public:
 
 signals:
     void changed();
+    void errorReported(const QString& text);
 
 private:
     AppLog() = default;

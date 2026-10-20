@@ -265,6 +265,59 @@ ApplicationWindow {
     }
 
     // Settings over the current mode (D-146); Esc closes it.
+    // Error toasts (0.7 notify.js): bottom right, above everything but the
+    // settings, a click dismisses, Open Log shows the Log tab.
+    Column {
+        id: toastHost
+        objectName: "toastHost"
+        anchors.right: parent.right; anchors.rightMargin: 20
+        anchors.bottom: parent.bottom; anchors.bottomMargin: 24
+        width: Math.min(parent.width - 40, 380)
+        spacing: 8
+        z: 20
+        Repeater {
+            model: Notices.toasts
+            delegate: Rectangle {
+                id: toast
+                required property var modelData
+                objectName: "toast"
+                Accessible.role: Accessible.AlertMessage
+                Accessible.name: modelData.text
+                width: toastHost.width
+                height: toastRow.implicitHeight + 20
+                radius: Theme.radiusSmall
+                color: Theme.bgBottom
+                border.color: Theme.danger
+                opacity: 0
+                Component.onCompleted: opacity = 1
+                Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
+                MouseArea { anchors.fill: parent; onClicked: Notices.dismiss(toast.modelData.id) }
+                RowLayout {
+                    id: toastRow
+                    anchors.fill: parent; anchors.margins: 10; anchors.leftMargin: 14
+                    spacing: 10
+                    Icon { name: "warning"; width: 16; height: 16; color: Theme.danger; Layout.alignment: Qt.AlignTop }
+                    Text {
+                        objectName: "toastText"
+                        Layout.fillWidth: true
+                        textFormat: Text.PlainText; wrapMode: Text.Wrap
+                        text: toast.modelData.text
+                        color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 13
+                    }
+                    FlowButton {
+                        objectName: "toastOpenLog"
+                        text: qsTr("Open Log")
+                        onClicked: {
+                            settingsPage.tab = 2
+                            settingsPage.open = true
+                            Notices.dismiss(toast.modelData.id)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     SettingsPage {
         id: settingsPage
         anchors.fill: parent

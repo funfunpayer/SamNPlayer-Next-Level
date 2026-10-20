@@ -14,6 +14,7 @@
 #include <cmath>
 #include <filesystem>
 
+#include "app_log.h"
 #include "curve_item.h"
 #include "device_controller.h"
 #include "samn/heatmap_image.h"
@@ -310,7 +311,7 @@ void PlayerController::removeScriptFolder(const QString& path) {
     try {
         settings().set(kScriptFoldersKey, u8(folders.join('\n')));
     } catch (const std::exception& e) {
-        setError(tr("Could not save the script folders: %1").arg(q(e.what())));
+        setFailure(tr("Could not save the script folders: %1").arg(q(e.what())));
         return;
     }
     emit scriptFoldersChanged();
@@ -332,7 +333,7 @@ void PlayerController::setAutoCreate(bool on) {
     try {
         settings().set(kAutoCreateKey, on);
     } catch (const std::exception& e) {
-        setError(tr("Could not save the setting: %1").arg(q(e.what())));
+        setFailure(tr("Could not save the setting: %1").arg(q(e.what())));
         return;
     }
     emit autoCreateChanged();
@@ -346,7 +347,7 @@ void PlayerController::addScriptFolder(const QString& pathOrUrl) {
         try {
             settings().set(kScriptFoldersKey, u8(folders.join('\n')));
         } catch (const std::exception& e) {
-            setError(tr("Could not save the script folders: %1").arg(q(e.what())));
+            setFailure(tr("Could not save the script folders: %1").arg(q(e.what())));
             return;
         }
         emit scriptFoldersChanged();
@@ -448,7 +449,7 @@ bool PlayerController::bakeOffset() {
             samn::SaveDocument(path, d);
         }
     } catch (const std::exception& e) {
-        setError(tr("Offset not baked: %1").arg(q(e.what())));
+        setFailure(tr("Offset not baked: %1").arg(q(e.what())));
         return false;
     }
     setOffsetMs(0);
@@ -476,7 +477,7 @@ bool PlayerController::openScript(const QString& pathIn, const QString& videoIn)
         doc = samn::IsSamnPath(u8(path)) ? samn::LoadDocument(std::filesystem::u8path(u8(path)))
                                          : samn::LoadFunscriptFile(std::filesystem::u8path(u8(path)));
     } catch (const std::exception& e) {
-        setError(tr("Could not open %1: %2").arg(QFileInfo(path).fileName(), q(e.what())));
+        setFailure(tr("Could not open %1: %2").arg(QFileInfo(path).fileName(), q(e.what())));
         return false;
     }
     // 0.7 "Honor inverted flag" (playback.honor_inverted, on by default): off
@@ -497,7 +498,7 @@ bool PlayerController::openScript(const QString& pathIn, const QString& videoIn)
         }
     }
     if (doc.general.empty()) {
-        setError(tr("Could not open %1: the script has no points.").arg(QFileInfo(path).fileName()));
+        setFailure(tr("Could not open %1: the script has no points.").arg(QFileInfo(path).fileName()));
         return false;
     }
     // The script's own recipe (profile, sync, contact vibration, feel,
@@ -586,7 +587,7 @@ void PlayerController::remap(bool fresh) {
         plan = samn::PlanPlayback(scriptMap_, profile_, mapping_.choices(recipeHasContact_), preset);
         frames = samn::PlaybackFrames(stroke_, plan);
     } catch (const std::exception& e) {
-        setError(tr("Could not map the script: %1").arg(q(e.what())));
+        setFailure(tr("Could not map the script: %1").arg(q(e.what())));
         return;
     }
     // The vibration and suction lanes are what the device gets (0.7 sent
@@ -624,7 +625,7 @@ void PlayerController::setActiveStrength(const QString& nameIn) {
         doc.active_strength = name;
         samn::SaveDocument(file, doc);
     } catch (const std::exception& e) {
-        setError(tr("Could not save the strength: %1").arg(q(e.what())));
+        setFailure(tr("Could not save the strength: %1").arg(q(e.what())));
         emit mappedChanged();  // the choice shows the one still in use
         return;
     }
@@ -713,7 +714,7 @@ bool PlayerController::commitMarks(std::vector<T>& list, std::vector<T> next, Sa
     try {
         save(std::filesystem::u8path(u8(scriptPath_)), next);
     } catch (const std::exception& e) {
-        setError(tr("Could not save: %1").arg(q(e.what())));
+        setFailure(tr("Could not save: %1").arg(q(e.what())));
         return false;  // the old list stays (0.7: rollback)
     }
     list = std::move(next);
@@ -880,7 +881,7 @@ void PlayerController::setBpmGrid(bool on) {
 bool PlayerController::attachVideo(const QString& pathOrUrl) {
     const QString path = toLocalPath(pathOrUrl);
     if (!QFileInfo(path).isFile()) {
-        setError(tr("Video not found: %1").arg(path));
+        setFailure(tr("Video not found: %1").arg(path));
         return false;
     }
     if (scriptPath_.isEmpty()) return openPath(path);
@@ -905,13 +906,13 @@ bool PlayerController::saveSnapshot(QObject* videoSink, const QString& pathOrUrl
     auto* sink = qobject_cast<QVideoSink*>(videoSink);
     const QImage img = sink ? sink->videoFrame().toImage() : QImage();
     if (img.isNull()) {
-        setError(tr("Snapshot failed: no video frame yet."));
+        setFailure(tr("Snapshot failed: no video frame yet."));
         return false;
     }
     QString path = toLocalPath(pathOrUrl);
     if (!path.endsWith(QLatin1String(".png"), Qt::CaseInsensitive)) path += QStringLiteral(".png");
     if (!img.save(path, "PNG")) {
-        setError(tr("Snapshot failed: cannot write %1").arg(path));
+        setFailure(tr("Snapshot failed: cannot write %1").arg(path));
         return false;
     }
     setError({});
@@ -990,6 +991,11 @@ void PlayerController::setError(const QString& e) {
     emit lastErrorChanged();
 }
 
+void PlayerController::setFailure(const QString& e) {
+    setError(e);
+    AppLog::instance().reportError(e);
+}
+
 void PlayerController::setOffsetMs(int ms) {
     ms = static_cast<int>(samn::clamp_offset(ms));
     if (ms == offsetMs_) return;
@@ -1004,7 +1010,7 @@ void PlayerController::setOffsetMs(int ms) {
         try {
             settings().set(samn::offset_key(u8(scriptPath_)), offsetMs_);
         } catch (const std::exception& e) {
-            setError(tr("Could not save the offset: %1").arg(q(e.what())));
+            setFailure(tr("Could not save the offset: %1").arg(q(e.what())));
         }
     }
     emit offsetMsChanged();
@@ -1082,7 +1088,7 @@ void PlayerController::setMarker(double startMs, double endMs) {
         try {
             samn::SaveMarker(std::filesystem::u8path(u8(scriptPath_)), marker_);
         } catch (const std::exception& e) {
-            setError(tr("Could not save the marked range: %1").arg(q(e.what())));
+            setFailure(tr("Could not save the marked range: %1").arg(q(e.what())));
         }
     }
     emit markerChanged();
@@ -1200,7 +1206,7 @@ void PlayerController::reportMediaError(int error, const QString& detail) {
     QString msg = tr("Video cannot be played (%1)").arg(kind);
     if (!videoName().isEmpty()) msg += QStringLiteral(": ") + videoName();
     if (!detail.isEmpty()) msg += QStringLiteral(" ") + QChar(0x2014) + QStringLiteral(" ") + detail;
-    setError(msg);
+    setFailure(msg);
     mediaError_ = true;
 }
 
@@ -1332,12 +1338,12 @@ QString PlayerController::exportHeatmapPng() {
         const QFileInfo fi(scriptPath_);
         const QString path = fi.dir().filePath(fi.completeBaseName() + QStringLiteral(".heatmap.png"));
         if (!out.save(path, "PNG")) {
-            setError(tr("Heatmap: could not write %1").arg(path));
+            setFailure(tr("Heatmap: could not write %1").arg(path));
             return {};
         }
         return path;
     } catch (const std::exception& e) {
-        setError(tr("Heatmap: %1").arg(q(e.what())));
+        setFailure(tr("Heatmap: %1").arg(q(e.what())));
         return {};
     }
 }
@@ -1359,7 +1365,7 @@ QString PlayerController::saveProject(qint64 videoMs) {
     try {
         samn::SaveProject(path, p);
     } catch (const std::exception& e) {
-        setError(tr("Project: %1").arg(q(e.what())));
+        setFailure(tr("Project: %1").arg(q(e.what())));
         return {};
     }
     return q(path.u8string());
@@ -1370,7 +1376,7 @@ qint64 PlayerController::loadProject(const QString& pathOrUrl) {
     try {
         p = samn::LoadProject(std::filesystem::u8path(u8(toLocalPath(pathOrUrl))));
     } catch (const std::exception& e) {
-        setError(tr("Load project: %1").arg(q(e.what())));
+        setFailure(tr("Load project: %1").arg(q(e.what())));
         return -1;
     }
     if (p.script_path.empty()) {

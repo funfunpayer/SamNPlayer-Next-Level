@@ -47,6 +47,12 @@ void AppLog::add(samn::LogSeverity level, const QString& text) {
     notify();
 }
 
+void AppLog::reportError(const QString& text) {
+    if (text.trimmed().isEmpty()) return;
+    add(samn::LogSeverity::kError, text);
+    QMetaObject::invokeMethod(this, [this, text] { emit errorReported(text); }, Qt::QueuedConnection);
+}
+
 void AppLog::enableFile(const std::filesystem::path& path) {
     std::lock_guard<std::mutex> l(file_mu_);
     file_ = path;

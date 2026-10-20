@@ -20,6 +20,7 @@
 #include <memory>
 
 #include "frame_provider.h"
+#include "app_log.h"
 #include "icon_provider.h"
 #include "player_controller.h"
 #include "plugins.h"
@@ -434,6 +435,37 @@ private slots:
     // 0.7: the pages of the other modes are hidden while one mode shows.
     // D-146: the gear opens Settings over the current mode (0.7 Tools →
     // Settings / Log / About); tabs switch, Esc and × close, the mode stays.
+    // Error toasts (0.7 notify.js): a failure shows at the bottom right;
+    // Open Log opens Settings on the Log tab.
+    void anErrorToastOpensTheLog() {
+        {
+            Shell s;
+            loadShell(s, 0);
+            QVERIFY(s.window);
+            auto byName = [&](const char* name) -> QQuickItem* {
+                for (QQuickItem* i : descendants(s.root()))
+                    if (i->objectName() == QLatin1String(name) && i->isVisible()) return i;
+                return nullptr;
+            };
+            QVERIFY(!byName("toast"));
+            samn::ui::AppLog::instance().reportError("Could not save: the disk is full");
+            QTRY_VERIFY_WITH_TIMEOUT(byName("toast"), kWait);
+            QCOMPARE(byName("toastText")->property("text").toString(), QString("Could not save: the disk is full"));
+            if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT_TOAST"); !shot.isEmpty()) {
+                QTest::qWait(300);
+                s.window->grabWindow().save(QString::fromLocal8Bit(shot));
+            }
+            QQuickItem* open = byName("toastOpenLog");
+            QVERIFY(open);
+            QTest::mouseClick(s.window, Qt::LeftButton, {}, open->mapToScene(QPointF(open->width() / 2, open->height() / 2)).toPoint());
+            QQuickItem* page = s.one("SettingsPage");
+            QTRY_VERIFY_WITH_TIMEOUT(page->isVisible(), kWait);
+            QCOMPARE(page->property("tab").toInt(), 2);
+            QTRY_VERIFY_WITH_TIMEOUT(!byName("toast"), kWait);
+        }
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
+
     void gearOpensSettingsOverTheMode() {
         {
             Shell s;
