@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 19 Oct 2026 (night), Claude, branch `claude/samn2-phase-rules`.
+**Last update:** 20 Oct 2026, Claude, branch `claude/samn2-phase-feel`.
 
 ## Rules
 
@@ -85,18 +85,17 @@
 - **Look and shell, 19 Oct** (#76–#79): the painted wordmark (D-151); the Training stage Rings · Flow figure · Video (D-152); the support link and start card to the GitHub page (D-153); the README as a product page with screenshots (`docs/media/`).
 - **Generator centre = Player** (#80, #83, D-154): the shared `VideoTransport.qml`, the Generator plays its video, the collapsible left column (`GeneratorProjectPanel.qml`: queue, recent videos, generated and edited scripts).
 - **Optimize for** (#81, D-156): `core/include/samn/improve.h` (trim, fill gaps, heal tracking gaps), the Editor's *Optimize for* any device / Sam Neo 2, *Optimize after Create*.
-- **Phases** (D-157, #85 and this branch): the phase lane in the label editor; rule-based suggestions (`core/include/samn/phase_rules.h`, `vision/include/samn/vision/picture_signals.h`, *Suggest phases*).
+- **Phases** (D-157, #85, #86 and `claude/samn2-phase-feel`): playback shaping per phase (`.samn` `phase_ranges`, `ApplyPhaseShape` in `PlaybackFrames`, Editor *Phases shape playback*); the phase lane in the label editor; rule-based suggestions (`core/include/samn/phase_rules.h`, `vision/include/samn/vision/picture_signals.h`, *Suggest phases*).
 - **AI Train as a plugin mode** (#82 plan, #84, D-155, `docs/P4_AI_TRAIN.md`): the `Plugins` singleton and Settings switch, the fourth tab, the label editor (`label_track.h`, `LabelController`, `LabelEditor.qml`): classes with several objects, the contact point, *not in the picture* (X), *there but covered* (H), exclusion zones ("not this", `ExcludeZonesAt`), lanes, undo, export as images / YOLO labels / classes.txt.
 
 **Parity (19 Oct):** about 53 % of 0.7/0.8 by the `PARITY.md` checklist (227 done, 117 partly, 19 dropped on purpose, 313 open of 676); `python3 ci/parity_status.py` recounts.
 
 ## Next (in order; the work list is `LESSONS.md` § Gaps, `TEST_PARITY.md` and `P3_GENERATOR.md`)
 
-0. **Now (AI Train, D-155 / D-157):** merge #85 (phase lane) and the
-   phase-rules PR on green CI; then the phases in the Editor's scenes (feel
-   per phase, hold at 0 over intro and empty, build-up and fade) and the
-   Training's video stage (skip intro and empty, pause or cool down at the
-   climax); then D-155 step 3 (tracking between keyframes, *Next uncertain*).
+0. **Now (AI Train, D-155 / D-157):** merge the phase-feel PR on green CI;
+   then the Training's video stage (skip intro and empty, pause or cool down
+   at the climax); then D-155 step 3 (tracking between keyframes, *Next
+   uncertain*).
 
 1. **Windows CI:** some app tests failed now and then with no output (stdout fully buffered when piped). Every app test now writes unbuffered (`tests/app/unbuffered_stdout.cpp`); find the cause on the next red run.
 2. **P3.3 done** (19 Oct): the Generator remembers its choices (0.7 `generator.*` keys), contact sensitivity and curve; the Player shows the contact marks on the video (#67). Left for later: the feel probe, the body map, the partner path.

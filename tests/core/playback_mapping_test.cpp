@@ -550,3 +550,51 @@ TEST_CASE("Effects presets: Default has the 0.7 FX_DEFAULTS; names are trimmed, 
     CHECK(CleanPresetName(std::string(50, 'x')) == std::string(40, 'x'));
     CHECK(CleanPresetName("\xC3\xBC" + std::string(45, 'a')).size() == 2 + 39);  // code points, not bytes
 }
+
+TEST_CASE("Phases shape playback (D-157): rest, build-up, fade") {
+    std::vector<Frame> frames;
+    for (int64_t t = 0; t < 40000; t += 500) frames.push_back({t, 0.5, 0.5});
+    const std::vector<PhaseRange> phases{{0, 10000, "intro"},
+                                         {20000, 30000, "climax"},
+                                         {30000, 40000, "cool-down"},
+                                         {10000, 20000, "oral"}};  // a feel: not shaped here
+    ApplyPhaseShape(frames, phases);
+    const auto at = [&](int64_t t) {
+        for (const auto& f : frames)
+            if (f.at == t) return f;
+        return Frame{};
+    };
+    CHECK(at(5000).vibration == doctest::Approx(0.0));  // intro: at rest
+    CHECK(at(5000).suction == doctest::Approx(0.0));
+    CHECK(at(9500).vibration == doctest::Approx(0.25));  // the edge fades back in
+    CHECK(at(15000).vibration == doctest::Approx(0.5));  // untouched
+    CHECK(at(20000).vibration == doctest::Approx(0.5));  // the climax starts as it is
+    CHECK(at(29500).vibration > 0.65);                   // and builds up
+    CHECK(at(29500).vibration <= 1.0);
+    CHECK(at(30000).vibration == doctest::Approx(0.5));  // the cool-down fades out
+    CHECK(at(35000).vibration == doctest::Approx(0.25));
+    CHECK(at(39500).vibration < 0.05);
+    // A pause in the climax stays a pause; no phases change nothing.
+    std::vector<Frame> still{{25000, 0.0, 0.0}};
+    ApplyPhaseShape(still, phases);
+    CHECK(still[0].vibration == 0.0);
+    std::vector<Frame> same{{1000, 0.4, 0.3}};
+    ApplyPhaseShape(same, {});
+    CHECK(same[0].vibration == 0.4);
+    CHECK(NormalizePhaseRanges(phases).size() == 3);
+}
+
+TEST_CASE("Phases from the recipe reach the device frames") {
+    Document d;
+    d.general = {{0, 0}, {500, 100}, {1000, 0}, {1500, 100}, {2000, 0}, {2500, 100}, {3000, 0}};
+    d.recipe.phase_ranges = {PhaseRange{0, 3000, "empty"}};
+    const MapOptions base = MapOptionsFromScript(d.ToFunscript());
+    REQUIRE(base.phase_ranges.size() == 1);
+    const auto frames = PlaybackFrames(d.general, PlanPlayback(base, d.profile, PlaybackChoices{}, nullptr));
+    REQUIRE_FALSE(frames.empty());
+    for (const auto& f : frames)
+        if (f.at >= 1000 && f.at <= 2000) {
+            CHECK(f.vibration == doctest::Approx(0.0));
+            CHECK(f.suction == doctest::Approx(0.0));
+        }
+}

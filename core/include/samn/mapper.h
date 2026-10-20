@@ -48,6 +48,15 @@ struct SceneFeelRange {
     std::string feel;
 };
 
+// A phase of the clip for playback (D-157): intro / empty hold the device
+// at rest, climax builds up, cool-down fades out. start inclusive, end
+// exclusive. Other names (the feels) are left to scene_ranges.
+struct PhaseRange {
+    int64_t start_ms = 0;
+    int64_t end_ms = 0;
+    std::string phase;
+};
+
 inline const char* const ContactCurveLinear = "linear";
 inline const char* const ContactCurveSoft = "soft";
 inline const char* const ContactCurvePeak = "peak";
@@ -80,6 +89,7 @@ struct MapOptions {
     std::vector<TrackingGap> tracking_gaps;
     std::string scene_feel;
     std::vector<SceneFeelRange> scene_ranges;
+    std::vector<PhaseRange> phase_ranges;
     bool vibration_follows_suction = false;
     double balance = 0.0;
     bool use_explicit_axes = false;
@@ -106,6 +116,16 @@ std::optional<double> SceneSuction(const std::string& feel, double depth, double
 double SampleAxisPos(const std::vector<Action>& actions, int64_t t);
 // pos -> 100-pos (clamped) when inverted.
 std::vector<Action> PlaybackActions(const std::vector<Action>& actions, bool inverted = false);
+// The phases that shape playback (intro, empty, climax, cool-down), sorted,
+// without empty or unknown ones.
+std::vector<PhaseRange> NormalizePhaseRanges(const std::vector<PhaseRange>& rs);
+// Shapes mapped frames by phase (D-157), after the mapping: intro and empty
+// fade to 0 and back over kPhaseFadeMs at their edges; the climax lifts the
+// output towards full as it goes on; the cool-down fades out to 0. Frames
+// outside a phase are not touched.
+constexpr int64_t kPhaseFadeMs = 1000;
+constexpr double kClimaxLift = 0.35;
+void ApplyPhaseShape(std::vector<Frame>& frames, const std::vector<PhaseRange>& phases);
 // Returns nullopt (Go nil) for < 2 actions.
 std::optional<std::vector<Frame>> ToIntensityCurve(const std::vector<Action>& actions,
                                                    const MapOptions& opts, bool inverted = false);

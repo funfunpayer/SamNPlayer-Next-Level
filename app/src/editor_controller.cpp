@@ -154,6 +154,7 @@ bool EditorController::open(const QString& pathIn) {
     samn::EditSession::Axes axes;
     std::vector<samn::Chapter> chapters;
     std::vector<samn::SceneFeelRange> scene_ranges;
+    std::vector<samn::PhaseRange> phase_ranges;
     std::optional<samn::ContactMarks> contact_marks;
     try {
         std::ifstream in(FsPath(funscript), std::ios::binary);
@@ -188,6 +189,7 @@ bool EditorController::open(const QString& pathIn) {
             // The Player plays the .samn, so its scenes count.
             if (!doc.chapters.empty()) chapters = doc.chapters;
             scene_ranges = doc.recipe.scene_ranges;
+            phase_ranges = doc.recipe.phase_ranges;
             if (doc.contact_marks) contact_marks = doc.contact_marks;
         } catch (const std::exception& e) {
             // The stroke still opens; the companion is left alone.
@@ -205,6 +207,7 @@ bool EditorController::open(const QString& pathIn) {
                      [](const samn::Chapter& a, const samn::Chapter& b) { return a.start_ms < b.start_ms; });
     chapters_ = std::move(chapters);
     scene_ranges_ = std::move(scene_ranges);
+    playback_phases_ = samn::NormalizePhaseRanges(phase_ranges);
     contact_marks_ = std::move(contact_marks);
     loadSceneProposals();
     emit scenesChanged();
@@ -730,6 +733,49 @@ void EditorController::loadSceneProposals() {
 
 bool EditorController::hasPhases() const {
     return hasScript() && std::any_of(phases_.begin(), phases_.end(), [](const samn::LabelPhase& p) { return p.confirmed; });
+}
+
+int EditorController::phasesToPlayback() {
+    if (!hasScript()) return 0;
+    std::vector<samn::PhaseRange> ranges;
+    for (const auto& p : phases_)
+        if (p.confirmed) ranges.push_back({p.start_ms, p.end_ms, p.name});
+    ranges = samn::NormalizePhaseRanges(ranges);
+    if (ranges.empty()) {
+        setStatus(tr("No confirmed intro, empty, climax or cool-down phase to play."));
+        return 0;
+    }
+    if (!savePlaybackPhases(ranges)) return 0;
+    setStatus(tr("%n phase(s) shape the playback: rest over intro and empty, build-up, fade.", "", int(ranges.size())));
+    return int(ranges.size());
+}
+
+bool EditorController::clearPlaybackPhases() {
+    if (playback_phases_.empty()) return false;
+    if (!savePlaybackPhases({})) return false;
+    setStatus(tr("Playback follows the script again, without phases."));
+    return true;
+}
+
+bool EditorController::savePlaybackPhases(std::vector<samn::PhaseRange> ranges) {
+    try {
+        samn::Document doc = companion();
+        doc.general = session_.Axis("stroke");
+        doc.chapters = chapters_;
+        doc.recipe.scene_ranges = scene_ranges_;
+        doc.recipe.phase_ranges = ranges;
+        if (samn_path_.isEmpty()) {
+            samn_path_ = QString::fromStdString(samn::CompanionSamnPath(path_.toStdString()));
+            emit scriptChanged();
+        }
+        samn::SaveDocument(FsPath(samn_path_), doc);
+    } catch (const std::exception& e) {
+        setStatus(tr("Phases not saved: %1").arg(QString::fromUtf8(e.what())));
+        return false;
+    }
+    playback_phases_ = std::move(ranges);
+    emit scenesChanged();
+    return true;
 }
 
 int EditorController::scenesFromPhases() {

@@ -185,8 +185,12 @@ lanes; its stretches are dragged and named like chapters:
    editor; they only fill stretches nobody set and stay pale until
    confirmed); the Editor's scenes (done: the feel phases suggest a scene's
    feel, *Scenes from phases* adds a scene where each confirmed phase
-   begins); next the device shaping per phase (hold over intro and empty,
-   build-up, fade) and the Training's video stage.
+   begins); the device shaping per phase at playback (done, Owner 20 Oct:
+   "beim Abspielen": the recipe's `phase_ranges` in the `.samn`, applied
+   after the mapping in `PlaybackFrames`: rest over intro and empty with a
+   1 s edge, the climax lifts towards full, the cool-down fades to 0; the
+   script stays as it is; Editor *Phases shape playback* / *Play without
+   phases*); next the Training's video stage.
 3. **Tracking between keyframes:** CSRT forward and backward from each keyframe,
    blended; the uncertainty lane and *Next uncertain*.
 4. **Teachers:** ONNX Runtime in the build, NudeNet (one-click download),

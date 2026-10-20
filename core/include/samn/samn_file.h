@@ -80,6 +80,8 @@ struct DeviceRecipe {
     bool vibration_follows_suction = false;
     double feel_balance = 0;
     std::vector<SceneFeelRange> scene_ranges;
+    // Phases that shape playback (D-157); not baked into axes.
+    std::vector<PhaseRange> phase_ranges;
     std::string playback_source;
 };
 

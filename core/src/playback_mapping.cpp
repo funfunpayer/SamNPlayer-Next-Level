@@ -227,6 +227,7 @@ std::vector<Frame> PlaybackFrames(const std::vector<Action>& actions, const Play
     frames = AdjustDeviceFrames(frames, plan.adjust);
     if (plan.suction_scale != 1.0)
         for (auto& f : frames) f.suction = Clamp01(f.suction * plan.suction_scale);
+    ApplyPhaseShape(frames, plan.map.phase_ranges);  // D-157, last: rest means rest
     return frames;
 }
 

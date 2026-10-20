@@ -473,6 +473,13 @@ JV Enc(const SceneFeelRange& r) {
     Put(o, "feel", JStr(r.feel));
     return o;
 }
+JV Enc(const PhaseRange& r) {
+    JV o = JObj();
+    Put(o, "start_ms", JInt(r.start_ms));
+    Put(o, "end_ms", JInt(r.end_ms));
+    Put(o, "phase", JStr(r.phase));
+    return o;
+}
 JV Enc(const TrackingGap& g) {
     JV o = JObj();
     Put(o, "start_ms", JInt(g.start_ms));
@@ -496,6 +503,11 @@ JV Enc(const DeviceRecipe& r) {
         JV a = JArr();
         for (const auto& x : r.scene_ranges) a.a.push_back(Enc(x));
         Put(o, "scene_ranges", std::move(a));
+    }
+    if (!r.phase_ranges.empty()) {
+        JV a = JArr();
+        for (const auto& x : r.phase_ranges) a.a.push_back(Enc(x));
+        Put(o, "phase_ranges", std::move(a));
     }
     if (!r.playback_source.empty()) Put(o, "playback_source", JStr(r.playback_source));
     return o;
@@ -726,6 +738,7 @@ void DecodeValue(const JV& v, std::string& out);
 void DecodeValue(const JV& v, Action& out);
 void DecodeValue(const JV& v, StrengthPreset& out);
 void DecodeValue(const JV& v, SceneFeelRange& out);
+void DecodeValue(const JV& v, PhaseRange& out);
 void DecodeValue(const JV& v, TrackingGap& out);
 void DecodeValue(const JV& v, DeviceRecipe& out);
 void DecodeValue(const JV& v, Chapter& out);
@@ -847,6 +860,12 @@ void DecodeValue(const JV& v, SceneFeelRange& r) {
     o.Get("end_ms", r.end_ms);
     o.Get("feel", r.feel);
 }
+void DecodeValue(const JV& v, PhaseRange& r) {
+    const ObjView o = Need(v, "PhaseRange");
+    o.Get("start_ms", r.start_ms);
+    o.Get("end_ms", r.end_ms);
+    o.Get("phase", r.phase);
+}
 void DecodeValue(const JV& v, TrackingGap& r) {
     const ObjView o = Need(v, "TrackingGap");
     o.Get("start_ms", r.start_ms);
@@ -866,6 +885,7 @@ void DecodeValue(const JV& v, DeviceRecipe& r) {
     o.Get("vibration_follows_suction", r.vibration_follows_suction);
     o.Get("feel_balance", r.feel_balance);
     o.Get("scene_ranges", r.scene_ranges);
+    o.Get("phase_ranges", r.phase_ranges);
     o.Get("playback_source", r.playback_source);
 }
 void DecodeValue(const JV& v, Chapter& r) {
@@ -1094,6 +1114,9 @@ bool Same(const StrengthPreset& a, const StrengthPreset& b) {
 bool Same(const SceneFeelRange& a, const SceneFeelRange& b) {
     return a.start_ms == b.start_ms && a.end_ms == b.end_ms && a.feel == b.feel;
 }
+bool Same(const PhaseRange& a, const PhaseRange& b) {
+    return a.start_ms == b.start_ms && a.end_ms == b.end_ms && a.phase == b.phase;
+}
 bool Same(const TrackingGap& a, const TrackingGap& b) { return a.start_ms == b.start_ms && a.end_ms == b.end_ms; }
 bool Same(const Chapter& a, const Chapter& b) { return a == b; }
 bool Same(const Bookmark& a, const Bookmark& b) { return a == b; }
@@ -1145,7 +1168,8 @@ bool Same(const DeviceRecipe& a, const DeviceRecipe& b) {
            a.contact_vibration_span == b.contact_vibration_span &&
            a.contact_vibration_curve == b.contact_vibration_curve && a.scene_feel == b.scene_feel &&
            a.vibration_follows_suction == b.vibration_follows_suction && a.feel_balance == b.feel_balance &&
-           Same(a.scene_ranges, b.scene_ranges) && a.playback_source == b.playback_source;
+           Same(a.scene_ranges, b.scene_ranges) && Same(a.phase_ranges, b.phase_ranges) &&
+           a.playback_source == b.playback_source;
 }
 template <class T>
 bool Same(const std::vector<T>& a, const std::vector<T>& b) {
@@ -1554,6 +1578,7 @@ MapOptions MapOptionsFromScript(const FunscriptView& s) {
         opts.contact_vibration_curve = dr.contact_vibration_curve;
         opts.scene_feel = NormalizeSceneFeel(dr.scene_feel);
         opts.scene_ranges = NormalizeSceneRanges(dr.scene_ranges);
+        opts.phase_ranges = NormalizePhaseRanges(dr.phase_ranges);
         opts.vibration_follows_suction = dr.vibration_follows_suction;
         opts.balance = dr.feel_balance;
         if (NormalizePlaybackSource(dr.playback_source) == PlaybackAxes && s.metadata.samn_axes) {
