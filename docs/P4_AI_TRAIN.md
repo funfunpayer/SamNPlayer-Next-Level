@@ -190,7 +190,10 @@ lanes; its stretches are dragged and named like chapters:
    after the mapping in `PlaybackFrames`: rest over intro and empty with a
    1 s edge, the climax lifts towards full, the cool-down fades to 0; the
    script stays as it is; Editor *Phases shape playback* / *Play without
-   phases*); next the Training's video stage.
+   phases*); the Training's video stage (done: the film's confirmed phases
+   from its `.labels.json`; intro and empty are skipped, at the climax the
+   session pauses by default, or cools down, or carries on, Owner 20 Oct:
+   "einstellbar, Standard Pause").
 3. **Tracking between keyframes:** CSRT forward and backward from each keyframe,
    blended; the uncertainty lane and *Next uncertain*.
 4. **Teachers:** ONNX Runtime in the build, NudeNet (one-click download),

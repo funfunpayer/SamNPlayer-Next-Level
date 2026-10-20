@@ -169,4 +169,25 @@ int ApplyPhaseSuggestions(LabelProject& p, const std::vector<LabelPhase>& sugges
     return added;
 }
 
+VideoPhaseStep StepVideoPhases(const std::vector<LabelPhase>& phases, int64_t ms, int last_climax) {
+    VideoPhaseStep step;
+    const auto skippable = [](const LabelPhase& p) { return p.confirmed && (p.name == "intro" || p.name == "empty"); };
+    int64_t at = ms;
+    for (bool moved = true; moved;) {  // touching stretches chain
+        moved = false;
+        for (const auto& p : phases)
+            if (skippable(p) && at >= p.start_ms && at < p.end_ms) {
+                at = p.end_ms;
+                moved = true;
+            }
+    }
+    if (at != ms) step.seek_to = at;
+    for (size_t i = 0; i < phases.size(); ++i) {
+        const auto& p = phases[i];
+        if (p.confirmed && p.name == "climax" && at >= p.start_ms && at < p.end_ms && int(i) != last_climax)
+            step.climax = int(i);
+    }
+    return step;
+}
+
 }  // namespace samn

@@ -13,6 +13,7 @@
 
 #include "device_controller.h"
 #include "samn/library.h"
+#include "samn/phase_rules.h"
 
 namespace samn::ui {
 
@@ -177,6 +178,9 @@ void TrainingController::load() {
     };
     video_loop_ = flag("training.stage.loop", true);
     video_muted_ = flag("training.stage.muted", true);
+    const QString climax = text("training.stage.climax_action");
+    if (climax == "none" || climax == "pause" || climax == "cooldown") climax_action_ = climax;
+    loadVideoPhases();
 }
 
 // ---------------------------------------------------------------- stage
@@ -208,6 +212,61 @@ void TrainingController::setVideoMuted(bool on) {
     emit stageChanged();
 }
 
+void TrainingController::loadVideoPhases() {
+    video_phases_.clear();
+    last_climax_ = -1;
+    if (video_path_.isEmpty()) return;
+    const auto file = samn::LabelProjectPath(std::filesystem::path(video_path_.toStdU16String()));
+    std::error_code ec;
+    if (!std::filesystem::exists(file, ec)) return;
+    try {
+        for (const auto& p : samn::LoadLabelProject(file).phases)
+            if (p.confirmed) video_phases_.push_back(p);
+    } catch (const std::exception&) {
+        video_phases_.clear();  // a broken labels file: the film plays as it is
+    }
+}
+
+QVariantList TrainingController::videoPhases() const {
+    QVariantList out;
+    for (const auto& p : video_phases_)
+        out << QVariantMap{{"startMs", double(p.start_ms)},
+                           {"endMs", double(p.end_ms)},
+                           {"phase", QString::fromStdString(p.name)}};
+    return out;
+}
+
+void TrainingController::setClimaxAction(const QString& action) {
+    if (action == climax_action_ || (action != "none" && action != "pause" && action != "cooldown")) return;
+    climax_action_ = action;
+    save("training.stage.climax_action", action.toStdString());
+    emit stageChanged();
+}
+
+double TrainingController::videoPosition(double ms) {
+    if (video_phases_.empty() || ms < 0) return -1;
+    const auto step = samn::StepVideoPhases(video_phases_, int64_t(std::llround(ms)), last_climax_);
+    if (step.climax >= 0) {
+        last_climax_ = step.climax;
+        if (state_ == State::Running) {
+            if (climax_action_ == "pause") {
+                log("The film's climax: paused (Play goes on).");
+                pause();
+            } else if (climax_action_ == "cooldown") {
+                log("The film's climax: cool-down.");
+                interrupt();
+            }
+        }
+    } else if (step.seek_to < 0) {
+        // Out of every climax again: the next one counts (a looped film).
+        bool inside = false;
+        for (const auto& p : video_phases_)
+            if (p.name == "climax" && ms >= double(p.start_ms) && ms < double(p.end_ms)) inside = true;
+        if (!inside) last_climax_ = -1;
+    }
+    return step.seek_to >= 0 ? double(step.seek_to) : -1;
+}
+
 QStringList TrainingController::recentVideos() {
     QStringList out;
     try {
@@ -226,6 +285,7 @@ void TrainingController::chooseVideo(const QString& pathOrUrl) {
     if (pathOrUrl.isEmpty() || !QFileInfo(path).isFile()) return;
     video_path_ = path;
     save("training.stage.video", path.toStdString());
+    loadVideoPhases();
     std::vector<std::string> recent;
     for (const auto& p : recentVideos()) recent.push_back(p.toStdString());
     save(samn::kRecentVideosKey, samn::PushFront(std::move(recent), path.toStdString(), samn::kRecentMax));
