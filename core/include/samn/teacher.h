@@ -17,6 +17,7 @@ namespace samn {
 struct TeacherBox {
     std::string cls;  // one of the asked classes
     LabelBox box;     // video pixels
+    bool uncertain = false;  // not every teacher that could see it did (votes)
 };
 
 // What the model is asked: the classes, one JSON object back, boxes as
@@ -42,7 +43,8 @@ std::vector<std::string> ParseModelList(const std::string& response_json);
 std::vector<TeacherBox> ParseTeacherBoxes(const std::string& text, double frame_w, double frame_h,
                                           const std::vector<std::string>& classes);
 
-// Puts the teacher's boxes at ms as unconfirmed keys (source `source`): each
+// Puts the teacher's boxes at ms as unconfirmed keys (source `source`, marked
+// uncertain where the box says so): each
 // box goes to the object of its class it overlaps most at ms, or to a new
 // object; an object the user confirmed at ms is never touched. Returns how
 // many keys were set.

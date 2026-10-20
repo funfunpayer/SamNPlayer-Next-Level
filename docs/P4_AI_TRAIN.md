@@ -223,7 +223,14 @@ lanes; its stretches are dragged and named like chapters:
    classes). *Ask the teacher (A)* then asks NudeNet on this computer or the
    model server (`aitrain.teacher.kind`): penis, vagina, breast and face come
    back as unconfirmed keys (`teacher:nudenet`), only for the classes the
-   project asks for. Next: consensus between teachers into proposed tracks.
+   project asks for. **Votes** (Owner 20 Oct): *Ask all teachers* (Shift+A)
+   asks NudeNet and the model server at once; `core/teacher_votes.h` groups
+   their boxes by class and overlap and averages them. What every teacher
+   that can see the class found is a plain proposal; what only some found is
+   kept, marked uncertain (*Next uncertain*, `N`); a class a teacher cannot
+   see (NudeNet has no hands) is no vote against. *Teachers through the clip*
+   votes every 2 s through the whole clip in the background (progress, Stop,
+   one undo step). Next: the tracker re-running a stretch after a drag.
 5. **Student:** the training environment (one click), RF-DETR training and ONNX
    export with progress and Cancel; the student as a teacher and in the
    Generator's tip finding.

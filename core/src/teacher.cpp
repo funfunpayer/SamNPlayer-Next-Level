@@ -205,6 +205,7 @@ int ApplyTeacherBoxes(LabelProject& p, int64_t ms, const std::vector<TeacherBox>
         key.box = b.box;
         key.confirmed = false;
         key.source = source;
+        key.uncertain = b.uncertain;
         best->SetKey(key, tolerance_ms);
         ++set;
     }

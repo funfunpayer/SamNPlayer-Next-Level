@@ -146,7 +146,7 @@ Item {
                     visible: page.tab === 0
                     number: "2"; title: qsTr("Teachers")
                     text: qsTr("NudeNet (one click to install) and vision models on Ollama, LM Studio or a server in your network, such as a Mac with larger models, propose boxes. Where several agree, the proposal is offered; you confirm it in the label editor.")
-                    status: qsTr("NudeNet on this computer and vision models on a server: below. Voting between teachers follows.")
+                    status: qsTr("NudeNet on this computer and vision models on a server: below. In the label editor, Shift+A asks all of them; Teachers through the clip asks them every 2 s. What all see is a plain proposal, what only some see is marked uncertain (N jumps there).")
                 }
                 // Which teacher answers "Ask the teacher" (A).
                 RowLayout {
