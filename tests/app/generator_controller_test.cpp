@@ -135,7 +135,8 @@ private slots:
         QVERIFY(!g.addContactArea(QRect(10, 10, 4, 40)));  // a click, not an area
         QVERIFY(!g.markContact());                         // marking ends either way
         QVERIFY(g.addContactArea(QRect(130, 90, 60, 60)));
-        g.setContactClass("mouth");
+        g.setExtraClass("mouth");
+        g.setMarkExtra(true);
         QVERIFY(g.addContactArea(QRect(300, 200, 60, 60)));  // clipped to the frame
         QCOMPARE(g.contactAreas().size(), 2);
         QCOMPARE(g.contactAreas().at(1).toMap().value("w").toInt(), 20);
@@ -160,6 +161,81 @@ private slots:
         // Another video: the areas belonged to the old one.
         QVERIFY(g.openVideo(clip("a.mp4", 8)));
         QVERIFY(g.contactAreas().isEmpty());
+    }
+
+    // 0.7's marking (G2a): the primary is drawn again in place, extras come
+    // with their own type, each mark says what comes next, a selection is
+    // deleted, Clear extras keeps the tip and the primary.
+    void marksFollowTheOldMarking() {
+        GeneratorController g;
+        QVERIFY(g.openVideo(clip("m.mp4", 6)));
+        g.setExtraClass("");  // remembered from an earlier test otherwise
+        QVERIFY(!g.markTip(QRect(5, 5, 3, 3)));  // a click, not a box
+        QVERIFY(g.markTip(QRect(100, 40, 120, 160)));
+        QVERIFY(g.status().startsWith(QStringLiteral("Snack 1 done — tip box is the stroke tracker (CSRT).")));
+        g.setContactVibration(false);
+        QVERIFY(g.markTip(QRect(100, 40, 100, 160)));
+        QVERIFY(g.status().startsWith(QStringLiteral("Tip box set — CSRT follows this look")));
+        g.setContactVibration(true);
+
+        // + Another before a primary: the first area is the primary.
+        g.setMarkExtra(true);
+        QCOMPARE(g.status(), QStringLiteral("Another contact area: drag on preview (magenta)."));
+        QVERIFY(g.addContactArea(QRect(10, 10, 40, 40)));
+        QCOMPARE(g.contactAreas().first().toMap().value("cls").toString(), QStringLiteral("nipples"));
+        QVERIFY(g.status().startsWith(QStringLiteral("Snack 2 done — partner touch (gold).")));
+        // Drawn again (no mode, the page's Shift-drag): it moves.
+        QVERIFY(g.addContactArea(QRect(20, 20, 40, 40)));
+        QCOMPARE(g.contactAreas().size(), 1);
+        QCOMPARE(g.contactAreas().first().toMap().value("x").toInt(), 20);
+
+        // Mark contact and + Another exclude each other.
+        g.setMarkContact(true);
+        g.setMarkExtra(true);
+        QVERIFY(!g.markContact());
+        QVERIFY(g.addContactArea(QRect(80, 80, 30, 30)));
+        QCOMPARE(g.status(), QStringLiteral("Extra contact #1 added, stay fixed."));
+        QCOMPARE(g.contactAreas().at(1).toMap().value("cls").toString(), QString());
+        g.setExtraClass("breasts");
+        g.setExtraClass("hand");  // not offered: kept
+        QCOMPARE(g.extraClass(), QStringLiteral("breasts"));
+        g.setMarkExtra(true);
+        QVERIFY(g.addContactArea(QRect(150, 80, 30, 30)));
+        QCOMPARE(g.status(), QStringLiteral("Extra contact #2 (breasts) added, stay fixed."));
+
+        g.setAreaClass(1, "mouth");
+        QCOMPARE(g.contactAreas().at(1).toMap().value("cls").toString(), QStringLiteral("mouth"));
+        QCOMPARE(g.status(), QStringLiteral("Extra contact class → mouth"));
+        g.setAreaClass(0, "");  // the primary keeps a class
+        QCOMPARE(g.contactAreas().at(0).toMap().value("cls").toString(), QStringLiteral("nipples"));
+
+        g.deleteMark(2);
+        QCOMPARE(g.status(), QStringLiteral("Extra contact removed."));
+        QCOMPARE(g.contactAreas().size(), 2);
+        g.setMarkExtra(true);
+        QVERIFY(g.addContactArea(QRect(150, 80, 30, 30)));
+        g.clearExtras();
+        QCOMPARE(g.contactAreas().size(), 1);
+        QVERIFY(g.hasBox());
+        g.deleteMark(0);
+        QCOMPARE(g.status(), QStringLiteral("Contact mark cleared."));
+        QVERIFY(g.contactAreas().isEmpty());
+        g.deleteMark(-1);
+        QCOMPARE(g.status(), QStringLiteral("Tip mark cleared — Find tip area or paint again."));
+        QVERIFY(!g.hasBox());
+    }
+
+    // An extra moved up to primary takes the contact class.
+    void anExtraMovedUpTakesAClass() {
+        GeneratorController g;
+        QVERIFY(g.openVideo(clip("p.mp4", 6)));
+        g.setExtraClass("");  // remembered from an earlier test otherwise
+        QVERIFY(g.addContactArea(QRect(10, 10, 40, 40)));
+        g.setMarkExtra(true);
+        QVERIFY(g.addContactArea(QRect(80, 80, 30, 30)));
+        g.removeContactArea(0);
+        QCOMPARE(g.contactAreas().size(), 1);
+        QCOMPARE(g.contactAreas().first().toMap().value("cls").toString(), QStringLiteral("nipples"));
     }
 
     // 0.7 Step 3: sensitivity and curve of contact vibration, written into

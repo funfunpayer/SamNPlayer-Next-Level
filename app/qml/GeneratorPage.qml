@@ -110,9 +110,17 @@ Item {
     property int selectedMark: -2
     function deleteSelectedMark() {
         if (gen.running) return
-        if (selectedMark === -1) gen.clearBox()
-        else if (selectedMark >= 0) gen.removeContactArea(selectedMark)
+        gen.deleteMark(selectedMark)
         selectedMark = -2
+    }
+    // 0.7 "Selected: …" under the preview.
+    function selectedMarkText() {
+        if (selectedMark === -1) return qsTr("Selected: Tip (%1)").arg(className(gen.tipClass))
+        if (selectedMark < 0 || selectedMark >= gen.contactAreas.length) return ""
+        const cls = gen.contactAreas[selectedMark].cls
+        if (selectedMark === 0) return qsTr("Selected: Contact (%1)").arg(className(cls))
+        return cls ? qsTr("Selected: Extra contact #%1 (%2)").arg(selectedMark).arg(className(cls))
+                   : qsTr("Selected: Extra contact #%1").arg(selectedMark)
     }
     function clearAllMarks() {
         gen.clearBox()
@@ -209,7 +217,20 @@ Item {
     Shortcut { sequence: ","; enabled: page.visible && !page.overlayOpen && gen.hasVideo; onActivated: page.seekBy(-40) }
     Shortcut { sequence: "."; enabled: page.visible && !page.overlayOpen && gen.hasVideo; onActivated: page.seekBy(40) }
     Shortcut { sequences: [StandardKey.Delete, "Backspace"]; enabled: page.visible && !page.overlayOpen && page.selectedMark !== -2; onActivated: page.deleteSelectedMark() }
-    Shortcut { sequence: "Esc"; enabled: page.visible && !page.overlayOpen && page.selectedMark !== -2; onActivated: page.selectedMark = -2 }
+    // Esc ends a marking, else drops the selection (0.7 "Mark deselected.").
+    Shortcut {
+        sequence: "Esc"
+        enabled: page.visible && !page.overlayOpen && (page.selectedMark !== -2 || gen.markContact || gen.markExtra)
+        onActivated: {
+            if (gen.markContact || gen.markExtra) {
+                gen.markContact = false
+                gen.markExtra = false
+                return
+            }
+            page.selectedMark = -2
+            gen.showStatus(qsTr("Mark deselected."))
+        }
+    }
     Shortcut { sequences: [StandardKey.Undo]; enabled: page.visible && edit.canUndo; onActivated: edit.undo() }
     Shortcut { sequences: [StandardKey.Redo, "Ctrl+Y"]; enabled: page.visible && edit.canRedo; onActivated: edit.redo() }
 
@@ -392,8 +413,8 @@ Item {
                         // The tip box: teal, as 0.7 (#3dccc0).
                         Rectangle {
                             objectName: "tipBox"
-                            visible: gen.hasBox || (drag.active && !gen.markContact)
-                            readonly property rect r: drag.active && !gen.markContact ? drag.rect : gen.box
+                            visible: gen.hasBox || (drag.active && !drag.contact)
+                            readonly property rect r: drag.active && !drag.contact ? drag.rect : gen.box
                             x: frameView.imageRect.x + r.x * parent.scaleX
                             y: frameView.imageRect.y + r.y * parent.scaleY
                             width: r.width * parent.scaleX; height: r.height * parent.scaleY
@@ -439,11 +460,11 @@ Item {
                         }
                         Rectangle {
                             objectName: "contactDraft"
-                            visible: drag.active && gen.markContact
+                            visible: drag.active && drag.contact
                             x: frameView.imageRect.x + drag.rect.x * parent.scaleX
                             y: frameView.imageRect.y + drag.rect.y * parent.scaleY
                             width: drag.rect.width * parent.scaleX; height: drag.rect.height * parent.scaleY
-                            readonly property color tone: gen.contactAreas.length === 0 ? "#f2b03d" : "#e070a0"
+                            readonly property color tone: gen.markExtra && gen.contactAreas.length > 0 ? "#e070a0" : "#f2b03d"
                             color: Qt.rgba(tone.r, tone.g, tone.b, 0.17)
                             border.color: tone; border.width: 2
                         }
@@ -473,7 +494,15 @@ Item {
                                     }
                                     MouseArea {
                                         anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                                        onClicked: gen.pickCandidate(cand.index)
+                                        // 0.7: click = tip, Shift-click = the contact area.
+                                        onClicked: (m) => {
+                                            if (gen.contactVibration && (m.modifiers & Qt.ShiftModifier)) {
+                                                const c = cand.modelData
+                                                if (gen.addContactArea(Qt.rect(c.x, c.y, c.w, c.h))) page.selectedMark = 0
+                                            } else {
+                                                gen.pickCandidate(cand.index)
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -485,12 +514,19 @@ Item {
                             enabled: gen.hasVideo && !gen.running && !page.playing
                             cursorShape: Qt.CrossCursor
                             property bool active: false
+                            // This drag draws a contact area: Mark contact, + Another, or
+                            // Shift held (0.7 Shift-drag = partner).
+                            property bool contact: false
                             property point start
                             property rect rect
                             function toVideo(mx, my) {
                                 return Qt.point((mx - frameView.imageRect.x) / parent.scaleX, (my - frameView.imageRect.y) / parent.scaleY)
                             }
-                            onPressed: (m) => { start = toVideo(m.x, m.y); rect = Qt.rect(start.x, start.y, 0, 0); active = true }
+                            onPressed: (m) => {
+                                start = toVideo(m.x, m.y); rect = Qt.rect(start.x, start.y, 0, 0)
+                                contact = gen.markContact || gen.markExtra || (gen.contactVibration && (m.modifiers & Qt.ShiftModifier))
+                                active = true
+                            }
                             function spanTo(mx, my) {
                                 const p = toVideo(mx, my)
                                 rect = Qt.rect(Math.min(start.x, p.x), Math.min(start.y, p.y), Math.abs(p.x - start.x), Math.abs(p.y - start.y))
@@ -503,12 +539,19 @@ Item {
                                 // A click (under 8 px on screen) picks the mark under it.
                                 if (rect.width * parent.scaleX < 8 && rect.height * parent.scaleY < 8) {
                                     page.selectedMark = markAt(start)
+                                    if (page.selectedMark !== -2)
+                                        gen.showStatus(qsTr("Mark selected — set its class below, or Delete selected."))
                                     return
                                 }
                                 page.selectedMark = -2
                                 const r = Qt.rect(Math.round(rect.x), Math.round(rect.y), Math.round(rect.width), Math.round(rect.height))
-                                if (gen.markContact) gen.addContactArea(r)
-                                else gen.box = r
+                                // 0.7 selects the mark just drawn.
+                                if (contact) {
+                                    const extra = gen.markExtra && gen.contactAreas.length > 0
+                                    if (gen.addContactArea(r)) page.selectedMark = extra ? gen.contactAreas.length - 1 : 0
+                                } else if (gen.markTip(r)) {
+                                    page.selectedMark = -1
+                                }
                             }
                             // Contact areas lie above the tip box; the last drawn wins.
                             function markAt(p) {
@@ -538,11 +581,37 @@ Item {
                             objectName: "boxLabel"
                             textFormat: Text.PlainText
                             Layout.fillWidth: true; elide: Text.ElideRight
-                            text: gen.boxLabel; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                            // A picked mark: 0.7's "Selected: …" with its class and Delete
+                            // selected, in this row so the frame keeps its size.
+                            text: page.selectedMark !== -2 ? page.selectedMarkText() : gen.boxLabel
+                            color: page.selectedMark !== -2 ? Theme.text : Theme.textDim
+                            font.family: Theme.fontSoft; font.pixelSize: 12
+                        }
+                        FlowCombo {
+                            objectName: "selectedClassCombo"
+                            visible: page.selectedMark !== -2
+                            // The tip's class is the Tip combo's; an area has its own, an extra may be any.
+                            readonly property bool isArea: page.selectedMark >= 0 && page.selectedMark < gen.contactAreas.length
+                            readonly property var classes: isArea && page.selectedMark > 0 ? [""].concat(gen.contactClasses)
+                                                                                            : isArea ? gen.contactClasses : gen.tipClasses
+                            Layout.preferredWidth: 140
+                            enabled: !gen.running
+                            textRole: "label"; valueRole: "value"
+                            model: classes.map((c) => ({ label: c ? page.className(c) : qsTr("(any)"), value: c }))
+                            currentIndex: Math.max(0, classes.indexOf(isArea ? gen.contactAreas[page.selectedMark].cls : gen.tipClass))
+                            onActivated: isArea ? gen.setAreaClass(page.selectedMark, currentValue) : gen.tipClass = currentValue
                         }
                         FlowButton {
+                            objectName: "deleteSelectedMark"
+                            visible: page.selectedMark !== -2
+                            text: qsTr("Delete selected")
+                            enabled: !gen.running
+                            onClicked: page.deleteSelectedMark()
+                        }
+                        HelpChip { key: "gen-selected-mark-delete"; visible: page.selectedMark !== -2; Layout.alignment: Qt.AlignVCenter }
+                        FlowButton {
                             objectName: "clearBox"
-                            visible: gen.hasBox || gen.contactAreas.length > 0
+                            visible: page.selectedMark === -2 && (gen.hasBox || gen.contactAreas.length > 0)
                             text: qsTr("Clear all")
                             enabled: !gen.running
                             onClicked: page.clearAllMarks()
@@ -1294,6 +1363,50 @@ Item {
                                 enabled: !gen.running
                                 text: qsTr("Clear areas")
                                 onClicked: gen.clearContactAreas()
+                            }
+                        }
+                        // 0.7 "+ Another contact area" (magenta) with its type.
+                        RowLayout {
+                            Layout.fillWidth: true; spacing: 8
+                            FlowButton {
+                                objectName: "addExtra"
+                                text: gen.markExtra ? qsTr("Drag the area on the frame…") : qsTr("+ Another contact area")
+                                enabled: gen.hasVideo && !gen.running
+                                onClicked: gen.markExtra = !gen.markExtra
+                            }
+                            HelpChip { key: "gen-target-add"; Layout.alignment: Qt.AlignVCenter }
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true; spacing: 8
+                            Text {
+                                textFormat: Text.PlainText
+                                text: qsTr("Extra type"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                            FlowCombo {
+                                objectName: "extraClassCombo"
+                                Layout.fillWidth: true
+                                enabled: !gen.running
+                                textRole: "label"; valueRole: "value"
+                                model: [{ label: qsTr("(any)"), value: "" }].concat(gen.contactClasses.map((c) => ({ label: page.className(c), value: c })))
+                                currentIndex: Math.max(0, indexOfValue(gen.extraClass))
+                                onActivated: gen.extraClass = currentValue
+                            }
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true; spacing: 8
+                            visible: gen.contactAreas.length > 1
+                            FlowButton {
+                                objectName: "clearExtras"
+                                enabled: !gen.running
+                                text: qsTr("Clear extras")
+                                onClicked: gen.clearExtras()
+                            }
+                            HelpChip { key: "gen-extras-clear"; Layout.alignment: Qt.AlignVCenter }
+                            Text {
+                                textFormat: Text.PlainText
+                                Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                text: qsTr("Extras stay where they are drawn; only the tip is tracked.")
+                                color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
                             }
                         }
                         Text {
