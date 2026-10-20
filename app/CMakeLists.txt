@@ -16,6 +16,7 @@ qt_add_qml_module(samn_app
     src/theme.h
     src/plugins.h src/plugins.cpp
     src/label_controller.h src/label_controller.cpp
+    src/model_download.h src/model_download.cpp
     src/curve_item.h src/curve_item.cpp
     src/heatmap_item.h src/heatmap_item.cpp
     src/wordmark_item.h src/wordmark_item.cpp
@@ -98,6 +99,10 @@ qt_add_resources(samn_app "legal" PREFIX /legal BASE ${PROJECT_SOURCE_DIR}
 target_include_directories(samn_app PUBLIC src src/device_io)
 target_link_libraries(samn_app PUBLIC samn_core samn_engine Qt6::Gui Qt6::Quick Qt6::Qml Qt6::Multimedia Qt6::Svg
   Qt6::Network Qt6::WebSockets Qt6::SerialPort Qt6::Bluetooth)
+# zlib unpacks the models fetched with one click (they come in zip archives);
+# OpenCV already brings it on every platform.
+find_package(ZLIB REQUIRED)
+target_link_libraries(samn_app PRIVATE ZLIB::ZLIB)
 
 qt_add_executable(samnplayer WIN32 src/main.cpp)
 target_link_libraries(samnplayer PRIVATE samn_app samn_appplugin)

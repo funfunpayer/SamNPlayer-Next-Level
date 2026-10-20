@@ -8,6 +8,7 @@
 #include <QTcpSocket>
 #include <QTcpServer>
 #include <cmath>
+#include <QCryptographicHash>
 #include <QFile>
 #include <QImage>
 #include <QTemporaryDir>
@@ -17,6 +18,9 @@
 #include <opencv2/videoio.hpp>
 
 #include "label_controller.h"
+#include "model_download.h"
+#include "samn/vision/onnx_detector.h"
+#include "zip_builder.h"
 #include "synthetic_clips.h"
 
 using samn::ui::LabelController;
@@ -60,6 +64,27 @@ public:
         });
     }
     QString url() const { return QStringLiteral("http://127.0.0.1:%1/v1/").arg(server.serverPort()); }
+};
+
+// Serves one file over HTTP (the model download).
+class FakeFileServer : public QObject {
+public:
+    QTcpServer server;
+    QByteArray body;
+    FakeFileServer() {
+        server.listen(QHostAddress::LocalHost, 0);
+        connect(&server, &QTcpServer::newConnection, this, [this] {
+            while (QTcpSocket* c = server.nextPendingConnection()) {
+                connect(c, &QTcpSocket::readyRead, c, [this, c] {
+                    if (!c->readAll().contains("\r\n\r\n")) return;
+                    c->write("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nConnection: close\r\nContent-Length: " +
+                             QByteArray::number(body.size()) + "\r\n\r\n" + body);
+                    c->disconnectFromHost();
+                });
+            }
+        });
+    }
+    QUrl url() const { return QUrl(QStringLiteral("http://127.0.0.1:%1/nudenet.whl").arg(server.serverPort())); }
 };
 
 class LabelControllerTest : public QObject {
@@ -351,6 +376,84 @@ private slots:
         LabelController again;
         QCOMPARE(again.teacherModel(), QString("vision-a"));
         QCOMPARE(again.teacherKey(), QString("secret"));
+    }
+
+    // NudeNet on this computer (D-155 step 4), with a tiny stand-in model of
+    // NudeNet's shape (tests/vision/data/make_tiny_yolo.py): a face, and feet
+    // that are no label of ours.
+    void nudenetIsALocalTeacher() {
+        const QString data = QStringLiteral(SAMN_VISION_TESTDATA);
+        const QString path = dir_.filePath("nudenet.mp4");
+        QVERIFY(QFile::copy(clip_, path));
+        LabelController c;
+        QVERIFY(c.openVideo(path));
+        c.setTeacherKind("nudenet");
+        QCOMPARE(c.teacherKind(), QString("nudenet"));
+        if (!c.localTeacherAvailable()) {
+            QVERIFY(!c.askTeacher());
+            QVERIFY(c.teacherStatus().contains("ONNX Runtime"));
+            return;
+        }
+        QVERIFY(!c.askTeacher());  // nothing fetched yet
+        QVERIFY(c.teacherStatus().contains("Fetch NudeNet"));
+        QVERIFY(!c.chooseNudeNet(data + "/tiny_yolo.onnx"));  // two classes: not NudeNet
+        QVERIFY(c.teacherStatus().contains("not NudeNet"));
+        QVERIFY(c.nudenetPath().isEmpty());
+        QVERIFY(c.chooseNudeNet(QUrl::fromLocalFile(data + "/tiny_nudenet.onnx").toString()));
+        QCOMPARE(c.nudenetPath(), data + "/tiny_nudenet.onnx");
+
+        // 320 x 240 is padded to 320 x 320 and seen at 64: five pixels each.
+        c.seek(0);
+        QVERIFY(c.askTeacher());
+        QVERIFY(c.teacherBusy());
+        QTRY_VERIFY(!c.teacherBusy());
+        QCOMPARE(c.labels(), QStringList{"face"});  // the feet have no label
+        const QVariantMap key = c.lanes()[0].toMap().value("keys").toList().value(0).toMap();
+        QCOMPARE(key.value("source").toString(), QString("teacher:nudenet"));
+        QVERIFY(!key.value("confirmed").toBool());
+        const QVariantMap box = c.boxes().value(0).toMap();
+        QVERIFY(std::abs(box.value("x").toDouble() - 110) < 1);
+        QVERIFY(std::abs(box.value("w").toDouble() - 100) < 1);
+        // Asking for other classes only: the face is not proposed.
+        QVERIFY(c.undo());
+        QVERIFY(c.addLabel("hand"));
+        QVERIFY(c.askTeacher());
+        QTRY_VERIFY(!c.teacherBusy());
+        QVERIFY(c.teacherStatus().contains("nothing"));
+
+        LabelController again;  // remembered
+        QCOMPARE(again.teacherKind(), QString("nudenet"));
+        QCOMPARE(again.nudenetPath(), data + "/tiny_nudenet.onnx");
+    }
+
+    void nudenetDownloadChecksWhatItGets() {
+        if (!samn::vision::OnnxDetector::Available()) return;  // nothing to fetch for
+        QFile f(QStringLiteral(SAMN_VISION_TESTDATA) + "/tiny_nudenet.onnx");
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        const QByteArray model = f.readAll();
+        FakeFileServer server;
+        server.body = testzip::Zip({{"nudenet/__init__.py", "", false}, {"nudenet/320n.onnx", model, true}});
+        const auto sha = [](const QByteArray& b) { return QCryptographicHash::hash(b, QCryptographicHash::Sha256).toHex(); };
+        samn::ui::ModelSource src{"NudeNet", server.url(), sha("not this"), "nudenet/320n.onnx", sha(model), "nudenet-test.onnx"};
+
+        LabelController c;
+        c.setTeacherKind("server");
+        c.setNudeNetSource(src);
+        QVERIFY(c.downloadNudeNet());
+        QVERIFY(!c.downloadNudeNet());  // one at a time
+        QVERIFY(c.modelDownload() >= 0);
+        QTRY_COMPARE(c.modelDownload(), -1);
+        QVERIFY2(c.teacherStatus().contains("cannot be used"), qPrintable(c.teacherStatus()));
+        QVERIFY(!QFile::exists(dir_.filePath("config/models/nudenet-test.onnx")));
+
+        src.archive_sha256 = sha(server.body);
+        c.setNudeNetSource(src);
+        QVERIFY(c.downloadNudeNet());
+        QTRY_COMPARE(c.modelDownload(), -1);
+        QVERIFY2(c.teacherStatus().contains("ready"), qPrintable(c.teacherStatus()));
+        QCOMPARE(QFileInfo(c.nudenetPath()).fileName(), QString("nudenet-test.onnx"));
+        QVERIFY(QFile::exists(dir_.filePath("config/models/nudenet-test.onnx")));
+        QCOMPARE(c.teacherKind(), QString("nudenet"));  // the new model is the teacher
     }
 
     void anImageIsAClipOfOneFrame() {

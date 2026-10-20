@@ -1,4 +1,5 @@
 find_package(Qt6 REQUIRED COMPONENTS Test)
+find_package(ZLIB REQUIRED)  # zip_builder.h
 set(CMAKE_AUTOMOC ON)
 # One Qt Test executable per controller (QTEST_MAIN each).
 foreach(t player_controller library_controller icon_provider device_transports device_controller playback_output training_controller settings_controller update_checker)
@@ -47,10 +48,16 @@ set_tests_properties(generator_controller_test PROPERTIES ENVIRONMENT "QT_QPA_PL
 
 # The AI Train label editor's controller (D-155).
 add_executable(label_controller_test label_controller_test.cpp)
-target_link_libraries(label_controller_test PRIVATE samn_app Qt6::Test)
+target_link_libraries(label_controller_test PRIVATE samn_app Qt6::Test ZLIB::ZLIB)
 target_include_directories(label_controller_test PRIVATE ${CMAKE_SOURCE_DIR}/tests/engine)
+target_compile_definitions(label_controller_test PRIVATE SAMN_VISION_TESTDATA="${CMAKE_SOURCE_DIR}/tests/vision/data")
 add_test(NAME label_controller_test COMMAND label_controller_test)
 set_tests_properties(label_controller_test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+# Models fetched with one click: the zip reader and the hash checks.
+add_executable(model_download_test model_download_test.cpp)
+target_link_libraries(model_download_test PRIVATE samn_app Qt6::Test ZLIB::ZLIB)
+add_test(NAME model_download_test COMMAND model_download_test)
 
 # The AI Train page's QML, loaded the way the app loads it (D-155).
 add_executable(aitrain_qml_test aitrain_qml_test.cpp)
@@ -84,20 +91,13 @@ target_include_directories(frame_cache_test PRIVATE ${CMAKE_SOURCE_DIR}/tests/en
 add_test(NAME frame_cache_test COMMAND frame_cache_test)
 set_tests_properties(frame_cache_test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
-# Every test above writes its output unbuffered (see unbuffered_stdout.cpp).
+# Every test above writes its output unbuffered (see unbuffered_stdout.cpp)
+# and finds ONNX Runtime beside it on Windows (no rpath there).
 get_property(_samn_app_tests DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
 foreach(_t IN LISTS _samn_app_tests)
   get_target_property(_type ${_t} TYPE)
   if(_type STREQUAL "EXECUTABLE")
     target_sources(${_t} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/unbuffered_stdout.cpp)
-  endif()
-endforeach()
-
-# ONNX Runtime beside every test executable on Windows (no rpath there).
-get_property(_app_tests DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
-foreach(t ${_app_tests})
-  get_target_property(_type ${t} TYPE)
-  if(_type STREQUAL "EXECUTABLE")
-    samn_copy_runtime_dlls(${t})
+    samn_copy_runtime_dlls(${_t})
   endif()
 endforeach()

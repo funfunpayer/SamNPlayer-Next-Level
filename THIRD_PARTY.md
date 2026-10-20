@@ -17,4 +17,11 @@ Every piece of code copied or adapted from another project is listed here with i
 | FFmpeg (through Qt Multimedia and OpenCV videoio) | decoding | LGPL-2.1+ (GPL builds where noted) |
 | nlohmann/json 3.11.3 | core | MIT |
 | ONNX Runtime 1.22.0 (official NuGet build, `Microsoft.ML.OnnxRuntime`; licence and notices ship beside it in the package) | `vision/` detectors (D-155 step 4) | MIT |
+| zlib (the one OpenCV brings) | unpacking the models fetched with one click | Zlib |
+
+## Fetched by the user, not shipped
+
+| Component | How | Licence |
+|---|---|---|
+| NudeNet 3.4.2 `320n.onnx` (AI Train teacher, D-155) | *AI Train → Teachers → Download NudeNet* fetches the PyPI wheel and checks the wheel and the model against pinned SHA-256 hashes | the wheel carries an AGPL-3.0 licence file (PyPI lists MIT); the weights were trained with YOLOv8, so their licence is unclear and they are not bundled |
 | pybind11 | Python bindings of the core | BSD-3-Clause |
