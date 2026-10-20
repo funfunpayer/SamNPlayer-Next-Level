@@ -203,9 +203,12 @@ lanes; its stretches are dragged and named like chapters:
    the object; orange keys in the lane, *Next uncertain* (`N`) jumps there.
    One undo step; confirmed keys are never overwritten. Next: re-run the
    stretch on its own after a drag.
-4. **Teachers:** ONNX Runtime in the build, NudeNet (one-click download),
-   vision servers (Ollama, LM Studio, any OpenAI-compatible address, e.g. a
-   Mac), consensus into proposed tracks.
+4. **Teachers:** vision servers first (done, Owner 20 Oct: no new
+   dependency, the Mac works at once): any OpenAI-compatible address (Ollama,
+   LM Studio, a Mac in the network), *Test connection* lists the models,
+   *Ask the teacher* (`A`) puts its boxes on the frame as unconfirmed keys
+   (`core/teacher.h`); next ONNX Runtime in the build, NudeNet (one-click
+   download), consensus into proposed tracks.
 5. **Student:** the training environment (one click), RF-DETR training and ONNX
    export with progress and Cancel; the student as a teacher and in the
    Generator's tip finding.
