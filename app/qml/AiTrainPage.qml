@@ -16,6 +16,8 @@ Item {
     property bool showSetup: false
 
     LabelController { id: labelCtl }
+    TrainController { id: trainCtl }
+    property alias trainer: trainCtl
     FileDialog {
         id: clipDialog
         title: qsTr("Open a clip or an image to label")
@@ -296,8 +298,127 @@ Item {
                 Step {
                     visible: page.tab === 0
                     number: "3"; title: qsTr("Train our model")
-                    text: qsTr("Every N-th frame of the confirmed stretches becomes a sample, split by clip. RF-DETR learns from them and is exported as one ONNX file; training runs in a separate Python set up with one click (CUDA, DirectML, Apple MPS or CPU).")
-                    status: qsTr("D-155 step 5.")
+                    text: qsTr("In the label editor, Add to training set turns every N-th frame of the confirmed stretches into samples. RF-DETR learns from them, whole clips held out to check it, and is kept as one ONNX file. Training runs in a Python of the app's own, set up with one click in its AI folder: nothing is installed on the system.")
+                    status: trainCtl.studentPath !== "" ? qsTr("A student is ready: %1.").arg(trainCtl.studentClasses.join(", "))
+                                                       : qsTr("No student yet.")
+                }
+                // D-155 step 5: the environment, the training set and the run.
+                GlassCard {
+                    objectName: "trainCard"
+                    visible: page.tab === 0
+                    Layout.fillWidth: true
+                    implicitHeight: trainCol.implicitHeight + 28
+                    ColumnLayout {
+                        id: trainCol
+                        anchors.fill: parent; anchors.margins: 14; spacing: 8
+                        Text { textFormat: Text.PlainText; text: qsTr("Train the student"); color: Theme.text; font.family: Theme.font; font.pixelSize: 15 }
+                        RowLayout {
+                            Layout.fillWidth: true; spacing: 8
+                            Text { textFormat: Text.PlainText; text: qsTr("Runs on"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
+                            FlowCombo {
+                                id: deviceBox
+                                objectName: "trainDevice"
+                                Layout.preferredWidth: 220; height: 32
+                                readonly property var values: ["auto", "cuda", "cpu"]
+                                model: [qsTr("Automatic (NVIDIA if there)"), qsTr("NVIDIA card (CUDA)"), qsTr("Processor only")]
+                                currentIndex: Math.max(0, values.indexOf(trainCtl.device))
+                                enabled: !trainCtl.settingUp && !trainCtl.training
+                                onActivated: (i) => trainCtl.device = values[i]
+                            }
+                            Text { textFormat: Text.PlainText; text: qsTr("Epochs"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
+                            FlowSlider {
+                                objectName: "trainEpochs"
+                                Layout.preferredWidth: 140
+                                from: 5; to: 200; value: trainCtl.epochs
+                                onMoved: (v) => trainCtl.epochs = Math.round(v)
+                            }
+                            Text { textFormat: Text.PlainText; text: trainCtl.epochs; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
+                            Item { Layout.fillWidth: true }
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true; spacing: 8
+                            FlowButton {
+                                objectName: "trainSetUp"
+                                visible: !trainCtl.settingUp
+                                primary: !trainCtl.envReady
+                                text: trainCtl.envReady ? qsTr("Set up again") : qsTr("Set up training (one click)")
+                                icon: "download"
+                                enabled: !trainCtl.training
+                                onClicked: trainCtl.setUpEnvironment()
+                            }
+                            FlowButton {
+                                objectName: "trainSetUpStop"
+                                visible: trainCtl.settingUp
+                                text: qsTr("Stop")
+                                onClicked: trainCtl.cancelSetup()
+                            }
+                            Text {
+                                objectName: "trainEnvStatus"
+                                Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                textFormat: Text.PlainText
+                                text: trainCtl.envStatus !== "" ? trainCtl.envStatus
+                                      : trainCtl.envReady ? qsTr("Ready.")
+                                      : qsTr("About 0.3 GB for the processor, about 3 GB with an NVIDIA card; fetched once.")
+                                color: trainCtl.envReady ? Theme.cyan : Theme.textDim
+                                font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                        }
+                        Text {
+                            textFormat: Text.PlainText
+                            text: trainCtl.datasets.length === 0 ? qsTr("The training set is empty: Add to training set in the label editor.")
+                                                                 : qsTr("Training set:")
+                            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                        }
+                        Flow {
+                            Layout.fillWidth: true; spacing: 6
+                            Repeater {
+                                model: trainCtl.datasets
+                                delegate: Rectangle {
+                                    required property var modelData
+                                    objectName: "trainSet_" + modelData.name
+                                    height: 26; radius: 13
+                                    width: setLabel.implicitWidth + 40
+                                    color: Qt.rgba(1, 1, 1, 0.06)
+                                    Text {
+                                        id: setLabel
+                                        anchors.left: parent.left; anchors.leftMargin: 10; anchors.verticalCenter: parent.verticalCenter
+                                        textFormat: Text.PlainText
+                                        text: qsTr("%1 · %2 samples").arg(modelData.name).arg(modelData.samples)
+                                        color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 12
+                                    }
+                                    Text {
+                                        anchors.right: parent.right; anchors.rightMargin: 9; anchors.verticalCenter: parent.verticalCenter
+                                        text: "×"; color: Theme.textDim; font.pixelSize: 14
+                                        MouseArea {
+                                            anchors.fill: parent; anchors.margins: -4
+                                            cursorShape: Qt.PointingHandCursor
+                                            enabled: !trainCtl.training
+                                            onClicked: trainCtl.removeDataset(modelData.name)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true; spacing: 8
+                            FlowButton {
+                                objectName: "trainStart"
+                                primary: true
+                                text: trainCtl.training ? qsTr("Stop (%1 %)").arg(trainCtl.trainProgress) : qsTr("Train")
+                                icon: "play"
+                                enabled: trainCtl.training || (trainCtl.envReady && !trainCtl.settingUp && trainCtl.datasets.length > 0)
+                                onClicked: trainCtl.training ? trainCtl.stop() : trainCtl.train()
+                            }
+                            Text {
+                                objectName: "trainStatus"
+                                Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                textFormat: Text.PlainText
+                                visible: text !== ""
+                                text: trainCtl.trainStatus
+                                color: Theme.cyan; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                        }
+                    }
                 }
                 Step {
                     visible: page.tab === 0

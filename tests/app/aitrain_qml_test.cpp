@@ -72,6 +72,9 @@ private slots:
         // The teachers' setup: NudeNet here or the model server answers A.
         QVERIFY(named(root.get(), "nudenetCard")->isVisible());
         QVERIFY(named(root.get(), "teacherCard")->isVisible());
+        QVERIFY(named(root.get(), "trainCard")->isVisible());
+        QVERIFY(!named(root.get(), "trainStart")->isEnabled());  // nothing set up, nothing to train on
+        QVERIFY(named(root.get(), "trainSetUp")->isVisible());
         auto* here = named(root.get(), "kindNudeNet");
         QCOMPARE(here->isEnabled(), labels->localTeacherAvailable());
         QVERIFY(named(root.get(), "kindServer")->property("checked").toBool());

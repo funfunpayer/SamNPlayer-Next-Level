@@ -248,7 +248,17 @@ lanes; its stretches are dragged and named like chapters:
    labels, ImageNet-normalised, stretched input). Checked on synthetic
    discs: 1 epoch of RF-DETR Nano on a CPU in about 70 s for 24 images, and
    the C++ decoder gives the same boxes and scores as RF-DETR's own
-   `predict`. Next: the one-click setup and the Train page in the app.
+   `predict`. The app part: *Set up training (one click)* fetches uv (the
+   PyPI wheel, both hashes pinned), installs Python 3.12 into the AI folder,
+   makes `ai/train-env` and installs `rfdetr[train,onnx]` with
+   `--torch-backend auto` (or `cpu`), then checks `import torch, rfdetr`
+   (`TrainController`); *Add to training set* in the label editor exports a
+   clip into `ai/datasets/<clip>` (replacing it); *Train* runs the script on
+   all of them with progress (epoch, share of boxes found) and Stop (after
+   the current step, the student so far is kept; a second Stop ends it at
+   once), keeps `models/student/` and deletes the run's copies and
+   checkpoints. Next: the student as a teacher (votes) and in the
+   Generator's tip finding.
 6. **Benchmark:** clip cutter, script compare with labels, golden-clip run and
    history; the gate for every model and engine change.
 7. **The smaller learners from 0.7:** the learned generation profile and the

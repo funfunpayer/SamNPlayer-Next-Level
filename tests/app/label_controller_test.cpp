@@ -181,6 +181,14 @@ private slots:
         QFile classes(out + "/classes.txt");
         QVERIFY(classes.open(QIODevice::ReadOnly));
         QCOMPARE(QString::fromUtf8(classes.readAll()), QString("glans\nmouth\n"));
+        // Into the student's training set: replaced, not added to.
+        QVERIFY(c.addToTrainingSet(500) == n);
+        const QString set = dir_.filePath("config/ai/datasets/clip");
+        QCOMPARE(QDir(set + "/images").entryList(QDir::Files).size(), n);
+        QFile::copy(set + "/images/" + QDir(set + "/images").entryList(QDir::Files).value(0), set + "/images/stale.jpg");
+        QVERIFY(c.addToTrainingSet(1000) > 0);
+        QVERIFY(!QFile::exists(set + "/images/stale.jpg"));
+        QVERIFY(c.status().contains("training set"));
         QFile first(out + "/labels/clip_00000000.txt");
         QVERIFY(first.open(QIODevice::ReadOnly));
         const QString lines = QString::fromUtf8(first.readAll());

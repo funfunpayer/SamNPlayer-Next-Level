@@ -207,6 +207,9 @@ public:
     bool suggesting() const { return suggesting_; }
     int suggestProgress() const { return suggest_progress_; }
     Q_INVOKABLE int exportDataset(const QString& dirOrUrl, double everyMs);
+    // The same into the student's training set (config_dir()/ai/datasets/<clip>),
+    // replacing what this clip had there (D-155 step 5).
+    Q_INVOKABLE int addToTrainingSet(double everyMs);
 
     QVariantList phases() const;
     QStringList phaseNames() const;
