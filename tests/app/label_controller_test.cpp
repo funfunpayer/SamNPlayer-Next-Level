@@ -569,6 +569,58 @@ private slots:
         QVERIFY(c.labels().contains("face"));
     }
 
+    // Our student (D-155 step 5) is a teacher too: alone (A) and in the vote.
+    // A tiny RF-DETR-shaped model stands in (tests/vision/data/tiny_detr.onnx):
+    // its query 0 is class 1, which classes.json names "face".
+    void theStudentIsATeacher() {
+        if (!samn::vision::OnnxDetector::Available()) return;
+        const QString models = dir_.filePath("config/models/student");
+        QVERIFY(QDir().mkpath(models));
+        QFile::remove(models + "/student.onnx");
+        QVERIFY(QFile::copy(QStringLiteral(SAMN_VISION_TESTDATA) + "/tiny_detr.onnx", models + "/student.onnx"));
+        QFile json(models + "/classes.json");
+        QVERIFY(json.open(QIODevice::WriteOnly));
+        json.write(R"({"classes": ["hand", "face"], "model": "nano"})");
+        json.close();
+        const QString path = dir_.filePath("student.mp4");
+        QVERIFY(QFile::copy(clip_, path));
+        LabelController c;
+        QVERIFY(c.openVideo(path));
+        QCOMPARE(c.studentClasses(), (QStringList{"hand", "face"}));
+        QVERIFY(!c.studentPath().isEmpty());
+        c.setTeacherKind("student");
+        QCOMPARE(c.teacherKind(), QString("student"));
+        c.seek(0);
+        QVERIFY(c.askTeacher());
+        QTRY_VERIFY(!c.teacherBusy());
+        QVERIFY2(c.labels().contains("face"), qPrintable(c.teacherStatus()));
+        const QVariantMap key = c.lanes()[0].toMap().value("keys").toList().value(0).toMap();
+        QCOMPARE(key.value("source").toString(), QString("teacher:student"));
+        const QVariantMap box = c.boxes().value(0).toMap();
+        QVERIFY(std::abs(box.value("x").toDouble() - 48) < 1);  // (0.25 - 0.1) * 320
+        QVERIFY(std::abs(box.value("h").toDouble() - 96) < 1);  // 0.4 * 240
+        QVERIFY(c.undo());
+
+        // The vote: NudeNet and the student, run one after the other; their
+        // faces are in different places, so each is kept, uncertain.
+        QVERIFY(c.chooseNudeNet(QStringLiteral(SAMN_VISION_TESTDATA) + "/tiny_nudenet.onnx"));
+        c.setTeacherUrl("");
+        QVERIFY(c.askAllTeachers());
+        QTRY_VERIFY(!c.teacherBusy());
+        int faces = 0, unsure = 0;
+        for (const QVariant& l : c.lanes()) {
+            const QVariantMap k = l.toMap().value("keys").toList().value(0).toMap();
+            faces += l.toMap().value("cls").toString() == "face";
+            unsure += k.value("uncertain").toBool();
+            QCOMPARE(k.value("source").toString(), QString("teachers:nudenet+student"));
+        }
+        QCOMPARE(faces, 2);
+        QCOMPARE(unsure, 2);
+        LabelController again;
+        QCOMPARE(again.teacherKind(), QString("nudenet"));  // chooseNudeNet made NudeNet the teacher
+        QFile::remove(models + "/student.onnx");
+    }
+
     void nudenetDownloadChecksWhatItGets() {
         if (!samn::vision::OnnxDetector::Available()) return;  // nothing to fetch for
         QFile f(QStringLiteral(SAMN_VISION_TESTDATA) + "/tiny_nudenet.onnx");
