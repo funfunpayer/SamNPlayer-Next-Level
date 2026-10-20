@@ -71,6 +71,7 @@ qt_add_qml_module(samn_app
     qml/LaneName.qml
     qml/Icon.qml
     qml/FlowFigure.qml
+    qml/DualRing.qml
     qml/VideoTransport.qml
     qml/GeneratorProjectPanel.qml
     qml/AiTrainPage.qml
