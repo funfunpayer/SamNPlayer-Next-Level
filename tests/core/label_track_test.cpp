@@ -236,3 +236,50 @@ TEST_CASE("YOLO lines are normalised and clipped to the frame") {
     s.items.push_back({0, LabelBox{200, 200, 5, 5}});  // fully outside
     CHECK(samn::YoloLines(s, 100, 100) == "2 0.950000 0.500000 0.100000 0.200000\n");
 }
+
+TEST_CASE("tracking between keys: forward and backward blend, disagreement is uncertain") {
+    using samn::TrackSample;
+    // Both runs agree at first; later the forward one drifts away.
+    std::vector<TrackSample> fwd{{0, LabelBox{0, 10, 20, 20}},
+                                 {250, LabelBox{10, 10, 20, 20}},
+                                 {500, LabelBox{20, 10, 20, 20}},
+                                 {750, LabelBox{90, 10, 20, 20}},
+                                 {1000, LabelBox{40, 10, 20, 20}}};
+    std::vector<TrackSample> bwd{{250, LabelBox{10, 10, 20, 20}},
+                                 {500, LabelBox{22, 10, 20, 20}},
+                                 {750, std::nullopt},
+                                 {1000, LabelBox{40, 10, 20, 20}}};
+    const auto keys = samn::BlendTracks(fwd, bwd, 0, 1000);
+    REQUIRE(keys.size() == 3);  // strictly between the two keys
+    CHECK(keys[0].ms == 250);
+    CHECK_FALSE(keys[0].confirmed);
+    CHECK(keys[0].source == "tracker");
+    CHECK_FALSE(keys[0].uncertain);
+    CHECK(keys[1].box.x == doctest::Approx(21.0));  // halfway: half of each
+    CHECK_FALSE(keys[1].uncertain);
+    CHECK(keys[2].uncertain);  // the backward run lost it
+    CHECK(keys[2].box.x == doctest::Approx(90.0));
+    CHECK(samn::BoxIoU({0, 0, 10, 10}, {0, 0, 10, 10}) == doctest::Approx(1.0));
+    CHECK(samn::BoxIoU({0, 0, 10, 10}, {20, 0, 10, 10}) == doctest::Approx(0.0));
+
+    samn::LabelProject p;
+    p.duration_ms = 1000;
+    auto& t = p.AddTrack("glans");
+    t.SetKey(Box(0, 0));
+    t.SetKey(Box(1000, 40));
+    t.SetKey(Box(600, 5, false, "tracker"));  // an old guess: replaced
+    CHECK(samn::FillBetweenKeys(t, 0, 1000, keys) == 3);
+    CHECK(t.keys().size() == 5);
+    CHECK(t.KeyAt(600) == nullptr);
+    CHECK(samn::NextUncertain(p, 0) == 750);
+    CHECK_FALSE(samn::NextUncertain(p, 750).has_value());
+    CHECK_FALSE(samn::NextUncertain(p, 0, "hand").has_value());
+    // The flag survives save and load.
+    const auto back = samn::ParseLabelProject(samn::SerializeLabelProject(p));
+    CHECK(back.tracks[0].KeyAt(750)->uncertain);
+    // A confirmed key in the gap stays.
+    t.SetKey(Box(500, 25));
+    samn::FillBetweenKeys(t, 0, 1000, keys);
+    CHECK(t.KeyAt(500)->confirmed);
+    CHECK(t.KeyAt(500)->box.x == doctest::Approx(25.0));
+}

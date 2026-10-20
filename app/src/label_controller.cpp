@@ -14,6 +14,7 @@
 
 #include "audio_level.h"
 #include "frame_cache.h"
+#include "samn/engine/label_tracking.h"
 #include "samn/phase_rules.h"
 #include "samn/vision/picture_signals.h"
 #include "samn/vision/frame_reader.h"
@@ -36,6 +37,8 @@ LabelController::LabelController(QObject* parent) : QObject(parent) {}
 LabelController::~LabelController() {
     if (suggest_cancel_) *suggest_cancel_ = true;
     if (suggest_worker_.joinable()) suggest_worker_.join();
+    if (track_cancel_) *track_cancel_ = true;
+    if (track_worker_.joinable()) track_worker_.join();
 }
 
 QString LabelController::videoName() const { return QFileInfo(video_path_).fileName(); }
@@ -64,6 +67,7 @@ void LabelController::setCurrentLabel(const QString& label) {
 
 bool LabelController::openVideo(const QString& pathOrUrl) {
     cancelSuggest();
+    cancelTrack();
     const QString path = LocalPath(pathOrUrl);
     if (!QFileInfo(path).isFile()) {
         setStatus(tr("Not found: %1").arg(path));
@@ -249,6 +253,119 @@ int LabelController::confirmPhases() {
         return true;
     });
     return n;
+}
+
+bool LabelController::trackCurrent() {
+    if (!hasVideo() || tracking_ || current_.isEmpty()) return false;
+    if (still_) {
+        setStatus(tr("Tracking needs a clip, not a still picture."));
+        return false;
+    }
+    const auto* t = project_.Track(current_.toStdString());
+    if (!t) return false;
+    // Each stretch between two confirmed boxes is one run.
+    std::vector<Gap> gaps;
+    const samn::LabelKey* prev = nullptr;
+    for (const auto& k : t->keys()) {
+        if (!k.confirmed) continue;
+        if (prev && !prev->absent && !k.absent && k.ms - prev->ms > int64_t(frame_ms_ * 2))
+            gaps.push_back({prev->ms, k.ms, prev->box, k.box});
+        prev = &k;
+    }
+    if (gaps.empty()) {
+        setStatus(tr("Set the box at two frames first; the tracker fills what lies between."));
+        return false;
+    }
+    if (track_worker_.joinable()) track_worker_.join();
+    track_cancel_ = std::make_shared<std::atomic<bool>>(false);
+    tracking_ = true;
+    track_progress_ = 0;
+    emit trackingChanged();
+    setStatus(tr("Tracking %1…").arg(current_));
+    QPointer<LabelController> self(this);
+    track_worker_ = std::thread([self, gaps, label = current_, cancel = track_cancel_, video = Fs(video_path_)] {
+        std::vector<std::vector<samn::LabelKey>> keys;
+        QString error;
+        for (size_t g = 0; g < gaps.size() && error.isEmpty(); ++g) {
+            samn::engine::BetweenKeysOptions o;
+            o.cancel = [cancel] { return cancel->load(); };
+            o.progress = [self, g, n = gaps.size()](int p) {
+                const int total = int((g * 100 + size_t(p)) / n);
+                QMetaObject::invokeMethod(qApp, [self, total] {
+                    if (self && self->tracking_) {
+                        self->track_progress_ = total;
+                        emit self->trackingChanged();
+                    }
+                }, Qt::QueuedConnection);
+            };
+            std::string why;
+            std::optional<samn::engine::BetweenKeysResult> r;
+            try {
+                r = samn::engine::TrackBetweenKeys(video, gaps[g].from_ms, gaps[g].from_box, gaps[g].to_ms, gaps[g].to_box, o, &why);
+            } catch (const std::exception& e) {
+                why = e.what();
+            }
+            if (!r) error = QString::fromStdString(why);
+            else keys.push_back(samn::BlendTracks(r->forward, r->backward, gaps[g].from_ms, gaps[g].to_ms));
+        }
+        QMetaObject::invokeMethod(qApp, [self, label, gaps, keys = std::move(keys), error] {
+            if (self) self->onTracked(label, gaps, keys, error);
+        }, Qt::QueuedConnection);
+    });
+    return true;
+}
+
+void LabelController::cancelTrack() {
+    if (!tracking_) return;
+    if (track_cancel_) *track_cancel_ = true;
+    tracking_ = false;
+    emit trackingChanged();
+    setStatus(tr("Tracking canceled."));
+}
+
+void LabelController::onTracked(const QString& label, const std::vector<Gap>& gaps,
+                                const std::vector<std::vector<samn::LabelKey>>& keys, const QString& error) {
+    if (!tracking_) return;  // canceled meanwhile
+    tracking_ = false;
+    track_progress_ = 100;
+    emit trackingChanged();
+    if (!error.isEmpty() && keys.empty()) {
+        setStatus(error == QLatin1String("canceled") ? tr("Tracking canceled.") : tr("Tracking: %1").arg(error));
+        return;
+    }
+    int added = 0, unsure = 0;
+    change(tr("Tracked %1").arg(label), [&](samn::LabelProject& p) {
+        auto* t = p.Track(label.toStdString());
+        if (!t) return false;
+        for (size_t g = 0; g < keys.size(); ++g) {
+            added += samn::FillBetweenKeys(*t, gaps[g].from_ms, gaps[g].to_ms, keys[g]);
+            for (const auto& k : keys[g]) unsure += k.uncertain ? 1 : 0;
+        }
+        return added > 0;
+    });
+    QString text = tr("%1: %n tracked key(s)", "", added).arg(label);
+    if (unsure > 0) text += tr(", %n uncertain: press N to check them", "", unsure);
+    if (!error.isEmpty()) text += tr(" (stopped: %1)").arg(error);
+    setStatus(text);
+}
+
+bool LabelController::nextUncertain() {
+    const int64_t now = int64_t(std::llround(preview_ms_));
+    auto at = samn::NextUncertain(project_, now, current_.toStdString());
+    if (!at) at = samn::NextUncertain(project_, now);
+    if (!at) {
+        setStatus(tr("Nothing uncertain after here."));
+        return false;
+    }
+    // The label of that key becomes the current one.
+    for (const auto& t : project_.tracks)
+        if (const auto* k = t.KeyAt(*at); k && k->uncertain && !k->confirmed) {
+            setCurrentLabel(QString::fromStdString(t.label()));
+            break;
+        }
+    seek(double(*at));
+    setStatus(tr("Uncertain here: drag the box where it belongs, or confirm it."));
+    return true;
 }
 
 bool LabelController::suggestPhases() {
@@ -471,7 +588,7 @@ QVariantList LabelController::lanes() const {
         const auto& k = t.keys();
         for (const auto& key : k)
             keys << QVariantMap{{"ms", double(key.ms)}, {"absent", key.absent}, {"covered", key.covered}, {"confirmed", key.confirmed},
-                                {"source", QString::fromStdString(key.source)}};
+                                {"source", QString::fromStdString(key.source)}, {"uncertain", key.uncertain}};
         // One span per stretch between keys (the last one runs to the end).
         for (size_t j = 0; j < k.size(); ++j) {
             const double end = j + 1 < k.size() ? double(k[j + 1].ms) : std::max(duration_ms_, double(k[j].ms));

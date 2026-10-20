@@ -27,6 +27,9 @@ struct LabelKey {
     LabelBox box;         // ignored when absent
     bool confirmed = false;
     std::string source = "user";  // "user", "tracker", "teacher:<name>"
+    // The tracker is unsure here (forward and backward disagree, or one
+    // lost the object): where "Next uncertain" jumps (D-155 §2.2).
+    bool uncertain = false;
 };
 
 // What a track says at one time.
@@ -139,6 +142,27 @@ std::vector<LabelSample> ExportSamples(const LabelProject& p, const std::vector<
 // The exclusion boxes visible at ms (all "exclude" objects), for the
 // Generator to avoid.
 std::vector<LabelBox> ExcludeZonesAt(const LabelProject& p, int64_t ms);
+
+// Tracking between keyframes (D-155 step 3): the tracker runs forward from
+// one confirmed key and backward from the next; the two are blended, the
+// forward one weighs more near its start, the backward one near its end.
+struct TrackSample {
+    int64_t ms = 0;
+    std::optional<LabelBox> box;  // nullopt: the tracker lost it
+};
+// Overlap of two boxes, 0..1 (intersection over union).
+double BoxIoU(const LabelBox& a, const LabelBox& b);
+// Unconfirmed keys (source "tracker") at the forward samples' times. A key is
+// uncertain when the two disagree (IoU under uncertain_iou) or one is lost;
+// when both are lost the key says absent.
+std::vector<LabelKey> BlendTracks(const std::vector<TrackSample>& forward, const std::vector<TrackSample>& backward,
+                                  int64_t from_ms, int64_t to_ms, double uncertain_iou = 0.5);
+// Replaces the unconfirmed keys strictly between from_ms and to_ms with
+// `keys`; confirmed keys stay. Returns how many keys were added.
+int FillBetweenKeys(LabelTrack& t, int64_t from_ms, int64_t to_ms, const std::vector<LabelKey>& keys);
+// The next uncertain key after after_ms on any track (the label, or all
+// labels when it is empty); nullopt when there is none.
+std::optional<int64_t> NextUncertain(const LabelProject& p, int64_t after_ms, const std::string& label = {});
 
 // "class cx cy w h" lines, normalised to the frame size, boxes clipped to it.
 std::string YoloLines(const LabelSample& s, double frame_w, double frame_h);

@@ -186,6 +186,72 @@ const LabelPhase* LabelProject::PhaseAt(int64_t ms) const {
     return nullptr;
 }
 
+double BoxIoU(const LabelBox& a, const LabelBox& b) {
+    const double x0 = std::max(a.x, b.x), y0 = std::max(a.y, b.y);
+    const double x1 = std::min(a.x + a.w, b.x + b.w), y1 = std::min(a.y + a.h, b.y + b.h);
+    const double inter = std::max(0.0, x1 - x0) * std::max(0.0, y1 - y0);
+    const double uni = a.w * a.h + b.w * b.h - inter;
+    return uni > 0 ? inter / uni : 0.0;
+}
+
+std::vector<LabelKey> BlendTracks(const std::vector<TrackSample>& forward, const std::vector<TrackSample>& backward,
+                                  int64_t from_ms, int64_t to_ms, double uncertain_iou) {
+    std::vector<LabelKey> out;
+    const double span = double(std::max<int64_t>(1, to_ms - from_ms));
+    for (const auto& f : forward) {
+        if (f.ms <= from_ms || f.ms >= to_ms) continue;
+        // The backward sample closest in time.
+        const TrackSample* b = nullptr;
+        for (const auto& s : backward)
+            if (!b || std::llabs(s.ms - f.ms) < std::llabs(b->ms - f.ms)) b = &s;
+        const std::optional<LabelBox> fb = f.box;
+        const std::optional<LabelBox> bb = b ? b->box : std::nullopt;
+        LabelKey k;
+        k.ms = f.ms;
+        k.confirmed = false;
+        k.source = "tracker";
+        if (!fb && !bb) {
+            k.absent = true;
+            k.uncertain = true;
+        } else if (!fb || !bb) {
+            k.box = fb ? *fb : *bb;
+            k.uncertain = true;
+        } else {
+            const double w = std::clamp(double(f.ms - from_ms) / span, 0.0, 1.0);  // weight of the backward run
+            k.box = {fb->x + (bb->x - fb->x) * w, fb->y + (bb->y - fb->y) * w, fb->w + (bb->w - fb->w) * w,
+                     fb->h + (bb->h - fb->h) * w};
+            k.uncertain = BoxIoU(*fb, *bb) < uncertain_iou;
+        }
+        out.push_back(std::move(k));
+    }
+    return out;
+}
+
+int FillBetweenKeys(LabelTrack& t, int64_t from_ms, int64_t to_ms, const std::vector<LabelKey>& keys) {
+    std::vector<int64_t> drop;
+    for (const auto& k : t.keys())
+        if (k.ms > from_ms && k.ms < to_ms && !k.confirmed) drop.push_back(k.ms);
+    for (const int64_t ms : drop) t.RemoveKey(ms);
+    int added = 0;
+    for (const auto& k : keys) {
+        if (k.ms <= from_ms || k.ms >= to_ms) continue;
+        if (const LabelKey* there = t.KeyAt(k.ms); there && there->confirmed) continue;
+        t.SetKey(k);
+        ++added;
+    }
+    return added;
+}
+
+std::optional<int64_t> NextUncertain(const LabelProject& p, int64_t after_ms, const std::string& label) {
+    std::optional<int64_t> best;
+    for (const auto& t : p.tracks) {
+        if (!label.empty() && t.label() != label) continue;
+        for (const auto& k : t.keys())
+            if (k.uncertain && !k.confirmed && k.ms > after_ms && (!best || k.ms < *best)) best = k.ms;
+    }
+    return best;
+}
+
 bool IsExcludeClass(const std::string& cls) { return cls == kExcludeClass; }
 
 std::vector<LabelBox> ExcludeZonesAt(const LabelProject& p, int64_t ms) {
@@ -218,6 +284,7 @@ std::string SerializeLabelProject(const LabelProject& p) {
             if (k.absent) o["absent"] = true;
             if (k.absent && k.covered) o["covered"] = true;
             else o["box"] = {k.box.x, k.box.y, k.box.w, k.box.h};
+            if (k.uncertain) o["uncertain"] = true;
             keys.push_back(std::move(o));
         }
         j["tracks"].push_back({{"label", t.label()}, {"class", t.cls()}, {"keys", std::move(keys)}});
@@ -262,6 +329,7 @@ LabelProject ParseLabelProject(const std::string& json) {
             k.source = o.value("source", "user");
             k.absent = o.value("absent", false);
             k.covered = k.absent && o.value("covered", false);
+            k.uncertain = o.value("uncertain", false);
             if (!k.absent) {
                 const auto b = o.value("box", nlohmann::json::array());
                 if (!b.is_array() || b.size() != 4) continue;

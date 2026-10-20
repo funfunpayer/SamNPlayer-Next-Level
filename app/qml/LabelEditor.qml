@@ -58,6 +58,8 @@ Item {
     Shortcut { sequence: "Right"; enabled: root.active && labels.hasVideo; onActivated: labels.seek(labels.previewMs + 1000) }
     Shortcut { sequence: "X"; enabled: root.active && labels.hasVideo; onActivated: labels.markAbsent(false) }
     Shortcut { sequence: "H"; enabled: root.active && labels.hasVideo; onActivated: labels.markAbsent(true) }
+    Shortcut { sequence: "T"; enabled: root.active && labels.hasVideo && !labels.tracking; onActivated: labels.trackCurrent() }
+    Shortcut { sequence: "N"; enabled: root.active && labels.hasVideo; onActivated: { root.playing = false; labels.nextUncertain() } }
     Shortcut { sequences: [StandardKey.Delete, "Backspace"]; enabled: root.active && labels.hasVideo; onActivated: labels.removeKey() }
     Shortcut { sequences: [StandardKey.Undo]; enabled: root.active && labels.canUndo; onActivated: labels.undo() }
     Shortcut { sequences: [StandardKey.Redo, "Ctrl+Y"]; enabled: root.active && labels.canRedo; onActivated: labels.redo() }
@@ -151,6 +153,15 @@ Item {
                     text: qsTr("Partly visible: mark the part you see. Covered stretches are left out of training.")
                     color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 11
                 }
+                // D-155 step 3: the tracker fills between the confirmed boxes.
+                FlowButton {
+                    objectName: "trackCurrent"
+                    Layout.fillWidth: true; primary: true
+                    text: labels.tracking ? qsTr("Tracking… %1 % (stop)").arg(labels.trackProgress) : qsTr("Track between keys (T)")
+                    enabled: labels.currentLabel !== "" || labels.tracking
+                    onClicked: labels.tracking ? labels.cancelTrack() : labels.trackCurrent()
+                }
+                FlowButton { objectName: "nextUncertain"; Layout.fillWidth: true; text: qsTr("Next uncertain (N)"); onClicked: { root.playing = false; labels.nextUncertain() } }
                 FlowButton { Layout.fillWidth: true; text: qsTr("Remove this key (Del)"); enabled: labels.currentLabel !== ""; onClicked: labels.removeKey() }
                 FlowButton { Layout.fillWidth: true; text: qsTr("Confirm all of this label"); enabled: labels.currentLabel !== ""; onClicked: labels.confirmAll() }
             }
@@ -432,8 +443,10 @@ Item {
                                         required property var modelData
                                         x: lanesArea.xOf(modelData.ms) - 5; y: lane.height / 2 - 5
                                         width: 10; height: 10; radius: modelData.absent ? 2 : 5; rotation: modelData.absent ? 45 : 0
-                                        color: modelData.confirmed ? lane.tone : "transparent"
-                                        border.color: lane.tone; border.width: 1.5
+                                        // The tracker is unsure here: orange, until confirmed.
+                                        readonly property color mark: modelData.uncertain && !modelData.confirmed ? Theme.orange : lane.tone
+                                        color: modelData.confirmed ? lane.tone : modelData.uncertain ? Qt.rgba(mark.r, mark.g, mark.b, 0.6) : "transparent"
+                                        border.color: mark; border.width: 1.5
                                     }
                                 }
                             }
