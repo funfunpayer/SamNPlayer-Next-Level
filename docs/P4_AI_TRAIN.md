@@ -201,8 +201,11 @@ lanes; its stretches are dragged and named like chapters:
    (the forward one weighs more near its start) into unconfirmed keys every
    200 ms, marked uncertain where they disagree (IoU under 0.5) or one lost
    the object; orange keys in the lane, *Next uncertain* (`N`) jumps there.
-   One undo step; confirmed keys are never overwritten. Next: re-run the
-   stretch on its own after a drag.
+   One undo step; confirmed keys are never overwritten. After a drag (Owner
+   20 Oct: at once, can be switched off) the stretches to the confirmed boxes
+   on both sides are tracked again in the background (*Track again after a
+   drag*, `aitrain.retrack_after_drag`); a drag while a run goes replaces it,
+   and a run whose ends were undone meanwhile changes nothing.
 4. **Teachers:** vision servers first (done, Owner 20 Oct: no new
    dependency, the Mac works at once): any OpenAI-compatible address (Ollama,
    LM Studio, a Mac in the network), *Test connection* lists the models,
@@ -230,7 +233,7 @@ lanes; its stretches are dragged and named like chapters:
    kept, marked uncertain (*Next uncertain*, `N`); a class a teacher cannot
    see (NudeNet has no hands) is no vote against. *Teachers through the clip*
    votes every 2 s through the whole clip in the background (progress, Stop,
-   one undo step). Next: the tracker re-running a stretch after a drag.
+   one undo step).
 5. **Student:** the training environment (one click), RF-DETR training and ONNX
    export with progress and Cancel; the student as a teacher and in the
    Generator's tip finding.

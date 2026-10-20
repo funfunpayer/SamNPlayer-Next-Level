@@ -103,6 +103,7 @@ private slots:
 
     void labelsKeysUndoAndSaving() {
         LabelController c;
+        c.setRetrackAfterDrag(false);  // the keys here are counted by hand
         QVERIFY(!c.openVideo(dir_.filePath("missing.mp4")));
         QVERIFY(c.openVideo(QUrl::fromLocalFile(clip_).toString()));
         QVERIFY(c.hasVideo());
@@ -300,6 +301,7 @@ private slots:
         const QString path = dir_.filePath("tracked.mp4");
         QVERIFY(QFile::copy(clip_, path));
         LabelController c;
+        c.setRetrackAfterDrag(false);
         QVERIFY(c.openVideo(path));
         QVERIFY(c.addLabel("glans"));
         QVERIFY(!c.trackCurrent());  // one key is not enough
@@ -329,6 +331,65 @@ private slots:
         QVERIFY(c.undo());
         QCOMPARE(c.lanes()[0].toMap().value("keys").toList().size(), before);
         QVERIFY(!c.nextUncertain() || c.status().contains("Uncertain"));
+    }
+
+    // Owner 20 Oct: after a drag the stretches on both sides follow at once;
+    // the switch turns it off and is remembered.
+    void aDraggedBoxIsFollowedAtOnce() {
+        const QString path = dir_.filePath("retrack.mp4");
+        QVERIFY(QFile::copy(clip_, path));
+        const auto disc = [](double ms) { return QRectF(125, 120 + 40 * std::sin(2 * 3.14159265358979323846 * ms / 1000.0) - 35, 70, 70); };
+        LabelController c;
+        c.setRetrackAfterDrag(true);
+        QVERIFY(c.openVideo(path));
+        QVERIFY(c.addLabel("glans"));
+        c.seek(0);
+        QVERIFY(c.setBox(disc(0)));
+        QVERIFY(!c.tracking());  // nothing on either side yet
+        c.seek(2000);
+        QVERIFY(c.setBox(disc(c.previewMs())));
+        QVERIFY(c.tracking());  // 0 to 2 s, on its own
+        QTRY_VERIFY_WITH_TIMEOUT(!c.tracking(), 30000);
+        const auto keyCount = [&] { return c.lanes()[0].toMap().value("keys").toList().size(); };
+        const int tracked = keyCount();
+        QVERIFY2(tracked > 4, qPrintable(c.status()));
+
+        // A correction in the middle: both halves are tracked again, the
+        // confirmed ends stay, one undo takes the new run back.
+        c.seek(1000);
+        QVERIFY(c.setBox(disc(c.previewMs())));
+        QVERIFY(c.tracking());
+        QTRY_VERIFY_WITH_TIMEOUT(!c.tracking(), 30000);
+        int confirmed = 0;
+        for (const auto& k : c.lanes()[0].toMap().value("keys").toList()) confirmed += k.toMap().value("confirmed").toBool();
+        QCOMPARE(confirmed, 3);
+        QVERIFY(c.undo());  // the run
+        QVERIFY(c.undo());  // the box
+        QCOMPARE(keyCount(), tracked);
+
+        // A drag while a run goes replaces it; only the last run counts.
+        c.seek(500);
+        QVERIFY(c.setBox(disc(c.previewMs())));
+        c.seek(1500);
+        QVERIFY(c.setBox(disc(c.previewMs())));
+        QTRY_VERIFY_WITH_TIMEOUT(!c.tracking(), 30000);
+
+        // Undone while it tracks: the run's result does not come back.
+        c.seek(2500);
+        QVERIFY(c.setBox(disc(c.previewMs())));
+        QVERIFY(c.tracking());
+        const int beforeUndo = c.lanes()[0].toMap().value("keys").toList().size() - 1;
+        QVERIFY(c.undo());
+        QTRY_VERIFY_WITH_TIMEOUT(!c.tracking(), 30000);
+        QCOMPARE(keyCount(), beforeUndo);
+
+        c.setRetrackAfterDrag(false);
+        c.seek(1200);
+        QVERIFY(c.setBox(disc(c.previewMs())));
+        QVERIFY(!c.tracking());
+        LabelController again;
+        QVERIFY(!again.retrackAfterDrag());  // remembered
+        again.setRetrackAfterDrag(true);
     }
 
     void aTeacherOnAModelServerProposesBoxes() {

@@ -53,6 +53,7 @@ LabelController::LabelController(QObject* parent) : QObject(parent) {
         teacher_model_ = text("aitrain.teacher.model");
         teacher_key_ = text("aitrain.teacher.key");
         if (text("aitrain.teacher.kind") == QLatin1String("nudenet")) teacher_kind_ = QStringLiteral("nudenet");
+        if (const auto v = settings().get("aitrain.retrack_after_drag", true); v.is_boolean()) retrack_after_drag_ = v.get<bool>();
         nudenet_path_ = text("aitrain.nudenet.path");
     } catch (const std::exception&) {
         // Unreadable settings: start without a teacher.
@@ -651,7 +652,40 @@ bool LabelController::setBox(const QRectF& box) {
         p.AddTrack(current_.toStdString()).SetKey(k, tolerance());
         return done = true;
     });
+    // The stretches on both sides of the new box follow it (Owner 20 Oct:
+    // at once after the drag, can be switched off).
+    if (done && retrack_after_drag_ && !still_)
+        if (const auto* t = project_.Track(current_.toStdString())) {
+            const auto gaps = gapsOf(*t, int64_t(std::llround(preview_ms_)));
+            if (!gaps.empty()) startTracking(current_, gaps, true);
+        }
     return done;
+}
+
+std::vector<LabelController::Gap> LabelController::gapsOf(const samn::LabelTrack& t, std::optional<int64_t> around) const {
+    // Each stretch between two confirmed boxes is one run; with `around`,
+    // only the stretches that end or start at that key.
+    std::vector<Gap> gaps;
+    const samn::LabelKey* prev = nullptr;
+    const int64_t near = tolerance();
+    for (const auto& k : t.keys()) {
+        if (!k.confirmed) continue;
+        if (prev && !prev->absent && !k.absent && k.ms - prev->ms > int64_t(frame_ms_ * 2) &&
+            (!around || std::llabs(prev->ms - *around) <= near || std::llabs(k.ms - *around) <= near))
+            gaps.push_back({prev->ms, k.ms, prev->box, k.box});
+        prev = &k;
+    }
+    return gaps;
+}
+
+void LabelController::setRetrackAfterDrag(bool on) {
+    if (on == retrack_after_drag_) return;
+    retrack_after_drag_ = on;
+    try {
+        settings().set("aitrain.retrack_after_drag", on);
+    } catch (const std::exception&) {
+    }
+    emit trackingChanged();
 }
 
 bool LabelController::markAbsent(bool covered) {
@@ -741,34 +775,33 @@ int LabelController::confirmPhases() {
 }
 
 bool LabelController::trackCurrent() {
-    if (!hasVideo() || tracking_ || current_.isEmpty()) return false;
+    if (!hasVideo() || current_.isEmpty()) return false;  // a run still going is replaced
     if (still_) {
         setStatus(tr("Tracking needs a clip, not a still picture."));
         return false;
     }
     const auto* t = project_.Track(current_.toStdString());
     if (!t) return false;
-    // Each stretch between two confirmed boxes is one run.
-    std::vector<Gap> gaps;
-    const samn::LabelKey* prev = nullptr;
-    for (const auto& k : t->keys()) {
-        if (!k.confirmed) continue;
-        if (prev && !prev->absent && !k.absent && k.ms - prev->ms > int64_t(frame_ms_ * 2))
-            gaps.push_back({prev->ms, k.ms, prev->box, k.box});
-        prev = &k;
-    }
+    const std::vector<Gap> gaps = gapsOf(*t);
     if (gaps.empty()) {
         setStatus(tr("Set the box at two frames first; the tracker fills what lies between."));
         return false;
     }
+    return startTracking(current_, gaps, false);
+}
+
+bool LabelController::startTracking(const QString& label, const std::vector<Gap>& gaps, bool automatic) {
+    // A new run replaces one still going (a drag while the last one tracks).
+    if (track_cancel_) *track_cancel_ = true;
     if (track_worker_.joinable()) track_worker_.join();
     track_cancel_ = std::make_shared<std::atomic<bool>>(false);
     tracking_ = true;
     track_progress_ = 0;
     emit trackingChanged();
-    setStatus(tr("Tracking %1…").arg(current_));
+    const int run = ++track_run_;
+    setStatus(automatic ? tr("Tracking %1 to follow your box…").arg(label) : tr("Tracking %1…").arg(label));
     QPointer<LabelController> self(this);
-    track_worker_ = std::thread([self, gaps, label = current_, cancel = track_cancel_, video = Fs(video_path_)] {
+    track_worker_ = std::thread([self, gaps, label, run, cancel = track_cancel_, video = Fs(video_path_)] {
         std::vector<std::vector<samn::LabelKey>> keys;
         QString error;
         for (size_t g = 0; g < gaps.size() && error.isEmpty(); ++g) {
@@ -793,8 +826,8 @@ bool LabelController::trackCurrent() {
             if (!r) error = QString::fromStdString(why);
             else keys.push_back(samn::BlendTracks(r->forward, r->backward, gaps[g].from_ms, gaps[g].to_ms));
         }
-        QMetaObject::invokeMethod(qApp, [self, label, gaps, keys = std::move(keys), error] {
-            if (self) self->onTracked(label, gaps, keys, error);
+        QMetaObject::invokeMethod(qApp, [self, run, label, gaps, keys = std::move(keys), error] {
+            if (self && run == self->track_run_) self->onTracked(label, gaps, keys, error);
         }, Qt::QueuedConnection);
     });
     return true;
@@ -823,6 +856,10 @@ void LabelController::onTracked(const QString& label, const std::vector<Gap>& ga
         auto* t = p.Track(label.toStdString());
         if (!t) return false;
         for (size_t g = 0; g < keys.size(); ++g) {
+            // Undone or moved meanwhile: a stretch whose ends are gone stays as it is.
+            const samn::LabelKey* a = t->KeyAt(gaps[g].from_ms);
+            const samn::LabelKey* b = t->KeyAt(gaps[g].to_ms);
+            if (!a || !b || !a->confirmed || !b->confirmed || a->absent || b->absent) continue;
             added += samn::FillBetweenKeys(*t, gaps[g].from_ms, gaps[g].to_ms, keys[g]);
             for (const auto& k : keys[g]) unsure += k.uncertain ? 1 : 0;
         }
