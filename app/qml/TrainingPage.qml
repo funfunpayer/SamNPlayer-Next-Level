@@ -688,13 +688,13 @@ Item {
                             visible: page.custom
                             enabled: ctl.state === "idle"
                             Layout.fillWidth: true; spacing: 6
-                            SettingRow { Layout.fillWidth: true; label: qsTr("Cycles"); from: 1; to: 20; step: 1; value: ctl.cycles; display: String(ctl.cycles); tip: qsTr("Number of training cycles (1-20)."); onMoved: (v) => ctl.cycles = v }
-                            SettingRow { Layout.fillWidth: true; label: qsTr("Ramp up (ms)"); from: 0; to: 30000; step: 500; value: ctl.rampUpMs; display: String(ctl.rampUpMs); tip: qsTr("Ramp-up duration per cycle."); onMoved: (v) => ctl.rampUpMs = v }
-                            SettingRow { Layout.fillWidth: true; label: qsTr("Hold (ms)"); from: 0; to: 15000; step: 500; value: ctl.holdMs; display: String(ctl.holdMs); tip: qsTr("Hold duration at peak."); onMoved: (v) => ctl.holdMs = v }
-                            SettingRow { Layout.fillWidth: true; label: qsTr("Rest (ms)"); from: 0; to: 60000; step: 500; value: ctl.restMs; display: String(ctl.restMs); tip: qsTr("Rest between cycles."); onMoved: (v) => ctl.restMs = v }
-                            SettingRow { Layout.fillWidth: true; label: qsTr("Peak intensity"); from: 0; to: 1; step: 0.05; value: ctl.peak; display: ctl.peak.toFixed(2); tip: qsTr("Peak level for each cycle (0-1)."); onMoved: (v) => ctl.peak = v }
-                            SettingRow { Layout.fillWidth: true; visible: ctl.technique === "plateau"; label: qsTr("Plateau fraction"); from: 0; to: 1; step: 0.05; value: ctl.plateauFraction; display: ctl.plateauFraction.toFixed(2); tip: qsTr("How high the plateau sits relative to the peak (edging)."); onMoved: (v) => ctl.plateauFraction = v }
-                            SettingRow { Layout.fillWidth: true; label: qsTr("Progression"); from: 0; to: 1; step: 0.05; value: ctl.progression; display: ctl.progression.toFixed(2); tip: qsTr("How much the peak grows each cycle (0-1)."); onMoved: (v) => ctl.progression = v }
+                            SettingRow { Layout.fillWidth: true; label: qsTr("Cycles"); help: "training.cycles"; from: 1; to: 20; step: 1; value: ctl.cycles; display: String(ctl.cycles); tip: qsTr("Number of training cycles (1-20)."); onMoved: (v) => ctl.cycles = v }
+                            SettingRow { Layout.fillWidth: true; label: qsTr("Ramp up (ms)"); help: "training.ramp-up-ms"; from: 0; to: 30000; step: 500; value: ctl.rampUpMs; display: String(ctl.rampUpMs); tip: qsTr("Ramp-up duration per cycle."); onMoved: (v) => ctl.rampUpMs = v }
+                            SettingRow { Layout.fillWidth: true; label: qsTr("Hold (ms)"); help: "training.hold-ms"; from: 0; to: 15000; step: 500; value: ctl.holdMs; display: String(ctl.holdMs); tip: qsTr("Hold duration at peak."); onMoved: (v) => ctl.holdMs = v }
+                            SettingRow { Layout.fillWidth: true; label: qsTr("Rest (ms)"); help: "training.rest-ms"; from: 0; to: 60000; step: 500; value: ctl.restMs; display: String(ctl.restMs); tip: qsTr("Rest between cycles."); onMoved: (v) => ctl.restMs = v }
+                            SettingRow { Layout.fillWidth: true; label: qsTr("Peak intensity"); help: "training.peak-intensity"; from: 0; to: 1; step: 0.05; value: ctl.peak; display: ctl.peak.toFixed(2); tip: qsTr("Peak level for each cycle (0-1)."); onMoved: (v) => ctl.peak = v }
+                            SettingRow { Layout.fillWidth: true; visible: ctl.technique === "plateau"; label: qsTr("Plateau fraction"); help: "training.plateau-fraction"; from: 0; to: 1; step: 0.05; value: ctl.plateauFraction; display: ctl.plateauFraction.toFixed(2); tip: qsTr("How high the plateau sits relative to the peak (edging)."); onMoved: (v) => ctl.plateauFraction = v }
+                            SettingRow { Layout.fillWidth: true; label: qsTr("Progression"); help: "training.progression-per-cycle"; from: 0; to: 1; step: 0.05; value: ctl.progression; display: ctl.progression.toFixed(2); tip: qsTr("How much the peak grows each cycle (0-1)."); onMoved: (v) => ctl.progression = v }
                         }
                     }
                 }

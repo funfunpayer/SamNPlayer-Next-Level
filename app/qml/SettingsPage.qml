@@ -95,6 +95,7 @@ Item {
                                     text: qsTr("Honor inverted flag — a script marked \"inverted\" plays flipped (100 − position)")
                                     color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
                                 }
+                                HelpChip { key: "st-honor-inverted" }
                                 FlowToggle {
                                     objectName: "honorInverted"
                                     checked: ctl.honorInverted
@@ -416,6 +417,7 @@ Item {
                                     text: qsTr("%1 % (level %2)").arg(Math.round(vibSlider.value)).arg(devTab.level(vibSlider.value, 10))
                                     color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                                 }
+                                HelpChip { key: "device.vibration" }
                             }
                             RowLayout {
                                 Layout.fillWidth: true; spacing: 10
@@ -435,6 +437,7 @@ Item {
                                     text: qsTr("%1 % (level %2)").arg(Math.round(sucSlider.value)).arg(devTab.level(sucSlider.value, 5))
                                     color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                                 }
+                                HelpChip { key: "device.suction" }
                             }
                             Row {
                                 spacing: 8
@@ -445,6 +448,7 @@ Item {
                                     // 0.7: two seconds of medium vibration, then off.
                                     onClicked: { root.device.setVibration(0.5); vibSlider.value = 50; pulseTimer.restart() }
                                 }
+                                HelpChip { key: "dev-pulse"; anchors.verticalCenter: parent.verticalCenter }
                                 FlowButton {
                                     objectName: "testAllOff"
                                     text: qsTr("All off"); danger: true

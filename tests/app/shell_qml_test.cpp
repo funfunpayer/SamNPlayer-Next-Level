@@ -11,6 +11,7 @@
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QRegularExpression>
+#include <QSet>
 #include <QTemporaryDir>
 #include <QXmlStreamReader>
 #include <QtQml/QQmlExtensionPlugin>
@@ -233,6 +234,57 @@ private slots:
     }
 
     // --- item 53: flow_wiring_test ---
+    // Every "?" names a 0.7 help text that exists (HelpTexts.js), and the
+    // catalogue holds 0.7's 189 data-help texts (ci/help_texts.py).
+    void helpKeysInTheQmlSourcesExist() {
+        QFile cat(QStringLiteral(SAMN_APP_QML_DIR) + "/HelpTexts.js");
+        QVERIFY(cat.open(QIODevice::ReadOnly));
+        const QString js = QString::fromUtf8(cat.readAll());
+        QSet<QString> keys;
+        static const QRegularExpression entry(QStringLiteral("^    \"([^\"]+)\": \"(.+)\",$"), QRegularExpression::MultilineOption);
+        auto e = entry.globalMatch(js);
+        while (e.hasNext()) keys.insert(e.next().captured(1));
+        QCOMPARE(keys.size(), 189);
+        static const QRegularExpression use(QStringLiteral("(?:HelpChip\\s*\\{[^}]*?\\bkey|\\bhelp)\\s*:\\s*\"([\\w.\\-]+)\""));
+        int found = 0;
+        QDirIterator qml(QStringLiteral(SAMN_APP_QML_DIR), {"*.qml"}, QDir::Files);
+        while (qml.hasNext()) {
+            QFile f(qml.next());
+            QVERIFY(f.open(QIODevice::ReadOnly));
+            auto m = use.globalMatch(QString::fromUtf8(f.readAll()));
+            while (m.hasNext()) {
+                const QString key = m.next().captured(1);
+                ++found;
+                QVERIFY2(keys.contains(key), qPrintable(QFileInfo(f).fileName() + ": no help text \"" + key + "\""));
+            }
+        }
+        QVERIFY(found >= 20);
+    }
+
+    // A "?" opens its text below it; Esc closes it.
+    void aHelpChipOpensItsText() {
+        {
+            Shell s;
+            loadShell(s, 2);  // Training: the session settings have chips
+            QQuickItem* chip = nullptr;
+            for (QQuickItem* c : itemsOfType(s.root(), "HelpChip"))
+                if (c->property("key").toString() == "training.cycles" && c->isVisible()) chip = c;
+            QVERIFY(chip);
+            QVERIFY(!chip->property("open").toBool());
+            QTest::mouseClick(s.window, Qt::LeftButton, {}, chip->mapToScene(QPointF(chip->width() / 2, chip->height() / 2)).toPoint());
+            QTRY_VERIFY_WITH_TIMEOUT(chip->property("open").toBool(), kWait);
+            QCOMPARE(chip->property("text").toString(),
+                     QString("Number of training cycles (1–20). Default 5. Training feel only — Create CSRT unchanged."));
+            if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT_HELP"); !shot.isEmpty()) {
+                QTest::qWait(300);
+                s.window->grabWindow().save(QString::fromLocal8Bit(shot));
+            }
+            QTest::keyClick(s.window, Qt::Key_Escape);
+            QTRY_VERIFY_WITH_TIMEOUT(!chip->property("open").toBool(), kWait);
+        }
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
+
     void shellLoadsWithoutWarningsAndShowsItsIcons() {
         {
             Shell s;

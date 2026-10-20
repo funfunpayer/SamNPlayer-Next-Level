@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 20 Oct 2026, Claude, branch `claude/samn2-toasts`.
+**Last update:** 20 Oct 2026, Claude, branch `claude/samn2-help-chips`.
 
 ## Rules
 
@@ -87,6 +87,7 @@
 - **Optimize for** (#81, D-156): `core/include/samn/improve.h` (trim, fill gaps, heal tracking gaps), the Editor's *Optimize for* any device / Sam Neo 2, *Optimize after Create*.
 - **Teacher on a model server** (D-155 step 4, first part, #91; Owner 20 Oct: servers first): `core/teacher.h`, `LabelController` teacher settings, *Ask the teacher* (`A`).
 - **ONNX Runtime in the build** (D-155 step 4, 20 Oct, `claude/samn2-onnx-nudenet`): ONNX Runtime 1.22 from its NuGet package (FetchContent, pinned hash, `SAMN_WITH_ONNXRUNTIME`), beside every executable on Windows (`samn_copy_runtime_dlls`) and in the package with its licence; `vision/onnx_detector.h` (YOLOv8 decoding, NudeNet classes and their labels), tested on `tests/vision/data/tiny_yolo.onnx`.
+- **Help chips** (20 Oct, `claude/samn2-help-chips`): `HelpChip.qml` and 0.7's 189 `data-help` texts verbatim (`app/qml/HelpTexts.js`, `ci/help_texts.py`); placed in the Inspector, Training and Settings; the Generator's texts are ready for its slices (`help: "<0.7 id>"` on a row or card, `HelpChip { key: … }` elsewhere; `shell_qml_test::helpKeysInTheQmlSourcesExist` checks every key).
 - **Error toasts** (20 Oct, `claude/samn2-toasts`): `Notices` + `AppLog::reportError` (0.7 notify.js uiError / showToast): failures toast for 8 s with *Open Log*, hints stay in the status lines (`PlayerController::setFailure` vs `setError`).
 - **Training complete** (20 Oct, `claude/samn2-training-dual-ring`): 0.7's dual intensity ring (`DualRing.qml`) on the Figure stage; the script plan preview was hidden by 0.7.0 itself (#538) in favour of the Target curves, the timeline and the stepper, which SN2 has. PARITY §5: 100 %.
 - **Cut a clip** (D-155 step 6, first part, 20 Oct, `claude/samn2-clip-prep`; Owner: in the app, ffmpeg with one click): `core/clip_prep.h` (times, 0.7's ffmpeg arguments and name, `marks.json`, the script cut to the window), `ClipPrepController` (ffmpeg from the imageio-ffmpeg wheel with pinned hashes or chosen, cut with progress and Stop, batch, *Copy command*), the card on the Benchmark tab; tested with a stand-in ffmpeg, checked by hand with the real one (`clip_prep_real_check`).
