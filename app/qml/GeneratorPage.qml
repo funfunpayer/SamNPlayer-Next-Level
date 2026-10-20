@@ -553,6 +553,7 @@ Item {
                             enabled: !gen.running
                             onClicked: gen.finding ? gen.cancelFind() : gen.findTip()
                         }
+                        HelpChip { key: "gen-autoroi"; Layout.alignment: Qt.AlignVCenter }
                     }
                 // The Player's transport (D-154), lower so the curves keep their room.
                 VideoTransport {
@@ -600,6 +601,7 @@ Item {
                     visible: gen.hasVideo && !edit.hasScript
                     Layout.fillWidth: true; spacing: 8
                     Text { textFormat: Text.PlainText; text: qsTr("Time (s)"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
+                    HelpChip { key: "generator.time-s"; Layout.alignment: Qt.AlignVCenter }
                     FlowTextField {
                         id: timeField
                         objectName: "timeField"
@@ -1146,22 +1148,26 @@ Item {
                         textFormat: Text.PlainText
                         text: qsTr("3 · How it feels"); color: Theme.text; font.family: Theme.font; font.pixelSize: 15
                     }
-                    FlowCombo {
-                        objectName: "styleCombo"
-                        Layout.fillWidth: true
-                        enabled: !gen.running
-                        textRole: "label"; valueRole: "value"
-                        model: [{ label: qsTr("Normal"), value: "standard" },
-                                { label: qsTr("Soft"), value: "weich" },
-                                { label: qsTr("Autotune"), value: "autotune" }]
-                        currentIndex: Math.max(0, indexOfValue(gen.profile))
-                        onActivated: gen.profile = currentValue
+                    RowLayout {
+                        Layout.fillWidth: true; spacing: 6
+                        FlowCombo {
+                            objectName: "styleCombo"
+                            Layout.fillWidth: true
+                            enabled: !gen.running
+                            textRole: "label"; valueRole: "value"
+                            model: [{ label: qsTr("Normal"), value: "standard" },
+                                    { label: qsTr("Soft"), value: "weich" },
+                                    { label: qsTr("Autotune"), value: "autotune" }]
+                            currentIndex: Math.max(0, indexOfValue(gen.profile))
+                            onActivated: gen.profile = currentValue
+                        }
+                        HelpChip { key: "generator.style"; Layout.alignment: Qt.AlignVCenter }
                     }
                     Repeater {
-                        model: [{ text: qsTr("Invert motion direction"), key: "invert" },
-                                { text: qsTr("Camera motion compensation"), key: "cameraCompensation" },
-                                { text: qsTr("Scene-cut detection"), key: "sceneCuts" },
-                                { text: qsTr("Suggest O-zone automatically"), key: "autoOZone" }]
+                        model: [{ text: qsTr("Invert motion direction"), key: "invert", help: "gen-invert" },
+                                { text: qsTr("Camera motion compensation"), key: "cameraCompensation", help: "gen-camcomp" },
+                                { text: qsTr("Scene-cut detection"), key: "sceneCuts", help: "gen-scenecut" },
+                                { text: qsTr("Suggest O-zone automatically"), key: "autoOZone", help: "gen-auto-ozone" }]
                         delegate: RowLayout {
                             required property var modelData
                             Layout.fillWidth: true
@@ -1170,6 +1176,7 @@ Item {
                                 Layout.fillWidth: true
                                 text: modelData.text; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
                             }
+                            HelpChip { key: modelData.help; Layout.alignment: Qt.AlignVCenter }
                             FlowToggle {
                                 objectName: "toggle_" + modelData.key
                                 enabled: !gen.running
@@ -1187,6 +1194,7 @@ Item {
                             Layout.fillWidth: true
                             text: qsTr("Contact vibration"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
                         }
+                        HelpChip { key: "gen-contact-vibration"; Layout.alignment: Qt.AlignVCenter }
                         FlowToggle {
                             objectName: "toggle_contactVibration"
                             enabled: !gen.running
@@ -1234,6 +1242,7 @@ Item {
                                 textFormat: Text.PlainText
                                 text: qsTr("Sensitivity"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                             }
+                            HelpChip { key: "generator.sensitivity"; Layout.alignment: Qt.AlignVCenter }
                             FlowSlider {
                                 objectName: "contactSpan"
                                 Layout.fillWidth: true
@@ -1256,6 +1265,7 @@ Item {
                                 textFormat: Text.PlainText
                                 text: qsTr("Curve"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                             }
+                            HelpChip { key: "generator.curve"; Layout.alignment: Qt.AlignVCenter }
                             FlowCombo {
                                 objectName: "contactCurveCombo"
                                 Layout.fillWidth: true
@@ -1277,6 +1287,7 @@ Item {
                                 enabled: gen.hasVideo && !gen.running
                                 onClicked: gen.markContact = !gen.markContact
                             }
+                            HelpChip { key: "gen-roi2-toggle"; Layout.alignment: Qt.AlignVCenter }
                             FlowButton {
                                 objectName: "clearContact"
                                 visible: gen.contactAreas.length > 0
@@ -1358,6 +1369,7 @@ Item {
                             currentIndex: Math.max(0, targets.indexOf(gen.optimizeTarget))
                             onActivated: (i) => gen.optimizeTarget = targets[i]
                         }
+                        HelpChip { key: "gen-optimize-target"; Layout.alignment: Qt.AlignVCenter }
                     }
                     Rectangle {
                         objectName: "progressBar"
@@ -1477,12 +1489,14 @@ Item {
                             enabled: !gen.queueRunning && !gen.running && gen.queue.some((q) => q.status === "queued")
                             onClicked: gen.runQueue(false)
                         }
+                        HelpChip { key: "gen-queue-run"; visible: gen.queue.length > 0; Layout.alignment: Qt.AlignVCenter }
                         FlowButton {
                             objectName: "clearQueue"
                             visible: gen.queue.length > 0 && !gen.queueRunning
                             text: qsTr("Clear")
                             onClicked: gen.clearQueue()
                         }
+                        HelpChip { key: "gen-queue-clear"; visible: gen.queue.length > 0 && !gen.queueRunning; Layout.alignment: Qt.AlignVCenter }
                     }
                     Text {
                         objectName: "queueSummary"
