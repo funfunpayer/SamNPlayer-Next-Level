@@ -12,6 +12,7 @@
 
 #include "audio_level.h"
 #include "curve_item.h"
+#include "samn/curve_geometry.h"
 #include "samn/funscript.h"
 #include "samn/improve.h"
 #include "samn/marks.h"
@@ -632,6 +633,12 @@ void EditorController::onBeats(bool found, const std::vector<double>& beats, dou
     setView(samn::FullView(timelineMs()));
     if (stepDone())
         setStatus(tr("Beat bar: %1 beats (about %2 BPM) written as the stroke.").arg(beats.size()).arg(bpm, 0, 'f', 0));
+}
+
+int EditorController::strokeAt(double ms) const {
+    if (!hasScript()) return -1;
+    const auto p = samn::PositionAt(session_.Axis("stroke"), int64_t(std::llround(ms)));
+    return p ? int(std::lround(*p)) : -1;
 }
 
 bool EditorController::undo() {
