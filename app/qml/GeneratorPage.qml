@@ -105,7 +105,6 @@ Item {
     // A video from the Player (0.7 "Create script" / "always create"): open
     // it here; with `start`, find the tip and run as soon as Create can
     // (0.7 waited for the Generate button, at most 120 s).
-    property bool autoCreatePending: false
     // The mark picked with a click on the frame (0.7: click a painted mark to
     // select it): -1 the tip box, 0… a contact area, -2 none. Delete removes it.
     property int selectedMark: -2
@@ -134,27 +133,46 @@ Item {
         page.sidePanel = scenes ? 1 : 0
         return true
     }
+    // From the Player's "Create script": open the video and, when asked,
+    // create at once (the controller finds the tip first, 0.7).
     function createFor(video, start) {
         if (gen.running || gen.queueRunning) return false
-        autoCreatePending = false
         if (!gen.openVideo(video.toString())) return false
-        if (start) {
-            autoCreatePending = true
-            autoCreateTimer.restart()
-            if (!gen.findTip()) autoCreatePending = false
-        }
+        if (start) page.startCreate()
         return true
     }
-    Timer { id: autoCreateTimer; interval: 120000; onTriggered: page.autoCreatePending = false }
-    Connections {
-        target: gen
-        function onFindingChanged() {
-            if (gen.finding || !page.autoCreatePending) return
-            page.autoCreatePending = false
-            autoCreateTimer.stop()
-            // The box is set right after the search reports done.
-            Qt.callLater(() => { if (gen.hasVideo && gen.hasBox && !gen.running) page.startCreate() })
+    // 0.7 syncWorkflowSteps: one line on what to do next, verbatim.
+    function stepPrompt() {
+        if (!gen.hasVideo) return qsTr("Start here: choose a video. Like FunGen2 — no motion path to paint; we find the tip.")
+        if (gen.running || (gen.finding && gen.status.startsWith(qsTr("Finding tip, then creating"))))
+            return qsTr("Step 4: creating… you can Cancel if needed.")
+        if (gen.outputPath !== "") return qsTr("Step 5: Improve, then Play — edit dots on the soft curve.")
+        if (!gen.hasBox) return qsTr("Snack 1: Find tip (auto) — or mark only if Find missed. Tip = stroke box, not whole-scene tracking.")
+        if (gen.contactVibration && gen.contactAreas.length === 0)
+            return qsTr("Snack 2–3 optional: partner touch for Contact vibe, then Feel. Create unlocks when tip is ready.")
+        return qsTr("Step 4: Create Emotion Script — Advanced stays closed for Everyday; open only if needed.")
+    }
+    // 0.7 roi_help.js coachText: the tip box and the first contact mark.
+    function coachText() {
+        const bits = []
+        const r1 = gen.hasBox ? gen.box : null
+        const a = gen.contactVibration && gen.contactAreas.length > 0 ? gen.contactAreas[0] : null
+        if (r1) {
+            if (r1.width * r1.height < 400) bits.push(qsTr("Tip box is very small — Find tip again or enlarge slightly."))
+            if (r1.x < 4 || r1.y < 4) bits.push(qsTr("Tip box is flush with the image edge."))
+            bits.push(qsTr("Tip box = CSRT stroke tracker."))
+        } else {
+            bits.push(qsTr("Press Find tip, or drag a tip box if Find missed."))
         }
+        if (r1 && a) {
+            const dx = (r1.x + r1.width / 2) - (a.x + a.w / 2)
+            const dy = (r1.y + r1.height / 2) - (a.y + a.h / 2)
+            if (Math.hypot(dx, dy) < 12) bits.push(qsTr("Contact mark almost on tip — move it to mouth/nipple."))
+            bits.push(qsTr("Gold = optional Contact feel (not a second stroke writer)."))
+        } else if (r1 && gen.contactVibration) {
+            bits.push(qsTr("Optional: Mark contact for Contact vibe (mouth / nipple)."))
+        }
+        return bits.join(" ")
     }
     function startCreate() {
         if (gen.scriptExists) overwriteDialog.open()
@@ -264,6 +282,20 @@ Item {
                                 }
                             }
                         }
+                    }
+                    Text {
+                        objectName: "createLede"
+                        visible: !gen.hasVideo
+                        textFormat: Text.PlainText
+                        text: qsTr("From a quiet video — motion becomes feel you can play.")
+                        color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                    }
+                    Text {
+                        objectName: "stepPrompt"
+                        Layout.fillWidth: true; wrapMode: Text.WordWrap
+                        textFormat: Text.PlainText
+                        text: page.stepPrompt()
+                        color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
                     }
                     Rectangle {
                         objectName: "generatorStage"
@@ -443,6 +475,14 @@ Item {
                                 return -2
                             }
                         }
+                    }
+                    Text {
+                        objectName: "previewCoach"
+                        visible: gen.hasVideo
+                        Layout.fillWidth: true; wrapMode: Text.WordWrap
+                        textFormat: Text.PlainText
+                        text: page.coachText()
+                        color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
                     }
                     RowLayout {
                         visible: gen.hasVideo
@@ -1188,8 +1228,27 @@ Item {
             GlassCard {
                 visible: page.sidePanel === 0
                 Layout.fillWidth: true; Layout.fillHeight: true
+                // Scrolls when the run's log, the quality box and the queue need more room.
+                Flickable {
+                    id: createFlick
+                    anchors.fill: parent; anchors.margins: 14
+                    clip: true
+                    contentHeight: createCol.implicitHeight
+                    boundsBehavior: Flickable.StopAtBounds
+                    // A finished run brings its quality box into view.
+                    Connections {
+                        target: gen
+                        function onCreated() {
+                            Qt.callLater(() => {
+                                const bottom = qualityBox.y + qualityBox.height
+                                if (bottom > createFlick.contentY + createFlick.height)
+                                    createFlick.contentY = Math.min(createFlick.contentHeight - createFlick.height, bottom - createFlick.height)
+                            })
+                        }
+                    }
                 ColumnLayout {
-                    anchors.fill: parent; anchors.margins: 14; spacing: 8
+                    id: createCol
+                    width: createFlick.width; spacing: 8
                     Text {
                         textFormat: Text.PlainText
                         text: qsTr("4 · Create"); color: Theme.text; font.family: Theme.font; font.pixelSize: 15
@@ -1199,12 +1258,13 @@ Item {
                         FlowButton {
                             objectName: "createButton"
                             text: qsTr("Create Emotion Script"); primary: true
-                            enabled: gen.hasVideo && gen.hasBox && !gen.running
+                            // No tip yet: Create finds it first (0.7).
+                            enabled: gen.hasVideo && !gen.running && !gen.finding
                             onClicked: page.startCreate()
                         }
                         FlowButton {
                             objectName: "cancelButton"
-                            text: qsTr("Cancel"); visible: gen.running || gen.queueRunning
+                            text: qsTr("Cancel"); visible: gen.running || gen.queueRunning || gen.finding
                             onClicked: gen.cancel()
                         }
                     }
@@ -1253,6 +1313,70 @@ Item {
                         textFormat: Text.PlainText
                         Layout.fillWidth: true; wrapMode: Text.WordWrap
                         text: gen.status; color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 13
+                    }
+                    // 0.7's quality box and post-generate review after a run.
+                    Rectangle {
+                        id: qualityBox
+                        objectName: "qualityBox"
+                        readonly property var r: gen.review
+                        readonly property bool ok: r.qualityPassed === true
+                        visible: r.quality !== undefined && !gen.running
+                        Layout.fillWidth: true
+                        implicitHeight: qualityCol.implicitHeight + 16
+                        radius: 8
+                        color: ok ? Qt.rgba(61 / 255, 216 / 255, 117 / 255, 0.12) : Qt.rgba(216 / 255, 77 / 255, 77 / 255, 0.12)
+                        border.color: ok ? Theme.good : Theme.danger
+                        ColumnLayout {
+                            id: qualityCol
+                            anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top; anchors.margins: 8
+                            spacing: 4
+                            Text {
+                                objectName: "qualityLine"
+                                Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                textFormat: Text.PlainText
+                                text: qsTr("Signal Quality (Quality Doctor): %1% %2").arg(qualityBox.r.quality)
+                                      .arg(qualityBox.ok ? qsTr("(within normal)") : qsTr("(review recommended)"))
+                                color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 13; font.bold: true
+                            }
+                            Text {
+                                Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                textFormat: Text.PlainText
+                                text: qsTr("Technical signal quality — not motion fidelity (Does the curve match the video?).")
+                                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                            Repeater {
+                                model: qualityBox.r.qualityWarnings || []
+                                delegate: Text {
+                                    required property string modelData
+                                    Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                    textFormat: Text.PlainText
+                                    text: "•  " + modelData
+                                    color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                                }
+                            }
+                            Text {
+                                objectName: "trackingLine"
+                                visible: text !== ""
+                                Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                textFormat: Text.PlainText
+                                text: {
+                                    const why = qualityBox.r.trackingReason || ""
+                                    if (why === "tracker_lost_heavy") return qsTr("Tracking: heavy tracker loss — Tip/Partner often lost; contact feel may mute in gaps")
+                                    if (why === "tracker_lost_elevated") return qsTr("Tracking: elevated tracker loss — some Tip/Partner gaps")
+                                    return why !== "" ? qsTr("Tracking: %1").arg(why) : ""
+                                }
+                                color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                            // postgen.js: direction and O-zone, a hint only.
+                            Text {
+                                objectName: "reviewLine"
+                                Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                textFormat: Text.PlainText
+                                text: qsTr("Direction: %1").arg(qualityBox.r.direction || "") + "\n" + (qualityBox.r.ozone || "")
+                                      + (qualityBox.r.suggestInvert ? qsTr(" (Direction uncertain — review in Play; invert curve if needed.)") : "")
+                                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                        }
                     }
                     FlowButton {
                         objectName: "reviewButton"
@@ -1337,6 +1461,7 @@ Item {
                             text: modelData; color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
                         }
                     }
+                }
                 }
             }
         }

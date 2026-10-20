@@ -71,8 +71,15 @@ private slots:
         clips::WriteMoving(std::filesystem::path(video.toStdU16String()), 8, 80.0, 1.0);
         GeneratorController g;
         QVERIFY(g.openVideo(video));
-        QVERIFY(!g.create());  // no box yet
-        QVERIFY(g.status().contains("tip box"));
+        // No box yet: Create finds the tip first (0.7); Cancel stops both.
+        QVERIFY(g.create());
+        QVERIFY(g.finding());
+        QCOMPARE(g.status(), QStringLiteral("Finding tip, then creating…"));
+        g.cancel();
+        QCOMPARE(g.status(), QStringLiteral("Tip find canceled."));
+        QTRY_VERIFY(!g.finding());
+        QTest::qWait(100);
+        QVERIFY(!g.running());  // the find was canceled, so no run follows
         g.setBox(QRect(100, 40, 120, 160));
         g.setProfile("autotune");
         g.setProfile("tj");  // not offered here: falls back to Normal
