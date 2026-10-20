@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 20 Oct 2026, Claude, branch `claude/samn2-clip-prep`.
+**Last update:** 20 Oct 2026, Claude, branch `claude/samn2-parity-audit`.
 
 ## Rules
 
@@ -100,7 +100,7 @@
 - **Phases** (D-157, #85, #86 and `claude/samn2-phase-feel`): playback shaping per phase (`.samn` `phase_ranges`, `ApplyPhaseShape` in `PlaybackFrames`, Editor *Phases shape playback*); the Training's video stage follows the film's phases (skip intro / empty, climax: pause by default); the phase lane in the label editor; rule-based suggestions (`core/include/samn/phase_rules.h`, `vision/include/samn/vision/picture_signals.h`, *Suggest phases*).
 - **AI Train as a plugin mode** (#82 plan, #84, D-155, `docs/P4_AI_TRAIN.md`): the `Plugins` singleton and Settings switch, the fourth tab, the label editor (`label_track.h`, `LabelController`, `LabelEditor.qml`): classes with several objects, the contact point, *not in the picture* (X), *there but covered* (H), exclusion zones ("not this", `ExcludeZonesAt`), lanes, undo, export as images / YOLO labels / classes.txt.
 
-**Parity (20 Oct):** about 54 % of 0.7/0.8 by the `PARITY.md` checklist (261 done, 126 partly, 42 dropped on purpose, 247 open of 676); `python3 ci/parity_status.py` recounts.
+**Parity (20 Oct, after an audit of §6, §11, §12 against the code):** about 56 % of 0.7/0.8 by the `PARITY.md` checklist (268 done, 134 partly, 43 dropped on purpose, 233 open of 678; the SAM sidecar and RuntimeAdjust were added, they were in no list). Real GUI gaps found: error toasts with *Open Log*, the `?` help chips with 0.7's texts, the handbook, a reduced-motion setting, the idle ribbon graphic; Training lacks the script plan preview and the legacy dual ring. Order agreed with the Owner 20 Oct: these first (they serve the Generator too), then the Generator (§4, 30 %) in slices; `python3 ci/parity_status.py` recounts.
 
 ## Next (in order; the work list is `LESSONS.md` § Gaps, `TEST_PARITY.md` and `P3_GENERATOR.md`)
 
