@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QDateTime>
 #include <QImage>
 #include <QObject>
 #include <QRectF>
@@ -9,6 +10,7 @@
 #include <QVariantList>
 #include <QtQml/qqmlregistration.h>
 #include <atomic>
+#include <filesystem>
 #include <functional>
 #include <optional>
 #include <memory>
@@ -78,7 +80,7 @@ class LabelController : public QObject {
     Q_PROPERTY(QStringList teacherModels READ teacherModels NOTIFY teacherChanged)
     Q_PROPERTY(bool teacherBusy READ teacherBusy NOTIFY teacherChanged)
     Q_PROPERTY(QString teacherStatus READ teacherStatus NOTIFY teacherChanged)
-    // Who answers "Ask the teacher": "server" (above) or "nudenet" (NudeNet
+    // Who answers "Ask the teacher": "server" (above), "student" (ours) or "nudenet" (NudeNet
     // on this computer with ONNX Runtime). Kept as aitrain.teacher.kind.
     Q_PROPERTY(QString teacherKind READ teacherKind WRITE setTeacherKind NOTIFY teacherChanged)
     // Whether this build runs models itself (ONNX Runtime).
@@ -88,6 +90,9 @@ class LabelController : public QObject {
     // The teachers going through the clip (votes): busy and 0..100.
     Q_PROPERTY(bool clipTeaching READ clipTeaching NOTIFY teacherChanged)
     Q_PROPERTY(int clipTeachProgress READ clipTeachProgress NOTIFY teacherChanged)
+    // Our student (D-155 step 5), "" until one is trained, and its classes.
+    Q_PROPERTY(QString studentPath READ studentPath NOTIFY teacherChanged)
+    Q_PROPERTY(QStringList studentClasses READ studentClasses NOTIFY teacherChanged)
     // The model download: -1 when none runs, else 0..100.
     Q_PROPERTY(int modelDownload READ modelDownload NOTIFY teacherChanged)
     // Tracking between keyframes (D-155 step 3): busy and 0..100.
@@ -187,6 +192,8 @@ public:
     void setTeacherKind(const QString& kind);
     bool localTeacherAvailable() const;
     QString nudenetPath() const;
+    QString studentPath() const;
+    QStringList studentClasses() const;
     int modelDownload() const { return model_download_; }
     // Fetches NudeNet (its PyPI wheel, both hashes checked) into
     // config_dir()/models and makes it the teacher. Asynchronous.
@@ -255,6 +262,18 @@ private:
     using VoteDone = std::function<void(const std::vector<samn::TeacherVote>&, const QStringList&)>;
     bool startServer(const QImage& frame, const std::vector<std::string>& classes, BoxesDone done);
     bool startLocal(const QImage& frame, const std::vector<std::string>& classes, BoxesDone done);
+    bool startStudent(const QImage& frame, const std::vector<std::string>& classes, BoxesDone done);
+    struct LocalJob {
+        std::shared_ptr<samn::vision::OnnxDetector> det;
+        std::filesystem::path path;
+        std::vector<std::string> names;  // the student's classes; NudeNet maps its own
+        bool nudenet = false;
+        BoxesDone done;
+    };
+    LocalJob studentJob(BoxesDone done);
+    bool startLocalJobs(const QImage& frame, const std::vector<std::string>& classes, std::vector<LocalJob> jobs);
+    std::shared_ptr<samn::vision::OnnxDetector> student_detector_;
+    QDateTime student_stamp_;
     bool startVote(const QImage& frame, VoteDone done, bool skipServer = false, bool skipLocal = false);
     void applyProposals(int64_t ms, const std::vector<samn::TeacherBox>& boxes, const std::string& source, const QString& who);
     std::vector<std::string> localClasses(const std::vector<std::string>& asked) const;

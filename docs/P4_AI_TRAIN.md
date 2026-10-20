@@ -257,8 +257,12 @@ lanes; its stretches are dragged and named like chapters:
    all of them with progress (epoch, share of boxes found) and Stop (after
    the current step, the student so far is kept; a second Stop ends it at
    once), keeps `models/student/` and deletes the run's copies and
-   checkpoints. Next: the student as a teacher (votes) and in the
-   Generator's tip finding.
+   checkpoints. The student is a teacher: *Our student* answers A, and it
+   votes with NudeNet and the model server (Shift+A, through the clip); its
+   classes are ours (`classes.json`), and a new training is loaded again
+   by its file time. Both local models run in one worker, one after the
+   other. Next: the student in the Generator's tip finding, once it wins the
+   benchmark (step 6).
 6. **Benchmark:** clip cutter, script compare with labels, golden-clip run and
    history; the gate for every model and engine change.
 7. **The smaller learners from 0.7:** the learned generation profile and the

@@ -164,6 +164,14 @@ Item {
                         onClicked: labelCtl.teacherKind = "nudenet"
                     }
                     FlowButton {
+                        objectName: "kindStudent"
+                        visible: trainCtl.studentPath !== ""
+                        text: qsTr("Our student")
+                        checked: labelCtl.teacherKind === "student"
+                        enabled: labelCtl.localTeacherAvailable
+                        onClicked: labelCtl.teacherKind = "student"
+                    }
+                    FlowButton {
                         objectName: "kindServer"
                         text: qsTr("The model server")
                         checked: labelCtl.teacherKind === "server"

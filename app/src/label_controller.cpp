@@ -5,6 +5,10 @@
 #include <QPointer>
 #include <QTimer>
 #include <QFile>
+#include <QDateTime>
+#include <QJsonObject>
+#include <QJsonDocument>
+#include <QJsonArray>
 #include <QFileInfo>
 #include <QBuffer>
 #include <QImageReader>
@@ -52,7 +56,7 @@ LabelController::LabelController(QObject* parent) : QObject(parent) {
         teacher_url_ = text("aitrain.teacher.url");
         teacher_model_ = text("aitrain.teacher.model");
         teacher_key_ = text("aitrain.teacher.key");
-        if (text("aitrain.teacher.kind") == QLatin1String("nudenet")) teacher_kind_ = QStringLiteral("nudenet");
+        if (const QString k = text("aitrain.teacher.kind"); k == QLatin1String("nudenet") || k == QLatin1String("student")) teacher_kind_ = k;
         if (const auto v = settings().get("aitrain.retrack_after_drag", true); v.is_boolean()) retrack_after_drag_ = v.get<bool>();
         nudenet_path_ = text("aitrain.nudenet.path");
     } catch (const std::exception&) {
@@ -194,38 +198,97 @@ bool LabelController::startLocal(const QImage& frame, const std::vector<std::str
         setTeacherStatus(tr("Fetch NudeNet first (Teachers and steps)."));
         return false;
     }
+    if (!detector_) detector_ = std::make_shared<samn::vision::OnnxDetector>();
+    return startLocalJobs(frame, classes, {{detector_, Fs(path), {}, true, done}});
+}
+
+bool LabelController::startStudent(const QImage& frame, const std::vector<std::string>& classes, BoxesDone done) {
+    if (!localTeacherAvailable()) {
+        setTeacherStatus(tr("This build cannot run models itself (no ONNX Runtime)."));
+        return false;
+    }
+    const QString path = studentPath();
+    if (path.isEmpty()) {
+        setTeacherStatus(tr("Train the student first (Teachers and steps)."));
+        return false;
+    }
+    return startLocalJobs(frame, classes, {studentJob(done)});
+}
+
+LabelController::LocalJob LabelController::studentJob(BoxesDone done) {
+    // A new training replaces the model: load it again then.
+    const QString path = studentPath();
+    const QDateTime stamp = QFileInfo(path).lastModified();
+    if (!student_detector_ || stamp != student_stamp_) {
+        student_detector_ = std::make_shared<samn::vision::OnnxDetector>();
+        student_stamp_ = stamp;
+    }
+    std::vector<std::string> names;
+    for (const QString& c : studentClasses()) names.push_back(c.toStdString());
+    return {student_detector_, Fs(path), names, false, done};
+}
+
+bool LabelController::startLocalJobs(const QImage& frame, const std::vector<std::string>& classes, std::vector<LocalJob> jobs) {
     const QImage bgr = frame.convertToFormat(QImage::Format_BGR888);
     cv::Mat mat = cv::Mat(bgr.height(), bgr.width(), CV_8UC3, const_cast<uchar*>(bgr.constBits()),
                           size_t(bgr.bytesPerLine())).clone();
     // The frame may be smaller than the video: boxes go back in video pixels.
     const double sx = video_size_.width() > 0 ? double(video_size_.width()) / bgr.width() : 1.0;
     const double sy = video_size_.height() > 0 ? double(video_size_.height()) / bgr.height() : 1.0;
-    if (!detector_) detector_ = std::make_shared<samn::vision::OnnxDetector>();
     if (local_worker_.joinable()) local_worker_.join();
     local_busy_ = true;
     QPointer<LabelController> self(this);
-    local_worker_ = std::thread([self, det = detector_, path = Fs(path), mat = std::move(mat), sx, sy, classes, done] {
-        std::string why;
-        std::vector<samn::TeacherBox> boxes;
-        if (det->loaded() || det->Load(path, &why)) {
-            for (const auto& d : det->Detect(mat, 0.3f, &why)) {
-                const auto& names = samn::vision::NudeNetClasses();
-                if (d.cls < 0 || size_t(d.cls) >= names.size()) continue;
-                const std::string label = samn::vision::NudeNetToLabel(names[size_t(d.cls)]);
-                if (label.empty() || std::find(classes.begin(), classes.end(), label) == classes.end()) continue;
-                boxes.push_back({label, {d.box.x * sx, d.box.y * sy, d.box.width * sx, d.box.height * sy}});
+    // One worker runs the models one after the other (NudeNet, the student).
+    local_worker_ = std::thread([self, jobs = std::move(jobs), mat = std::move(mat), sx, sy, classes] {
+        struct Result {
+            std::vector<samn::TeacherBox> boxes;
+            QString error;
+        };
+        std::vector<Result> results;
+        for (const auto& job : jobs) {
+            Result r;
+            std::string why;
+            if (job.det->loaded() || job.det->Load(job.path, &why)) {
+                for (const auto& d : job.det->Detect(mat, 0.3f, &why)) {
+                    std::string label;
+                    if (job.nudenet) {
+                        const auto& names = samn::vision::NudeNetClasses();
+                        if (d.cls >= 0 && size_t(d.cls) < names.size()) label = samn::vision::NudeNetToLabel(names[size_t(d.cls)]);
+                    } else if (d.cls >= 0 && size_t(d.cls) < job.names.size()) {
+                        label = job.names[size_t(d.cls)];  // the student was trained on our classes
+                    }
+                    if (label.empty() || std::find(classes.begin(), classes.end(), label) == classes.end()) continue;
+                    r.boxes.push_back({label, {d.box.x * sx, d.box.y * sy, d.box.width * sx, d.box.height * sy}});
+                }
             }
+            r.error = QString::fromStdString(why);
+            results.push_back(std::move(r));
         }
-        QMetaObject::invokeMethod(qApp, [self, boxes, done, error = QString::fromStdString(why)] {
+        QMetaObject::invokeMethod(qApp, [self, jobs, results] {
             if (!self) return;
             self->local_busy_ = false;
             emit self->teacherChanged();
-            if (!error.isEmpty() && boxes.empty()) done(std::nullopt, error);
-            else done(boxes, {});
+            for (size_t i = 0; i < jobs.size(); ++i) {
+                if (!results[i].error.isEmpty() && results[i].boxes.empty()) jobs[i].done(std::nullopt, results[i].error);
+                else jobs[i].done(results[i].boxes, {});
+            }
         }, Qt::QueuedConnection);
     });
     emit teacherChanged();
     return true;
+}
+
+QString LabelController::studentPath() const {
+    const QString p = QString::fromStdU16String((samn::config_dir() / "models" / "student" / "student.onnx").u16string());
+    return QFileInfo::exists(p) ? p : QString();
+}
+
+QStringList LabelController::studentClasses() const {
+    QFile f(QString::fromStdU16String((samn::config_dir() / "models" / "student" / "classes.json").u16string()));
+    if (!f.open(QIODevice::ReadOnly)) return {};
+    QStringList out;
+    for (const QJsonValue& v : QJsonDocument::fromJson(f.readAll()).object().value("classes").toArray()) out << v.toString();
+    return out;
 }
 
 std::vector<std::string> LabelController::localClasses(const std::vector<std::string>& asked) const {
@@ -259,13 +322,16 @@ bool LabelController::askTeacher() {
     const int64_t ms = int64_t(std::llround(preview_ms_));
     const QString at = QString::number(ms / 1000.0, 'f', 1) + " s";
     const bool local = teacher_kind_ == QLatin1String("nudenet");
-    const QString who = local ? QStringLiteral("NudeNet") : teacher_model_;
-    const std::string source = local ? "teacher:nudenet" : "teacher:" + teacher_model_.toStdString();
+    const bool student = teacher_kind_ == QLatin1String("student");
+    const QString who = local ? QStringLiteral("NudeNet") : student ? tr("our student") : teacher_model_;
+    const std::string source = local ? "teacher:nudenet" : student ? "teacher:student" : "teacher:" + teacher_model_.toStdString();
     const auto done = [this, ms, who, source](std::optional<std::vector<samn::TeacherBox>> boxes, const QString& error) {
         if (!boxes) setTeacherStatus(tr("No answer from %1: %2").arg(who, error));
         else applyProposals(ms, *boxes, source, who);
     };
-    const bool started = local ? startLocal(frame_, teacherClasses(), done) : startServer(frame_, teacherClasses(), done);
+    const bool started = local     ? startLocal(frame_, teacherClasses(), done)
+                         : student ? startStudent(frame_, teacherClasses(), done)
+                                   : startServer(frame_, teacherClasses(), done);
     if (started) setTeacherStatus(tr("%1 is looking at %2 …").arg(who, at));
     return started;
 }
@@ -276,7 +342,8 @@ bool LabelController::startVote(const QImage& frame, VoteDone done, bool skipSer
     const std::vector<std::string> classes = teacherClasses();
     const bool server = !skipServer && !teacher_url_.isEmpty() && !teacher_model_.isEmpty();
     const bool local = !skipLocal && localTeacherAvailable() && !nudenetPath().isEmpty();
-    if (!server && !local) {
+    const bool student = !skipLocal && localTeacherAvailable() && !studentPath().isEmpty();
+    if (!server && !local && !student) {
         setTeacherStatus(tr("Set up a teacher first: NudeNet here or a model server (Teachers and steps)."));
         return false;
     }
@@ -294,9 +361,21 @@ bool LabelController::startVote(const QImage& frame, VoteDone done, bool skipSer
         };
     };
     // Counted before either starts: a teacher may answer before the other is asked.
-    state->pending = int(server) + int(local);
+    state->pending = int(server) + int(local) + int(student);
     if (server && !startServer(frame, classes, answer(teacher_model_.toStdString(), classes))) --state->pending;
-    if (local && !startLocal(frame, classes, answer("nudenet", localClasses(classes)))) --state->pending;
+    // The local models run in one worker, one after the other.
+    std::vector<LocalJob> jobs;
+    if (local) {
+        if (!detector_) detector_ = std::make_shared<samn::vision::OnnxDetector>();
+        jobs.push_back({detector_, Fs(nudenetPath()), {}, true, answer("nudenet", localClasses(classes))});
+    }
+    if (student) {
+        std::vector<std::string> sees;
+        for (const QString& c : studentClasses())
+            if (std::find(classes.begin(), classes.end(), c.toStdString()) != classes.end()) sees.push_back(c.toStdString());
+        jobs.push_back(studentJob(answer("student", sees)));
+    }
+    if (!jobs.empty() && !startLocalJobs(frame, classes, jobs)) state->pending -= int(jobs.size());
     return state->pending > 0;
 }
 
@@ -372,7 +451,7 @@ void LabelController::teachNextFrame() {
         // A teacher that failed once sits out the rest of the run: an
         // unreachable server would otherwise cost its timeout at every frame.
         for (const auto& e : errors) {
-            if (e.startsWith(QLatin1String("nudenet: "))) clip_skip_local_ = true;
+            if (e.startsWith(QLatin1String("nudenet: ")) || e.startsWith(QLatin1String("student: "))) clip_skip_local_ = true;
             else clip_skip_server_ = true;
             if (!clip_errors_.contains(e)) clip_errors_ << e;
         }
@@ -411,7 +490,7 @@ void LabelController::finishTeachClip() {
 }
 
 void LabelController::setTeacherKind(const QString& kind) {
-    const QString k = kind == QLatin1String("nudenet") ? kind : QStringLiteral("server");
+    const QString k = (kind == QLatin1String("nudenet") || kind == QLatin1String("student")) ? kind : QStringLiteral("server");
     if (k == teacher_kind_) return;
     teacher_kind_ = k;
     saveSetting("aitrain.teacher.kind", k);
