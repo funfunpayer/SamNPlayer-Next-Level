@@ -26,6 +26,8 @@ GlassCard {
     component Card: Rectangle {
         default property alias content: body.data
         property string title
+        // A 0.7 help key (HelpTexts.js): a "?" after the title.
+        property string help
         width: parent ? parent.width : 280
         height: body.implicitHeight + head.height + 22
         radius: Theme.radiusSmall
@@ -36,6 +38,7 @@ GlassCard {
             x: 12; y: 10; text: parent.title
             color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold
         }
+        HelpChip { key: parent.help; visible: key !== "" && text !== ""; x: head.x + head.implicitWidth + 6; y: head.y + (head.height - height) / 2 }
         Column { id: body; x: 12; y: head.y + head.height + 8; width: parent.width - 24; spacing: 8 }
     }
     component Note: Text {
@@ -70,6 +73,7 @@ GlassCard {
         id: sr
         property string label
         property string tip
+        property string help
         property real from: 0
         property real to: 1
         property real value: 0
@@ -92,6 +96,7 @@ GlassCard {
             onMoved: (v) => { sr.picked(v); value = Qt.binding(() => sr.value) }
         }
         Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; text: sr.valueText; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
+        HelpChip { key: sr.help; visible: key !== "" && text !== ""; anchors.verticalCenter: parent.verticalCenter }
     }
     component Channel: Item {
         property string name
@@ -193,6 +198,7 @@ GlassCard {
 
                 Card {
                     title: qsTr("Device")
+                    help: "dev-transport"
                     // Status: dot, line and a short caption (0.7 wording).
                     Row {
                         spacing: 8
@@ -358,6 +364,7 @@ GlassCard {
                     // 0.7 Soft-Start (Playback Advanced) and Effects → Reduce peaks.
                     SliderRow {
                         label: qsTr("Soft start")
+                        help: "playback.soft-start"
                         tip: qsTr("At Play, after a pause and after a quiet stretch, vibration and suction ramp up over this time in 10 steps instead of jumping to the script. Default 500 ms.")
                         from: 0; to: 3000; value: root.ctrl.output.softStartMs
                         valueText: root.ctrl.output.softStartMs === 0 ? qsTr("Off") : qsTr("%1 ms").arg(root.ctrl.output.softStartMs)
@@ -498,6 +505,7 @@ GlassCard {
                 width: parent.width; spacing: 10
                 Card {
                     title: qsTr("BPM")
+                    help: "playback.bpm"
                     Row {
                         spacing: 8
                         FlowTextField {
@@ -521,6 +529,7 @@ GlassCard {
                 width: parent.width; spacing: 10
                 Card {
                     title: qsTr("Script Tools")
+                    help: "playback.script-offset"
                     Row {
                         spacing: 8
                         Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; text: qsTr("Script offset"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13 }
@@ -610,6 +619,7 @@ GlassCard {
                     SliderRow {
                         objectName: "fxSmoothing"
                         label: qsTr("Smoothing")
+                        help: "playback.smoothing"
                         tip: qsTr("Live curve smoothing toward the next sample (0–1). Default 0.3. Playback feel only.")
                         from: 0; to: 1; value: fx.mapping.smoothing
                         valueText: fx.mapping.smoothing.toFixed(2)
@@ -617,6 +627,7 @@ GlassCard {
                     }
                     SliderRow {
                         label: qsTr("Max speed")
+                        help: "playback.max-speed"
                         tip: qsTr("The stroke speed (position change per millisecond, 0–100 scale) that gives full strength. Default 0.6. Playback feel only.")
                         from: 0.1; to: 2; value: fx.mapping.maxSpeed
                         valueText: fx.mapping.maxSpeed.toFixed(1)
@@ -624,6 +635,7 @@ GlassCard {
                     }
                     SliderRow {
                         label: qsTr("Tick")
+                        help: "playback.tick-ms"
                         tip: qsTr("Device command interval. Lower = denser stream. Default 50 ms. Playback feel only.")
                         from: 10; to: 200; value: fx.mapping.tickMs
                         valueText: qsTr("%1 ms").arg(fx.mapping.tickMs)
@@ -663,6 +675,7 @@ GlassCard {
                     SliderRow {
                         visible: root.ctrl.contactControls
                         label: qsTr("Strength")
+                        help: "playback.contact-strength"
                         tip: qsTr("Live scaling of the contact vibration without rewriting the file. 1 = as created, 0 = off, up to 2 = stronger.")
                         from: 0; to: 2; value: contact.mapping.contactIntensity
                         valueText: contact.mapping.contactIntensity === 0 ? qsTr("0 (off)") : contact.mapping.contactIntensity.toFixed(2)
@@ -672,6 +685,7 @@ GlassCard {
                         visible: root.ctrl.contactControls
                         active: root.ctrl.contactKnobsLive
                         label: qsTr("Sensitivity")
+                        help: "playback.sensitivity"
                         tip: qsTr("Lower = the vibration starts earlier in the stroke. Starts from the script's recipe; not saved.")
                         from: 0.4; to: 0.95; value: contact.mapping.contactSpan
                         valueText: contact.mapping.contactSpan.toFixed(2)
@@ -738,6 +752,7 @@ GlassCard {
                     }
                     SliderRow {
                         label: qsTr("Hold")
+                        help: "playback.hold-s"
                         tip: qsTr("How long the minimum is held. Default 10 s.")
                         from: 1; to: 60; value: root.ctrl.output.extendedOHoldS
                         valueText: qsTr("%1 s").arg(Math.round(root.ctrl.output.extendedOHoldS))
@@ -745,6 +760,7 @@ GlassCard {
                     }
                     SliderRow {
                         label: qsTr("Restore")
+                        help: "playback.restore-ms"
                         tip: qsTr("Ramp time down to the minimum and back up again. 0 switches at once. Default 500 ms.")
                         from: 0; to: 3000; value: root.ctrl.output.extendedORestoreMs
                         valueText: root.ctrl.output.extendedORestoreMs === 0 ? qsTr("At once") : qsTr("%1 ms").arg(root.ctrl.output.extendedORestoreMs)
@@ -859,6 +875,7 @@ GlassCard {
                 width: parent.width; spacing: 10
                 Card {
                     title: qsTr("Timeline")
+                    help: "pb-marker-hint"
                     Row {
                         spacing: 8
                         FlowButton {
@@ -942,6 +959,7 @@ GlassCard {
                 // O-markers (0.7 View): from the marked range on the heatmap.
                 Card {
                     title: qsTr("O-markers")
+                    help: "pb-omarker-hint"
                     FlowCombo {
                         id: oKind
                         width: parent.width

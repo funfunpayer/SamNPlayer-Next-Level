@@ -12,6 +12,8 @@ RowLayout {
     property real value: 0
     property string display: String(value)
     property string tip
+    // A 0.7 help key (HelpTexts.js): a "?" at the end of the row.
+    property string help
     signal moved(real value)
     spacing: 10
     Text {
@@ -33,4 +35,5 @@ RowLayout {
         radius: 8; color: Qt.rgba(1, 1, 1, 0.04); border.color: Theme.cardBorder
         Text { textFormat: Text.PlainText; anchors.centerIn: parent; text: root.display; color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 12 }
     }
+    HelpChip { key: root.help; visible: key !== "" && text !== "" }
 }

@@ -73,6 +73,8 @@ qt_add_qml_module(samn_app
     qml/Icon.qml
     qml/FlowFigure.qml
     qml/DualRing.qml
+    qml/HelpChip.qml
+    qml/HelpTexts.js
     qml/VideoTransport.qml
     qml/GeneratorProjectPanel.qml
     qml/AiTrainPage.qml
