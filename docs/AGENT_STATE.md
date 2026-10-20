@@ -87,6 +87,7 @@
 - **Optimize for** (#81, D-156): `core/include/samn/improve.h` (trim, fill gaps, heal tracking gaps), the Editor's *Optimize for* any device / Sam Neo 2, *Optimize after Create*.
 - **Teacher on a model server** (D-155 step 4, first part, #91; Owner 20 Oct: servers first): `core/teacher.h`, `LabelController` teacher settings, *Ask the teacher* (`A`).
 - **ONNX Runtime in the build** (D-155 step 4, 20 Oct, `claude/samn2-onnx-nudenet`): ONNX Runtime 1.22 from its NuGet package (FetchContent, pinned hash, `SAMN_WITH_ONNXRUNTIME`), beside every executable on Windows (`samn_copy_runtime_dlls`) and in the package with its licence; `vision/onnx_detector.h` (YOLOv8 decoding, NudeNet classes and their labels), tested on `tests/vision/data/tiny_yolo.onnx`.
+- **Votes between teachers** (D-155 step 4, 20 Oct, `claude/samn2-teacher-votes`): `core/teacher_votes.h`; *Ask all teachers* (Shift+A) and *Teachers through the clip* in the label editor; a box only some teachers saw is an uncertain key.
 - **NudeNet as a local teacher** (D-155 step 4, 20 Oct, `claude/samn2-nudenet-teacher`): one click fetches the PyPI wheel (both hashes pinned, `app/src/model_download.h`, zip reader on zlib), or *Choose a file…*; *Ask the teacher (A)* asks NudeNet here or the model server (`aitrain.teacher.kind`); the AI Train page has the NudeNet card and the choice.
 - **Bug hunt, 20 Oct** (#93, #94 and `claude/samn2-bughunt2`): dead GUI paths found by matching every `Q_INVOKABLE` / `Q_PROPERTY` against the QML (Bake offset, `O` key, queue ×, *Clear all*, click a box + Delete in the Generator); the Player's keys only act while the Player shows; notes that promised features which already exist ("comes with P2/P3/P4") are now buttons that open the script in the Editor (*Edit this script*, *Open in the Editor*, *Open the scenes in the Editor*).
 - **Issue #4** (#90): the codec as the decoder reports it, "codec unknown" otherwise (`samn::CodecName`, `FrameReader::fourcc`).
@@ -98,9 +99,8 @@
 
 ## Next (in order; the work list is `LESSONS.md` § Gaps, `TEST_PARITY.md` and `P3_GENERATOR.md`)
 
-0. **Now (AI Train, D-155):** step 4 goes on: votes between teachers (consensus
-   into proposals, the "uncertain" lane fed by disagreement); the tracker
-   re-running a stretch on its own after a drag; later the learned scene model
+0. **Now (AI Train, D-155):** the tracker re-running a stretch on its own
+   after a drag; later the learned scene model
    for the phases (D-157). No open issues (#4 closed by #90).
 
 1. **Windows CI:** some app tests failed now and then with no output (stdout fully buffered when piped). Every app test now writes unbuffered (`tests/app/unbuffered_stdout.cpp`); find the cause on the next red run. Seen again on #95 (20 Oct): `device_transports_test` red under ctest with no output, every function green alone; a re-run passed. Each test function must also pass on its own (the diagnostics step runs them one by one); `label_controller` export no longer leans on the previous function.

@@ -9,6 +9,7 @@
 #include <QTcpServer>
 #include <cmath>
 #include <QCryptographicHash>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QImage>
 #include <QTemporaryDir>
@@ -424,6 +425,79 @@ private slots:
         LabelController again;  // remembered
         QCOMPARE(again.teacherKind(), QString("nudenet"));
         QCOMPARE(again.nudenetPath(), data + "/tiny_nudenet.onnx");
+    }
+
+    // Votes (D-155 step 4, Owner 20 Oct): what both teachers see is plain, what
+    // only one of those that could see it found is kept as uncertain; the
+    // same through the clip in one undo step.
+    void teachersVoteOnAFrameAndThroughTheClip() {
+        if (!samn::vision::OnnxDetector::Available()) return;  // one teacher only: nothing to vote
+        FakeModelServer fake;
+        const QString path = dir_.filePath("votes.mp4");
+        QVERIFY(QFile::copy(clip_, path));
+        LabelController c;
+        QVERIFY(c.openVideo(path));
+        c.setTeacherUrl(fake.url());
+        c.setTeacherModel("vision-a");
+        QVERIFY(c.chooseNudeNet(QStringLiteral(SAMN_VISION_TESTDATA) + "/tiny_nudenet.onnx"));
+        c.setTeacherKind("server");  // A asks one; the vote asks both
+
+        // NudeNet's face is at 110, 110, 100 x 100 in the 320 x 240 picture.
+        fake.answer = R"({"objects": [{"label": "face", "box": [0.35, 0.46, 0.31, 0.42]},
+                                      {"label": "hand", "box": [0.8, 0.1, 0.1, 0.1]}]})";
+        c.seek(0);
+        QVERIFY(c.askAllTeachers());
+        QVERIFY(c.teacherBusy());
+        QTRY_VERIFY(!c.teacherBusy());
+        QVERIFY2(c.labels().contains("face") && c.labels().contains("hand"), qPrintable(c.teacherStatus()));
+        const auto keyOf = [&](const QString& label) {
+            for (const QVariant& l : c.lanes())
+                if (l.toMap().value("label").toString() == label) return l.toMap().value("keys").toList().value(0).toMap();
+            return QVariantMap();
+        };
+        QVERIFY(keyOf("face").value("source").toString().startsWith("teachers:"));
+        QVERIFY(!keyOf("face").value("uncertain").toBool());  // both saw it
+        QVERIFY(!keyOf("hand").value("uncertain").toBool());  // NudeNet has no hands
+        QVERIFY(c.teacherStatus().contains("0 uncertain"));
+
+        // The server misses the face: NudeNet's face stays, uncertain.
+        QVERIFY(c.undo());
+        fake.answer = R"({"objects": []})";
+        QVERIFY(c.askAllTeachers());
+        QTRY_VERIFY(!c.teacherBusy());
+        QCOMPARE(c.labels(), QStringList{"face"});
+        QVERIFY(keyOf("face").value("uncertain").toBool());
+
+        // Through the clip: one vote per second, one undo step.
+        QVERIFY(c.undo());
+        fake.answer = R"({"objects": [{"label": "face", "box": [0.35, 0.46, 0.31, 0.42]}]})";
+        QVERIFY(c.teachClip(1000));
+        QVERIFY(c.clipTeaching());
+        QTRY_VERIFY_WITH_TIMEOUT(!c.clipTeaching(), 20000);
+        QVERIFY2(keyOf("face").size() > 0, qPrintable(c.teacherStatus()));
+        int keys = 0;
+        for (const QVariant& l : c.lanes()) keys += l.toMap().value("keys").toList().size();
+        QVERIFY2(keys >= 4, qPrintable(c.teacherStatus()));
+        QVERIFY(c.teacherStatus().contains("frame"));
+        QVERIFY(c.undo());
+        QVERIFY(c.labels().isEmpty());
+
+        // Stopped at once: said, and what was done is kept.
+        QVERIFY(c.teachClip(500));
+        c.cancelTeachClip();
+        QTRY_VERIFY_WITH_TIMEOUT(!c.clipTeaching(), 20000);
+        QVERIFY(c.teacherStatus().startsWith("Stopped"));
+
+        // A server that does not answer sits out after its first failure;
+        // NudeNet goes on alone through the clip.
+        c.setTeacherUrl("http://127.0.0.1:1/v1");
+        QElapsedTimer took;
+        took.start();
+        QVERIFY(c.teachClip(1000));
+        QTRY_VERIFY_WITH_TIMEOUT(!c.clipTeaching(), 20000);
+        QVERIFY(took.elapsed() < 15000);
+        QVERIFY2(c.teacherStatus().contains("Not always answered"), qPrintable(c.teacherStatus()));
+        QVERIFY(c.labels().contains("face"));
     }
 
     void nudenetDownloadChecksWhatItGets() {

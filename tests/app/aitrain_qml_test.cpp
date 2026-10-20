@@ -85,6 +85,8 @@ private slots:
         }
         QVERIFY(labels->openVideo(clip));
         QTRY_VERIFY(named(root.get(), "labelEditor")->isVisible());
+        QVERIFY(named(root.get(), "askAllTeachers")->isVisible());
+        QVERIFY(named(root.get(), "teachClip")->isVisible());
 
         // A preset chip adds the label; drawing on the frame sets its box.
         QQuickItem* chip = nullptr;

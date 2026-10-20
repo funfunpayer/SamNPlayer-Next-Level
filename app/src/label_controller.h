@@ -9,12 +9,15 @@
 #include <QVariantList>
 #include <QtQml/qqmlregistration.h>
 #include <atomic>
+#include <functional>
+#include <optional>
 #include <memory>
 #include <thread>
 #include <vector>
 
 #include "model_download.h"
 #include "samn/label_track.h"
+#include "samn/teacher_votes.h"
 
 class QNetworkAccessManager;
 class QNetworkReply;
@@ -82,6 +85,9 @@ class LabelController : public QObject {
     Q_PROPERTY(bool localTeacherAvailable READ localTeacherAvailable CONSTANT)
     // NudeNet's model file, "" until fetched or chosen (aitrain.nudenet.path).
     Q_PROPERTY(QString nudenetPath READ nudenetPath NOTIFY teacherChanged)
+    // The teachers going through the clip (votes): busy and 0..100.
+    Q_PROPERTY(bool clipTeaching READ clipTeaching NOTIFY teacherChanged)
+    Q_PROPERTY(int clipTeachProgress READ clipTeachProgress NOTIFY teacherChanged)
     // The model download: -1 when none runs, else 0..100.
     Q_PROPERTY(int modelDownload READ modelDownload NOTIFY teacherChanged)
     // Tracking between keyframes (D-155 step 3): busy and 0..100.
@@ -160,7 +166,20 @@ public:
     QString teacherKey() const { return teacher_key_; }
     void setTeacherKey(const QString& key);
     QStringList teacherModels() const { return teacher_models_; }
-    bool teacherBusy() const { return teacher_reply_ != nullptr || local_busy_; }
+    bool teacherBusy() const { return teacher_reply_ != nullptr || local_busy_ || clip_teaching_; }
+    bool clipTeaching() const { return clip_teaching_; }
+    int clipTeachProgress() const {
+        return clip_times_.empty() ? 0 : int(clip_index_ * 100 / clip_times_.size());
+    }
+    // Every teacher set up (NudeNet here, the model server) looks at the
+    // frame on screen; their boxes are voted on (D-155 step 4): what all
+    // that can see a class found is a plain proposal, what only some found
+    // is kept as uncertain. One undo step.
+    Q_INVOKABLE bool askAllTeachers();
+    // The same vote every stepMs through the whole clip, in the background;
+    // one undo step at the end (or when stopped, for what was done).
+    Q_INVOKABLE bool teachClip(double stepMs = 2000);
+    Q_INVOKABLE void cancelTeachClip();
     QString teacherKind() const { return teacher_kind_; }
     void setTeacherKind(const QString& kind);
     bool localTeacherAvailable() const;
@@ -224,8 +243,22 @@ private:
     QString teacher_url_, teacher_model_, teacher_key_, teacher_status_;
     QStringList teacher_models_;
 
-    bool askLocal();
+    using BoxesDone = std::function<void(std::optional<std::vector<samn::TeacherBox>>, const QString&)>;
+    using VoteDone = std::function<void(const std::vector<samn::TeacherVote>&, const QStringList&)>;
+    bool startServer(const QImage& frame, const std::vector<std::string>& classes, BoxesDone done);
+    bool startLocal(const QImage& frame, const std::vector<std::string>& classes, BoxesDone done);
+    bool startVote(const QImage& frame, VoteDone done, bool skipServer = false, bool skipLocal = false);
+    void applyProposals(int64_t ms, const std::vector<samn::TeacherBox>& boxes, const std::string& source, const QString& who);
+    std::vector<std::string> localClasses(const std::vector<std::string>& asked) const;
     std::vector<std::string> teacherClasses() const;
+    void teachNextFrame();
+    void finishTeachClip();
+    bool clip_teaching_ = false, clip_cancel_ = false, clip_skip_server_ = false, clip_skip_local_ = false;
+    std::vector<double> clip_times_;
+    size_t clip_index_ = 0;
+    std::vector<std::pair<int64_t, std::vector<samn::VotedBox>>> clip_results_;
+    std::vector<std::string> clip_teachers_;
+    QStringList clip_errors_;
     QString teacher_kind_ = QStringLiteral("server");
     QString nudenet_path_;
     ModelSource nudenet_source_ = NudeNetSource();

@@ -23,6 +23,7 @@
 #include "samn/phase_rules.h"
 #include "samn/settings.h"
 #include "samn/teacher.h"
+#include "samn/teacher_votes.h"
 #include "samn/vision/picture_signals.h"
 #include "samn/vision/frame_reader.h"
 #include "samn/vision/onnx_detector.h"
@@ -146,16 +147,13 @@ std::vector<std::string> LabelController::teacherClasses() const {
     return classes;
 }
 
-bool LabelController::askTeacher() {
-    if (teacherBusy() || !hasVideo() || frame_.isNull()) return false;
-    if (teacher_kind_ == QLatin1String("nudenet")) return askLocal();
+bool LabelController::startServer(const QImage& frame, const std::vector<std::string>& classes, BoxesDone done) {
     if (teacher_model_.isEmpty()) {
         setTeacherStatus(tr("Choose a model first (Test connection lists them)."));
         return false;
     }
-    const std::vector<std::string> classes = teacherClasses();
     // The frame at most 1024 px; the boxes come back in its fractions.
-    QImage img = frame_;
+    QImage img = frame;
     if (std::max(img.width(), img.height()) > 1024) img = img.scaled(1024, 1024, Qt::KeepAspectRatio, Qt::SmoothTransformation);
     QByteArray jpeg;
     QBuffer buf(&jpeg);
@@ -166,39 +164,249 @@ bool LabelController::askTeacher() {
     QNetworkReply* r = teacherRequest(QStringLiteral("/chat/completions"), QByteArray::fromStdString(body));
     if (!r) return false;
     teacher_reply_ = r;
-    const int64_t ms = int64_t(std::llround(preview_ms_));
-    const double w = frame_.width(), h = frame_.height();
-    setTeacherStatus(tr("%1 is looking at %2 …").arg(teacher_model_, QString::number(ms / 1000.0, 'f', 1) + " s"));
-    connect(r, &QNetworkReply::finished, this, [this, r, ms, w, h, classes] {
+    const double w = video_size_.width() > 0 ? video_size_.width() : frame.width();
+    const double h = video_size_.height() > 0 ? video_size_.height() : frame.height();
+    connect(r, &QNetworkReply::finished, this, [this, r, w, h, classes, done] {
         r->deleteLater();
         teacher_reply_ = nullptr;
         const QByteArray data = r->readAll();
         std::string error;
         const auto content = samn::ChatContent(data.toStdString(), &error);
-        if (r->error() != QNetworkReply::NoError && !content) {
-            setTeacherStatus(tr("No answer: %1").arg(error.empty() ? r->errorString() : QString::fromStdString(error)));
-            return;
-        }
         if (!content) {
-            setTeacherStatus(tr("The teacher: %1").arg(QString::fromStdString(error)));
+            done(std::nullopt, r->error() != QNetworkReply::NoError && error.empty() ? r->errorString()
+                                                                                     : QString::fromStdString(error));
             return;
         }
-        const auto boxes = samn::ParseTeacherBoxes(*content, w, h, classes);
-        if (boxes.empty()) {
-            setTeacherStatus(tr("The teacher sees nothing it was asked for here."));
-            return;
-        }
-        int set = 0;
-        const std::string source = "teacher:" + teacher_model_.toStdString();
-        change(tr("Teacher proposals"), [&](samn::LabelProject& p) {
-            set = samn::ApplyTeacherBoxes(p, ms, boxes, source, tolerance());
-            return set > 0;
-        });
-        setTeacherStatus(set > 0 ? tr("%n proposal(s) from %1: check them, drag or confirm.", "", set).arg(teacher_model_)
-                                 : tr("The teacher's boxes are all where you already confirmed one."));
+        done(samn::ParseTeacherBoxes(*content, w, h, classes), {});
     });
     emit teacherChanged();
     return true;
+}
+
+bool LabelController::startLocal(const QImage& frame, const std::vector<std::string>& classes, BoxesDone done) {
+    if (!localTeacherAvailable()) {
+        setTeacherStatus(tr("This build cannot run models itself (no ONNX Runtime)."));
+        return false;
+    }
+    const QString path = nudenetPath();
+    if (path.isEmpty()) {
+        setTeacherStatus(tr("Fetch NudeNet first (Teachers and steps)."));
+        return false;
+    }
+    const QImage bgr = frame.convertToFormat(QImage::Format_BGR888);
+    cv::Mat mat = cv::Mat(bgr.height(), bgr.width(), CV_8UC3, const_cast<uchar*>(bgr.constBits()),
+                          size_t(bgr.bytesPerLine())).clone();
+    // The frame may be smaller than the video: boxes go back in video pixels.
+    const double sx = video_size_.width() > 0 ? double(video_size_.width()) / bgr.width() : 1.0;
+    const double sy = video_size_.height() > 0 ? double(video_size_.height()) / bgr.height() : 1.0;
+    if (!detector_) detector_ = std::make_shared<samn::vision::OnnxDetector>();
+    if (local_worker_.joinable()) local_worker_.join();
+    local_busy_ = true;
+    QPointer<LabelController> self(this);
+    local_worker_ = std::thread([self, det = detector_, path = Fs(path), mat = std::move(mat), sx, sy, classes, done] {
+        std::string why;
+        std::vector<samn::TeacherBox> boxes;
+        if (det->loaded() || det->Load(path, &why)) {
+            for (const auto& d : det->Detect(mat, 0.3f, &why)) {
+                const auto& names = samn::vision::NudeNetClasses();
+                if (d.cls < 0 || size_t(d.cls) >= names.size()) continue;
+                const std::string label = samn::vision::NudeNetToLabel(names[size_t(d.cls)]);
+                if (label.empty() || std::find(classes.begin(), classes.end(), label) == classes.end()) continue;
+                boxes.push_back({label, {d.box.x * sx, d.box.y * sy, d.box.width * sx, d.box.height * sy}});
+            }
+        }
+        QMetaObject::invokeMethod(qApp, [self, boxes, done, error = QString::fromStdString(why)] {
+            if (!self) return;
+            self->local_busy_ = false;
+            emit self->teacherChanged();
+            if (!error.isEmpty() && boxes.empty()) done(std::nullopt, error);
+            else done(boxes, {});
+        }, Qt::QueuedConnection);
+    });
+    emit teacherChanged();
+    return true;
+}
+
+std::vector<std::string> LabelController::localClasses(const std::vector<std::string>& asked) const {
+    std::vector<std::string> out;
+    for (const auto& c : samn::vision::NudeNetClasses()) {
+        const std::string label = samn::vision::NudeNetToLabel(c);
+        if (!label.empty() && std::find(asked.begin(), asked.end(), label) != asked.end() &&
+            std::find(out.begin(), out.end(), label) == out.end())
+            out.push_back(label);
+    }
+    return out;
+}
+
+void LabelController::applyProposals(int64_t ms, const std::vector<samn::TeacherBox>& boxes, const std::string& source,
+                                     const QString& who) {
+    if (boxes.empty()) {
+        setTeacherStatus(tr("%1 sees nothing it was asked for here.").arg(who));
+        return;
+    }
+    int set = 0;
+    change(tr("Proposals from %1").arg(who), [&](samn::LabelProject& p) {
+        set = samn::ApplyTeacherBoxes(p, ms, boxes, source, tolerance());
+        return set > 0;
+    });
+    setTeacherStatus(set > 0 ? tr("%n proposal(s) from %1: check them, drag or confirm.", "", set).arg(who)
+                             : tr("%1's boxes are all where you already confirmed one.").arg(who));
+}
+
+bool LabelController::askTeacher() {
+    if (teacherBusy() || !hasVideo() || frame_.isNull()) return false;
+    const int64_t ms = int64_t(std::llround(preview_ms_));
+    const QString at = QString::number(ms / 1000.0, 'f', 1) + " s";
+    const bool local = teacher_kind_ == QLatin1String("nudenet");
+    const QString who = local ? QStringLiteral("NudeNet") : teacher_model_;
+    const std::string source = local ? "teacher:nudenet" : "teacher:" + teacher_model_.toStdString();
+    const auto done = [this, ms, who, source](std::optional<std::vector<samn::TeacherBox>> boxes, const QString& error) {
+        if (!boxes) setTeacherStatus(tr("No answer from %1: %2").arg(who, error));
+        else applyProposals(ms, *boxes, source, who);
+    };
+    const bool started = local ? startLocal(frame_, teacherClasses(), done) : startServer(frame_, teacherClasses(), done);
+    if (started) setTeacherStatus(tr("%1 is looking at %2 …").arg(who, at));
+    return started;
+}
+
+// Both teachers at once on one frame (D-155 step 4, votes): done gets the
+// votes of the teachers that answered and the errors of the others.
+bool LabelController::startVote(const QImage& frame, VoteDone done, bool skipServer, bool skipLocal) {
+    const std::vector<std::string> classes = teacherClasses();
+    const bool server = !skipServer && !teacher_url_.isEmpty() && !teacher_model_.isEmpty();
+    const bool local = !skipLocal && localTeacherAvailable() && !nudenetPath().isEmpty();
+    if (!server && !local) {
+        setTeacherStatus(tr("Set up a teacher first: NudeNet here or a model server (Teachers and steps)."));
+        return false;
+    }
+    struct State {
+        int pending = 0;
+        std::vector<samn::TeacherVote> votes;
+        QStringList errors;
+    };
+    auto state = std::make_shared<State>();
+    const auto answer = [state, done](const std::string& teacher, const std::vector<std::string>& sees) {
+        return [state, done, teacher, sees](std::optional<std::vector<samn::TeacherBox>> boxes, const QString& error) {
+            if (boxes) state->votes.push_back({teacher, sees, *boxes});
+            else state->errors << QString::fromStdString(teacher) + ": " + (error.isEmpty() ? tr("no answer") : error);
+            if (--state->pending == 0) done(state->votes, state->errors);
+        };
+    };
+    // Counted before either starts: a teacher may answer before the other is asked.
+    state->pending = int(server) + int(local);
+    if (server && !startServer(frame, classes, answer(teacher_model_.toStdString(), classes))) --state->pending;
+    if (local && !startLocal(frame, classes, answer("nudenet", localClasses(classes)))) --state->pending;
+    return state->pending > 0;
+}
+
+bool LabelController::askAllTeachers() {
+    if (teacherBusy() || !hasVideo() || frame_.isNull()) return false;
+    const int64_t ms = int64_t(std::llround(preview_ms_));
+    const bool started = startVote(frame_, [this, ms](const std::vector<samn::TeacherVote>& votes, const QStringList& errors) {
+        if (votes.empty()) {
+            setTeacherStatus(tr("No teacher answered: %1").arg(errors.join("; ")));
+            return;
+        }
+        std::string names;
+        for (const auto& v : votes) names += (names.empty() ? "" : "+") + v.teacher;
+        const auto voted = samn::VoteTeacherBoxes(votes);
+        int set = 0, unsure = 0;
+        if (!voted.empty())
+            change(tr("Teachers' vote"), [&](samn::LabelProject& p) {
+                set = samn::ApplyTeacherBoxes(p, ms, samn::VotedBoxes(voted), "teachers:" + names, tolerance());
+                return set > 0;
+            });
+        for (const auto& v : voted) unsure += v.box.uncertain ? 1 : 0;
+        QString msg = voted.empty() ? tr("The teachers see nothing they were asked for here.")
+                                    : tr("%n proposal(s) from %1 teacher(s), %2 uncertain (N jumps there).", "", set)
+                                          .arg(votes.size())
+                                          .arg(unsure);
+        if (!errors.isEmpty()) msg += ' ' + tr("Not answered: %1").arg(errors.join("; "));
+        setTeacherStatus(msg);
+    });
+    if (started) setTeacherStatus(tr("The teachers are looking at %1 …").arg(QString::number(ms / 1000.0, 'f', 1) + " s"));
+    return started;
+}
+
+bool LabelController::teachClip(double stepMs) {
+    if (teacherBusy() || !hasVideo()) return false;
+    stepMs = std::max(200.0, stepMs);
+    clip_times_.clear();
+    for (double t = 0; t <= duration_ms_; t += stepMs) clip_times_.push_back(t);
+    if (clip_times_.empty()) clip_times_.push_back(0);
+    clip_index_ = 0;
+    clip_results_.clear();
+    clip_errors_.clear();
+    clip_skip_server_ = clip_skip_local_ = false;
+    clip_teaching_ = true;
+    clip_cancel_ = false;
+    emit teacherChanged();
+    teachNextFrame();
+    return clip_teaching_;
+}
+
+void LabelController::cancelTeachClip() {
+    if (clip_teaching_) clip_cancel_ = true;
+}
+
+void LabelController::teachNextFrame() {
+    if (!clip_teaching_) return;
+    if (clip_cancel_ || clip_index_ >= clip_times_.size()) {
+        finishTeachClip();
+        return;
+    }
+    const FrameCache::Frame f = FrameCache::shared().At(video_path_, clip_times_[clip_index_]);
+    if (f.image.isNull()) {  // nothing to see there: go on
+        ++clip_index_;
+        QTimer::singleShot(0, this, [this] { teachNextFrame(); });
+        return;
+    }
+    const int64_t ms = int64_t(std::llround(f.ms));
+    setTeacherStatus(tr("The teachers go through the clip: %1 of %2 …").arg(clip_index_ + 1).arg(clip_times_.size()));
+    const bool started = startVote(f.image, [this, ms](const std::vector<samn::TeacherVote>& votes, const QStringList& errors) {
+        for (const auto& v : votes)
+            if (std::find(clip_teachers_.begin(), clip_teachers_.end(), v.teacher) == clip_teachers_.end())
+                clip_teachers_.push_back(v.teacher);
+        if (!votes.empty()) clip_results_.push_back({ms, samn::VoteTeacherBoxes(votes)});
+        // A teacher that failed once sits out the rest of the run: an
+        // unreachable server would otherwise cost its timeout at every frame.
+        for (const auto& e : errors) {
+            if (e.startsWith(QLatin1String("nudenet: "))) clip_skip_local_ = true;
+            else clip_skip_server_ = true;
+            if (!clip_errors_.contains(e)) clip_errors_ << e;
+        }
+        ++clip_index_;
+        emit teacherChanged();
+        QTimer::singleShot(0, this, [this] { teachNextFrame(); });
+    }, clip_skip_server_, clip_skip_local_);
+    if (!started) finishTeachClip();
+}
+
+void LabelController::finishTeachClip() {
+    clip_teaching_ = false;
+    const bool canceled = clip_cancel_;
+    std::string names;
+    for (const auto& t : clip_teachers_) names += (names.empty() ? "" : "+") + t;
+    int set = 0, unsure = 0;
+    if (!clip_results_.empty())
+        change(tr("Teachers through the clip"), [&](samn::LabelProject& p) {
+            for (const auto& [ms, voted] : clip_results_) {
+                set += samn::ApplyTeacherBoxes(p, ms, samn::VotedBoxes(voted), "teachers:" + names, tolerance());
+                for (const auto& v : voted) unsure += v.box.uncertain ? 1 : 0;
+            }
+            return set > 0;
+        });
+    QString msg = clip_results_.empty() && !clip_errors_.isEmpty()
+                      ? tr("No teacher answered: %1").arg(clip_errors_.join("; "))
+                      : tr("%n proposal(s) at %1 frame(s), %2 uncertain (N jumps there).", "", set)
+                            .arg(clip_results_.size())
+                            .arg(unsure);
+    if (canceled) msg = tr("Stopped.") + ' ' + msg;
+    if (!clip_errors_.isEmpty() && !clip_results_.empty()) msg += ' ' + tr("Not always answered: %1").arg(clip_errors_.join("; "));
+    clip_results_.clear();
+    clip_teachers_.clear();
+    clip_errors_.clear();
+    setTeacherStatus(msg);
 }
 
 void LabelController::setTeacherKind(const QString& kind) {
@@ -299,65 +507,6 @@ bool LabelController::chooseNudeNet(const QString& pathOrUrl) {
     teacher_kind_ = QStringLiteral("nudenet");
     saveSetting("aitrain.teacher.kind", teacher_kind_);
     setTeacherStatus(tr("NudeNet is ready: Ask the teacher (A) uses it."));
-    return true;
-}
-
-bool LabelController::askLocal() {
-    if (!localTeacherAvailable()) {
-        setTeacherStatus(tr("This build cannot run models itself (no ONNX Runtime)."));
-        return false;
-    }
-    const QString path = nudenetPath();
-    if (path.isEmpty()) {
-        setTeacherStatus(tr("Fetch NudeNet first (Teachers and steps)."));
-        return false;
-    }
-    const QImage bgr = frame_.convertToFormat(QImage::Format_BGR888);
-    cv::Mat mat = cv::Mat(bgr.height(), bgr.width(), CV_8UC3, const_cast<uchar*>(bgr.constBits()),
-                          size_t(bgr.bytesPerLine())).clone();
-    // The frame on screen may be smaller than the video: boxes go back in video pixels.
-    const double sx = video_size_.width() > 0 ? double(video_size_.width()) / bgr.width() : 1.0;
-    const double sy = video_size_.height() > 0 ? double(video_size_.height()) / bgr.height() : 1.0;
-    if (!detector_) detector_ = std::make_shared<samn::vision::OnnxDetector>();
-    if (local_worker_.joinable()) local_worker_.join();
-    local_busy_ = true;
-    const int64_t ms = int64_t(std::llround(preview_ms_));
-    setTeacherStatus(tr("NudeNet is looking at %1 …").arg(QString::number(ms / 1000.0, 'f', 1) + " s"));
-    QPointer<LabelController> self(this);
-    local_worker_ = std::thread([self, det = detector_, path = Fs(path), mat = std::move(mat), sx, sy, ms,
-                                 wanted = teacherClasses()] {
-        std::string why;
-        std::vector<samn::TeacherBox> boxes;
-        if (det->loaded() || det->Load(path, &why)) {
-            for (const auto& d : det->Detect(mat, 0.3f, &why)) {
-                const auto& names = samn::vision::NudeNetClasses();
-                if (d.cls < 0 || size_t(d.cls) >= names.size()) continue;
-                const std::string label = samn::vision::NudeNetToLabel(names[size_t(d.cls)]);
-                if (label.empty() || std::find(wanted.begin(), wanted.end(), label) == wanted.end()) continue;
-                boxes.push_back({label, {d.box.x * sx, d.box.y * sy, d.box.width * sx, d.box.height * sy}});
-            }
-        }
-        QMetaObject::invokeMethod(qApp, [self, boxes, ms, error = QString::fromStdString(why)] {
-            if (!self) return;
-            self->local_busy_ = false;
-            if (!error.isEmpty() && boxes.empty()) {
-                self->setTeacherStatus(tr("NudeNet: %1").arg(error));
-                return;
-            }
-            if (boxes.empty()) {
-                self->setTeacherStatus(tr("NudeNet sees nothing it was asked for here."));
-                return;
-            }
-            int set = 0;
-            self->change(tr("NudeNet proposals"), [&](samn::LabelProject& p) {
-                set = samn::ApplyTeacherBoxes(p, ms, boxes, "teacher:nudenet", self->tolerance());
-                return set > 0;
-            });
-            self->setTeacherStatus(set > 0 ? tr("%n proposal(s) from NudeNet: check them, drag or confirm.", "", set)
-                                           : tr("NudeNet's boxes are all where you already confirmed one."));
-        }, Qt::QueuedConnection);
-    });
-    emit teacherChanged();
     return true;
 }
 

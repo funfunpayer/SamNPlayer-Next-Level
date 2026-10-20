@@ -60,6 +60,7 @@ Item {
     Shortcut { sequence: "H"; enabled: root.active && labels.hasVideo; onActivated: labels.markAbsent(true) }
     Shortcut { sequence: "T"; enabled: root.active && labels.hasVideo && !labels.tracking; onActivated: labels.trackCurrent() }
     Shortcut { sequence: "A"; enabled: root.active && labels.hasVideo && !labels.teacherBusy; onActivated: labels.askTeacher() }
+    Shortcut { sequence: "Shift+A"; enabled: root.active && labels.hasVideo && !labels.teacherBusy; onActivated: labels.askAllTeachers() }
     Shortcut { sequence: "N"; enabled: root.active && labels.hasVideo; onActivated: { root.playing = false; labels.nextUncertain() } }
     Shortcut { sequences: [StandardKey.Delete, "Backspace"]; enabled: root.active && labels.hasVideo; onActivated: labels.removeKey() }
     Shortcut { sequences: [StandardKey.Undo]; enabled: root.active && labels.canUndo; onActivated: labels.undo() }
@@ -169,6 +170,21 @@ Item {
                     text: labels.teacherBusy ? qsTr("The teacher is looking…") : local ? qsTr("Ask NudeNet (A)") : qsTr("Ask the teacher (A)")
                     enabled: labels.hasVideo && !labels.teacherBusy && (local ? labels.nudenetPath !== "" : labels.teacherModel !== "")
                     onClicked: labels.askTeacher()
+                }
+                FlowButton {
+                    objectName: "askAllTeachers"
+                    Layout.fillWidth: true
+                    text: qsTr("Ask all teachers (Shift+A)")
+                    enabled: labels.hasVideo && !labels.teacherBusy
+                    onClicked: labels.askAllTeachers()
+                }
+                FlowButton {
+                    objectName: "teachClip"
+                    Layout.fillWidth: true
+                    text: labels.clipTeaching ? qsTr("Stop the teachers (%1 %)").arg(labels.clipTeachProgress)
+                                              : qsTr("Teachers through the clip")
+                    enabled: labels.hasVideo && (labels.clipTeaching || !labels.teacherBusy)
+                    onClicked: labels.clipTeaching ? labels.cancelTeachClip() : labels.teachClip(2000)
                 }
                 FlowButton { objectName: "nextUncertain"; Layout.fillWidth: true; text: qsTr("Next uncertain (N)"); onClicked: { root.playing = false; labels.nextUncertain() } }
                 FlowButton { Layout.fillWidth: true; text: qsTr("Remove this key (Del)"); enabled: labels.currentLabel !== ""; onClicked: labels.removeKey() }
