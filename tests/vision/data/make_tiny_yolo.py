@@ -74,3 +74,39 @@ save(
     ),
     "tiny_nudenet.onnx",
 )
+
+# tiny_detr.onnx: shaped like an RF-DETR export (input 1x3x64x64, outputs
+# "dets" 1x4x4 and "labels" 1x4x3). Query 0 is class 1 at logit 3 (0.95),
+# box (0.25, 0.5, 0.2, 0.4) as fractions; query 1's class-0 logit is the mean
+# of the normalised red channel (red frame: +2.25, 0.90; blue: -2.12, 0.11),
+# box (0.75, 0.25, 0.1, 0.1); queries 2 and 3 are below any threshold.
+dets = np.array([[[0.25, 0.5, 0.2, 0.4], [0.75, 0.25, 0.1, 0.1], [0.5, 0.5, 0.1, 0.1], [0.5, 0.5, 0.2, 0.2]]], np.float32)
+logits = np.full((1, 4, 3), -6.0, np.float32)
+logits[0, 0, 1] = 3.0
+logits[0, 1, 0] = 0.0  # plus the red mean
+redmask = np.zeros((1, 4, 3), np.float32)
+redmask[0, 1, 0] = 1
+save(
+    helper.make_graph(
+        [
+            helper.make_node("Gather", ["input", "red"], ["r"], axis=1),
+            helper.make_node("ReduceMean", ["r"], ["m"], axes=[0, 1, 2], keepdims=0),
+            helper.make_node("Mul", ["m", "redmask"], ["scored"]),
+            helper.make_node("Add", ["logits", "scored"], ["labels"]),
+            helper.make_node("Identity", ["dets_c"], ["dets"]),
+        ],
+        "tiny_detr",
+        [helper.make_tensor_value_info("input", TensorProto.FLOAT, [1, 3, 64, 64])],
+        [
+            helper.make_tensor_value_info("dets", TensorProto.FLOAT, [1, 4, 4]),
+            helper.make_tensor_value_info("labels", TensorProto.FLOAT, [1, 4, 3]),
+        ],
+        [
+            numpy_helper.from_array(np.array(0, np.int64), "red"),
+            numpy_helper.from_array(dets, "dets_c"),
+            numpy_helper.from_array(logits, "logits"),
+            numpy_helper.from_array(redmask, "redmask"),
+        ],
+    ),
+    "tiny_detr.onnx",
+)

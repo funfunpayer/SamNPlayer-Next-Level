@@ -116,3 +116,57 @@ TEST_CASE("a detector model runs with ONNX Runtime") {
     CHECK(det.Detect(cv::Mat(), 0.25f, &error).empty());
     CHECK_FALSE(error.empty());
 }
+
+TEST_CASE("DETR decoding: sigmoid scores, boxes as fractions, best first") {
+    // Two queries, three logits each.
+    const float boxes[] = {0.5f, 0.5f, 0.2f, 0.4f,  // centre
+                           0.95f, 0.1f, 0.2f, 0.2f};  // over the right edge
+    const float logits[] = {-5, 2.0f, -5,   // class 1, 0.88
+                            3.0f, -5, -5};  // class 0, 0.95
+    const auto d = samn::vision::DecodeDetr(boxes, logits, 2, 3, cv::Size(200, 100), 0.5f);
+    REQUIRE(d.size() == 2);
+    CHECK(d[0].cls == 0);
+    CHECK(d[0].score == doctest::Approx(0.9526).epsilon(0.001));
+    CHECK(d[0].box.x == doctest::Approx(170));
+    CHECK(d[0].box.width == doctest::Approx(30));  // 170..200, the frame's edge
+    CHECK(d[1].cls == 1);
+    CHECK(d[1].box.x == doctest::Approx(80));
+    CHECK(d[1].box.y == doctest::Approx(30));
+    CHECK(d[1].box.height == doctest::Approx(40));
+    CHECK(samn::vision::DecodeDetr(boxes, logits, 2, 3, cv::Size(200, 100), 0.9f).size() == 1);
+    CHECK(samn::vision::DecodeDetr(nullptr, logits, 2, 3, cv::Size(200, 100)).empty());
+}
+
+TEST_CASE("the DETR input: stretched, RGB, ImageNet-normalised") {
+    const cv::Mat red(30, 90, CV_8UC3, cv::Scalar(0, 0, 255));
+    const cv::Mat blob = samn::vision::DetrBlob(red, 64);
+    REQUIRE(blob.dims == 4);
+    CHECK(blob.size[2] == 64);
+    CHECK(blob.size[3] == 64);
+    CHECK(blob.ptr<float>(0, 0)[63 * 64 + 63] == doctest::Approx((1 - 0.485) / 0.229).epsilon(0.001));  // no padding
+    CHECK(blob.ptr<float>(0, 2)[0] == doctest::Approx(-0.406 / 0.225).epsilon(0.001));
+}
+
+TEST_CASE("an RF-DETR-shaped model runs with ONNX Runtime") {
+    if (!samn::vision::OnnxDetector::Available()) return;
+    samn::vision::OnnxDetector det;
+    std::string error;
+    REQUIRE_MESSAGE(det.Load(std::string(SAMN_VISION_TESTDATA) + "/tiny_detr.onnx", &error), error);
+    CHECK(det.isDetr());
+    CHECK(det.inputSize() == 64);
+    CHECK(det.classCount() == 3);
+    // Red, 200 x 100: query 1 sees the red (class 0), query 0 is fixed (class 1).
+    auto d = det.Detect(cv::Mat(100, 200, CV_8UC3, cv::Scalar(0, 0, 255)), 0.5f, &error);
+    REQUIRE(d.size() == 2);
+    CHECK(d[0].cls == 1);
+    CHECK(d[0].box.x == doctest::Approx(30));  // (0.25 - 0.1) * 200
+    CHECK(d[0].box.height == doctest::Approx(40));
+    CHECK(d[1].cls == 0);
+    CHECK(d[1].score == doctest::Approx(0.905).epsilon(0.01));
+    // Blue: only the fixed query.
+    d = det.Detect(cv::Mat(100, 200, CV_8UC3, cv::Scalar(255, 0, 0)), 0.5f, &error);
+    REQUIRE(d.size() == 1);
+    CHECK(d[0].cls == 1);
+    CHECK(det.Load(std::string(SAMN_VISION_TESTDATA) + "/tiny_yolo.onnx", &error));  // YOLO still loads
+    CHECK_FALSE(det.isDetr());
+}

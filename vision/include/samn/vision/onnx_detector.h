@@ -1,8 +1,14 @@
-// A YOLOv8-style object detector in ONNX format, run with ONNX Runtime
-// (D-155 step 4): NudeNet as a local teacher, later our own student. The
-// picture goes in as NudeNet expects it (padded to a square at the right and
-// bottom, RGB, 0..1); the boxes come back in frame pixels. Without ONNX
-// Runtime in the build (SAMN_WITH_ONNXRUNTIME off) Load() says so.
+// An object detector in ONNX format, run with ONNX Runtime (D-155 steps 4
+// and 5). Two kinds are read, told apart by their outputs:
+// - YOLOv8 (NudeNet, one output 1 x (4 + classes) x anchors): the picture is
+//   padded to a square at the right and bottom, RGB, 0..1, and the boxes are
+//   in model pixels (NMS here).
+// - DETR (RF-DETR, our student; outputs "dets" 1 x queries x 4 and "labels"
+//   1 x queries x classes): the picture is stretched to the square, RGB,
+//   ImageNet-normalised; boxes are cx, cy, w, h as fractions, the classes
+//   logits (sigmoid here), one box per query.
+// The boxes come back in frame pixels. Without ONNX Runtime in the build
+// (SAMN_WITH_ONNXRUNTIME off) Load() says so.
 #pragma once
 
 #include <filesystem>
@@ -25,6 +31,16 @@ struct Detection {
 // into frame pixels.
 cv::Mat YoloBlob(const cv::Mat& bgr, int size, double* scale);
 
+// The DETR input: stretched to size x size, RGB, (x / 255 - mean) / std with
+// ImageNet's mean and std, NCHW.
+cv::Mat DetrBlob(const cv::Mat& bgr, int size);
+
+// Decodes a DETR head: `queries` boxes (cx, cy, w, h as fractions of the
+// picture) and `classes` logits per query; each query's best class above
+// min_score, in frame pixels and clipped to the frame, best first.
+std::vector<Detection> DecodeDetr(const float* boxes, const float* logits, int queries, int classes, cv::Size frame,
+                                  float min_score = 0.3f);
+
 // Decodes a YOLOv8 head of `rows` = 4 + classes rows by `anchors` columns
 // (cx, cy, w, h in model pixels, then one score per class): the boxes whose
 // best class reaches min_score, one per object (class-agnostic NMS at
@@ -44,12 +60,13 @@ public:
     // The ONNX Runtime version, empty without it.
     static std::string RuntimeVersion();
 
-    // Loads a model with one picture input and one YOLOv8 output. False with
+    // Loads a model with one picture input and a YOLOv8 or DETR head. False with
     // *error set for a missing or unreadable file or another kind of model.
     bool Load(const std::filesystem::path& model, std::string* error);
     bool loaded() const;
     int inputSize() const;   // the square side the model sees
-    int classCount() const;  // the output's rows minus the four box rows
+    int classCount() const;  // YOLOv8: the rows minus the four box rows; DETR: the logits per query
+    bool isDetr() const;
 
     // The boxes in a BGR frame. Empty with *error set when it fails.
     std::vector<Detection> Detect(const cv::Mat& bgr, float min_score = 0.25f, std::string* error = nullptr) const;

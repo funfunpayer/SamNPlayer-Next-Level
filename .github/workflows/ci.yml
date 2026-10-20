@@ -116,7 +116,7 @@ jobs:
         shell: bash
         run: |
           if [ -d build/core/Release ]; then export PYTHONPATH=build/core/Release; else export PYTHONPATH=build/core; fi
-          for t in core/python/tests/test_*.py; do
+          for t in core/python/tests/test_*.py ai/tests/test_*.py; do
             echo "== $t"
             python "$t"
           done
@@ -144,6 +144,8 @@ jobs:
           qt=$(cygpath -u "$QT_ROOT_DIR")
           "$qt/bin/windeployqt.exe" --release --qmldir app/qml --compiler-runtime --no-translations "$dist/SamNPlayer2.exe"
           cp LICENSE THIRD_PARTY.md ci/windows/README.txt "$dist/"
+          # The student's training script runs in the Python the app sets up (D-155 step 5).
+          mkdir -p "$dist/ai" && cp ai/train_student.py "$dist/ai/"
           # ONNX Runtime (MIT) carries its licence and notices with it.
           ort=build/_deps/onnxruntime-src
           cp "$ort/LICENSE" "$dist/ONNXRUNTIME_LICENSE.txt"
