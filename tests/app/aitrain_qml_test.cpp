@@ -87,6 +87,9 @@ private slots:
         QTRY_VERIFY(named(root.get(), "labelEditor")->isVisible());
         QVERIFY(named(root.get(), "askAllTeachers")->isVisible());
         QVERIFY(named(root.get(), "teachClip")->isVisible());
+        auto* retrack = named(root.get(), "retrackAfterDrag");
+        QVERIFY(retrack->isVisible());
+        QCOMPARE(retrack->property("checked").toBool(), labels->retrackAfterDrag());
 
         // A preset chip adds the label; drawing on the frame sets its box.
         QQuickItem* chip = nullptr;

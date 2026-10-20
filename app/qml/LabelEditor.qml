@@ -163,6 +163,20 @@ Item {
                     enabled: labels.currentLabel !== "" || labels.tracking
                     onClicked: labels.tracking ? labels.cancelTrack() : labels.trackCurrent()
                 }
+                RowLayout {
+                    Layout.fillWidth: true; spacing: 8
+                    FlowToggle {
+                        objectName: "retrackAfterDrag"
+                        checked: labels.retrackAfterDrag
+                        onToggled: (on) => labels.retrackAfterDrag = on
+                    }
+                    Text {
+                        Layout.fillWidth: true; wrapMode: Text.WordWrap
+                        textFormat: Text.PlainText
+                        text: qsTr("Track again after a drag")
+                        color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                    }
+                }
                 FlowButton {
                     objectName: "askTeacher"
                     Layout.fillWidth: true

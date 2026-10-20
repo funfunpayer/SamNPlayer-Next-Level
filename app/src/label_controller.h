@@ -93,6 +93,9 @@ class LabelController : public QObject {
     // Tracking between keyframes (D-155 step 3): busy and 0..100.
     Q_PROPERTY(bool tracking READ tracking NOTIFY trackingChanged)
     Q_PROPERTY(int trackProgress READ trackProgress NOTIFY trackingChanged)
+    // After a box is drawn or dragged, the stretches to the confirmed boxes
+    // on both sides are tracked again at once (aitrain.retrack_after_drag).
+    Q_PROPERTY(bool retrackAfterDrag READ retrackAfterDrag WRITE setRetrackAfterDrag NOTIFY trackingChanged)
 
 public:
     explicit LabelController(QObject* parent = nullptr);
@@ -198,6 +201,8 @@ public:
     // Seconds before a teacher request gives up (a big model on a laptop is slow).
     static constexpr int kTeacherTimeoutMs = 180000;
     bool tracking() const { return tracking_; }
+    bool retrackAfterDrag() const { return retrack_after_drag_; }
+    void setRetrackAfterDrag(bool on);
     int trackProgress() const { return track_progress_; }
     bool suggesting() const { return suggesting_; }
     int suggestProgress() const { return suggest_progress_; }
@@ -274,6 +279,10 @@ private:
         int64_t from_ms, to_ms;
         samn::LabelBox from_box, to_box;
     };
+    std::vector<Gap> gapsOf(const samn::LabelTrack& t, std::optional<int64_t> around = std::nullopt) const;
+    bool startTracking(const QString& label, const std::vector<Gap>& gaps, bool automatic);
+    bool retrack_after_drag_ = true;
+    int track_run_ = 0;
     void onTracked(const QString& label, const std::vector<Gap>& gaps, const std::vector<std::vector<samn::LabelKey>>& keys,
                    const QString& error);
     bool tracking_ = false;
