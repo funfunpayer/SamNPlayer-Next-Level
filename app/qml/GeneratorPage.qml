@@ -406,6 +406,13 @@ Item {
                             text: gen.boxLabel; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                         }
                         FlowButton {
+                            objectName: "clearBox"
+                            visible: gen.hasBox
+                            text: qsTr("Clear box")
+                            enabled: !gen.running
+                            onClicked: gen.clearBox()
+                        }
+                        FlowButton {
                             objectName: "findTip"
                             text: gen.finding ? qsTr("Stop finding") : qsTr("Find tip"); icon: "search"
                             enabled: !gen.running
@@ -529,6 +536,22 @@ Item {
                             spacing: 6
                             FlowToggle { id: softEdges; objectName: "softEdges"; checked: true }
                             Text { textFormat: Text.PlainText; text: qsTr("Soft edges"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
+                        }
+                        // FPS snap (0.7 FPS-Snap): new and dragged points land on frame boundaries.
+                        RowLayout {
+                            spacing: 6
+                            Text { textFormat: Text.PlainText; text: qsTr("Snap"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
+                            FlowSlider {
+                                objectName: "fpsSnap"
+                                from: 0; to: 60; Layout.preferredWidth: 110
+                                value: edit.fpsSnap
+                                onMoved: (v) => edit.fpsSnap = Math.round(v)
+                            }
+                            Text {
+                                textFormat: Text.PlainText
+                                text: edit.fpsSnap > 0 ? qsTr("%1 fps").arg(Math.round(edit.fpsSnap)) : qsTr("off")
+                                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
                         }
                     }
                     // Create tools: whole lanes from the stroke or the sound
@@ -1242,6 +1265,14 @@ Item {
                                     Layout.fillWidth: true; elide: Text.ElideMiddle
                                     text: modelData.name + (modelData.message !== "" && modelData.status !== "done" ? " · " + modelData.message : "")
                                     color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 12
+                                }
+                                // One clip out of the queue (not while it runs).
+                                IconButton {
+                                    objectName: "removeQueued_" + index
+                                    width: 22; height: 22
+                                    icon: "close"; tip: qsTr("Remove from the queue")
+                                    visible: !gen.queueRunning
+                                    onClicked: gen.removeFromQueue(index)
                                 }
                             }
                         }

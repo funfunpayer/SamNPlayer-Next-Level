@@ -67,7 +67,6 @@ qt_add_qml_module(samn_app
     qml/MarkList.qml
     qml/LaneName.qml
     qml/Icon.qml
-    qml/FlowStage.qml
     qml/FlowFigure.qml
     qml/VideoTransport.qml
     qml/GeneratorProjectPanel.qml

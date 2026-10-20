@@ -123,6 +123,16 @@ private slots:
         QVERIFY(gen->hasBox());
         QTRY_VERIFY(named(root.get(), "candidate_1"));
         QVERIFY(named(root.get(), "candidate_1")->isVisible());
+        // A queued clip can be taken out again with its ×.
+        QCOMPARE(gen->addToQueue({video}), 1);
+        QQuickItem* remove = nullptr;
+        QTRY_VERIFY((remove = named(root.get(), "removeQueued_0")) && remove->isVisible());
+        QMetaObject::invokeMethod(remove, "clicked");
+        QTRY_COMPARE(gen->queue().size(), 0);
+        // Clear box takes the tip box away again (the drag below sets a new one).
+        QTRY_VERIFY(named(root.get(), "clearBox")->isVisible());
+        QMetaObject::invokeMethod(named(root.get(), "clearBox"), "clicked");
+        QTRY_VERIFY(!gen->hasBox());
 
         // A drag over the frame becomes the tip box in video pixels. The seek
         // row and box label appear with the video and shrink the frame, so

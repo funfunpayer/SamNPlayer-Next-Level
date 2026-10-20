@@ -13,6 +13,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <nlohmann/json.hpp>
@@ -78,6 +79,13 @@ std::string GoJsonString(const std::string& raw);
 
 // Go json.Indent(dst, compact, "", "  ") for compact JSON text.
 std::string GoIndent(const std::string& compact);
+
+// Moving a script in time (0.7 ShiftBookmarks / ShiftChapters, for "Bake
+// offset"): everything moves by delta_ms; what would start before 0 ms is
+// dropped and counted, a chapter that only starts before 0 is cut at 0, an
+// open end (0) stays open.
+std::pair<std::vector<Bookmark>, int> ShiftBookmarks(const std::vector<Bookmark>& bookmarks, int64_t delta_ms);
+std::pair<std::vector<Chapter>, int> ShiftChapters(const std::vector<Chapter>& chapters, int64_t delta_ms);
 
 std::vector<Bookmark> LoadBookmarks(const std::filesystem::path& path);
 std::vector<Chapter> LoadChapters(const std::filesystem::path& path);
