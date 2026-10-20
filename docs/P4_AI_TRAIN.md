@@ -207,8 +207,16 @@ lanes; its stretches are dragged and named like chapters:
    dependency, the Mac works at once): any OpenAI-compatible address (Ollama,
    LM Studio, a Mac in the network), *Test connection* lists the models,
    *Ask the teacher* (`A`) puts its boxes on the frame as unconfirmed keys
-   (`core/teacher.h`); next ONNX Runtime in the build, NudeNet (one-click
-   download), consensus into proposed tracks.
+   (`core/teacher.h`). ONNX Runtime is in the build (20 Oct, Owner: in the
+   build, not loaded on demand): OpenCV's dnn cannot read NudeNet on the
+   OpenCV 4.6 of the Linux distributions (dynamic shapes, `Range`), so the
+   official ONNX Runtime 1.22 comes from its NuGet package, pinned by hash,
+   and ships in the Windows package. `vision/onnx_detector.h` runs any
+   YOLOv8-style model as NudeNet feeds it (square padding, RGB, 0..1) and maps
+   NudeNet's classes to ours; tested on a tiny generated model
+   (`tests/vision/data/make_tiny_yolo.py`), NudeNet 320n itself loads and
+   takes about 20 ms per frame on a CPU. Next: NudeNet as a one-click download
+   and a teacher in the label editor, then consensus into proposed tracks.
 5. **Student:** the training environment (one click), RF-DETR training and ONNX
    export with progress and Cancel; the student as a teacher and in the
    Generator's tip finding.
