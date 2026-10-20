@@ -1,6 +1,7 @@
 // The AI Train label editor's controller (D-155 §2.2): tracks, keys, undo,
 // saving beside the clip and the dataset export. Synthetic clips only.
 #include <QDir>
+#include <cmath>
 #include <QFile>
 #include <QImage>
 #include <QTemporaryDir>
@@ -207,6 +208,42 @@ private slots:
         QVERIFY(c.suggestPhases());
         c.cancelSuggest();
         QVERIFY(!c.suggesting());
+    }
+
+    void theTrackerFillsBetweenKeys() {
+        // The moving disc (WriteMoving: x 160, y = 120 + 40 sin(2 pi t), r 35).
+        const QString path = dir_.filePath("tracked.mp4");
+        QVERIFY(QFile::copy(clip_, path));
+        LabelController c;
+        QVERIFY(c.openVideo(path));
+        QVERIFY(c.addLabel("glans"));
+        QVERIFY(!c.trackCurrent());  // one key is not enough
+        const auto disc = [](double ms) { return QRectF(125, 120 + 40 * std::sin(2 * 3.14159265358979323846 * ms / 1000.0) - 35, 70, 70); };
+        c.seek(0);
+        QVERIFY(c.setBox(disc(0)));
+        c.seek(1000);
+        QVERIFY(c.setBox(disc(c.previewMs())));
+        const int before = c.lanes()[0].toMap().value("keys").toList().size();
+        QVERIFY(c.trackCurrent());
+        QVERIFY(c.tracking());
+        QTRY_VERIFY_WITH_TIMEOUT(!c.tracking(), 30000);
+        const QVariantList keys = c.lanes()[0].toMap().value("keys").toList();
+        QVERIFY2(keys.size() > before + 2, qPrintable(c.status()));
+        int tracker = 0;
+        for (const auto& k : keys)
+            if (k.toMap().value("source").toString() == "tracker") {
+                ++tracker;
+                QVERIFY(!k.toMap().value("confirmed").toBool());
+            }
+        QVERIFY(tracker >= 3);
+        // The box follows the disc halfway.
+        c.seek(500);
+        const QVariantMap box = c.boxes().value(0).toMap();
+        QVERIFY(std::abs(box.value("y").toDouble() + 35 - (120 + 40 * std::sin(2 * 3.14159265358979323846 * c.previewMs() / 1000.0))) < 12);
+        // One undo takes the tracked keys back.
+        QVERIFY(c.undo());
+        QCOMPARE(c.lanes()[0].toMap().value("keys").toList().size(), before);
+        QVERIFY(!c.nextUncertain() || c.status().contains("Uncertain"));
     }
 
     void anImageIsAClipOfOneFrame() {

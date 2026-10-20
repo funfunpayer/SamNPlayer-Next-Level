@@ -55,6 +55,9 @@ class LabelController : public QObject {
     // The rule-based phase suggestions run (D-157): busy and 0..100.
     Q_PROPERTY(bool suggesting READ suggesting NOTIFY suggestingChanged)
     Q_PROPERTY(int suggestProgress READ suggestProgress NOTIFY suggestingChanged)
+    // Tracking between keyframes (D-155 step 3): busy and 0..100.
+    Q_PROPERTY(bool tracking READ tracking NOTIFY trackingChanged)
+    Q_PROPERTY(int trackProgress READ trackProgress NOTIFY trackingChanged)
 
 public:
     explicit LabelController(QObject* parent = nullptr);
@@ -107,6 +110,16 @@ public:
     // phase is set yet (empty, intro, climax, cool-down). Asynchronous.
     Q_INVOKABLE bool suggestPhases();
     Q_INVOKABLE void cancelSuggest();
+    // Fills the current label between its confirmed boxes: CSRT forward and
+    // backward, blended; unconfirmed keys, uncertain where the runs disagree.
+    // Asynchronous, one undo step.
+    Q_INVOKABLE bool trackCurrent();
+    Q_INVOKABLE void cancelTrack();
+    // Jumps to the next uncertain key (the current label first, else any);
+    // false when there is none.
+    Q_INVOKABLE bool nextUncertain();
+    bool tracking() const { return tracking_; }
+    int trackProgress() const { return track_progress_; }
     bool suggesting() const { return suggesting_; }
     int suggestProgress() const { return suggest_progress_; }
     Q_INVOKABLE int exportDataset(const QString& dirOrUrl, double everyMs);
@@ -122,6 +135,7 @@ signals:
     void currentLabelChanged();
     void statusChanged();
     void suggestingChanged();
+    void trackingChanged();
 
 private:
     void change(const QString& what, const std::function<bool(samn::LabelProject&)>& op);
@@ -141,6 +155,16 @@ private:
 
     void onPictureSignals(const std::vector<double>& luma, const std::vector<double>& motion, const QString& error);
     void finishSuggest();
+    struct Gap {
+        int64_t from_ms, to_ms;
+        samn::LabelBox from_box, to_box;
+    };
+    void onTracked(const QString& label, const std::vector<Gap>& gaps, const std::vector<std::vector<samn::LabelKey>>& keys,
+                   const QString& error);
+    bool tracking_ = false;
+    int track_progress_ = 0;
+    std::shared_ptr<std::atomic<bool>> track_cancel_;
+    std::thread track_worker_;
     bool suggesting_ = false;
     int suggest_progress_ = 0;
     int suggest_run_ = 0;

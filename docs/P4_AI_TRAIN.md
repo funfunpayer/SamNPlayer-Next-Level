@@ -194,8 +194,15 @@ lanes; its stretches are dragged and named like chapters:
    from its `.labels.json`; intro and empty are skipped, at the climax the
    session pauses by default, or cools down, or carries on, Owner 20 Oct:
    "einstellbar, Standard Pause").
-3. **Tracking between keyframes:** CSRT forward and backward from each keyframe,
-   blended; the uncertainty lane and *Next uncertain*.
+3. **Tracking between keyframes** (done): *Track between keys* (`T`) runs
+   CSRT forward from one confirmed box and backward from the next
+   (`engine/label_tracking.h`, frames at most 640 px, at most 1500 frames per
+   stretch, else "add a key in between"); `BlendTracks` blends the two runs
+   (the forward one weighs more near its start) into unconfirmed keys every
+   200 ms, marked uncertain where they disagree (IoU under 0.5) or one lost
+   the object; orange keys in the lane, *Next uncertain* (`N`) jumps there.
+   One undo step; confirmed keys are never overwritten. Next: re-run the
+   stretch on its own after a drag.
 4. **Teachers:** ONNX Runtime in the build, NudeNet (one-click download),
    vision servers (Ollama, LM Studio, any OpenAI-compatible address, e.g. a
    Mac), consensus into proposed tracks.
