@@ -1049,24 +1049,26 @@ Item {
     Shortcut { sequence: "Shift+Right"; enabled: page.visible && !page.overlayOpen; onActivated: page.seekBy(1000) }
     Shortcut { sequence: ","; enabled: page.visible && !page.overlayOpen; onActivated: page.seekBy(-200) }
     Shortcut { sequence: "."; enabled: page.visible && !page.overlayOpen; onActivated: page.seekBy(200) }
-    Shortcut { sequences: ["+", "="]; enabled: !page.overlayOpen; onActivated: ctrl.offsetMs = ctrl.offsetMs + 10 }
-    Shortcut { sequence: "-"; enabled: !page.overlayOpen; onActivated: ctrl.offsetMs = ctrl.offsetMs - 10 }
-    Shortcut { sequence: "L"; enabled: !page.overlayOpen; onActivated: ctrl.loopEnabled = !ctrl.loopEnabled }
-    Shortcut { sequence: "A"; enabled: !page.overlayOpen; onActivated: ctrl.setLoopStart(page.player.position) }
-    Shortcut { sequence: "B"; enabled: !page.overlayOpen; onActivated: ctrl.setLoopEnd(page.player.position) }
+    Shortcut { sequences: ["+", "="]; enabled: page.visible && !page.overlayOpen; onActivated: ctrl.offsetMs = ctrl.offsetMs + 10 }
+    Shortcut { sequence: "-"; enabled: page.visible && !page.overlayOpen; onActivated: ctrl.offsetMs = ctrl.offsetMs - 10 }
+    Shortcut { sequence: "L"; enabled: page.visible && !page.overlayOpen; onActivated: ctrl.loopEnabled = !ctrl.loopEnabled }
+    Shortcut { sequence: "A"; enabled: page.visible && !page.overlayOpen; onActivated: ctrl.setLoopStart(page.player.position) }
+    Shortcut { sequence: "B"; enabled: page.visible && !page.overlayOpen; onActivated: ctrl.setLoopEnd(page.player.position) }
     // 0.7 key E: Extended-O (ignored when not playing, off or running).
-    Shortcut { sequence: "E"; enabled: !page.overlayOpen; onActivated: ctrl.output.triggerExtendedO() }
+    Shortcut { sequence: "E"; enabled: page.visible && !page.overlayOpen; onActivated: ctrl.output.triggerExtendedO() }
+    // 0.7 key O: a 4 s primary O-marker at the playhead.
+    Shortcut { sequence: "O"; enabled: page.visible && !page.overlayOpen && !page.empty; onActivated: ctrl.addOMarkerAt(page.player.position) }
     Repeater {
         model: 9
         delegate: Item {
             required property int index
             Shortcut {
                 sequence: String(index + 1)
-                enabled: !page.overlayOpen
+                enabled: page.visible && !page.overlayOpen
                 onActivated: page.seekTo(ctrl.jumpTenthVideoMs(index + 1))
             }
         }
     }
-    Shortcut { sequence: "Esc"; enabled: page.fullStage && !page.overlayOpen; onActivated: page.fullStage = false }
-    Shortcut { sequence: "T"; enabled: !page.overlayOpen && !page.empty; onActivated: page.theatre = !page.theatre }
+    Shortcut { sequence: "Esc"; enabled: page.visible && page.fullStage && !page.overlayOpen; onActivated: page.fullStage = false }
+    Shortcut { sequence: "T"; enabled: page.visible && !page.overlayOpen && !page.empty; onActivated: page.theatre = !page.theatre }
 }
