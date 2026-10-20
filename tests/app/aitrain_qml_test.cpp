@@ -1,7 +1,9 @@
 // The AI Train page's label editor (D-155 §2.2), loaded the way the app
 // loads it: open a clip, add labels, draw a box on the frame, scrub, mark a
 // label absent, undo. Synthetic clips only; SAMN_TEST_SHOT names a PNG.
+#include <QFile>
 #include <QQmlComponent>
+#include <QStandardPaths>
 #include <QQmlEngine>
 #include <QQuickItem>
 #include <QQuickWindow>
@@ -11,6 +13,7 @@
 
 #include "frame_provider.h"
 #include "icon_provider.h"
+#include "clip_prep_controller.h"
 #include "label_controller.h"
 #include "synthetic_clips.h"
 
@@ -162,6 +165,63 @@ private slots:
         QTRY_VERIFY(named(root.get(), "phaseBadge")->isVisible());
         if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT"); !shot.isEmpty()) {
                         QTest::qWait(300);
+            window.grabWindow().save(QString::fromLocal8Bit(shot));
+        }
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
+
+    // Benchmark: Cut a clip with the stand-in for ffmpeg. SAMN_TEST_SHOT_BENCH
+    // names a PNG of the tab.
+    void benchmarkCutsAClip() {
+        const QString video = dir_.filePath("bench/long.mp4");
+        QVERIFY(QDir().mkpath(dir_.filePath("bench")));
+        QFile f(video);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write("the stand-in does not read it");
+        f.close();
+        QQmlEngine engine;
+        engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
+        engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+        engine.addImageProvider(QStringLiteral("frames"), new samn::ui::FrameProvider);
+        QQmlComponent comp(&engine);
+        comp.setData("import QtQuick\nimport SamN\nRectangle { width: 1400; height: 800; color: \"#021024\"\n"
+                     "property alias page: p\nAiTrainPage { id: p; anchors.fill: parent; anchors.margins: 20 } }",
+                     QUrl("qrc:/test/Wrapper.qml"));
+        QVERIFY2(comp.status() == QQmlComponent::Ready, qPrintable(comp.errorString()));
+        QQuickWindow window;
+        window.resize(1400, 800);
+        std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
+        QVERIFY(root);
+        root->setParentItem(window.contentItem());
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto* page = root->property("page").value<QQuickItem*>();
+        auto* clip = page->property("clipPrep").value<samn::ui::ClipPrepController*>();
+        QVERIFY(clip);
+        QVERIFY(!named(root.get(), "clipPrepCard")->isVisible());
+        page->setProperty("tab", 1);
+        QTRY_VERIFY(named(root.get(), "clipPrepCard")->isVisible());
+        QVERIFY(!named(root.get(), "trainCard")->isVisible());
+        QVERIFY(named(root.get(), "ffmpegFetch")->isVisible());  // no ffmpeg yet
+        QVERIFY(!named(root.get(), "clipCut")->isEnabled());
+
+        page->setProperty("clipSource", video);
+        named(root.get(), "clipIn")->setProperty("text", "0:01");
+        named(root.get(), "clipOut")->setProperty("text", "0:04");
+        QTRY_COMPARE(named(root.get(), "clipTarget")->property("target").toString(), dir_.filePath("bench/long_0-01-0-04.mp4"));
+        QString python;
+        for (const char* name : {"python3", "python"})
+            if (python.isEmpty()) python = QStandardPaths::findExecutable(QString::fromLatin1(name));
+        QVERIFY(!python.isEmpty());
+        clip->setFfmpegCommand(python, {QStringLiteral(SAMN_TEST_DATA) + "/fake_ffmpeg.py"});
+        QTRY_VERIFY(!named(root.get(), "ffmpegFetch")->isVisible());
+        auto* cut = named(root.get(), "clipCut");
+        QTRY_VERIFY(cut->isEnabled());
+        QVERIFY(QMetaObject::invokeMethod(cut, "clicked"));
+        QTRY_VERIFY_WITH_TIMEOUT(!clip->cutting() && clip->status().startsWith("Done"), 30000);
+        QVERIFY(QFile::exists(dir_.filePath("bench/long_0-01-0-04.mp4")));
+        if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT_BENCH"); !shot.isEmpty()) {
+            QTest::qWait(300);
             window.grabWindow().save(QString::fromLocal8Bit(shot));
         }
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));

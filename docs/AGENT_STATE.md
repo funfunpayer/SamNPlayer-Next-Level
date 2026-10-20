@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 20 Oct 2026, Claude, branch `claude/samn2-state-docs`.
+**Last update:** 20 Oct 2026, Claude, branch `claude/samn2-clip-prep`.
 
 ## Rules
 
@@ -87,6 +87,7 @@
 - **Optimize for** (#81, D-156): `core/include/samn/improve.h` (trim, fill gaps, heal tracking gaps), the Editor's *Optimize for* any device / Sam Neo 2, *Optimize after Create*.
 - **Teacher on a model server** (D-155 step 4, first part, #91; Owner 20 Oct: servers first): `core/teacher.h`, `LabelController` teacher settings, *Ask the teacher* (`A`).
 - **ONNX Runtime in the build** (D-155 step 4, 20 Oct, `claude/samn2-onnx-nudenet`): ONNX Runtime 1.22 from its NuGet package (FetchContent, pinned hash, `SAMN_WITH_ONNXRUNTIME`), beside every executable on Windows (`samn_copy_runtime_dlls`) and in the package with its licence; `vision/onnx_detector.h` (YOLOv8 decoding, NudeNet classes and their labels), tested on `tests/vision/data/tiny_yolo.onnx`.
+- **Cut a clip** (D-155 step 6, first part, 20 Oct, `claude/samn2-clip-prep`; Owner: in the app, ffmpeg with one click): `core/clip_prep.h` (times, 0.7's ffmpeg arguments and name, `marks.json`, the script cut to the window), `ClipPrepController` (ffmpeg from the imageio-ffmpeg wheel with pinned hashes or chosen, cut with progress and Stop, batch, *Copy command*), the card on the Benchmark tab; tested with a stand-in ffmpeg, checked by hand with the real one (`clip_prep_real_check`).
 - **The student as a teacher** (D-155 step 5, 20 Oct, `claude/samn2-student-teacher`): *Our student* for A, a third teacher in the votes; local models in one worker.
 - **Student, the app part** (D-155 step 5, 20 Oct, `claude/samn2-student-train`): `TrainController` (one-click setup with uv in `config_dir()/ai`, the training set, the run with progress and Stop, `models/student/`), *Add to training set* in the label editor, the Train card on the AI Train page; tested with a fake uv (a real venv with tiny torch and rfdetr) and a fake training script.
 - **Student, first part** (D-155 step 5, 20 Oct, `claude/samn2-student-env`): `ai/train_student.py` (RF-DETR training with JSON progress and STOP, ONNX export; tested by `ai/tests`, run in CI), DETR heads in `vision/onnx_detector.h` (same results as RF-DETR's `predict`); the script ships in the Windows package under `ai/`.
@@ -99,13 +100,15 @@
 - **Phases** (D-157, #85, #86 and `claude/samn2-phase-feel`): playback shaping per phase (`.samn` `phase_ranges`, `ApplyPhaseShape` in `PlaybackFrames`, Editor *Phases shape playback*); the Training's video stage follows the film's phases (skip intro / empty, climax: pause by default); the phase lane in the label editor; rule-based suggestions (`core/include/samn/phase_rules.h`, `vision/include/samn/vision/picture_signals.h`, *Suggest phases*).
 - **AI Train as a plugin mode** (#82 plan, #84, D-155, `docs/P4_AI_TRAIN.md`): the `Plugins` singleton and Settings switch, the fourth tab, the label editor (`label_track.h`, `LabelController`, `LabelEditor.qml`): classes with several objects, the contact point, *not in the picture* (X), *there but covered* (H), exclusion zones ("not this", `ExcludeZonesAt`), lanes, undo, export as images / YOLO labels / classes.txt.
 
-**Parity (19 Oct):** about 53 % of 0.7/0.8 by the `PARITY.md` checklist (227 done, 117 partly, 19 dropped on purpose, 313 open of 676); `python3 ci/parity_status.py` recounts.
+**Parity (20 Oct):** about 54 % of 0.7/0.8 by the `PARITY.md` checklist (261 done, 126 partly, 42 dropped on purpose, 247 open of 676); `python3 ci/parity_status.py` recounts.
 
 ## Next (in order; the work list is `LESSONS.md` § Gaps, `TEST_PARITY.md` and `P3_GENERATOR.md`)
 
-0. **Now (AI Train, D-155):** step 5, the student: the training environment
-   (one click), RF-DETR training and ONNX export; later the learned scene
-   model for the phases (D-157). The Owner tests the Windows build of 20 Oct
+0. **Now (AI Train, D-155):** step 5 is done up to the student as a teacher;
+   step 6 has the clip cutter. Next in step 6: script compare with labels,
+   then the golden-clip run (needs the Owner's clips in the private
+   testmedia repo, `clips/`); later the learned scene model for the phases
+   (D-157). The Owner tests the Windows build of 20 Oct
    (main after #99) with real clips. No open issues (#4 closed by #90).
 
 1. **Windows CI:** some app tests failed now and then with no output (stdout fully buffered when piped). Every app test now writes unbuffered (`tests/app/unbuffered_stdout.cpp`); find the cause on the next red run. Seen again on #95 (20 Oct): `device_transports_test` red under ctest with no output, every function green alone; a re-run passed. Each test function must also pass on its own (the diagnostics step runs them one by one); `label_controller` export no longer leans on the previous function.

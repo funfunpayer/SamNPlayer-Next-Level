@@ -5,8 +5,6 @@
 #include <QJsonObject>
 #include <QJsonDocument>
 #include <QJsonArray>
-#include <QTcpSocket>
-#include <QTcpServer>
 #include <cmath>
 #include <QCryptographicHash>
 #include <QElapsedTimer>
@@ -21,6 +19,7 @@
 #include "label_controller.h"
 #include "model_download.h"
 #include "samn/vision/onnx_detector.h"
+#include "fake_file_server.h"
 #include "zip_builder.h"
 #include "synthetic_clips.h"
 
@@ -65,27 +64,6 @@ public:
         });
     }
     QString url() const { return QStringLiteral("http://127.0.0.1:%1/v1/").arg(server.serverPort()); }
-};
-
-// Serves one file over HTTP (the model download).
-class FakeFileServer : public QObject {
-public:
-    QTcpServer server;
-    QByteArray body;
-    FakeFileServer() {
-        server.listen(QHostAddress::LocalHost, 0);
-        connect(&server, &QTcpServer::newConnection, this, [this] {
-            while (QTcpSocket* c = server.nextPendingConnection()) {
-                connect(c, &QTcpSocket::readyRead, c, [this, c] {
-                    if (!c->readAll().contains("\r\n\r\n")) return;
-                    c->write("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nConnection: close\r\nContent-Length: " +
-                             QByteArray::number(body.size()) + "\r\n\r\n" + body);
-                    c->disconnectFromHost();
-                });
-            }
-        });
-    }
-    QUrl url() const { return QUrl(QStringLiteral("http://127.0.0.1:%1/nudenet.whl").arg(server.serverPort())); }
 };
 
 class LabelControllerTest : public QObject {

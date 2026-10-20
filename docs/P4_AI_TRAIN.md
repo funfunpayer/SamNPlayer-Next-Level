@@ -264,7 +264,18 @@ lanes; its stretches are dragged and named like chapters:
    other. Next: the student in the Generator's tip finding, once it wins the
    benchmark (step 6).
 6. **Benchmark:** clip cutter, script compare with labels, golden-clip run and
-   history; the gate for every model and engine change.
+   history; the gate for every model and engine change. Clip cutter done
+   (Owner 20 Oct, three options: in the app, ffmpeg with one click): 0.7's
+   Clip-Prep and `scripts/benchmark-prep` as *Benchmark → Cut a clip*
+   (`core/clip_prep.h`, `ClipPrepController`). ffmpeg 7 comes out of the
+   imageio-ffmpeg 0.6.0 wheel on PyPI (both hashes pinned, like uv and
+   NudeNet) into `config_dir()/tools`, or the user chooses one. 0.7's
+   settings (Lanczos down to 1280 / 960 / 1920 wide, never up, H.264 CRF 20
+   veryfast, yuv420p, AAC 128k or no sound, +faststart), in and out as
+   seconds, MM:SS or HH:MM:SS, 0.7's name beside the source or *Save as*,
+   progress and Stop (the half file is removed), *Copy command*, a whole
+   `marks.json` at once; a `.funscript` beside the video is cut to the same
+   window (edge positions interpolated).
 7. **The smaller learners from 0.7:** the learned generation profile and the
    quality model (logistic regression over the run's numbers, kept only when it
    beats the rules in cross-validation).
