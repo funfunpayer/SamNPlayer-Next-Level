@@ -129,7 +129,7 @@ private slots:
         QTRY_VERIFY((remove = named(root.get(), "removeQueued_0")) && remove->isVisible());
         QMetaObject::invokeMethod(remove, "clicked");
         QTRY_COMPARE(gen->queue().size(), 0);
-        // Clear box takes the tip box away again (the drag below sets a new one).
+        // Clear all takes the tip box (and any contact areas) away (the drag below sets a new one).
         QTRY_VERIFY(named(root.get(), "clearBox")->isVisible());
         QMetaObject::invokeMethod(named(root.get(), "clearBox"), "clicked");
         QTRY_VERIFY(!gen->hasBox());
@@ -160,6 +160,25 @@ private slots:
         QVERIFY(qAbs(gen->box().width() - 120) <= 3);
         QVERIFY(qAbs(gen->box().height() - 160) <= 3);
         QVERIFY(named(root.get(), "tipBox")->isVisible());
+        // Click the box to pick it, Delete removes it (0.7: select a mark,
+        // delete it); Esc lets go of a pick.
+        QObject* gp = root->property("page").value<QObject*>();
+        const QPoint inside = ((a + b) / 2).toPoint();
+        QTest::mouseClick(&window, Qt::LeftButton, {}, inside);
+        QTRY_COMPARE(gp->property("selectedMark").toInt(), -1);
+        QTest::keyClick(&window, Qt::Key_Escape);
+        QTRY_COMPARE(gp->property("selectedMark").toInt(), -2);
+        QVERIFY(gen->hasBox());
+        QTest::mouseClick(&window, Qt::LeftButton, {}, inside);
+        QTRY_COMPARE(gp->property("selectedMark").toInt(), -1);
+        QTest::keyClick(&window, Qt::Key_Delete);
+        QTRY_VERIFY(!gen->hasBox());
+        // Drawn again for what follows.
+        QTest::mousePress(&window, Qt::LeftButton, {}, a.toPoint());
+        QTest::mouseMove(&window, ((a + b) / 2).toPoint());
+        QTest::mouseMove(&window, b.toPoint());
+        QTest::mouseRelease(&window, Qt::LeftButton, {}, b.toPoint());
+        QTRY_VERIFY(gen->hasBox());
         QVERIFY(named(root.get(), "createButton")->isEnabled());
 
         // Feel: the style combo and a toggle reach the controller.

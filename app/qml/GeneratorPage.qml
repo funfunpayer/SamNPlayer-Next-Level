@@ -106,6 +106,25 @@ Item {
     // it here; with `start`, find the tip and run as soon as Create can
     // (0.7 waited for the Generate button, at most 120 s).
     property bool autoCreatePending: false
+    // The mark picked with a click on the frame (0.7: click a painted mark to
+    // select it): -1 the tip box, 0… a contact area, -2 none. Delete removes it.
+    property int selectedMark: -2
+    function deleteSelectedMark() {
+        if (gen.running) return
+        if (selectedMark === -1) gen.clearBox()
+        else if (selectedMark >= 0) gen.removeContactArea(selectedMark)
+        selectedMark = -2
+    }
+    function clearAllMarks() {
+        gen.clearBox()
+        gen.clearContactAreas()
+        selectedMark = -2
+    }
+    Connections {
+        target: gen
+        function onContactChanged() { if (page.selectedMark >= gen.contactAreas.length) page.selectedMark = -2 }
+        function onBoxChanged() { if (page.selectedMark === -1 && !gen.hasBox) page.selectedMark = -2 }
+    }
     function createFor(video, start) {
         if (gen.running || gen.queueRunning) return false
         autoCreatePending = false
@@ -162,6 +181,8 @@ Item {
     Shortcut { sequence: "Shift+Right"; enabled: page.visible && !page.overlayOpen && gen.hasVideo; onActivated: page.seekBy(1000) }
     Shortcut { sequence: ","; enabled: page.visible && !page.overlayOpen && gen.hasVideo; onActivated: page.seekBy(-40) }
     Shortcut { sequence: "."; enabled: page.visible && !page.overlayOpen && gen.hasVideo; onActivated: page.seekBy(40) }
+    Shortcut { sequences: [StandardKey.Delete, "Backspace"]; enabled: page.visible && !page.overlayOpen && page.selectedMark !== -2; onActivated: page.deleteSelectedMark() }
+    Shortcut { sequence: "Esc"; enabled: page.visible && !page.overlayOpen && page.selectedMark !== -2; onActivated: page.selectedMark = -2 }
     Shortcut { sequences: [StandardKey.Undo]; enabled: page.visible && edit.canUndo; onActivated: edit.undo() }
     Shortcut { sequences: [StandardKey.Redo, "Ctrl+Y"]; enabled: page.visible && edit.canRedo; onActivated: edit.redo() }
 
@@ -288,8 +309,8 @@ Item {
                             x: frameView.imageRect.x + r.x * parent.scaleX
                             y: frameView.imageRect.y + r.y * parent.scaleY
                             width: r.width * parent.scaleX; height: r.height * parent.scaleY
-                            color: Qt.rgba(61 / 255, 204 / 255, 192 / 255, 0.16)
-                            border.color: "#3dccc0"; border.width: 2
+                            color: Qt.rgba(61 / 255, 204 / 255, 192 / 255, page.selectedMark === -1 ? 0.30 : 0.16)
+                            border.color: page.selectedMark === -1 ? "white" : "#3dccc0"; border.width: page.selectedMark === -1 ? 3 : 2
                         }
                         // Contact areas with their class and ×: the first gold, extras
                         // magenta (0.7 #f2b03d / #e070a0).
@@ -305,8 +326,9 @@ Item {
                                 width: modelData.w * parent.scaleX; height: modelData.h * parent.scaleY
                                 z: 2
                                 readonly property color tone: index === 0 ? "#f2b03d" : "#e070a0"
-                                color: Qt.rgba(tone.r, tone.g, tone.b, 0.17)
-                                border.color: tone; border.width: 2
+                                readonly property bool picked: page.selectedMark === index
+                                color: Qt.rgba(tone.r, tone.g, tone.b, picked ? 0.32 : 0.17)
+                                border.color: picked ? "white" : tone; border.width: picked ? 3 : 2
                                 Text {
                                     textFormat: Text.PlainText
                                     x: 4; y: 2
@@ -390,9 +412,26 @@ Item {
                             onReleased: (m) => {
                                 spanTo(m.x, m.y)
                                 active = false
+                                // A click (under 8 px on screen) picks the mark under it.
+                                if (rect.width * parent.scaleX < 8 && rect.height * parent.scaleY < 8) {
+                                    page.selectedMark = markAt(start)
+                                    return
+                                }
+                                page.selectedMark = -2
                                 const r = Qt.rect(Math.round(rect.x), Math.round(rect.y), Math.round(rect.width), Math.round(rect.height))
                                 if (gen.markContact) gen.addContactArea(r)
                                 else gen.box = r
+                            }
+                            // Contact areas lie above the tip box; the last drawn wins.
+                            function markAt(p) {
+                                const areas = gen.contactVibration ? gen.contactAreas : []
+                                for (let i = areas.length - 1; i >= 0; --i) {
+                                    const a = areas[i]
+                                    if (p.x >= a.x && p.x <= a.x + a.w && p.y >= a.y && p.y <= a.y + a.h) return i
+                                }
+                                const b = gen.box
+                                if (gen.hasBox && p.x >= b.x && p.x <= b.x + b.width && p.y >= b.y && p.y <= b.y + b.height) return -1
+                                return -2
                             }
                         }
                     }
@@ -407,10 +446,10 @@ Item {
                         }
                         FlowButton {
                             objectName: "clearBox"
-                            visible: gen.hasBox
-                            text: qsTr("Clear box")
+                            visible: gen.hasBox || gen.contactAreas.length > 0
+                            text: qsTr("Clear all")
                             enabled: !gen.running
-                            onClicked: gen.clearBox()
+                            onClicked: page.clearAllMarks()
                         }
                         FlowButton {
                             objectName: "findTip"
