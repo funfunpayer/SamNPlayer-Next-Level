@@ -403,6 +403,8 @@ signals:
 private:
     void setVideo(const QString& path);
     void setError(const QString& e);
+    // setError for a failure (not a hint): also an error toast (Notices).
+    void setFailure(const QString& e);
     void checkAutoExtendedO(qint64 playheadMs);
     void setView(samn::ViewWindow v);
     void clearScript();

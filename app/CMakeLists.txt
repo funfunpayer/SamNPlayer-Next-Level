@@ -19,6 +19,7 @@ qt_add_qml_module(samn_app
     src/model_download.h src/model_download.cpp
     src/train_controller.h src/train_controller.cpp
     src/clip_prep_controller.h src/clip_prep_controller.cpp
+    src/notices.h src/notices.cpp
     src/curve_item.h src/curve_item.cpp
     src/heatmap_item.h src/heatmap_item.cpp
     src/wordmark_item.h src/wordmark_item.cpp

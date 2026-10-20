@@ -798,8 +798,10 @@ void DeviceController::applyError(const QString& message, const QString& hint) {
     last_error_ = message;
     hint_ = hint;
     emit errorChanged();
+    if (!message.isEmpty()) AppLog::instance().reportError(hint.isEmpty() ? message : message + QStringLiteral(" — ") + hint);
 }
 
+// A refused request (busy, already connected): a hint in the status, no toast.
 void DeviceController::reportError(const QString& message, const QString& hint) {
     last_error_ = message;
     hint_ = hint;

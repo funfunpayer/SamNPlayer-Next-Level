@@ -1,5 +1,6 @@
 #include "generator_controller.h"
 
+#include "app_log.h"
 #include "frame_cache.h"
 
 #include <QCoreApplication>
@@ -296,6 +297,7 @@ bool GeneratorController::openVideo(const QString& pathOrUrl) {
     auto reader = vision::FrameReader::Open(std::filesystem::path(path.toStdU16String()), &error);
     if (!reader) {
         setStatus(tr("Cannot open the video: %1").arg(QString::fromStdString(error)));
+        AppLog::instance().reportError(status_);
         return false;
     }
     video_path_ = path;

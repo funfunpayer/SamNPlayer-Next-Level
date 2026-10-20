@@ -2,7 +2,7 @@ find_package(Qt6 REQUIRED COMPONENTS Test)
 find_package(ZLIB REQUIRED)  # zip_builder.h
 set(CMAKE_AUTOMOC ON)
 # One Qt Test executable per controller (QTEST_MAIN each).
-foreach(t player_controller library_controller icon_provider device_transports device_controller playback_output training_controller settings_controller update_checker)
+foreach(t player_controller library_controller icon_provider device_transports device_controller playback_output training_controller settings_controller update_checker notices)
   add_executable(${t}_test ${t}_test.cpp)
   target_link_libraries(${t}_test PRIVATE samn_app Qt6::Test)
   # fake_servers.h reuses the Buttplug message shapes of the core tests.
