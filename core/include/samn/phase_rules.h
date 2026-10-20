@@ -42,4 +42,15 @@ std::vector<LabelPhase> SuggestPhases(const PhaseSignals& s, const PhaseRuleOpti
 // stretches no phase covers yet are filled. Returns how many were added.
 int ApplyPhaseSuggestions(LabelProject& p, const std::vector<LabelPhase>& suggestions);
 
+// The Training's video stage (D-157): where the film is at ms, what to do.
+// Only confirmed phases count. seek_to (>= 0): the film is in an intro or
+// empty stretch and jumps to its end (across touching intro / empty
+// stretches). climax (>= 0): the film has entered a climax other than
+// last_climax; its index in `phases`.
+struct VideoPhaseStep {
+    int64_t seek_to = -1;
+    int climax = -1;
+};
+VideoPhaseStep StepVideoPhases(const std::vector<LabelPhase>& phases, int64_t ms, int last_climax);
+
 }  // namespace samn

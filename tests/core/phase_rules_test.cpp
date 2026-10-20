@@ -81,3 +81,19 @@ TEST_CASE("suggestions never overwrite what the user set") {
     samn::ApplyPhaseSuggestions(p, samn::SuggestPhases(StoryClip()));
     CHECK(p.phases.size() == before);
 }
+
+TEST_CASE("the video stage skips intro and empty and notices the climax once") {
+    const std::vector<samn::LabelPhase> phases{{0, 10000, "intro", true, "user"},
+                                               {10000, 12000, "empty", true, "user"},
+                                               {30000, 40000, "empty", false, "rules"},  // a suggestion: plays
+                                               {60000, 70000, "climax", true, "user"}};
+    auto s = samn::StepVideoPhases(phases, 500, -1);
+    CHECK(s.seek_to == 12000);  // across the touching empty stretch
+    CHECK(s.climax == -1);
+    CHECK(samn::StepVideoPhases(phases, 20000, -1).seek_to == -1);
+    CHECK(samn::StepVideoPhases(phases, 35000, -1).seek_to == -1);
+    s = samn::StepVideoPhases(phases, 61000, -1);
+    CHECK(s.climax == 3);
+    CHECK(samn::StepVideoPhases(phases, 62000, 3).climax == -1);  // once per climax
+    CHECK(samn::StepVideoPhases({}, 1000, -1).seek_to == -1);
+}

@@ -297,6 +297,12 @@ Item {
                     readonly property bool shouldPlay: stage.videoStage && ctl.state === "running"
                     onShouldPlayChanged: shouldPlay ? play() : pause()
                     onMediaStatusChanged: if (mediaStatus === MediaPlayer.LoadedMedia && shouldPlay) play()
+                    // D-157: past intro and empty stretches; a climax acts on the session.
+                    onPositionChanged: {
+                        if (!stage.videoStage) return
+                        const to = ctl.videoPosition(position)
+                        if (to >= 0) setPosition(to)
+                    }
                 }
                 VideoOutput {
                     id: stageVideo
@@ -325,6 +331,15 @@ Item {
                         height: 30
                         text: qsTr("Choose video…")
                         onClicked: stageVideoDialog.open()
+                    }
+                    FlowCombo {
+                        objectName: "stageClimaxAction"
+                        visible: ctl.videoPhases.length > 0
+                        width: 190; height: 30
+                        readonly property var actions: ["none", "pause", "cooldown"]
+                        model: [qsTr("Climax: carry on"), qsTr("Climax: pause"), qsTr("Climax: cool-down")]
+                        currentIndex: actions.indexOf(ctl.climaxAction)
+                        onActivated: (i) => ctl.climaxAction = actions[i]
                     }
                     FlowCombo {
                         objectName: "stageVideoRecent"

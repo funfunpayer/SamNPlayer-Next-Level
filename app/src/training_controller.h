@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "device_controller.h"
+#include "samn/label_track.h"
 #include "samn/settings.h"
 #include "samn/training.h"
 #include "samn/training_store.h"
@@ -110,6 +111,12 @@ class TrainingController : public QObject {
     Q_PROPERTY(bool videoMuted READ videoMuted WRITE setVideoMuted NOTIFY stageChanged)
     // The Player library's recent videos (shared list, newest first).
     Q_PROPERTY(QStringList recentVideos READ recentVideos NOTIFY stageChanged)
+    // The film's confirmed phases from the AI Train label editor (D-157):
+    // [{startMs, endMs, phase}]; intro and empty are skipped.
+    Q_PROPERTY(QVariantList videoPhases READ videoPhases NOTIFY stageChanged)
+    // What the film's climax does to the session: "none", "pause" (default,
+    // Owner 20 Oct) or "cooldown" (ends the cycle, its rest follows).
+    Q_PROPERTY(QString climaxAction READ climaxAction WRITE setClimaxAction NOTIFY stageChanged)
 
 public:
     // The engine ticks every kTickMs (a ramp step is 50 ms).
@@ -137,6 +144,9 @@ public:
     Q_INVOKABLE void togglePause();
     // Use this film on the Video stage (a path or a file URL); it joins the recent videos.
     Q_INVOKABLE void chooseVideo(const QString& pathOrUrl);
+    // The stage's film is at ms: returns where it should jump to (past an
+    // intro or empty stretch), or -1; a new climax acts on the session.
+    Q_INVOKABLE double videoPosition(double ms);
     // End the current cycle now; the session goes on (Esc).
     Q_INVOKABLE void interrupt();
     // Feedback 1-10; 9 and 10 also interrupt the running cycle. Returns false when not running or invalid.
@@ -245,6 +255,9 @@ public:
     bool videoMuted() const { return video_muted_; }
     void setVideoMuted(bool on);
     QStringList recentVideos();
+    QVariantList videoPhases() const;
+    QString climaxAction() const { return climax_action_; }
+    void setClimaxAction(const QString& action);
 
 signals:
     void deviceChanged();
@@ -295,6 +308,10 @@ private:
     // stage
     QString stage_ = QStringLiteral("rings"), video_path_;
     bool video_loop_ = true, video_muted_ = true;
+    QString climax_action_ = QStringLiteral("pause");
+    std::vector<samn::LabelPhase> video_phases_;
+    int last_climax_ = -1;
+    void loadVideoPhases();
     QPointer<DeviceController> device_;
     // form
     bool mock_ = true, auto_adjust_ = true;

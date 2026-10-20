@@ -9,6 +9,7 @@
 #include "fake_servers.h"
 #include "samn/training_store.h"
 #include "training_controller.h"
+#include "samn/label_track.h"
 
 using samn::ui::DeviceController;
 using samn::ui::TrainingController;
@@ -404,6 +405,51 @@ private slots:
         QTRY_VERIFY(r.tc.vibration() > 0.1);
         r.tc.stop();
         QCOMPARE(r.tc.state(), QString("idle"));
+    }
+
+    void theFilmsPhasesSkipAndPauseAtTheClimax() {
+        // A film with confirmed phases from the label editor (D-157).
+        const QString film = config_.filePath("film.mp4");
+        QFile f(film);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write("not a real video");
+        f.close();
+        samn::LabelProject labels;
+        labels.SetPhase(0, 8000, "intro");
+        labels.SetPhase(30000, 40000, "climax");
+        labels.SetPhase(50000, 60000, "empty", false, "rules");  // a suggestion: plays
+        samn::SaveLabelProject(samn::LabelProjectPath(std::filesystem::path(film.toStdU16String())), labels);
+        Rig r;
+        r.tc.chooseVideo(film);
+        QCOMPARE(r.tc.videoPhases().size(), 2);
+        QCOMPARE(r.tc.climaxAction(), QString("pause"));  // the default
+        QCOMPARE(r.tc.videoPosition(1000), 8000.0);       // past the intro
+        QCOMPARE(r.tc.videoPosition(20000), -1.0);
+        QCOMPARE(r.tc.videoPosition(55000), -1.0);
+        // Not running: the climax only counts.
+        QCOMPARE(r.tc.videoPosition(31000), -1.0);
+        QCOMPARE(r.tc.state(), QString("idle"));
+        QCOMPARE(r.tc.videoPosition(45000), -1.0);  // out again: the next one counts
+
+        r.tc.setTimeScale(1);
+        r.tc.setRampUpMs(2000);
+        r.tc.setHoldMs(1000);
+        r.tc.setCycles(1);
+        QVERIFY(r.tc.start());
+        QTRY_COMPARE(r.tc.state(), QString("running"));
+        r.tc.videoPosition(31000);
+        QCOMPARE(r.tc.state(), QString("paused"));
+        r.tc.resume();
+        r.tc.videoPosition(32000);  // still the same climax: no second pause
+        QCOMPARE(r.tc.state(), QString("running"));
+        r.tc.stop();
+
+        r.tc.setClimaxAction("cooldown");
+        r.tc.setClimaxAction("loud");  // unknown: ignored
+        QCOMPARE(r.tc.climaxAction(), QString("cooldown"));
+        TrainingController again;  // remembered
+        QCOMPARE(again.climaxAction(), QString("cooldown"));
+        QCOMPARE(again.videoPhases().size(), 2);
     }
 
     void interruptEndsTheCycleAndTheSessionGoesOn() {
