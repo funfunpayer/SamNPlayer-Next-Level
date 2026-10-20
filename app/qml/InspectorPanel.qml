@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Dialogs
 import SamN
 
 // The Inspector of the Player (0.7 v1): tabs Devices · Audio · Playback ·
@@ -525,9 +526,23 @@ GlassCard {
                     Row {
                         spacing: 8
                         FlowButton { text: qsTr("Reset"); enabled: root.ctrl.offsetMs !== 0; onClicked: root.ctrl.offsetMs = 0 }
-                        FlowButton { text: qsTr("Bake offset"); enabled: false }
+                        FlowButton {
+                            objectName: "bakeOffset"
+                            text: qsTr("Bake offset")
+                            enabled: root.ctrl.offsetMs !== 0 && root.ctrl.scriptPath !== ""
+                            onClicked: bakeConfirm.open()
+                        }
+                        // 0.7 asked first: this rewrites the script file.
+                        MessageDialog {
+                            id: bakeConfirm
+                            title: qsTr("Bake offset")
+                            text: qsTr("Move every point, bookmark and chapter by %1 ms and save the script? The offset then goes back to 0.").arg(root.ctrl.offsetMs)
+                            buttons: MessageDialog.Ok | MessageDialog.Cancel
+                            onAccepted: root.ctrl.bakeOffset()
+                        }
                     }
-                    Note { text: qsTr("Positive: the script comes later. Saved per script. Baking it into the script's times (all channels, bookmarks and chapters in one safe step) comes with the Editor (P4).") }
+                    Note { text: qsTr("Positive: the script comes later. Saved per script. Bake writes it into the script's times (all channels, bookmarks and chapters), so other players get it too; the offset goes back to 0.") }
+                    Note { objectName: "bakeNote"; visible: root.ctrl.toolNote !== ""; text: root.ctrl.toolNote }
                 }
                 // Effects (0.7 Player Inspector → Effects and "Playback &
                 // Extended-O"): the presets, Intensity and the mapping

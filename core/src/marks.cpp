@@ -658,4 +658,36 @@ std::optional<std::vector<Chapter>> AddSceneMarker(const std::vector<Chapter>& c
     return next;
 }
 
+std::pair<std::vector<Bookmark>, int> ShiftBookmarks(const std::vector<Bookmark>& bookmarks, int64_t delta_ms) {
+    std::vector<Bookmark> out;
+    int dropped = 0;
+    for (const auto& b : bookmarks) {
+        if (b.time_ms + delta_ms < 0) {
+            ++dropped;
+            continue;
+        }
+        out.push_back({b.name, b.time_ms + delta_ms});
+    }
+    return {out, dropped};
+}
+
+std::pair<std::vector<Chapter>, int> ShiftChapters(const std::vector<Chapter>& chapters, int64_t delta_ms) {
+    std::vector<Chapter> out;
+    int dropped = 0;
+    for (const auto& c : chapters) {
+        Chapter n = c;
+        n.start_ms = c.start_ms + delta_ms;
+        n.end_ms = c.end_ms == 0 ? 0 : c.end_ms + delta_ms;
+        if (n.start_ms < 0) {
+            if (c.end_ms != 0 && n.end_ms <= 0) {
+                ++dropped;  // the whole chapter lies before the start
+                continue;
+            }
+            n.start_ms = 0;
+        }
+        out.push_back(n);
+    }
+    return {out, dropped};
+}
+
 }  // namespace samn

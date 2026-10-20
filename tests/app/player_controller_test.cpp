@@ -20,6 +20,7 @@
 #include "curve_item.h"
 #include "heatmap_item.h"
 #include "player_controller.h"
+#include "samn/marks.h"
 #include "samn/playback_mapping.h"
 #include "samn/contact_marks.h"
 #include "samn/samn_file.h"
@@ -240,6 +241,50 @@ private slots:
         QCOMPARE(c2.offsetMs(), 300);
         QVERIFY(c2.openScript(d.filePath("B.funscript")));
         QCOMPARE(c2.offsetMs(), 0);
+    }
+
+    void bakeOffsetWritesItIntoTheScript() {
+        QTemporaryDir d;
+        const QString path = d.filePath("Bake.funscript");
+        writeFile(path, R"({"actions":[{"at":0,"pos":0},{"at":1000,"pos":100},{"at":2000,"pos":0}],)"
+                        R"("metadata":{"bookmarks":[{"name":"b","time":1500}],)"
+                        R"("chapters":[{"name":"c","startTime":"00:00:00.000","endTime":"00:00:01.500"}]}})");
+        PlayerController c;
+        QVERIFY(c.openScript(path));
+        QVERIFY(!c.bakeOffset());  // nothing to bake at 0
+        c.setOffsetMs(-300);
+        QVERIFY(c.bakeOffset());
+        QCOMPARE(c.offsetMs(), 0);
+        QVERIFY(c.toolNote().contains("1 point"));  // the point at 0 went before the start
+        const auto actions = samn::LoadFunscript(std::filesystem::u8path(path.toStdString())).actions;
+        QCOMPARE(actions.size(), size_t(2));
+        QCOMPARE(actions[0].at, int64_t(700));
+        QCOMPARE(samn::LoadBookmarks(std::filesystem::u8path(path.toStdString()))[0].time_ms, int64_t(1200));
+        const auto chapters = samn::LoadChapters(std::filesystem::u8path(path.toStdString()));
+        QCOMPARE(chapters[0].start_ms, int64_t(0));  // cut at 0
+        QCOMPARE(chapters[0].end_ms, int64_t(1200));
+        // Reopened: the offset is 0 and stays 0.
+        PlayerController again;
+        QVERIFY(again.openScript(path));
+        QCOMPARE(again.offsetMs(), 0);
+
+        // A .samn moves together with the .funscript beside it.
+        const QString samnPath = d.filePath("Bake.samn");
+        samn::Document doc;
+        doc.version = samn::SamnCurrentVersion;
+        doc.kind = samn::SamnKind;
+        doc.general = {{0, 0}, {1000, 100}, {2000, 0}};
+        doc.vibration = {{0, 50}, {2000, 50}};
+        samn::SaveDocument(std::filesystem::u8path(samnPath.toStdString()), doc);
+        PlayerController s;
+        QVERIFY(s.openScript(samnPath));
+        s.setOffsetMs(500);
+        QVERIFY(s.bakeOffset());
+        const samn::Document back = samn::LoadDocument(std::filesystem::u8path(samnPath.toStdString()));
+        QCOMPARE(back.general.front().at, int64_t(500));
+        QCOMPARE(back.vibration.back().at, int64_t(2500));
+        QCOMPARE(samn::LoadFunscript(std::filesystem::u8path(path.toStdString())).actions.front().at, int64_t(1200));
+        QVERIFY(s.toolNote().contains("500 ms"));
     }
 
     void loopOverMarkedRange() {

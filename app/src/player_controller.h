@@ -47,6 +47,8 @@ class PlayerController : public QObject {
     Q_PROPERTY(int offsetMs READ offsetMs WRITE setOffsetMs NOTIFY offsetMsChanged)
     Q_PROPERTY(qint64 playheadMs READ playheadMs NOTIFY playheadMsChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
+    // What the last script tool did (Bake offset), for the Script Tools card.
+    Q_PROPERTY(QString toolNote READ toolNote NOTIFY toolNoteChanged)
     Q_PROPERTY(QVariantList variants READ variants NOTIFY variantsChanged)
     Q_PROPERTY(int variantIndex READ variantIndex NOTIFY variantsChanged)
     // Marks of the script ({name, startMs, endMs, label}, {name, timeMs,
@@ -227,6 +229,12 @@ public:
     Q_INVOKABLE bool addOMarkerAt(qint64 videoMs);
     // Link a video to the open script (0.7 "Select a video file…").
     Q_INVOKABLE bool attachVideo(const QString& pathOrUrl);
+    // Writes the offset into the script itself (0.7 BakeScriptOffset): every
+    // point of every channel, the bookmarks and the chapters move by it, the
+    // file is saved (a .samn and the .funscript beside it alike) and the
+    // offset goes back to 0. What would land before 0 ms is dropped and
+    // counted in the status line.
+    Q_INVOKABLE bool bakeOffset();
     // 0.7 ExportScriptHeatmapPNG: "<script>.heatmap.png" beside the script,
     // 960 x 56 with chapter ticks. The path, or "" with lastError.
     Q_INVOKABLE QString exportHeatmapPng();
@@ -278,6 +286,7 @@ public:
     int pointCount() const { return static_cast<int>(stroke_.size()); }
     qint64 scriptDurationMs() const { return stroke_.empty() ? 0 : stroke_.back().at; }
     int offsetMs() const { return offsetMs_; }
+    QString toolNote() const { return toolNote_; }
     void setOffsetMs(int ms);
     qint64 playheadMs() const { return playheadMs_; }
     QString lastError() const { return lastError_; }
@@ -370,6 +379,7 @@ signals:
     void scriptChanged();
     void videoChanged();
     void offsetMsChanged();
+    void toolNoteChanged();
     void playheadMsChanged();
     void lastErrorChanged();
     void variantsChanged();
@@ -433,6 +443,7 @@ private:
     samn::Playlist playlist_;
     std::mt19937 rng_{std::random_device{}()};
     int offsetMs_ = 0;
+    QString toolNote_;
     bool vibrationFromScript_ = false, suctionFromScript_ = false;
     qint64 videoDurationMs_ = 0;
     samn::ViewWindow view_;

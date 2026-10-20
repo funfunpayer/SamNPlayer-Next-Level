@@ -399,6 +399,69 @@ QVariantMap MarksInfo(const samn::ContactMarks& m, const std::optional<samn::Tra
 
 }  // namespace
 
+bool PlayerController::bakeOffset() {
+    if (scriptPath_.isEmpty()) {
+        setError(tr("Open a script first."));
+        return false;
+    }
+    const int64_t delta = offsetMs_;
+    if (delta == 0) return false;
+    int dropped = 0;
+    const auto shift = [&](std::vector<samn::Action>& actions) {
+        if (actions.empty()) return;
+        auto [moved, gone] = samn::ShiftActions(actions, delta);
+        if (moved.empty()) throw std::runtime_error(tr("the offset would move every point before the start").toStdString());
+        dropped += gone;
+        actions = std::move(moved);
+    };
+    const auto shiftMarks = [&](std::vector<samn::Bookmark>& b, std::vector<samn::Chapter>& c) {
+        auto [nb, db] = samn::ShiftBookmarks(b, delta);
+        auto [nc, dc] = samn::ShiftChapters(c, delta);
+        dropped += db + dc;
+        b = std::move(nb);
+        c = std::move(nc);
+    };
+    const std::filesystem::path path = std::filesystem::u8path(u8(scriptPath_));
+    try {
+        // The .funscript (the .samn's companion, or the script itself).
+        std::filesystem::path funscript = path;
+        if (samn::IsSamnPath(u8(scriptPath_))) funscript.replace_extension(".funscript");
+        std::error_code ec;
+        if (std::filesystem::exists(funscript, ec)) {
+            auto actions = samn::LoadFunscript(funscript).actions;
+            auto bookmarks = samn::LoadBookmarks(funscript);
+            auto chapters = samn::LoadChapters(funscript);
+            const int before = dropped;
+            shift(actions);
+            shiftMarks(bookmarks, chapters);
+            if (samn::IsSamnPath(u8(scriptPath_))) dropped = before;  // counted once, from the .samn
+            samn::PatchActions(funscript, actions);
+            samn::SaveBookmarks(funscript, bookmarks);
+            samn::SaveChapters(funscript, chapters);
+        }
+        if (samn::IsSamnPath(u8(scriptPath_))) {
+            samn::Document d = samn::LoadDocument(path);
+            shift(d.general);
+            shift(d.vibration);
+            shift(d.suction);
+            shiftMarks(d.bookmarks, d.chapters);
+            samn::SaveDocument(path, d);
+        }
+    } catch (const std::exception& e) {
+        setError(tr("Offset not baked: %1").arg(q(e.what())));
+        return false;
+    }
+    setOffsetMs(0);
+    reloadScript();
+    toolNote_ = (dropped > 0 ? tr("Offset of %1 ms written into the script; %2 point(s) or marks before the start dropped.")
+                                .arg(delta)
+                                .arg(dropped)
+                          : tr("Offset of %1 ms written into the script.").arg(delta));
+    emit toolNoteChanged();
+    emit scriptEdited(scriptPath_);
+    return true;
+}
+
 bool PlayerController::reloadScript() {
     if (scriptPath_.isEmpty()) return false;
     const QString script = scriptPath_, video = videoPath_;
@@ -932,6 +995,10 @@ void PlayerController::setOffsetMs(int ms) {
     if (ms == offsetMs_) return;
     const bool wasZoomed = zoomed();
     offsetMs_ = ms;
+    if (ms != 0 && !toolNote_.isEmpty()) {
+        toolNote_.clear();  // a new offset: the last bake's note is old news
+        emit toolNoteChanged();
+    }
     setView(wasZoomed ? view_ : samn::FullView(timelineMs()));
     if (!scriptPath_.isEmpty()) {
         try {
