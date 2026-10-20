@@ -142,7 +142,7 @@ Confirmed (c): **none**. Items that deserve an Owner look:
 |---|---|---|
 | `find_two_rois` (AI proposes two separated regions) | Built in 0.3.0, "not wired into generation", still unwired in 0.7.0 (CHANGELOG 0.3.0; `ROADMAP.md` old "Open tasks") | Not removed, never finished. SamNPlayer 2 only has D-055/D-056 (never commit silently), no item to build it |
 | `gen-tftj-hint` and `rt-docs-link` elements (0.2.1 / 0.5.6 - 0.5.44) | Gone in #460 "declutter"; no CHANGELOG line names them | Most likely moved with Tf/Tj and AI Train; unverified |
-| `.sam` sidecar, SAM Densify, SAM RuntimeAdjust (live contact strength / sensitivity / curve), CLI `sam` | Added 0.5.4; code in `sam/densify.go`, `sam/runtime.go`, `app_playback.go` in 0.7.0 | **Present in 0.7.0 code but in no SamNPlayer 2 doc** (grep of PARITY, ROADMAP, DECISIONS, PLAN found nothing). A silent gap in the parity list |
+| `.sam` sidecar, SAM Densify, SAM RuntimeAdjust (live contact strength / sensitivity / curve), CLI `sam` | Added 0.5.4; code in `sam/densify.go`, `sam/runtime.go`, `app_playback.go` in 0.7.0 | **Present in 0.7.0 code but in no SamNPlayer 2 doc** (grep of PARITY, ROADMAP, DECISIONS, PLAN found nothing). A silent gap in the parity list. **20 Oct:** now in `PARITY.md` §9: RuntimeAdjust is ported (`playback_mapping.h`), the `.sam` sidecar, Densify and CLI `sam` are open |
 
 ---
 
