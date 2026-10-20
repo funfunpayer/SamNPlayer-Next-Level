@@ -2,12 +2,14 @@
 
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <random>
 
 #include <opencv2/imgproc.hpp>
 #include <opencv2/videoio.hpp>
 
 #include "samn/vision/frame_reader.h"
+#include "samn/video_info.h"
 
 namespace fs = std::filesystem;
 using samn::vision::FrameReader;
@@ -91,5 +93,23 @@ TEST_CASE("frame reader: a missing or broken file is an error with the path") {
     error.clear();
     CHECK_FALSE(FrameReader::Open(junk, &error));
     CHECK(!error.empty());
+    fs::remove(junk);
+}
+
+TEST_CASE("frame reader: the codec as the file says, unknown stays unknown (issue #4)") {
+    const fs::path p = WritePatternClip();  // MJPG
+    std::string error;
+    auto r = FrameReader::Open(p, &error);
+    REQUIRE(r);
+    CHECK(samn::CodecName(r->fourcc()) == "Motion JPEG");
+    r.reset();
+    fs::remove(p);
+    // A file that is not a video opens to nothing, with a reason; no made-up values.
+    const fs::path junk = fs::temp_directory_path() / ("samn_junk_" + std::to_string(std::random_device{}()) + ".mp4");
+    {
+        std::ofstream(junk, std::ios::binary) << "ftypisom but not really a video";
+    }
+    CHECK_FALSE(FrameReader::Open(junk, &error));
+    CHECK_FALSE(error.empty());
     fs::remove(junk);
 }

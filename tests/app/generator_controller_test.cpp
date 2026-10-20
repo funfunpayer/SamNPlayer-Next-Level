@@ -35,7 +35,10 @@ private slots:
         QVERIFY(g.status().contains("Cannot open"));
         QVERIFY(g.openVideo(QUrl::fromLocalFile(clip("a.mp4", 8)).toString()));
         QCOMPARE(g.videoSize(), QSize(320, 240));
-        QCOMPARE(g.videoInfo(), QStringLiteral("0:08 · 320×240 · 25 fps"));
+        // The codec as the decoder reports it (the clip is MPEG-4 part 2); never a guessed H.264.
+        QVERIFY2(g.videoInfo() == QStringLiteral("0:08 · 320×240 · 25 fps · MPEG-4") ||
+                     g.videoInfo() == QStringLiteral("0:08 · 320×240 · 25 fps · codec unknown"),
+                 qPrintable(g.videoInfo()));
         QVERIFY(!g.frame().isNull());
         QCOMPARE(g.frame().size(), QSize(320, 240));
         QVERIFY(qAbs(g.previewMs() - 800) <= 40);  // 0.7 poster: 10 % in
