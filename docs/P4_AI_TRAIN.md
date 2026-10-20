@@ -236,7 +236,19 @@ lanes; its stretches are dragged and named like chapters:
    one undo step).
 5. **Student:** the training environment (one click), RF-DETR training and ONNX
    export with progress and Cancel; the student as a teacher and in the
-   Generator's tip finding.
+   Generator's tip finding. Owner 20 Oct (three options each): the app sets
+   up its own Python with **uv** (fetched like NudeNet: the PyPI wheel, both
+   hashes pinned) in the AI folder, nothing installed beforehand and nothing
+   of the system touched; the device is chosen on its own (NVIDIA → CUDA,
+   else CPU; `uv --torch-backend auto`). First part done: `ai/train_student.py`
+   (rfdetr 1.11.2, Apache-2.0) merges the label editor's clip exports into
+   one YOLO dataset (whole clips held out for validation), trains with JSON
+   progress lines and a STOP file, and exports `student.onnx` +
+   `classes.json`; `vision/onnx_detector.h` now also reads DETR heads (dets +
+   labels, ImageNet-normalised, stretched input). Checked on synthetic
+   discs: 1 epoch of RF-DETR Nano on a CPU in about 70 s for 24 images, and
+   the C++ decoder gives the same boxes and scores as RF-DETR's own
+   `predict`. Next: the one-click setup and the Train page in the app.
 6. **Benchmark:** clip cutter, script compare with labels, golden-clip run and
    history; the gate for every model and engine change.
 7. **The smaller learners from 0.7:** the learned generation profile and the
