@@ -185,6 +185,17 @@ private slots:
         QVERIFY(named(root.get(), "createButton")->isEnabled());
         // The coach under the preview (0.7 roi_help.js) and the next step.
         QVERIFY(named(root.get(), "previewCoach")->property("text").toString().contains("Tip box = CSRT stroke tracker."));
+        // 0.7 seek row while marking: Time (s) in 0.5 s steps, +1 s, +5 s.
+        QVERIFY(named(root.get(), "seekRow")->isVisible());
+        auto* timeField = named(root.get(), "timeField");
+        timeField->setProperty("text", "2.3");
+        QMetaObject::invokeMethod(timeField, "accepted");
+        QTRY_VERIFY(qAbs(page->property("playheadMs").toDouble() - 2500) < 60);
+        QMetaObject::invokeMethod(named(root.get(), "plus1s"), "clicked");
+        QTRY_VERIFY(qAbs(page->property("playheadMs").toDouble() - 3500) < 60);
+        QMetaObject::invokeMethod(named(root.get(), "plus5s"), "clicked");
+        QTRY_VERIFY(page->property("playheadMs").toDouble() > 7000);  // at most the end (0:08)
+        QMetaObject::invokeMethod(page, "seekTo", Q_ARG(QVariant, 0));
         QVERIFY(!named(root.get(), "createLede")->isVisible());
 
         // Feel: the style combo and a toggle reach the controller.
@@ -260,6 +271,18 @@ private slots:
         QVERIFY(named(root.get(), "reviewLine")->property("text").toString().startsWith("Direction: "));
         QVERIFY(named(root.get(), "stepPrompt")->property("text").toString().startsWith("Step 5: Improve, then Play"));
         if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT_DONE"); !shot.isEmpty()) window.grabWindow().save(QString::fromLocal8Bit(shot));
+        // After Create the seek row gives way to the editor's timeline; the
+        // 0–100 gauge shows the stroke at the playhead, its chip switches it.
+        QVERIFY(!named(root.get(), "seekRow")->isVisible());
+        QTRY_VERIFY(named(root.get(), "generatorGauge")->isVisible());
+        const int g = named(root.get(), "generatorGauge")->property("value").toInt();
+        QVERIFY2(g >= 0 && g <= 100, qPrintable(QString::number(g)));
+        auto* chip = named(root.get(), "posOverlayToggle");
+        QVERIFY(chip->isVisible());
+        QTest::mouseClick(&window, Qt::LeftButton, {}, chip->mapToScene(QPointF(chip->width() / 2, chip->height() / 2)).toPoint());
+        QTRY_VERIFY(!named(root.get(), "generatorGauge")->isVisible());
+        QVERIFY(!GeneratorController().posOverlay());  // remembered
+        gen->setPosOverlay(true);
         // The frame strip under the curves loads its frames off the UI thread.
         QVERIFY(named(root.get(), "frameStrip")->isVisible());
         QTRY_VERIFY(named(root.get(), "frameThumb"));

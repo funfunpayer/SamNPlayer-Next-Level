@@ -83,6 +83,7 @@ void GeneratorController::loadSettings() {
         if (span.is_number()) setContactSpan(span.get<double>() / 100.0);
         setContactCurve(str("generator.contact_vibration_curve", contact_curve_));
         setOptimizeTarget(str("generator.optimize_target", optimize_target_));
+        pos_overlay_ = flag("generator.pos_overlay", pos_overlay_);
     } catch (const std::exception&) {
         // Unreadable settings: the defaults stay.
     }
@@ -463,6 +464,13 @@ void GeneratorController::setOptimizeTarget(const QString& target) {
     if (v == optimize_target_) return;
     optimize_target_ = v;
     saveSetting("generator.optimize_target", v.toStdString());
+    emit optionsChanged();
+}
+
+void GeneratorController::setPosOverlay(bool on) {
+    if (on == pos_overlay_) return;
+    pos_overlay_ = on;
+    saveSetting("generator.pos_overlay", on);
     emit optionsChanged();
 }
 

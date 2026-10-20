@@ -190,6 +190,9 @@ public:
     Q_INVOKABLE int phasesToPlayback();
     Q_INVOKABLE bool clearPlaybackPhases();
 
+    // The stroke's 0-100 position at ms (the "0–100 on video" gauge); -1
+    // without a script.
+    Q_INVOKABLE int strokeAt(double ms) const;
     Q_INVOKABLE bool undo();
     Q_INVOKABLE bool redo();
 

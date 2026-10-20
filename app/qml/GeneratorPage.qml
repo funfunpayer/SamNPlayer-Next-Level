@@ -314,6 +314,53 @@ Item {
                             visible: !page.playing
                             image: gen.frame
                         }
+                        // The "0–100 on video" switch as a chip on the preview (0.7 toggle).
+                        Rectangle {
+                            objectName: "posOverlayToggle"
+                            visible: gen.hasVideo && edit.hasScript
+                            anchors.left: parent.left; anchors.top: parent.top; anchors.margins: 8
+                            z: 4
+                            width: chipLabel.implicitWidth + 18; height: 22; radius: 11
+                            color: gen.posOverlay ? Qt.rgba(0, 217 / 255, 244 / 255, 0.22) : Qt.rgba(2 / 255, 10 / 255, 20 / 255, 0.62)
+                            border.color: gen.posOverlay ? Theme.cyan : Theme.cardBorder
+                            Text {
+                                id: chipLabel
+                                anchors.centerIn: parent
+                                textFormat: Text.PlainText
+                                text: qsTr("0–100 on video")
+                                color: gen.posOverlay ? Theme.text : Theme.textDim
+                                font.family: Theme.fontSoft; font.pixelSize: 11
+                            }
+                            MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: gen.posOverlay = !gen.posOverlay }
+                        }
+                        // 0.7 "0–100 on video": the script's stroke at the playhead.
+                        Item {
+                            id: gaugeHolder
+                            objectName: "generatorGauge"
+                            anchors.fill: parent
+                            z: 3
+                            visible: gen.hasVideo && gen.posOverlay && edit.hasScript
+                            readonly property int value: edit.hasScript && edit.pointCount >= 0 ? edit.strokeAt(page.playheadMs) : -1  // pointCount: follows edits
+                            PositionGauge {
+                                visible: parent.height >= 150
+                                anchors.right: parent.right; anchors.rightMargin: 12; anchors.verticalCenter: parent.verticalCenter
+                                height: Math.min(190, parent.height - 24)
+                                value: gaugeHolder.value
+                            }
+                            // A low preview: the value alone, never a squashed gauge.
+                            Rectangle {
+                                visible: parent.height < 150
+                                anchors.right: parent.right; anchors.top: parent.top; anchors.margins: 8
+                                width: 44; height: 26; radius: 13
+                                color: Qt.rgba(2 / 255, 10 / 255, 20 / 255, 0.62); border.color: Theme.cardBorder
+                                Text {
+                                    anchors.centerIn: parent
+                                    textFormat: Text.PlainText
+                                    text: gaugeHolder.value < 0 ? "—" : String(gaugeHolder.value)
+                                    color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.bold: true
+                                }
+                            }
+                        }
                         // Nothing open: the Player's round Play button opens a video.
                         Column {
                             objectName: "generatorEmpty"
@@ -544,6 +591,34 @@ Item {
                             onActivated: (i) => page.speed = rates[i]
                         }
                     ]
+                }
+                // 0.7 seek row: Time (s), +1 s, +5 s and the 0–100 gauge switch.
+                // While marking (no script yet): after Create the editor's
+                // timeline seeks, and the preview keeps its height.
+                RowLayout {
+                    objectName: "seekRow"
+                    visible: gen.hasVideo && !edit.hasScript
+                    Layout.fillWidth: true; spacing: 8
+                    Text { textFormat: Text.PlainText; text: qsTr("Time (s)"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
+                    FlowTextField {
+                        id: timeField
+                        objectName: "timeField"
+                        Layout.preferredWidth: 80
+                        maxLength: 10
+                        placeholder: "0"
+                        // Follows the playhead unless it is being typed in.
+                        Binding on text {
+                            when: !timeField.activeFocus
+                            value: (page.playheadMs / 1000).toFixed(1)
+                        }
+                        onAccepted: {
+                            const s = parseFloat(text.replace(",", "."))
+                            if (!isNaN(s) && s >= 0) page.seekTo(Math.round(s * 2) / 2 * 1000)  // 0.7: step 0.5 s
+                        }
+                    }
+                    FlowButton { objectName: "plus1s"; text: qsTr("+1s"); onClicked: page.seekBy(1000) }
+                    FlowButton { objectName: "plus5s"; text: qsTr("+5s"); onClicked: page.seekBy(5000) }
+                    Item { Layout.fillWidth: true }
                 }
                 }
             }
