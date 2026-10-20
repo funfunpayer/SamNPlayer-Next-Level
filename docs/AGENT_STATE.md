@@ -109,7 +109,7 @@
    then the golden-clip run (needs the Owner's clips in the private
    testmedia repo, `clips/`); later the learned scene model for the phases
    (D-157). The Owner tests the Windows build of 20 Oct
-   (main after #99) with real clips. No open issues (#4 closed by #90).
+   (main after #103) with real clips. No open issues (#4 closed by #90).
 
 1. **Windows CI:** some app tests failed now and then with no output (stdout fully buffered when piped). Every app test now writes unbuffered (`tests/app/unbuffered_stdout.cpp`); find the cause on the next red run. Seen again on #95 (20 Oct): `device_transports_test` red under ctest with no output, every function green alone; a re-run passed. Each test function must also pass on its own (the diagnostics step runs them one by one); `label_controller` export no longer leans on the previous function.
 2. **P3.3 done** (19 Oct): the Generator remembers its choices (0.7 `generator.*` keys), contact sensitivity and curve; the Player shows the contact marks on the video (#67). Left for later: the feel probe, the body map, the partner path.
