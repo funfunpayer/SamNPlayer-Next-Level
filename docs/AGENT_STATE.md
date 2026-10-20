@@ -102,7 +102,7 @@
    re-running a stretch on its own after a drag; later the learned scene model
    for the phases (D-157). No open issues (#4 closed by #90).
 
-1. **Windows CI:** some app tests failed now and then with no output (stdout fully buffered when piped). Every app test now writes unbuffered (`tests/app/unbuffered_stdout.cpp`); find the cause on the next red run.
+1. **Windows CI:** some app tests failed now and then with no output (stdout fully buffered when piped). Every app test now writes unbuffered (`tests/app/unbuffered_stdout.cpp`); find the cause on the next red run. Seen again on #95 (20 Oct): `device_transports_test` red under ctest with no output, every function green alone; a re-run passed. Each test function must also pass on its own (the diagnostics step runs them one by one); `label_controller` export no longer leans on the previous function.
 2. **P3.3 done** (19 Oct): the Generator remembers its choices (0.7 `generator.*` keys), contact sensitivity and curve; the Player shows the contact marks on the video (#67). Left for later: the feel probe, the body map, the partner path.
 3. **P3.6** Quality Doctor on the dense curve, the signal auto-retry and the stroke preview (feeds the adaptive detrend); then the controller reports Quality as its second number (GD-04).
 4. **P3.4** two-point / multi-point, rhythm grid, follow marks; **P3.9** improvements, each measured with `samn_compare` (first lever: memory templates of the subject, not the box, GD-10).

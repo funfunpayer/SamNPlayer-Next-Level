@@ -129,13 +129,24 @@ private slots:
     }
 
     void exportWritesImagesLabelsAndClasses() {
+        // Its own copy of the clip, so it does not lean on what another test saved.
+        QVERIFY(QDir(dir_.path()).mkpath("export"));
+        const QString clip = dir_.filePath("export/clip.mp4");
+        QFile::remove(clip);
+        QFile::remove(dir_.filePath("export/clip.labels.json"));
+        QVERIFY(QFile::copy(clip_, clip));
         LabelController c;
-        QVERIFY(c.openVideo(clip_));
+        QVERIFY(c.openVideo(clip));
+        QVERIFY(c.addLabel("glans"));
+        QVERIFY(c.setBox(QRectF(10, 20, 40, 40)));
+        c.seek(2000);
+        QVERIFY(c.setBox(QRectF(110, 20, 40, 40)));
+        c.seek(0);
         QVERIFY(c.addLabel("mouth"));
         QVERIFY(c.setBox(QRectF(20, 20, 30, 30)));
         c.seek(1000);
         QVERIFY(c.markAbsent());
-        const QString out = dir_.filePath("dataset");
+        const QString out = dir_.filePath("export/dataset");
         const int n = c.exportDataset(QUrl::fromLocalFile(out).toString(), 500);
         QVERIFY(n >= 8);  // glans and mouth are reviewed over the clip
         QCOMPARE(QDir(out + "/images").entryList(QDir::Files).size(), n);
