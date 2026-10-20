@@ -721,6 +721,45 @@ private slots:
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }
 
+    // The Player's "Edit this script" / "Open the scenes in the Editor" links
+    // (they replaced notes that said the editing comes later).
+    void editFromThePlayerOpensTheEditor() {
+        {
+            Shell s;
+            loadShell(s);
+            QVERIFY(s.window);
+            QQuickItem* player = s.one("PlayerPage");
+            QQuickItem* generator = s.one("GeneratorPage");
+            QTemporaryDir dir;
+            const QString video = dir.filePath("clip.mp4");
+            QVERIFY(QFile::copy(QStringLiteral(SAMN_APP_QML_DIR "/../../tests/app/data/testpattern_4s.mp4"), video));
+            const QString script = dir.filePath("clip.funscript");
+            QFile f(script);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(R"({"version":"1.0","actions":[{"at":0,"pos":0},{"at":500,"pos":100},{"at":1000,"pos":0}]})");
+            f.close();
+            QVERIFY(QMetaObject::invokeMethod(player, "editRequested", Q_ARG(QString, script),
+                                              Q_ARG(QUrl, QUrl::fromLocalFile(video)), Q_ARG(bool, true)));
+            QTRY_COMPARE_WITH_TIMEOUT(s.mode(), 1, kWait);
+            QCOMPARE(generator->property("sidePanel").toInt(), 1);  // the scenes
+            auto* edit = generator->property("editor").value<QObject*>();
+            QVERIFY(edit);
+            QVERIFY(edit->property("hasScript").toBool());
+            auto* gen = generator->property("controller").value<QObject*>();
+            QVERIFY(gen);
+            QTRY_VERIFY_WITH_TIMEOUT(gen->property("hasVideo").toBool(), kWait);
+            QCOMPARE(QFileInfo(gen->property("videoPath").toString()).fileName(), QStringLiteral("clip.mp4"));
+            // Without the scenes: the edit panel.
+            QTest::keyClick(s.window, Qt::Key_1, Qt::ControlModifier);
+            QTRY_COMPARE_WITH_TIMEOUT(s.mode(), 0, kWait);
+            QVERIFY(QMetaObject::invokeMethod(player, "editRequested", Q_ARG(QString, script),
+                                              Q_ARG(QUrl, QUrl::fromLocalFile(video)), Q_ARG(bool, false)));
+            QTRY_COMPARE_WITH_TIMEOUT(s.mode(), 1, kWait);
+            QCOMPARE(generator->property("sidePanel").toInt(), 0);
+        }
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
+
     void onlyTheChosenModesPageShows() {
         {
             Shell s;

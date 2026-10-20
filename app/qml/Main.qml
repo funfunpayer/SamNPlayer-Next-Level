@@ -94,6 +94,8 @@ ApplicationWindow {
             id: player; overlayOpen: settingsPage.open; device: deviceCtl
             // 0.7: "Create script" goes to the Generator with this video.
             onCreateRequested: (video, start) => { win.mode = 1; generator.createFor(video, start) }
+            // Editing lives in the Generator (D-137): the script, its video, the scenes.
+            onEditRequested: (script, video, scenes) => { win.mode = 1; generator.editScript(script, video, scenes) }
         }
         // Generator and Editor are one mode: the Generator is the Editor (D-137).
         GeneratorPage {

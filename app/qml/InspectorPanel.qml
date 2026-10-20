@@ -16,6 +16,8 @@ GlassCard {
     // The video position (for Save project) and the project picker (the page owns the dialog).
     property real videoPositionMs: 0
     signal projectLoadRequested()
+    // Edit the open script in the Generator's Editor (the scenes when true).
+    signal editRequested(bool scenes)
     property string projectStatus: ""
     width: collapsed ? 44 : 320
     Behavior on width { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
@@ -508,7 +510,8 @@ GlassCard {
                 }
                 Card {
                     title: qsTr("Audio Vibration")
-                    Note { text: qsTr("Vibration from the video's sound plays on a device, so it comes with the devices phase (P2).") }
+                    Note { text: qsTr("Vibration from the video's sound is written into the script in the Editor (\"Vibration from the sound\"); the Player then plays it on the device.") }
+                    FlowButton { objectName: "editForSound"; text: qsTr("Open in the Editor"); enabled: root.ctrl.hasScript; onClicked: root.editRequested(false) }
                 }
             }
             // Playback: script tools.
@@ -972,7 +975,8 @@ GlassCard {
                 }
                 Card {
                     title: qsTr("Curve editing")
-                    Note { text: qsTr("Editing dots, range tools and Undo come with the Editor in the Generator mode (P3–P4).") }
+                    Note { text: qsTr("Points, range tools, undo and the scenes are edited in the Generator, which is the Editor.") }
+                    FlowButton { objectName: "editScript"; text: qsTr("Edit this script"); icon: "edit"; enabled: root.ctrl.hasScript; onClicked: root.editRequested(false) }
                 }
             }
         }
