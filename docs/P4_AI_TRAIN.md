@@ -215,8 +215,15 @@ lanes; its stretches are dragged and named like chapters:
    YOLOv8-style model as NudeNet feeds it (square padding, RGB, 0..1) and maps
    NudeNet's classes to ours; tested on a tiny generated model
    (`tests/vision/data/make_tiny_yolo.py`), NudeNet 320n itself loads and
-   takes about 20 ms per frame on a CPU. Next: NudeNet as a one-click download
-   and a teacher in the label editor, then consensus into proposed tracks.
+   takes about 20 ms per frame on a CPU. NudeNet is one click (*Download
+   NudeNet*): the app fetches the NudeNet 3.4.2 wheel from PyPI, checks the
+   wheel and the `320n.onnx` in it against pinned SHA-256 hashes, unpacks it
+   (zlib) into `config_dir()/models` and makes it the teacher; *Choose a
+   file…* takes a copy the user already has (it must have NudeNet's 18
+   classes). *Ask the teacher (A)* then asks NudeNet on this computer or the
+   model server (`aitrain.teacher.kind`): penis, vagina, breast and face come
+   back as unconfirmed keys (`teacher:nudenet`), only for the classes the
+   project asks for. Next: consensus between teachers into proposed tracks.
 5. **Student:** the training environment (one click), RF-DETR training and ONNX
    export with progress and Cancel; the student as a teacher and in the
    Generator's tip finding.

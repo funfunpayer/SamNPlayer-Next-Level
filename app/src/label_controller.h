@@ -13,6 +13,7 @@
 #include <thread>
 #include <vector>
 
+#include "model_download.h"
 #include "samn/label_track.h"
 
 class QNetworkAccessManager;
@@ -20,6 +21,9 @@ class QNetworkReply;
 
 namespace samn {
 class Settings;
+}
+namespace samn::vision {
+class OnnxDetector;
 }
 
 namespace samn::ui {
@@ -71,6 +75,15 @@ class LabelController : public QObject {
     Q_PROPERTY(QStringList teacherModels READ teacherModels NOTIFY teacherChanged)
     Q_PROPERTY(bool teacherBusy READ teacherBusy NOTIFY teacherChanged)
     Q_PROPERTY(QString teacherStatus READ teacherStatus NOTIFY teacherChanged)
+    // Who answers "Ask the teacher": "server" (above) or "nudenet" (NudeNet
+    // on this computer with ONNX Runtime). Kept as aitrain.teacher.kind.
+    Q_PROPERTY(QString teacherKind READ teacherKind WRITE setTeacherKind NOTIFY teacherChanged)
+    // Whether this build runs models itself (ONNX Runtime).
+    Q_PROPERTY(bool localTeacherAvailable READ localTeacherAvailable CONSTANT)
+    // NudeNet's model file, "" until fetched or chosen (aitrain.nudenet.path).
+    Q_PROPERTY(QString nudenetPath READ nudenetPath NOTIFY teacherChanged)
+    // The model download: -1 when none runs, else 0..100.
+    Q_PROPERTY(int modelDownload READ modelDownload NOTIFY teacherChanged)
     // Tracking between keyframes (D-155 step 3): busy and 0..100.
     Q_PROPERTY(bool tracking READ tracking NOTIFY trackingChanged)
     Q_PROPERTY(int trackProgress READ trackProgress NOTIFY trackingChanged)
@@ -147,7 +160,21 @@ public:
     QString teacherKey() const { return teacher_key_; }
     void setTeacherKey(const QString& key);
     QStringList teacherModels() const { return teacher_models_; }
-    bool teacherBusy() const { return teacher_reply_ != nullptr; }
+    bool teacherBusy() const { return teacher_reply_ != nullptr || local_busy_; }
+    QString teacherKind() const { return teacher_kind_; }
+    void setTeacherKind(const QString& kind);
+    bool localTeacherAvailable() const;
+    QString nudenetPath() const;
+    int modelDownload() const { return model_download_; }
+    // Fetches NudeNet (its PyPI wheel, both hashes checked) into
+    // config_dir()/models and makes it the teacher. Asynchronous.
+    Q_INVOKABLE bool downloadNudeNet();
+    Q_INVOKABLE void cancelModelDownload();
+    // A NudeNet model file the user already has (it must load and have
+    // NudeNet's 18 classes); made the teacher.
+    Q_INVOKABLE bool chooseNudeNet(const QString& pathOrUrl);
+    // Tests: where NudeNet is fetched from.
+    void setNudeNetSource(const ModelSource& source) { nudenet_source_ = source; }
     QString teacherStatus() const { return teacher_status_; }
     // Seconds before a teacher request gives up (a big model on a laptop is slow).
     static constexpr int kTeacherTimeoutMs = 180000;
@@ -196,6 +223,17 @@ private:
     QNetworkReply* teacher_reply_ = nullptr;
     QString teacher_url_, teacher_model_, teacher_key_, teacher_status_;
     QStringList teacher_models_;
+
+    bool askLocal();
+    std::vector<std::string> teacherClasses() const;
+    QString teacher_kind_ = QStringLiteral("server");
+    QString nudenet_path_;
+    ModelSource nudenet_source_ = NudeNetSource();
+    int model_download_ = -1;
+    QNetworkReply* download_reply_ = nullptr;
+    std::shared_ptr<samn::vision::OnnxDetector> detector_;
+    bool local_busy_ = false;
+    std::thread local_worker_;
 
     void onPictureSignals(const std::vector<double>& luma, const std::vector<double>& motion, const QString& error);
     void finishSuggest();

@@ -69,6 +69,20 @@ private slots:
         auto* labels = page->property("labels").value<LabelController*>();
         QVERIFY(labels);
         QVERIFY(!named(root.get(), "labelEditor")->isVisible());
+        // The teachers' setup: NudeNet here or the model server answers A.
+        QVERIFY(named(root.get(), "nudenetCard")->isVisible());
+        QVERIFY(named(root.get(), "teacherCard")->isVisible());
+        auto* here = named(root.get(), "kindNudeNet");
+        QCOMPARE(here->isEnabled(), labels->localTeacherAvailable());
+        QVERIFY(named(root.get(), "kindServer")->property("checked").toBool());
+        if (here->isEnabled()) {
+            QVERIFY(QMetaObject::invokeMethod(here, "clicked"));
+            QCOMPARE(labels->teacherKind(), QString("nudenet"));
+            QTRY_VERIFY(here->property("checked").toBool());
+            QVERIFY(named(root.get(), "nudenetDownload")->isVisible());
+            QCOMPARE(named(root.get(), "nudenetState")->property("text").toString(), QString("Not fetched yet"));
+            labels->setTeacherKind("server");
+        }
         QVERIFY(labels->openVideo(clip));
         QTRY_VERIFY(named(root.get(), "labelEditor")->isVisible());
 

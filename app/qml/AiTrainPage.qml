@@ -22,6 +22,12 @@ Item {
         nameFilters: [qsTr("Video or image (*.mp4 *.mkv *.webm *.mov *.avi *.m4v *.png *.jpg *.jpeg)"), qsTr("All files (*)")]
         onAccepted: { page.showSetup = false; labelCtl.openVideo(selectedFile.toString()) }
     }
+    FileDialog {
+        id: nudenetDialog
+        title: qsTr("Choose a NudeNet model (320n.onnx)")
+        nameFilters: [qsTr("ONNX model (*.onnx)"), qsTr("All files (*)")]
+        onAccepted: labelCtl.chooseNudeNet(selectedFile.toString())
+    }
 
     component Step: GlassCard {
         id: step
@@ -140,7 +146,89 @@ Item {
                     visible: page.tab === 0
                     number: "2"; title: qsTr("Teachers")
                     text: qsTr("NudeNet (one click to install) and vision models on Ollama, LM Studio or a server in your network, such as a Mac with larger models, propose boxes. Where several agree, the proposal is offered; you confirm it in the label editor.")
-                    status: qsTr("Vision models on a server: below. NudeNet and voting between teachers follow.")
+                    status: qsTr("NudeNet on this computer and vision models on a server: below. Voting between teachers follows.")
+                }
+                // Which teacher answers "Ask the teacher" (A).
+                RowLayout {
+                    objectName: "teacherKindRow"
+                    visible: page.tab === 0
+                    Layout.fillWidth: true; spacing: 8
+                    Text { textFormat: Text.PlainText; text: qsTr("Ask the teacher (A) asks:"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
+                    FlowButton {
+                        objectName: "kindNudeNet"
+                        text: qsTr("NudeNet here")
+                        checked: labelCtl.teacherKind === "nudenet"
+                        enabled: labelCtl.localTeacherAvailable
+                        onClicked: labelCtl.teacherKind = "nudenet"
+                    }
+                    FlowButton {
+                        objectName: "kindServer"
+                        text: qsTr("The model server")
+                        checked: labelCtl.teacherKind === "server"
+                        onClicked: labelCtl.teacherKind = "server"
+                    }
+                    Item { Layout.fillWidth: true }
+                }
+                // NudeNet on this computer (D-155 step 4): ONNX Runtime, one click.
+                GlassCard {
+                    objectName: "nudenetCard"
+                    visible: page.tab === 0
+                    Layout.fillWidth: true
+                    implicitHeight: nudenetCol.implicitHeight + 28
+                    ColumnLayout {
+                        id: nudenetCol
+                        anchors.fill: parent; anchors.margins: 14; spacing: 8
+                        Text { textFormat: Text.PlainText; text: qsTr("NudeNet on this computer"); color: Theme.text; font.family: Theme.font; font.pixelSize: 15 }
+                        Text {
+                            textFormat: Text.PlainText
+                            Layout.fillWidth: true; wrapMode: Text.WordWrap
+                            text: labelCtl.localTeacherAvailable
+                                  ? qsTr("A small detector of body parts that runs here, no server, no upload. Its weights are not part of SamNPlayer (their licence is unclear): one click fetches NudeNet 3.4.2 from PyPI (about 11 MB) and checks it against a fixed checksum. It proposes penis, vagina, breast and face.")
+                                  : qsTr("This build cannot run models itself (it has no ONNX Runtime). Use a model server below.")
+                            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true; spacing: 8
+                            visible: labelCtl.localTeacherAvailable
+                            FlowButton {
+                                objectName: "nudenetDownload"
+                                visible: labelCtl.modelDownload < 0
+                                primary: labelCtl.nudenetPath === ""
+                                text: labelCtl.nudenetPath === "" ? qsTr("Download NudeNet") : qsTr("Download again")
+                                icon: "download"
+                                enabled: !labelCtl.teacherBusy
+                                onClicked: labelCtl.downloadNudeNet()
+                            }
+                            Text {
+                                objectName: "nudenetProgress"
+                                visible: labelCtl.modelDownload >= 0
+                                textFormat: Text.PlainText
+                                text: qsTr("Fetching NudeNet … %1 %").arg(labelCtl.modelDownload)
+                                color: Theme.cyan; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                            FlowButton {
+                                objectName: "nudenetStop"
+                                visible: labelCtl.modelDownload >= 0
+                                text: qsTr("Stop")
+                                onClicked: labelCtl.cancelModelDownload()
+                            }
+                            FlowButton {
+                                objectName: "nudenetChoose"
+                                visible: labelCtl.modelDownload < 0
+                                text: qsTr("Choose a file…")
+                                enabled: !labelCtl.teacherBusy
+                                onClicked: nudenetDialog.open()
+                            }
+                            Text {
+                                objectName: "nudenetState"
+                                Layout.fillWidth: true
+                                textFormat: Text.PlainText; elide: Text.ElideMiddle
+                                text: labelCtl.nudenetPath !== "" ? qsTr("Ready") : qsTr("Not fetched yet")
+                                color: labelCtl.nudenetPath !== "" ? Theme.cyan : Theme.textDim
+                                font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                        }
+                    }
                 }
                 // The teacher on a model server (D-155 step 4).
                 GlassCard {

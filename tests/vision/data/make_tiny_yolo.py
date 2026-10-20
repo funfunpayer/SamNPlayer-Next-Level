@@ -8,6 +8,10 @@ tests (no trained weights, no pictures). Input "images" 1x3x64x64, output
 - anchor 1: class 1 at 0.9, box (48, 40, 16, 12).
 - anchor 2: class 1 at 0.6, nearly the same box: NMS drops it.
 
+It also writes tiny_nudenet.onnx, shaped like NudeNet (18 classes, output
+1x22x4) for the app's tests: anchor 0 is FACE_MALE at 0.9 (box 32, 32,
+20, 20), anchor 1 FEET_EXPOSED at 0.9 (no label of ours).
+
 Run: python3 make_tiny_yolo.py (needs the onnx package).
 """
 import numpy as np
@@ -40,7 +44,33 @@ graph = helper.make_graph(
         numpy_helper.from_array(mask, "mask"),
     ],
 )
-model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 17)], producer_name="samn-tests")
-model.ir_version = 8
-onnx.checker.check_model(model)
-onnx.save(model, __file__.replace("make_tiny_yolo.py", "tiny_yolo.onnx"))
+
+
+def save(graph, name):
+    model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 17)], producer_name="samn-tests")
+    model.ir_version = 8
+    onnx.checker.check_model(model)
+    onnx.save(model, __file__.replace("make_tiny_yolo.py", name))
+
+
+save(graph, "tiny_yolo.onnx")
+
+nn = np.zeros((1, 22, 4), np.float32)
+nn[0, 0:4, 0] = [32, 32, 20, 20]
+nn[0, 4 + 12, 0] = 0.9  # FACE_MALE
+nn[0, 0:4, 1] = [10, 50, 8, 8]
+nn[0, 4 + 7, 1] = 0.9  # FEET_EXPOSED
+save(
+    helper.make_graph(
+        [
+            helper.make_node("ReduceMean", ["images"], ["m"], axes=[0, 1, 2, 3], keepdims=0),
+            helper.make_node("Mul", ["m", "zero"], ["z"]),
+            helper.make_node("Add", ["base", "z"], ["output0"]),
+        ],
+        "tiny_nudenet",
+        [helper.make_tensor_value_info("images", TensorProto.FLOAT, [1, 3, 64, 64])],
+        [helper.make_tensor_value_info("output0", TensorProto.FLOAT, [1, 22, 4])],
+        [numpy_helper.from_array(nn, "base"), numpy_helper.from_array(np.array(0, np.float32), "zero")],
+    ),
+    "tiny_nudenet.onnx",
+)

@@ -165,8 +165,9 @@ Item {
                 FlowButton {
                     objectName: "askTeacher"
                     Layout.fillWidth: true
-                    text: labels.teacherBusy ? qsTr("The teacher is looking…") : qsTr("Ask the teacher (A)")
-                    enabled: labels.hasVideo && !labels.teacherBusy && labels.teacherModel !== ""
+                    readonly property bool local: labels.teacherKind === "nudenet"
+                    text: labels.teacherBusy ? qsTr("The teacher is looking…") : local ? qsTr("Ask NudeNet (A)") : qsTr("Ask the teacher (A)")
+                    enabled: labels.hasVideo && !labels.teacherBusy && (local ? labels.nudenetPath !== "" : labels.teacherModel !== "")
                     onClicked: labels.askTeacher()
                 }
                 FlowButton { objectName: "nextUncertain"; Layout.fillWidth: true; text: qsTr("Next uncertain (N)"); onClicked: { root.playing = false; labels.nextUncertain() } }
