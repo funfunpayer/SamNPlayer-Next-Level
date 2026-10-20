@@ -132,8 +132,10 @@ bool GeneratorController::findTip() {
             const bool thenCreate = std::exchange(self->create_after_find_, false);
             if (forVideo != self->video_path_) return;  // another video was opened meanwhile
             if (!r) {
-                if (thenCreate && error != "canceled")
+                if (thenCreate && error != "canceled") {
                     self->setStatus(tr("Find tip failed: %1.").arg(QString::fromStdString(error)));
+                    AppLog::instance().reportError(self->status_);  // 0.7 uiError
+                }
                 else
                     self->setStatus(error == "canceled" ? tr("Find tip: canceled.")
                                                         : tr("Find tip: %1").arg(QString::fromStdString(error)));
@@ -150,7 +152,10 @@ bool GeneratorController::findTip() {
             const bool weak = r->candidates.empty() || r->candidates.front().score < 0.05;
             if (thenCreate) {
                 // Create goes on only with a real find; a weak one waits for the user.
-                if (weak) self->setStatus(tr("Find tip failed: only weak motion found — check the box, or drag it by hand, then Create."));
+                if (weak) {
+                    self->setStatus(tr("Find tip failed: only weak motion found — check the box, or drag it by hand, then Create."));
+                    AppLog::instance().reportError(self->status_);
+                }
                 else self->create(self->create_overwrite_);
                 return;
             }
