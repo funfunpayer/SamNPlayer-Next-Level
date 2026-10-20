@@ -15,6 +15,13 @@
 
 #include "samn/label_track.h"
 
+class QNetworkAccessManager;
+class QNetworkReply;
+
+namespace samn {
+class Settings;
+}
+
 namespace samn::ui {
 
 class AudioLevelDecoder;
@@ -55,6 +62,15 @@ class LabelController : public QObject {
     // The rule-based phase suggestions run (D-157): busy and 0..100.
     Q_PROPERTY(bool suggesting READ suggesting NOTIFY suggestingChanged)
     Q_PROPERTY(int suggestProgress READ suggestProgress NOTIFY suggestingChanged)
+    // A teacher on a model server (D-155 step 4): an OpenAI-compatible
+    // address (Ollama http://<host>:11434/v1, LM Studio http://<host>:1234/v1),
+    // the model, an optional key. Kept as aitrain.teacher.*.
+    Q_PROPERTY(QString teacherUrl READ teacherUrl WRITE setTeacherUrl NOTIFY teacherChanged)
+    Q_PROPERTY(QString teacherModel READ teacherModel WRITE setTeacherModel NOTIFY teacherChanged)
+    Q_PROPERTY(QString teacherKey READ teacherKey WRITE setTeacherKey NOTIFY teacherChanged)
+    Q_PROPERTY(QStringList teacherModels READ teacherModels NOTIFY teacherChanged)
+    Q_PROPERTY(bool teacherBusy READ teacherBusy NOTIFY teacherChanged)
+    Q_PROPERTY(QString teacherStatus READ teacherStatus NOTIFY teacherChanged)
     // Tracking between keyframes (D-155 step 3): busy and 0..100.
     Q_PROPERTY(bool tracking READ tracking NOTIFY trackingChanged)
     Q_PROPERTY(int trackProgress READ trackProgress NOTIFY trackingChanged)
@@ -118,6 +134,23 @@ public:
     // Jumps to the next uncertain key (the current label first, else any);
     // false when there is none.
     Q_INVOKABLE bool nextUncertain();
+    // Lists the server's models (GET <url>/models).
+    Q_INVOKABLE bool testTeacher();
+    // The teacher looks at the frame on screen and proposes boxes for the
+    // project's classes (all presets but contact and exclude when there are
+    // none yet): unconfirmed keys, one undo step.
+    Q_INVOKABLE bool askTeacher();
+    QString teacherUrl() const { return teacher_url_; }
+    void setTeacherUrl(const QString& url);
+    QString teacherModel() const { return teacher_model_; }
+    void setTeacherModel(const QString& model);
+    QString teacherKey() const { return teacher_key_; }
+    void setTeacherKey(const QString& key);
+    QStringList teacherModels() const { return teacher_models_; }
+    bool teacherBusy() const { return teacher_reply_ != nullptr; }
+    QString teacherStatus() const { return teacher_status_; }
+    // Seconds before a teacher request gives up (a big model on a laptop is slow).
+    static constexpr int kTeacherTimeoutMs = 180000;
     bool tracking() const { return tracking_; }
     int trackProgress() const { return track_progress_; }
     bool suggesting() const { return suggesting_; }
@@ -136,6 +169,7 @@ signals:
     void statusChanged();
     void suggestingChanged();
     void trackingChanged();
+    void teacherChanged();
 
 private:
     void change(const QString& what, const std::function<bool(samn::LabelProject&)>& op);
@@ -152,6 +186,16 @@ private:
     samn::LabelProject project_;
     std::vector<samn::LabelProject> undo_, redo_;
     QString status_;
+
+    samn::Settings& settings();
+    void saveSetting(const char* key, const QString& value);
+    QNetworkReply* teacherRequest(const QString& path, const QByteArray& body);
+    void setTeacherStatus(const QString& s);
+    std::unique_ptr<samn::Settings> settings_;
+    QNetworkAccessManager* net_ = nullptr;
+    QNetworkReply* teacher_reply_ = nullptr;
+    QString teacher_url_, teacher_model_, teacher_key_, teacher_status_;
+    QStringList teacher_models_;
 
     void onPictureSignals(const std::vector<double>& luma, const std::vector<double>& motion, const QString& error);
     void finishSuggest();

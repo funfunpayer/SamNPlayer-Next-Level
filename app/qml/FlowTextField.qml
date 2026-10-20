@@ -7,6 +7,8 @@ Rectangle {
     property alias text: input.text
     property string placeholder
     property int maxLength: 80
+    // Hidden input (a key or a password).
+    property bool secret: false
     signal accepted()
     implicitWidth: 200; implicitHeight: 32
     radius: 10
@@ -20,6 +22,7 @@ Rectangle {
         color: Theme.text; selectionColor: Theme.blue
         font.family: Theme.fontSoft; font.pixelSize: 13
         maximumLength: root.maxLength
+        echoMode: root.secret ? TextInput.Password : TextInput.Normal
         clip: true
         onAccepted: root.accepted()
     }

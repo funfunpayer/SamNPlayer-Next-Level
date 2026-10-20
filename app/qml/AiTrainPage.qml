@@ -12,13 +12,15 @@ Item {
     property bool overlayOpen: false
     property int tab: 0
     property alias labels: labelCtl
+    // With a clip open: the steps and the teacher setup instead of the editor.
+    property bool showSetup: false
 
     LabelController { id: labelCtl }
     FileDialog {
         id: clipDialog
         title: qsTr("Open a clip or an image to label")
         nameFilters: [qsTr("Video or image (*.mp4 *.mkv *.webm *.mov *.avi *.m4v *.png *.jpg *.jpeg)"), qsTr("All files (*)")]
-        onAccepted: labelCtl.openVideo(selectedFile.toString())
+        onAccepted: { page.showSetup = false; labelCtl.openVideo(selectedFile.toString()) }
     }
 
     component Step: GlassCard {
@@ -77,6 +79,12 @@ Item {
                 font.family: Theme.fontSoft; font.pixelSize: 12
             }
             FlowButton {
+                objectName: "aiTrainSetup"
+                visible: page.tab === 0 && labelCtl.hasVideo
+                text: page.showSetup ? qsTr("Back to the clip") : qsTr("Teachers and steps")
+                onClicked: page.showSetup = !page.showSetup
+            }
+            FlowButton {
                 objectName: "openLabelClip"
                 visible: page.tab === 0
                 primary: !labelCtl.hasVideo
@@ -87,7 +95,7 @@ Item {
 
         LabelEditor {
             objectName: "labelEditor"
-            visible: page.tab === 0 && labelCtl.hasVideo
+            visible: page.tab === 0 && labelCtl.hasVideo && !page.showSetup
             active: visible && !page.overlayOpen
             Layout.fillWidth: true; Layout.fillHeight: true
             labels: labelCtl
@@ -95,7 +103,7 @@ Item {
 
         Flickable {
             objectName: "aiTrainPageBody"
-            visible: !(page.tab === 0 && labelCtl.hasVideo)
+            visible: !(page.tab === 0 && labelCtl.hasVideo && !page.showSetup)
             Layout.fillWidth: true; Layout.fillHeight: true
             contentHeight: body.implicitHeight
             clip: true
@@ -126,13 +134,76 @@ Item {
                     visible: page.tab === 0
                     number: "1"; title: qsTr("Label")
                     text: qsTr("Open a clip or an image. Each label (glans, mouth, hand …) is a track through the clip with its own lane under the video. Scrub or play: the boxes ride along. Where one drifts, drag it back; the tracker fills the stretch to the next correction. Mark where a label is not visible, and jump to the next unsure frame.")
-                    status: qsTr("Open a clip or image above to start. The tracker that fills between your corrections comes next (D-155 step 3).")
+                    status: qsTr("Open a clip or image above to start. T tracks between your boxes, N jumps to the next unsure frame.")
                 }
                 Step {
                     visible: page.tab === 0
                     number: "2"; title: qsTr("Teachers")
                     text: qsTr("NudeNet (one click to install) and vision models on Ollama, LM Studio or a server in your network, such as a Mac with larger models, propose boxes. Where several agree, the proposal is offered; you confirm it in the label editor.")
-                    status: qsTr("D-155 step 4.")
+                    status: qsTr("Vision models on a server: below. NudeNet and voting between teachers follow.")
+                }
+                // The teacher on a model server (D-155 step 4).
+                GlassCard {
+                    objectName: "teacherCard"
+                    visible: page.tab === 0
+                    Layout.fillWidth: true
+                    implicitHeight: teacherCol.implicitHeight + 28
+                    ColumnLayout {
+                        id: teacherCol
+                        anchors.fill: parent; anchors.margins: 14; spacing: 8
+                        Text { textFormat: Text.PlainText; text: qsTr("Teacher on a model server"); color: Theme.text; font.family: Theme.font; font.pixelSize: 15 }
+                        Text {
+                            textFormat: Text.PlainText
+                            Layout.fillWidth: true; wrapMode: Text.WordWrap
+                            text: qsTr("Any OpenAI-compatible address with a vision model: Ollama (http://<host>:11434/v1), LM Studio (http://<host>:1234/v1) or another server in your network. The frame goes only to this address.")
+                            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true; spacing: 8
+                            FlowTextField {
+                                objectName: "teacherUrl"
+                                Layout.fillWidth: true
+                                maxLength: 200
+                                placeholder: "http://192.168.1.20:11434/v1"
+                                text: labelCtl.teacherUrl
+                                onAccepted: labelCtl.teacherUrl = text
+                                onTextChanged: if (text !== labelCtl.teacherUrl) labelCtl.teacherUrl = text
+                            }
+                            FlowButton {
+                                objectName: "teacherTest"
+                                text: qsTr("Test connection")
+                                enabled: !labelCtl.teacherBusy
+                                onClicked: labelCtl.testTeacher()
+                            }
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true; spacing: 8
+                            FlowCombo {
+                                objectName: "teacherModel"
+                                Layout.preferredWidth: 260; height: 32
+                                model: labelCtl.teacherModels
+                                enabled: labelCtl.teacherModels.length > 0
+                                displayText: labelCtl.teacherModel !== "" ? labelCtl.teacherModel : qsTr("Model (test the connection)")
+                                onActivated: (i) => labelCtl.teacherModel = labelCtl.teacherModels[i]
+                            }
+                            FlowTextField {
+                                objectName: "teacherKey"
+                                Layout.fillWidth: true
+                                secret: true; maxLength: 200
+                                placeholder: qsTr("Key (only if the server asks for one)")
+                                text: labelCtl.teacherKey
+                                onTextChanged: if (text !== labelCtl.teacherKey) labelCtl.teacherKey = text
+                            }
+                        }
+                        Text {
+                            objectName: "teacherStatus"
+                            textFormat: Text.PlainText
+                            Layout.fillWidth: true; wrapMode: Text.WordWrap
+                            visible: text !== ""
+                            text: labelCtl.teacherStatus
+                            color: Theme.cyan; font.family: Theme.fontSoft; font.pixelSize: 12
+                        }
+                    }
                 }
                 Step {
                     visible: page.tab === 0
