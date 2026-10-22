@@ -1,1 +1,1 @@
-PLACEHOLDER_REPLACE_WITH_FILE
+__LOAD_FROM__/workspace/.pp_upload.qml
