@@ -3,12 +3,14 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'docs/.PlayerPage.zlib.b64'
+      - 'docs/.PlayerPage.zlib.b64.a'
+      - 'docs/.PlayerPage.zlib.b64.b'
 permissions:
   contents: write
 jobs:
   decode:
     runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, 'zlib payload part b'))
     steps:
       - uses: actions/checkout@v4
         with:
@@ -19,8 +21,9 @@ jobs:
           python3 <<'PY'
           import base64, zlib
           from pathlib import Path
-          b64 = Path("docs/.PlayerPage.zlib.b64").read_text().strip()
-          raw = zlib.decompress(base64.b64decode(b64))
+          a = Path("docs/.PlayerPage.zlib.b64.a").read_text().strip()
+          b = Path("docs/.PlayerPage.zlib.b64.b").read_text().strip()
+          raw = zlib.decompress(base64.b64decode(a + b))
           Path("app/qml/PlayerPage.qml").write_bytes(raw)
           assert b"Look-only: match 0.8" in raw
           print("wrote", len(raw), "bytes")
