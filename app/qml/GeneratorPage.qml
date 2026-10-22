@@ -496,7 +496,10 @@ Item {
                                         anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                                         // 0.7: click = tip, Shift-click = the contact area.
                                         onClicked: (m) => {
-                                            if (gen.contactVibration && (m.modifiers & Qt.ShiftModifier)) {
+                                            // keyboardModifiers: Windows QTest / some
+                                            // drivers leave m.modifiers empty while Shift is held.
+                                            const shift = (m.modifiers | Qt.keyboardModifiers) & Qt.ShiftModifier
+                                            if (gen.contactVibration && shift) {
                                                 const c = cand.modelData
                                                 if (gen.addContactArea(Qt.rect(c.x, c.y, c.w, c.h))) page.selectedMark = 0
                                             } else {
@@ -524,7 +527,8 @@ Item {
                             }
                             onPressed: (m) => {
                                 start = toVideo(m.x, m.y); rect = Qt.rect(start.x, start.y, 0, 0)
-                                contact = gen.markContact || gen.markExtra || (gen.contactVibration && (m.modifiers & Qt.ShiftModifier))
+                                const shift = (m.modifiers | Qt.keyboardModifiers) & Qt.ShiftModifier
+                                contact = gen.markContact || gen.markExtra || (gen.contactVibration && shift)
                                 active = true
                             }
                             function spanTo(mx, my) {
