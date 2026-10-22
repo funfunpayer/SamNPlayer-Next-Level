@@ -33,16 +33,8 @@ jobs:
 
           top = Path("app/qml/TopBar.qml")
           t = top.read_text()
-          old = """                    }
-                    Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
-                }
-                Column {"""
-          new = """                    }
-                    scale: tab.current ? 1.0 : (tabArea.containsMouse ? 1.03 : 1.0)
-                    Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
-                    Behavior on scale { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
-                }
-                Column {"""
+          old = "                    }\n                    Behavior on border.color { ColorAnimation { duration: Theme.animFast } }\n                }\n                Column {"
+          new = "                    }\n                    scale: tab.current ? 1.0 : (tabArea.containsMouse ? 1.03 : 1.0)\n                    Behavior on border.color { ColorAnimation { duration: Theme.animFast } }\n                    Behavior on scale { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }\n                }\n                Column {"
           if old in t:
               top.write_text(t.replace(old, new, 1))
               print("patched TopBar")
@@ -51,24 +43,10 @@ jobs:
 
           main = Path("app/qml/Main.qml")
           m = main.read_text()
-          old1 = """        anchors.fill: parent
-        visible: drop.containsDrag
-        color: Qt.rgba(0, 20 / 255, 45 / 255, 0.72)"""
-          new1 = """        anchors.fill: parent
-        visible: opacity > 0.01
-        opacity: drop.containsDrag ? 1 : 0
-        Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
-        color: Qt.rgba(0, 20 / 255, 45 / 255, 0.72)"""
-          old2 = """            color: \"white\"; font.family: Theme.font; font.pixelSize: 22
-        }
-    }
-    // Ctrl+O from every mode opens in the Player"""
-          new2 = """            color: \"white\"; font.family: Theme.font; font.pixelSize: 22
-            scale: drop.containsDrag ? 1.0 : 0.96
-            Behavior on scale { NumberAnimation { duration: Theme.animSlow; easing.type: Easing.OutBack } }
-        }
-    }
-    // Ctrl+O from every mode opens in the Player"""
+          old1 = "        anchors.fill: parent\n        visible: drop.containsDrag\n        color: Qt.rgba(0, 20 / 255, 45 / 255, 0.72)"
+          new1 = "        anchors.fill: parent\n        visible: opacity > 0.01\n        opacity: drop.containsDrag ? 1 : 0\n        Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }\n        color: Qt.rgba(0, 20 / 255, 45 / 255, 0.72)"
+          old2 = "            color: \"white\"; font.family: Theme.font; font.pixelSize: 22\n        }\n    }\n    // Ctrl+O from every mode opens in the Player"
+          new2 = "            color: \"white\"; font.family: Theme.font; font.pixelSize: 22\n            scale: drop.containsDrag ? 1.0 : 0.96\n            Behavior on scale { NumberAnimation { duration: Theme.animSlow; easing.type: Easing.OutBack } }\n        }\n    }\n    // Ctrl+O from every mode opens in the Player"
           if old1 in m:
               m = m.replace(old1, new1, 1)
               print("patched Main drop opacity")
