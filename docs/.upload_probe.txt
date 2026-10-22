@@ -1,1 +1,1 @@
-probe
+@/tmp/samn-next/docs/AGENT_STATE.md
