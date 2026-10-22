@@ -1,0 +1,172 @@
+import QtQuick
+import QtQuick.Window
+import QtQuick.Dialogs
+import QtQuick.Layouts
+import QtMultimedia
+import SamN
+
+// Player mode: the video card with transport and heatmap, and the timeline
+// card with the curve, the channel lanes and the audio level lane.
+// All logic lives in PlayerController (C++); this file only shows it.
+Item {
+    id: page
+    property alias controller: ctrl
+
+    property real speed: 1.0
+    // Nothing open yet: round Play + Open… (D-138 / 0.8 #550), not the old welcome stage.
+    readonly property bool empty: !ctrl.hasScript && ctrl.videoName === ""
+    // Video fullscreen (0.7: button, double-click, Esc leaves).
+    property bool fullStage: false
+    onFullStageChanged: {
+        const w = page.Window.window
+        if (w) w.visibility = fullStage ? Window.FullScreen : Window.Windowed
+    }
+    // Theatre (D-144): the video in the window without the side panels; the
+    // curve strip under it stays and can be switched off. Remembered.
+    property bool theatre: ctrl.uiValue("player.theatre", false)
+    onTheatreChanged: ctrl.setUiValue("player.theatre", theatre)
+    property bool theatreLanes: ctrl.uiValue("player.theatreLanes", true)
+    onTheatreLanesChanged: ctrl.setUiValue("player.theatreLanes", theatreLanes)
+    // Side panels away: fullscreen or theatre.
+    readonly property bool bare: fullStage || theatre
+    property bool muted: false
+    readonly property string videoGlobs: "*.mp4 *.mkv *.avi *.mov *.wmv *.m4v *.webm *.ts *.m2ts *.flv *.mpg *.mpeg *.3gp *.ogv"
+    // An overlay (Settings) is open: its keys win.
+    property bool overlayOpen: false
+
+    // The device connection of the app (Main.qml); the Player drives it.
+    required property DeviceController device
+    // "Create script" for a video without one (0.7 open_media.js): Main.qml
+    // opens the Generator with the video; `start` runs it right away.
+    signal createRequested(url video, bool start)
+    signal editRequested(string script, url video, bool scenes)
+    // The last script that was open, for "Back to the script" (0.7).
+    property string lastScript: ""
+    property url lastVideo
+    property url autoCreatedFor  // once per video, scriptChanged comes more than once
+    Connections {
+        target: ctrl
+        function onScriptChanged() {
+            if (ctrl.hasScript) {
+                page.lastScript = ctrl.scriptPath; page.lastVideo = ctrl.videoUrl
+            } else if (ctrl.noScriptForVideo && ctrl.autoCreate && ctrl.videoUrl !== page.autoCreatedFor) {
+                page.autoCreatedFor = ctrl.videoUrl
+                page.createRequested(ctrl.videoUrl, true)
+            }
+        }
+    }
+
+    PlayerController {
+        id: ctrl
+        device: page.device
+        onSleepReached: page.player.pause()
+        // The Emergency stop pauses the video too (the device is already stopped).
+        onEmergencyStopped: page.player.pause()
+    }
+    // A script without a video plays on its own clock (0.7 "Feel without
+    // film"); `player` is whichever drives the playhead.
+    readonly property bool scriptOnly: ctrl.hasScript && ctrl.videoName === ""
+    readonly property QtObject player: scriptOnly ? clock : media
+    onScriptOnlyChanged: clock.stop()  // also back to 0
+    function playheadMoved(pos) {
+        ctrl.setVideoPositionMs(pos)
+        const jump = ctrl.loopJumpFor(pos)
+        if (jump >= 0) page.player.position = jump
+    }
+    ScriptClock {
+        id: clock
+        objectName: "scriptClock"
+        duration: page.scriptOnly ? ctrl.scriptDurationMs : 0
+        playbackRate: page.speed
+        onDurationChanged: if (page.scriptOnly) ctrl.setVideoDurationMs(clock.duration)
+        onPlaybackStateChanged: if (page.scriptOnly) ctrl.setPlaying(clock.playbackState === ScriptClock.PlayingState)
+        onPositionChanged: if (page.scriptOnly) page.playheadMoved(clock.position)
+        // Play list: at the end, Auto-advance opens the next script; one
+        // without a video starts on its own (0.7).
+        onFinished: {
+            if (ctrl.playlistFinished()) {
+                if (ctrl.videoName !== "") media.playWhenLoaded = true
+                else Qt.callLater(clock.play)
+            }
+        }
+    }
+    Binding { target: ctrl.output; property: "speed"; value: page.speed }
+
+    MediaPlayer {
+        id: media
+        objectName: "media"
+        source: ctrl.videoUrl
+        videoOutput: videoOut
+        onDurationChanged: ctrl.setVideoDurationMs(media.duration)
+        audioOutput: AudioOutput { id: audio; volume: transport.volume; muted: page.muted }
+        playbackRate: page.speed
+        onPlaybackStateChanged: ctrl.setPlaying(playbackState === MediaPlayer.PlayingState)
+        // errorChanged, not errorOccurred: the FFmpeg backend of Qt 6.4 sets
+        // the error without emitting errorOccurred.
+        onErrorChanged: if (media.error !== MediaPlayer.NoError) ctrl.reportMediaError(media.error, media.errorString)
+        // Play list: at the end of the video, Auto-advance opens the next
+        // script and it starts once its video is loaded (0.7).
+        property bool playWhenLoaded: false
+        // A seek before the video is loaded (a project's saved position)
+        // waits here; clamped to a duration of 0 it would land at 0.
+        property real pendingSeekMs: -1
+        onSourceChanged: pendingSeekMs = -1
+        onMediaStatusChanged: {
+            if (mediaStatus === MediaPlayer.LoadedMedia && pendingSeekMs >= 0) {
+                const ms = pendingSeekMs
+                pendingSeekMs = -1
+                page.seekTo(ms)
+            }
+            if (mediaStatus === MediaPlayer.EndOfMedia && ctrl.playlistFinished()) {
+                if (ctrl.videoName !== "") playWhenLoaded = true
+                else Qt.callLater(clock.play)  // the next script has no video
+            }
+            else if (mediaStatus === MediaPlayer.LoadedMedia && playWhenLoaded) { playWhenLoaded = false; media.play() }
+        }
+        onPositionChanged: page.playheadMoved(media.position)
+    }
+
+    FileDialog {
+        id: openDialog
+        title: qsTr("Open video or script")
+        // 0.7 PickMediaFile: one dialog, the extensions of VIDEO_EXTS.
+        nameFilters: [qsTr("Video or script (%1 *.samn *.funscript)").arg(page.videoGlobs), qsTr("Videos (%1)").arg(page.videoGlobs),
+                      qsTr("Scripts (*.samn *.funscript)"), qsTr("All files (*)")]
+        onAccepted: ctrl.openPath(selectedFile.toString())
+    }
+    FileDialog {
+        id: scriptDialog
+        title: qsTr("Choose a script for this video")
+        nameFilters: [qsTr("Script (*.funscript *.samn)"), qsTr("All files (*)")]
+        onAccepted: ctrl.openScript(selectedFile.toString(), ctrl.videoUrl.toString())
+    }
+    FileDialog {
+        id: videoDialog
+        title: qsTr("Select a video file")
+        nameFilters: [qsTr("Videos (%1)").arg(page.videoGlobs), qsTr("All files (*)")]
+        onAccepted: ctrl.attachVideo(selectedFile.toString())
+    }
+    FileDialog {
+        id: snapshotDialog
+        title: qsTr("Save the frame as PNG")
+        fileMode: FileDialog.SaveFile
+        nameFilters: [qsTr("PNG image (*.png)")]
+        onAccepted: ctrl.saveSnapshot(videoOut.videoSink, selectedFile.toString())
+    }
+    FileDialog {
+        id: addListDialog
+        title: qsTr("Add a script to the list")
+        fileMode: FileDialog.OpenFiles
+        nameFilters: [qsTr("Script (*.funscript *.samn)"), qsTr("All files (*)")]
+        onAccepted: { for (const f of selectedFiles) ctrl.addToPlaylist(f.toString()) }
+    }
+    FileDialog {
+        id: projectDialog
+        title: qsTr("Choose project (.snp.json)")
+        nameFilters: [qsTr("Emotion project (*.snp.json)"), qsTr("JSON (*.json)")]
+        onAccepted: {
+            const path = selectedFile.toString()
+            const seek = ctrl.loadProject(path)
+            inspector.projectStatus = seek >= 0 ? qsTr("Project: %1").arg(ctrl.localPath(path)) : ctrl.lastError
+            if (seek > 0) page.seekTo(seek)
+   
