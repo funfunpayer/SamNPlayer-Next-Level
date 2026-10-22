@@ -23,6 +23,8 @@ jobs:
           from pathlib import Path
           a = Path("docs/.PlayerPage.zlib.b64.a").read_text().strip()
           b = Path("docs/.PlayerPage.zlib.b64.b").read_text().strip()
+          # Fix known single-char MCP transcription typos if present.
+          b = b.replace("JRlbGxsGil", "JRrbGxsGil", 1).replace("p9yjfr3Vi", "p9wjfr3Vi", 1)
           raw = zlib.decompress(base64.b64decode(a + b))
           Path("app/qml/PlayerPage.qml").write_bytes(raw)
           assert b"emptyHome" in raw
