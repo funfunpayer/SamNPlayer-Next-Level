@@ -22,11 +22,15 @@ What remains open in `PARITY.md` for silk/play is mostly **reduced-motion** and 
 | Training | Two glow gauges, silk bridge, name / % / wave | `TrainingRing` + `stage-ribbons` bridge |
 | Tokens | Navy `#021024`→`#01070f`, cyan `#00d9f4`, orange `#ff8a23` | `theme.h` |
 
-## Look-only polish applied (this branch)
+## Look + motion polish applied (this branch)
 
-Static empty-CTA text closer to 0.8 `.pb-empty-open`: letter-spacing and a soft cyan glow under **Open…**. Stale comment that still mentioned the 0.7 “Ready when you are” stage removed.
+1. Static empty-CTA text closer to 0.8 `.pb-empty-open`: letter-spacing and a soft cyan glow under **Open…**.
+2. **Play button:** softer silk ring, glyph glow, idle reverse drift (ambient) that quickens while playing; hover bloom.
+3. **Empty Player home:** calm ambient bloom + settle-in; still only Play + Open… (no wordmark clutter).
+4. **Transport:** progress trail glow, playhead knob pulse while playing.
+5. **Tabs / drop overlay / glass cards / silk:** quieter hover scale, fade-in drop, glass catch-light, slightly richer silk.
 
-No change to PlayButton / SilkLayer / TrainingRing animations or any controller logic.
+Controller / crank / open-media logic untouched. Decorative motion pauses when the app is inactive.
 
 ## Intentionally not changed (later / not look-blocking)
 
