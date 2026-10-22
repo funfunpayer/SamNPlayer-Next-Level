@@ -186,6 +186,20 @@ TEST_CASE("track: a missing file is an error, not an empty track") {
     CHECK(error.find("not found") != std::string::npos);
 }
 
+// Soft masks (0.7 maskRois) are punched out of camera motion with the tip
+// box; tracking still follows the ROI (masks do not drive the stroke).
+TEST_CASE("track: mask rois are accepted as camera excludes") {
+    TempDir dir;
+    const fs::path clip = dir.path / "panning_mask.mp4";
+    REQUIRE(clips::WritePanning(clip, 8, 80.0));
+    TrackOptions o = Plain();
+    o.camera_compensation = true;
+    o.mask_rois = {cv::Rect(0, 0, 40, 40), cv::Rect(clips::kW - 50, clips::kH - 50, 40, 40)};
+    const TrackResult r = Track(clip, o);
+    CHECK(r.stats.total_frames > 0);
+    CHECK(std::abs(Ptp(r.positions) - 80.0) <= 40);
+}
+
 // ---- building blocks ----
 
 TEST_CASE("parts: savgol keeps a parabola and matches scipy interp at the edges") {

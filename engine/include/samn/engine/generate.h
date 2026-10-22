@@ -46,6 +46,9 @@ struct GenerateRequest {
     std::string tip_class;
     std::optional<ContactMarkBox> contact_area;
     std::vector<ContactMarkBox> extra_areas;
+    // Ignore regions (0.7 maskRois): black exclusion boxes in video pixels.
+    // Passed to TrackBox as camera-motion excludes; they do not drive stroke.
+    std::vector<cv::Rect> mask_rois;
 };
 
 enum class GenerateEventKind { kProgress, kNote, kDone, kCanceled, kError };
