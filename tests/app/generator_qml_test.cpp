@@ -284,19 +284,36 @@ private slots:
         QCOMPARE(gen->status(), QStringLiteral("Extra contact removed."));
         QCOMPARE(gp->property("selectedMark").toInt(), -2);
         // Shift-drag draws the primary again (0.7 Shift = partner); the tip stays.
-        QTest::mousePress(&window, Qt::LeftButton, Qt::ShiftModifier, e1.toPoint());
-        QTest::mouseMove(&window, ((e1 + e2) / 2).toPoint());
-        QTest::mouseMove(&window, e2.toPoint());
-        QTest::mouseRelease(&window, Qt::LeftButton, Qt::ShiftModifier, e2.toPoint());
-        QTRY_VERIFY(qAbs(gen->contactAreas().first().toMap().value("y").toInt() - 150) <= 2);
+        // Windows CI: mouse modifiers alone often never reach QML MouseArea —
+        // hold Shift with keyPress, and refresh imageRect after the selection
+        // row came and went (layout can drift under offscreen DPI).
+        QTRY_VERIFY([&] {
+            const QRectF now = frame->property("imageRect").toRectF();
+            const bool same = now == ir && !now.isEmpty();
+            ir = now;
+            return same;
+        }());
+        const double sShift = ir.width() / 320.0;
+        const QPointF s1 = frame->mapToScene(QPointF(ir.x() + 20 * sShift, ir.y() + 150 * sShift));
+        const QPointF s2 = frame->mapToScene(QPointF(ir.x() + 70 * sShift, ir.y() + 200 * sShift));
+        QTest::keyPress(&window, Qt::Key_Shift);
+        QTest::mousePress(&window, Qt::LeftButton, Qt::ShiftModifier, s1.toPoint());
+        QTest::mouseMove(&window, ((s1 + s2) / 2).toPoint(), -1, Qt::LeftButton);
+        QTest::mouseMove(&window, s2.toPoint(), -1, Qt::LeftButton);
+        QTest::mouseRelease(&window, Qt::LeftButton, Qt::ShiftModifier, s2.toPoint());
+        QTest::keyRelease(&window, Qt::Key_Shift);
+        QTRY_VERIFY2(qAbs(gen->contactAreas().first().toMap().value("y").toInt() - 150) <= 2,
+                     qPrintable(QString("contact y=%1").arg(gen->contactAreas().first().toMap().value("y").toInt())));
         QCOMPARE(gen->contactAreas().size(), 1);
         QCOMPARE(gen->box(), tip);
         // Shift-click on a candidate makes it the contact area (0.7), not the tip.
         auto* chip1 = named(root.get(), "candidate_0");
         QVERIFY(chip1);
         const QVariantMap cand0 = gen->tipCandidates().first().toMap();
+        QTest::keyPress(&window, Qt::Key_Shift);
         QTest::mouseClick(&window, Qt::LeftButton, Qt::ShiftModifier,
                           chip1->mapToScene(QPointF(chip1->width() / 2, chip1->height() / 2)).toPoint());
+        QTest::keyRelease(&window, Qt::Key_Shift);
         QTRY_COMPARE(gen->contactAreas().first().toMap().value("x").toInt(), cand0.value("x").toInt());
         QCOMPARE(gen->box(), tip);
         QTRY_COMPARE(gp->property("selectedMark").toInt(), 0);
