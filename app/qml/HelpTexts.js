@@ -360,6 +360,8 @@ const texts = {
     "st-delete-learning": "Deletes only scene_map_learning under the ROI dataset folder. Hand YOLO samples stay.",
     // src/settings.js:114 (Honor "inverted" flag in .funscript files)
     "st-honor-inverted": "Some .funscript files (e.g. from OpenFunscripter) carry \"inverted\": true. On: Play flips those files (100 − position) as the format intends. Off: they play exactly as the points are written — use this if such a file feels upside down. Review → Invert always flips what you currently see and removes the flag.",
+    // SamN2 (D-092): no 0.7 data-help id; Settings → General.
+    "st-reduced-motion": "Stops decorative motion: silk bands, breathing glow on the mode tab, Play ring spin and Training stage drift. Transitions snap. Useful for screenshots, accessibility, or a calmer window. SAMN_NO_ANIM=1 forces it on for tests.",
     // src/settings.js:168 (Install video tools)
     "st-install-ffmpeg": "Downloads a static ffmpeg into your SamNPlayer tools folder when missing. Prefer the portable release (ffmpeg already next to the app).",
     // src/settings.js:204 (Open AI training)

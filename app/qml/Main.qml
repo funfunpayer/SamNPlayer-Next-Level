@@ -36,12 +36,12 @@ ApplicationWindow {
         property real driftX: 0
         property real driftY: 0
         SequentialAnimation on driftX {
-            running: win.visible; loops: Animation.Infinite
+            running: win.visible && !Theme.reducedMotion; loops: Animation.Infinite
             NumberAnimation { to: -win.width * 0.025; duration: 32000; easing.type: Easing.InOutSine }
             NumberAnimation { to: 0; duration: 32000; easing.type: Easing.InOutSine }
         }
         SequentialAnimation on driftY {
-            running: win.visible; loops: Animation.Infinite
+            running: win.visible && !Theme.reducedMotion; loops: Animation.Infinite
             NumberAnimation { to: win.height * 0.02; duration: 32000; easing.type: Easing.InOutSine }
             NumberAnimation { to: 0; duration: 32000; easing.type: Easing.InOutSine }
         }
@@ -56,12 +56,12 @@ ApplicationWindow {
         property real driftX: 0
         property real driftY: 0
         SequentialAnimation on driftX {
-            running: win.visible; loops: Animation.Infinite
+            running: win.visible && !Theme.reducedMotion; loops: Animation.Infinite
             NumberAnimation { to: win.width * 0.03; duration: 40000; easing.type: Easing.InOutSine }
             NumberAnimation { to: 0; duration: 40000; easing.type: Easing.InOutSine }
         }
         SequentialAnimation on driftY {
-            running: win.visible; loops: Animation.Infinite
+            running: win.visible && !Theme.reducedMotion; loops: Animation.Infinite
             NumberAnimation { to: win.height * 0.02; duration: 40000; easing.type: Easing.InOutSine }
             NumberAnimation { to: 0; duration: 40000; easing.type: Easing.InOutSine }
         }

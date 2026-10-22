@@ -43,12 +43,12 @@ Item {
         }
         readonly property int period: root.playing ? 2400 : 4500
         SequentialAnimation on opacity {
-            loops: Animation.Infinite
+            running: !Theme.reducedMotion; loops: Animation.Infinite
             NumberAnimation { to: 0.5; duration: halo.period / 2; easing.type: Easing.InOutSine }
             NumberAnimation { to: 0.9; duration: halo.period / 2; easing.type: Easing.InOutSine }
         }
         SequentialAnimation on scale {
-            loops: Animation.Infinite
+            running: !Theme.reducedMotion; loops: Animation.Infinite
             NumberAnimation { to: 1.05; duration: halo.period / 2; easing.type: Easing.InOutSine }
             NumberAnimation { to: 1.0; duration: halo.period / 2; easing.type: Easing.InOutSine }
         }
@@ -77,7 +77,7 @@ Item {
         RotationAnimator on rotation {
             from: 0; to: 360; duration: 2400
             loops: Animation.Infinite
-            running: root.playing
+            running: root.playing && !Theme.reducedMotion
         }
     }
     Rectangle {

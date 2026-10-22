@@ -63,7 +63,7 @@ Item {
         property double closedAt: 0
         onClosed: closedAt = Date.now()
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-        enter: Transition { NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 200 } }
+        enter: Transition { NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Theme.animFast || 200 } }
         contentItem: Text {
             objectName: "helpPopoverText"
             textFormat: Text.PlainText; wrapMode: Text.Wrap

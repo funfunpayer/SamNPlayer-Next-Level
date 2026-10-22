@@ -25,6 +25,7 @@
 #include "icon_provider.h"
 #include "player_controller.h"
 #include "plugins.h"
+#include "theme.h"
 #include "update_checker.h"
 
 Q_IMPORT_QML_PLUGIN(SamNPlugin)
@@ -740,6 +741,46 @@ private slots:
             QTest::qWait(2500);
             QVERIFY(!card->isVisible());
             s.window->findChild<samn::ui::UpdateChecker*>()->setSupportNoteAtStart(true);
+        }
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
+
+    // D-092 / UI-07: Settings → General "Reduce motion" stops decorative
+    // loops and zeros Theme.animFast / animNormal; the choice is kept.
+    void reducedMotionStopsDecorativeAnimations() {
+        {
+            Shell s;
+            loadShell(s);
+            QVERIFY(s.window);
+            auto* theme = s.engine.singletonInstance<samn::ui::Theme*>(qmlTypeId("SamN", 1, 0, "Theme"));
+            QVERIFY(theme);
+            QVERIFY(!theme->reducedMotion());
+            QCOMPARE(theme->animFast(), 140);
+            QCOMPARE(theme->animNormal(), 220);
+            QTest::keyClick(s.window, Qt::Key_Comma, Qt::ControlModifier);
+            QQuickItem* page = s.one("SettingsPage");
+            QTRY_VERIFY_WITH_TIMEOUT(page->isVisible(), kWait);
+            QQuickItem* toggle = nullptr;
+            for (QQuickItem* i : descendants(s.root()))
+                if (i->objectName() == QLatin1String("reducedMotion")) toggle = i;
+            QVERIFY(toggle && toggle->isVisible());
+            QTest::mouseClick(s.window, Qt::LeftButton, {},
+                              toggle->mapToScene(QPointF(toggle->width() / 2, toggle->height() / 2)).toPoint());
+            QTRY_VERIFY(theme->reducedMotion());
+            QCOMPARE(theme->animFast(), 0);
+            QCOMPARE(theme->animNormal(), 0);
+            if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT_REDUCED"); !shot.isEmpty()) {
+                QTest::qWait(200);
+                s.window->grabWindow().save(QString::fromLocal8Bit(shot));
+            }
+        }
+        {
+            Shell s;
+            loadShell(s);
+            QVERIFY(s.window);
+            auto* theme = s.engine.singletonInstance<samn::ui::Theme*>(qmlTypeId("SamN", 1, 0, "Theme"));
+            QVERIFY(theme && theme->reducedMotion());
+            theme->setReducedMotion(false);
         }
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }
