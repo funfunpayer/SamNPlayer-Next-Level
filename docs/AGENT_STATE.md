@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 22 Oct 2026, Cursor, branch `cursor/look-empty-open-polish-2c42` — look review vs 0.8 #550 (`docs/LOOK_FROM_08_ASSESSMENT.md`); empty Open… static glow only, no animation/crank changes.
+**Last update:** 22 Oct 2026, Cursor, branch `cursor/look-empty-open-polish-2c42` — Flow look + calm motion polish (Play drift/halo, empty bloom, transport pulse, tab/drop/glass/silk); crank/open logic untouched (`LOOK_FROM_08_ASSESSMENT.md`).
 
 ## Rules
 

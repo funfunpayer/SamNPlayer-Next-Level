@@ -139,7 +139,9 @@ ApplicationWindow {
     Rectangle {
         objectName: "dropOverlay"
         anchors.fill: parent
-        visible: drop.containsDrag
+        visible: opacity > 0.01
+        opacity: drop.containsDrag ? 1 : 0
+        Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
         color: Qt.rgba(0, 20 / 255, 45 / 255, 0.72)
         border.color: Theme.cyan; border.width: 2
         Text {
@@ -147,6 +149,8 @@ ApplicationWindow {
             anchors.centerIn: parent
             text: qsTr("Drop a video or script here")
             color: "white"; font.family: Theme.font; font.pixelSize: 22
+            scale: drop.containsDrag ? 1.0 : 0.96
+            Behavior on scale { NumberAnimation { duration: Theme.animSlow; easing.type: Easing.OutBack } }
         }
     }
     // Ctrl+O from every mode opens in the Player (0.7 top-bar Open).

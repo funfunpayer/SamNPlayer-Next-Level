@@ -96,7 +96,9 @@ Item {
                         GradientStop { position: 0; color: tab.current ? Qt.rgba(0, 120 / 255, 1, 0.45) : tabArea.containsMouse ? Qt.rgba(1, 1, 1, 0.06) : "transparent" }
                         GradientStop { position: 1; color: tab.current ? Qt.rgba(0, 70 / 255, 160 / 255, 0.40) : "transparent" }
                     }
+                    scale: tab.current ? 1.0 : (tabArea.containsMouse ? 1.03 : 1.0)
                     Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
+                    Behavior on scale { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
                 }
                 Column {
                     anchors.centerIn: parent
