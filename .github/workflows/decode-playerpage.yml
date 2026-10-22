@@ -25,7 +25,8 @@ jobs:
           b = Path("docs/.PlayerPage.zlib.b64.b").read_text().strip()
           raw = zlib.decompress(base64.b64decode(a + b))
           Path("app/qml/PlayerPage.qml").write_bytes(raw)
-          assert b"Look-only: match 0.8" in raw
+          assert b"emptyHome" in raw
+          assert b"Ambient stage bloom" in raw
           print("wrote", len(raw), "bytes")
           PY
       - name: Commit
@@ -33,5 +34,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add app/qml/PlayerPage.qml
-          git commit -m "Look: empty Open… glow to match 0.8 .pb-empty-open" || exit 0
+          git commit -m "Look: calmer Play motion, empty bloom, transport pulse" || exit 0
           git push
