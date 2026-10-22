@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 20 Oct 2026, Claude, branch `claude/samn2-help-chips`.
+**Last update:** 22 Oct 2026, Cursor, branch `cursor/look-empty-open-polish-2c42` — look review vs 0.8 #550 (`docs/LOOK_FROM_08_ASSESSMENT.md`); empty Open… static glow only, no animation/crank changes.
 
 ## Rules
 
@@ -109,18 +109,19 @@
 
 ## Next (in order; the work list is `LESSONS.md` § Gaps, `TEST_PARITY.md` and `P3_GENERATOR.md`)
 
-0. **Now (AI Train, D-155):** step 5 is done up to the student as a teacher;
+0. **Look vs 0.8 #550:** already at stand for empty Play+Open, window/stage silk, Training rings (`LOOK_FROM_08_ASSESSMENT.md`). Optional later: reduced-motion. Do not redesign the Flow face.
+1. **Now (AI Train, D-155):** step 5 is done up to the student as a teacher;
    step 6 has the clip cutter. Next in step 6: script compare with labels,
    then the golden-clip run (needs the Owner's clips in the private
    testmedia repo, `clips/`); later the learned scene model for the phases
    (D-157). The Owner tests the Windows build of 20 Oct
    (main after #103) with real clips. No open issues (#4 closed by #90).
 
-1. **Windows CI:** some app tests failed now and then with no output (stdout fully buffered when piped). Every app test now writes unbuffered (`tests/app/unbuffered_stdout.cpp`); find the cause on the next red run. Seen again on #95 (20 Oct): `device_transports_test` red under ctest with no output, every function green alone; a re-run passed. Each test function must also pass on its own (the diagnostics step runs them one by one); `label_controller` export no longer leans on the previous function.
-2. **P3.3 done** (19 Oct): the Generator remembers its choices (0.7 `generator.*` keys), contact sensitivity and curve; the Player shows the contact marks on the video (#67). Left for later: the feel probe, the body map, the partner path.
-3. **P3.6** Quality Doctor on the dense curve, the signal auto-retry and the stroke preview (feeds the adaptive detrend); then the controller reports Quality as its second number (GD-04).
-4. **P3.4** two-point / multi-point, rhythm grid, follow marks; **P3.9** improvements, each measured with `samn_compare` (first lever: memory templates of the subject, not the box, GD-10).
-5. Player finish (`PARITY.md` §1–3), donation pages (manifest), devices for Svakom and other toys, the Scene Map as a view in the Editor (D-145, no own mode), Settings / Tools; bug hunt; release.
+2. **Windows CI:** some app tests failed now and then with no output (stdout fully buffered when piped). Every app test now writes unbuffered (`tests/app/unbuffered_stdout.cpp`); find the cause on the next red run. Seen again on #95 (20 Oct): `device_transports_test` red under ctest with no output, every function green alone; a re-run passed. Each test function must also pass on its own (the diagnostics step runs them one by one); `label_controller` export no longer leans on the previous function.
+3. **P3.3 done** (19 Oct): the Generator remembers its choices (0.7 `generator.*` keys), contact sensitivity and curve; the Player shows the contact marks on the video (#67). Left for later: the feel probe, the body map, the partner path.
+4. **P3.6** Quality Doctor on the dense curve, the signal auto-retry and the stroke preview (feeds the adaptive detrend); then the controller reports Quality as its second number (GD-04).
+5. **P3.4** two-point / multi-point, rhythm grid, follow marks; **P3.9** improvements, each measured with `samn_compare` (first lever: memory templates of the subject, not the box, GD-10).
+6. Player finish (`PARITY.md` §1–3), donation pages (manifest), devices for Svakom and other toys, the Scene Map as a view in the Editor (D-145, no own mode), Settings / Tools; bug hunt; release.
 
 Owner reminders (16–17 Oct): the Generator is the Editor; detection better than 0.7 but measured against it; curves stay real curves (audio too); every function of 0.7 and all earlier versions and plans comes along, what was removed on purpose stays out (and why is in `VERSIONS_AND_PLANS.md`).
 
