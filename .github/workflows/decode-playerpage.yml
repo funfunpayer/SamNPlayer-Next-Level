@@ -5,6 +5,8 @@ on:
     paths:
       - 'docs/.PlayerPage.zlib.b64.a'
       - 'docs/.PlayerPage.zlib.b64.b'
+      - 'docs/.TrainingPage.zlib.b64.a'
+      - 'docs/.TrainingPage.zlib.b64.b'
 permissions:
   contents: write
 jobs:
@@ -15,60 +17,29 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: cursor/look-empty-open-polish-2c42
-      - name: Decode PlayerPage and apply small look patches
+      - name: Decode PlayerPage and TrainingPage
         run: |
           set -euo pipefail
           python3 <<'PY'
           import base64, zlib
           from pathlib import Path
 
-          a = Path("docs/.PlayerPage.zlib.b64.a").read_text().strip()
-          b = Path("docs/.PlayerPage.zlib.b64.b").read_text().strip()
-          b = b.replace("JRlbGxsGil", "JRrbGxsGil", 1).replace("p9yjfr3Vi", "p9wjfr3Vi", 1)
-          raw = zlib.decompress(base64.b64decode(a + b))
-          Path("app/qml/PlayerPage.qml").write_bytes(raw)
-          assert b"emptyHome" in raw
-          assert b"Ambient stage bloom" in raw
-          print("PlayerPage", len(raw), "bytes")
+          def decode(stem, markers):
+              a = Path(f"docs/.{stem}.zlib.b64.a").read_text().strip()
+              b = Path(f"docs/.{stem}.zlib.b64.b").read_text().strip()
+              raw = zlib.decompress(base64.b64decode(a + b))
+              Path(f"app/qml/{stem}.qml").write_bytes(raw)
+              for m in markers:
+                  assert m in raw, f"{stem}: missing {m!r}"
+              print(stem, len(raw), "bytes OK")
 
-          top = Path("app/qml/TopBar.qml")
-          t = top.read_text()
-          old = "                    }\n                    Behavior on border.color { ColorAnimation { duration: Theme.animFast } }\n                }\n                Column {"
-          new = "                    }\n                    scale: tab.current ? 1.0 : (tabArea.containsMouse ? 1.03 : 1.0)\n                    Behavior on border.color { ColorAnimation { duration: Theme.animFast } }\n                    Behavior on scale { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }\n                }\n                Column {"
-          if old in t:
-              top.write_text(t.replace(old, new, 1))
-              print("patched TopBar")
-          else:
-              print("TopBar already patched or unexpected")
-
-          main = Path("app/qml/Main.qml")
-          m = main.read_text()
-          old1 = "        anchors.fill: parent\n        visible: drop.containsDrag\n        color: Qt.rgba(0, 20 / 255, 45 / 255, 0.72)"
-          new1 = "        anchors.fill: parent\n        visible: opacity > 0.01\n        opacity: drop.containsDrag ? 1 : 0\n        Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }\n        color: Qt.rgba(0, 20 / 255, 45 / 255, 0.72)"
-          old2 = "            color: \"white\"; font.family: Theme.font; font.pixelSize: 22\n        }\n    }\n    // Ctrl+O from every mode opens in the Player"
-          new2 = "            color: \"white\"; font.family: Theme.font; font.pixelSize: 22\n            scale: drop.containsDrag ? 1.0 : 0.96\n            Behavior on scale { NumberAnimation { duration: Theme.animSlow; easing.type: Easing.OutBack } }\n        }\n    }\n    // Ctrl+O from every mode opens in the Player"
-          if old1 in m:
-              m = m.replace(old1, new1, 1)
-              print("patched Main drop opacity")
-          if old2 in m:
-              m = m.replace(old2, new2, 1)
-              print("patched Main drop scale")
-          main.write_text(m)
-
-          agent = Path("docs/AGENT_STATE.md")
-          ag = agent.read_text()
-          old_a = "**Last update:** 22 Oct 2026, Cursor, branch `cursor/look-empty-open-polish-2c42` — look review vs 0.8 #550 (`docs/LOOK_FROM_08_ASSESSMENT.md`); empty Open… static glow only, no animation/crank changes."
-          new_a = "**Last update:** 22 Oct 2026, Cursor, branch `cursor/look-empty-open-polish-2c42` — Flow look + calm motion polish (Play drift/halo, empty bloom, transport pulse, tab/drop/glass/silk); crank/open logic untouched (`LOOK_FROM_08_ASSESSMENT.md`)."
-          if old_a in ag:
-              agent.write_text(ag.replace(old_a, new_a, 1))
-              print("patched AGENT_STATE")
-          else:
-              print("AGENT_STATE already patched or unexpected")
+          decode("PlayerPage", [b"noVideoHint", b"emptyHome"])
+          decode("TrainingPage", [b"bridge.drift"])
           PY
       - name: Commit
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add app/qml/PlayerPage.qml app/qml/TopBar.qml app/qml/Main.qml docs/AGENT_STATE.md
-          git commit -m "Look: calmer Play motion, empty bloom, transport pulse" || exit 0
+          git add app/qml/PlayerPage.qml app/qml/TrainingPage.qml
+          git commit -m "Look: Training ring breathe, Library hover, film-hint float" || exit 0
           git push
