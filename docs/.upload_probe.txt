@@ -1,1 +1,1 @@
-@/tmp/samn-next/docs/AGENT_STATE.md
+file:///tmp/samn-next/app/qml/PlayerPage.qml
