@@ -25,6 +25,10 @@ struct TrackOptions {
     bool scene_cuts = true;
     bool appearance_memory = true;
     TrackAxis axis = TrackAxis::kAuto;
+    // Soft masks / ignore regions (0.7 maskRois): punched out of the camera-
+    // motion estimate together with the tip box, so a wrong latch (knees,
+    // background) does not pull the compensation. Video pixels.
+    std::vector<cv::Rect> mask_rois;
     // Checked every frame; true stops the run (Result::canceled).
     std::function<bool()> cancel;
     // About every 1 % of frames: (done, total); total 0 when unknown.

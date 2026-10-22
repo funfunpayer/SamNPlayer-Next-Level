@@ -127,6 +127,7 @@ void GenerateUnguarded(const GenerateRequest& req, uint64_t run_id, const std::f
     to.camera_compensation = req.camera_compensation;
     to.scene_cuts = req.scene_cuts;
     to.axis = req.axis;
+    to.mask_rois = req.mask_rois;
     to.cancel = cancel;
     // Progress from the first frame on (GD-21).
     to.on_progress = [&](int done, int total) {

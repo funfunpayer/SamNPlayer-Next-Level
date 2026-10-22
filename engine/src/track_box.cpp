@@ -157,7 +157,11 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
         if (opts.camera_compensation) {
             double dy = 0;
             if (!cut) {
-                dy = CameraMotionY(prev_gray, gray, {last});
+                // Tip box plus soft masks (0.7 punch exclude): keep wrong
+                // latch regions out of the camera estimate.
+                std::vector<cv::Rect> excludes = opts.mask_rois;
+                excludes.push_back(last);
+                dy = CameraMotionY(prev_gray, gray, excludes);
                 if (dy == 0.0) ++res.stats.camera_frames_lost;
             }
             camera_dy.push_back(cut ? 0.0 : camera_dy.back() + dy);

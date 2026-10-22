@@ -225,6 +225,38 @@ private slots:
         QVERIFY(!g.hasBox());
     }
 
+    // Ignore region (black soft mask): add, select encoding, clear with extras.
+    void ignoreRegionsAreSoftMasks() {
+        GeneratorController g;
+        QVERIFY(g.openVideo(clip("mask.mp4", 6)));
+        QVERIFY(g.maskRois().isEmpty());
+        g.setMarkIgnore(true);
+        QVERIFY(g.markIgnore());
+        QVERIFY(!g.markContact());
+        QVERIFY(!g.markExtra());
+        QVERIFY(g.addMaskRoi(QRect(20, 30, 50, 40)));
+        QCOMPARE(g.status(), QStringLiteral("Ignore region (black) #1 added."));
+        QVERIFY(!g.markIgnore());
+        QCOMPARE(g.maskRois().size(), 1);
+        QCOMPARE(g.maskRois().first().toMap().value("x").toInt(), 20);
+        QCOMPARE(g.maskRois().first().toMap().value("w").toInt(), 50);
+        g.setMarkIgnore(true);
+        QVERIFY(g.addMaskRoi(QRect(200, 10, 40, 40)));
+        QCOMPARE(g.status(), QStringLiteral("Ignore region (black) #2 added."));
+        QCOMPARE(g.maskRois().size(), 2);
+        g.deleteMark(GeneratorController::kMaskSelectBase + 0);
+        QCOMPARE(g.status(), QStringLiteral("Ignore region removed."));
+        QCOMPARE(g.maskRois().size(), 1);
+        QCOMPARE(g.maskRois().first().toMap().value("x").toInt(), 200);
+        // Clear extras also drops soft masks (0.7 help gen-extras-clear).
+        g.clearExtras();
+        QVERIFY(g.maskRois().isEmpty());
+        QCOMPARE(g.status(), QStringLiteral("Soft masks cleared."));
+        // Tiny box is a click, not a mask.
+        QVERIFY(!g.addMaskRoi(QRect(1, 1, 4, 4)));
+        QVERIFY(g.maskRois().isEmpty());
+    }
+
     // G2b: Partner fixed / Stay fixed set ContactMarkBox.fixed and are remembered.
     void partnerFixedAndStayFixedFlags() {
         {
