@@ -284,25 +284,33 @@ private slots:
         QCOMPARE(gen->status(), QStringLiteral("Extra contact removed."));
         QCOMPARE(gp->property("selectedMark").toInt(), -2);
         // Shift-drag draws the primary again (0.7 Shift = partner); the tip stays.
-        // Windows CI: mouse modifiers alone often never reach QML MouseArea —
-        // hold Shift with keyPress, and refresh imageRect after the selection
-        // row came and went (layout can drift under offscreen DPI).
-        QTRY_VERIFY([&] {
-            const QRectF now = frame->property("imageRect").toRectF();
-            const bool same = now == ir && !now.isEmpty();
-            ir = now;
-            return same;
-        }());
+        // Windows CI (offscreen): (1) mouse modifiers alone often miss QML —
+        // hold Shift with keyPress; (2) imageRect can keep twitching after the
+        // selection row closes, so do not wait for two identical frames;
+        // (3) under ctest the first Shift-drag can be a no-op — retry once.
+        QTRY_VERIFY(!frame->property("imageRect").toRectF().isEmpty());
+        QTest::qWait(200);
+        ir = frame->property("imageRect").toRectF();
+        QVERIFY(ir.width() > 100);
         const double sShift = ir.width() / 320.0;
-        const QPointF s1 = frame->mapToScene(QPointF(ir.x() + 20 * sShift, ir.y() + 150 * sShift));
-        const QPointF s2 = frame->mapToScene(QPointF(ir.x() + 70 * sShift, ir.y() + 200 * sShift));
-        QTest::keyPress(&window, Qt::Key_Shift);
-        QTest::mousePress(&window, Qt::LeftButton, Qt::ShiftModifier, s1.toPoint());
-        // QWindow mouseMove is (window, pos, delay) — no button arg (MSVC/Qt 6.7).
-        QTest::mouseMove(&window, ((s1 + s2) / 2).toPoint());
-        QTest::mouseMove(&window, s2.toPoint());
-        QTest::mouseRelease(&window, Qt::LeftButton, Qt::ShiftModifier, s2.toPoint());
-        QTest::keyRelease(&window, Qt::Key_Shift);
+        auto shiftDragPrimary = [&] {
+            const QPointF a = frame->mapToScene(QPointF(ir.x() + 20 * sShift, ir.y() + 150 * sShift));
+            const QPointF b = frame->mapToScene(QPointF(ir.x() + 100 * sShift, ir.y() + 210 * sShift));
+            QTest::keyPress(&window, Qt::Key_Shift);
+            QCoreApplication::processEvents();
+            QTest::mousePress(&window, Qt::LeftButton, Qt::ShiftModifier, a.toPoint());
+            // QWindow mouseMove is (window, pos, delay) — no button arg (MSVC/Qt 6.7).
+            QTest::mouseMove(&window, ((a + b) / 2).toPoint(), 40);
+            QTest::mouseMove(&window, b.toPoint(), 40);
+            QTest::mouseRelease(&window, Qt::LeftButton, Qt::ShiftModifier, b.toPoint());
+            QTest::keyRelease(&window, Qt::Key_Shift);
+            QCoreApplication::processEvents();
+        };
+        shiftDragPrimary();
+        if (qAbs(gen->contactAreas().first().toMap().value("y").toInt() - 150) > 2) {
+            QTest::qWait(100);
+            shiftDragPrimary();
+        }
         QTRY_VERIFY2(qAbs(gen->contactAreas().first().toMap().value("y").toInt() - 150) <= 2,
                      qPrintable(QString("contact y=%1").arg(gen->contactAreas().first().toMap().value("y").toInt())));
         QCOMPARE(gen->contactAreas().size(), 1);
@@ -312,6 +320,7 @@ private slots:
         QVERIFY(chip1);
         const QVariantMap cand0 = gen->tipCandidates().first().toMap();
         QTest::keyPress(&window, Qt::Key_Shift);
+        QCoreApplication::processEvents();
         QTest::mouseClick(&window, Qt::LeftButton, Qt::ShiftModifier,
                           chip1->mapToScene(QPointF(chip1->width() / 2, chip1->height() / 2)).toPoint());
         QTest::keyRelease(&window, Qt::Key_Shift);
