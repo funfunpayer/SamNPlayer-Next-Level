@@ -235,8 +235,9 @@ private slots:
     }
 
     // --- item 53: flow_wiring_test ---
-    // Every "?" names a 0.7 help text that exists (HelpTexts.js), and the
-    // catalogue holds 0.7's 189 data-help texts (ci/help_texts.py).
+    // Every "?" names a help text that exists (HelpTexts.js). The catalogue
+    // holds 0.7's 189 data-help texts (ci/help_texts.py); SamN2 may add more
+    // (e.g. st-reduced-motion for D-092).
     void helpKeysInTheQmlSourcesExist() {
         QFile cat(QStringLiteral(SAMN_APP_QML_DIR) + "/HelpTexts.js");
         QVERIFY(cat.open(QIODevice::ReadOnly));
@@ -246,7 +247,7 @@ private slots:
         static const QRegularExpression entry(QStringLiteral("^    \"([^\"]+)\": \"(.+)\",$"), QRegularExpression::MultilineOption);
         auto e = entry.globalMatch(js);
         while (e.hasNext()) keys.insert(e.next().captured(1));
-        QCOMPARE(keys.size(), 189);
+        QVERIFY2(keys.size() >= 189, qPrintable(QString("help catalogue has %1 keys, need ≥ 189").arg(keys.size())));
         static const QRegularExpression use(QStringLiteral("(?:HelpChip\\s*\\{[^}]*?\\bkey|\\bhelp)\\s*:\\s*\"([\\w.\\-]+)\""));
         int found = 0;
         QDirIterator qml(QStringLiteral(SAMN_APP_QML_DIR), {"*.qml"}, QDir::Files);
