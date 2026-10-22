@@ -1,1 +1,0 @@
-file:///tmp/samn-next/app/qml/PlayerPage.qml
