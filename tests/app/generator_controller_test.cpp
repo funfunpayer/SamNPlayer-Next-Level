@@ -225,6 +225,38 @@ private slots:
         QVERIFY(!g.hasBox());
     }
 
+    // G2b: Partner fixed / Stay fixed set ContactMarkBox.fixed and are remembered.
+    void partnerFixedAndStayFixedFlags() {
+        {
+            GeneratorController g;
+            QVERIFY(!g.partnerFixed());
+            QVERIFY(g.extrasStayFixed());
+            QVERIFY(g.openVideo(clip("fix.mp4", 6)));
+            g.setExtraClass("");
+            QVERIFY(g.addContactArea(QRect(10, 10, 40, 40)));
+            QCOMPARE(g.contactAreas().first().toMap().value("fixed").toBool(), false);
+            g.setPartnerFixed(true);
+            QCOMPARE(g.contactAreas().first().toMap().value("fixed").toBool(), true);
+            g.setMarkExtra(true);
+            QVERIFY(g.addContactArea(QRect(80, 80, 30, 30)));
+            QCOMPARE(g.status(), QStringLiteral("Extra contact #1 added, stay fixed."));
+            QCOMPARE(g.contactAreas().at(1).toMap().value("fixed").toBool(), true);
+            g.setExtrasStayFixed(false);
+            QCOMPARE(g.contactAreas().at(1).toMap().value("fixed").toBool(), false);
+            g.setMarkExtra(true);
+            QVERIFY(g.addContactArea(QRect(150, 80, 30, 30)));
+            QCOMPARE(g.status(), QStringLiteral("Extra contact #2 added, follows partner path."));
+            QCOMPARE(g.contactAreas().at(2).toMap().value("fixed").toBool(), false);
+        }
+        {
+            GeneratorController g;
+            QVERIFY(g.partnerFixed());
+            QVERIFY(!g.extrasStayFixed());
+            g.setPartnerFixed(false);
+            g.setExtrasStayFixed(true);
+        }
+    }
+
     // An extra moved up to primary takes the contact class.
     void anExtraMovedUpTakesAClass() {
         GeneratorController g;

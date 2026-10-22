@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 22 Oct 2026, Cursor, branch `cursor/samn2-gen-g2a-60e6` (took over Generator from Claude #111).
+**Last update:** 22 Oct 2026, Cursor, branch `cursor/samn2-gen-g2b-60e6` (G2a takeover + G2b Partner fixed UI).
 
 ## Rules
 
@@ -88,7 +88,8 @@
 - **Optimize for** (#81, D-156): `core/include/samn/improve.h` (trim, fill gaps, heal tracking gaps), the Editor's *Optimize for* any device / Sam Neo 2, *Optimize after Create*.
 - **Teacher on a model server** (D-155 step 4, first part, #91; Owner 20 Oct: servers first): `core/teacher.h`, `LabelController` teacher settings, *Ask the teacher* (`A`).
 - **ONNX Runtime in the build** (D-155 step 4, 20 Oct, `claude/samn2-onnx-nudenet`): ONNX Runtime 1.22 from its NuGet package (FetchContent, pinned hash, `SAMN_WITH_ONNXRUNTIME`), beside every executable on Windows (`samn_copy_runtime_dlls`) and in the package with its licence; `vision/onnx_detector.h` (YOLOv8 decoding, NudeNet classes and their labels), tested on `tests/vision/data/tiny_yolo.onnx`.
-- **Generator G2a** (20 Oct Claude `claude/samn2-gen-g2` / #111; 22 Oct Cursor takeover `cursor/samn2-gen-g2a-60e6`): "+ Another contact area" (magenta) with "Extra type", Shift-drag and Shift-click on a candidate = contact, the mark just drawn is selected, "Selected: …" with its class, "Delete selected", Esc "Mark deselected.", "Clear extras", 0.7's lines after each mark (Snack 1 / Snack 2 / "Extra contact #N … stay fixed."). Extras stay fixed: the engine tracks only the tip. Windows CI: Shift via `keyPress` + `Qt.keyboardModifiers` (mouse modifiers alone failed on windows-latest); `QTest::mouseMove` stays 3-arg. Next: **G2b** partner tracking (port `track_multi`, Partner fixed / Stay fixed), measured against 0.7.
+- **Generator G2a** (20 Oct Claude `claude/samn2-gen-g2` / #111; 22 Oct Cursor takeover `cursor/samn2-gen-g2a-60e6` / #114): "+ Another contact area" (magenta) with "Extra type", Shift-drag and Shift-click on a candidate = contact, the mark just drawn is selected, "Selected: …" with its class, "Delete selected", Esc "Mark deselected.", "Clear extras", 0.7's lines after each mark. Windows CI: Shift via `keyPress` + `Qt.keyboardModifiers`; `QTest::mouseMove` 3-arg.
+- **Generator G2b UI** (22 Oct, `cursor/samn2-gen-g2b-60e6`): 0.7 "Partner fixed (pixels)" and "Stay fixed (extras)" toggles; `ContactMarkBox.fixed` in `contactAreas` and remembered (`generator.partner_fixed`, `generator.extras_stay_fixed`); status "stay fixed" / "follows partner path". **Still open:** engine `track_multi` / partner path recording (P3.4) so fixed=false actually tracks.
 - **Generator G1b** (20 Oct, `claude/samn2-gen-g1b`): the seek row while marking (Time (s), +1s, +5s), the "0–100 on video" chip and gauge on the preview; PARITY §3.8 (the Editor part of the Generator) checked against the code and the tests: drag, add, delete, clamp, save, undo / redo and the range tools are built. The Generator's help chips: Find tip, Time (s), Style, the four toggles, contact vibration, sensitivity, curve, mark contact, optimize after Create, the queue.
 - **Generator G1** (20 Oct, `claude/samn2-gen-g1`, the everyday Create path as in 0.7): the lede and step prompts verbatim, the preview coach, Create without a tip finds it first, the done line, the quality box with the post-generate review (`core/polarity.h`), the Create card scrolls. Next slices: G1b seek row and help chips, G2 marking, G3 feel, G4 advanced, G5 review panel, G6 queue/drop, G7 AI assist, G8 `.sam`.
 - **Help chips** (20 Oct, `claude/samn2-help-chips`): `HelpChip.qml` and 0.7's 189 `data-help` texts verbatim (`app/qml/HelpTexts.js`, `ci/help_texts.py`); placed in the Inspector, Training and Settings; the Generator's texts are ready for its slices (`help: "<0.7 id>"` on a row or card, `HelpChip { key: … }` elsewhere; `shell_qml_test::helpKeysInTheQmlSourcesExist` checks every key).
@@ -111,16 +112,17 @@
 
 ## Next (in order; the work list is `LESSONS.md` § Gaps, `TEST_PARITY.md` and `P3_GENERATOR.md`)
 
-0. **Generator (Cursor lane after Claude):** land G2a (`cursor/samn2-gen-g2a-60e6`); then **G2b** Partner fixed / Stay fixed + `track_multi` parity; then G3 feel, G4 advanced, G5 review, G6 queue/drop, G7 AI, G8 `.sam`.
-1. **Owner GUI leftovers:** handbook (§12), idle ribbon (§11), donation pages (Manifest §2). Parallel OK on another agent.
+0. **Generator (Cursor lane):** land **G2a** (#114 `cursor/samn2-gen-g2a-60e6`); land **G2b UI** (`cursor/samn2-gen-g2b-60e6`, stacks on G2a); then **G2b engine** = `track_multi` / partner trajectory (P3.4); then G3 feel → G8 `.sam`.
+1. **Owner GUI leftovers:** handbook (§12), idle ribbon (§11), donation pages (Manifest §2). Parallel OK on another agent (#113 reduced motion).
 2. **AI Train D-155:** script compare with labels, then golden-clip run (Owner clips).
 3. **Windows CI flakiness** under ctest; diagnostics already run functions alone.
-4. **P3.6** Quality Doctor; **P3.4** multi-point; Player finish / Svakom / Scene Map view; bug hunt; release.
+4. **P3.6** Quality Doctor; Player finish / Svakom / Scene Map view; bug hunt; release.
 
 ### Handoff note (for the next agent)
-- Active Generator work: branch `cursor/samn2-gen-g2a-60e6` (supersedes open #111 / #112 once merged).
-- Reduced motion: `cursor/reduced-motion-60e6` (#113) — separate, no Generator marking.
-- Do not push to `claude/*`. Merge only on green CI. Update this file every PR.
+- G2a → `main`: `cursor/samn2-gen-g2a-60e6` (#114); supersedes #111 / #112.
+- G2b UI (this tip): `cursor/samn2-gen-g2b-60e6` — merge after G2a, or rebase onto `main` once G2a lands.
+- Next code: engine partner tracking (`track_two` / `track_multi` Go ports + tests in TEST_PARITY).
+- Reduced motion: #113. Do not push to `claude/*`. Push often; update this file every PR.
 
 Owner reminders (16–17 Oct): the Generator is the Editor; detection better than 0.7 but measured against it; curves stay real curves (audio too); every function of 0.7 and all earlier versions and plans comes along, what was removed on purpose stays out (and why is in `VERSIONS_AND_PLANS.md`).
 
