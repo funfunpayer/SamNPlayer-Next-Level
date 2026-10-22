@@ -367,47 +367,77 @@ Item {
         }
 
         // Empty state (Owner 15 Oct, 0.8 #550): one real round Play button,
-        // "Open…" under it, centred. No wordmark or stage art.
-        Column {
-            id: emptyState
+        // "Open…" under it, centred. No wordmark or stage art. Soft bloom and
+        // a calm settle-in so the home feels alive without clutter.
+        Item {
+            id: emptyHome
             visible: page.empty
-            anchors.centerIn: parent
-            spacing: 18
-            PlayButton {
-                objectName: "emptyPlay"
-                anchors.horizontalCenter: parent.horizontalCenter
-                width: 168; height: 168
-                onClicked: page.openFile()
+            anchors.fill: parent
+            opacity: page.empty ? 1 : 0
+            Behavior on opacity { NumberAnimation { duration: Theme.animSlow; easing.type: Easing.OutCubic } }
+
+            // Ambient stage bloom (static composition + slow breathe).
+            Rectangle {
+                anchors.centerIn: parent
+                width: Math.min(parent.width * 0.72, 520); height: width * 0.62
+                radius: width / 2
+                rotation: 0
+                gradient: Gradient {
+                    GradientStop { position: 0; color: Qt.rgba(0, 180 / 255, 1, 0.10) }
+                    GradientStop { position: 0.55; color: Qt.rgba(1, 138 / 255, 35 / 255, 0.06) }
+                    GradientStop { position: 1; color: "transparent" }
+                }
+                SequentialAnimation on opacity {
+                    running: page.empty && Qt.application.state === Qt.ApplicationActive
+                    loops: Animation.Infinite
+                    NumberAnimation { from: 0.55; to: 1.0; duration: 3800; easing.type: Easing.InOutSine }
+                    NumberAnimation { from: 1.0; to: 0.55; duration: 3800; easing.type: Easing.InOutSine }
+                }
             }
-            // Look-only: match 0.8 `.pb-empty-open` (letter-spacing + soft cyan glow).
-            Item {
-                anchors.horizontalCenter: parent.horizontalCenter
-                width: emptyOpenLabel.implicitWidth
-                height: emptyOpenLabel.implicitHeight
-                // Soft stand-in for CSS text-shadow (no GraphicalEffects).
-                Text {
-                    anchors.centerIn: parent
-                    textFormat: Text.PlainText
-                    text: emptyOpenLabel.text
-                    color: Qt.rgba(63 / 255, 208 / 255, 1, 0.45)
-                    font: emptyOpenLabel.font
-                    opacity: emptyOpen.containsMouse ? 0.75 : 0.55
-                    scale: 1.08
-                    z: -1
-                }
-                Text {
-                    id: emptyOpenLabel
-                    textFormat: Text.PlainText
-                    text: qsTr("Open…")
-                    color: emptyOpen.containsMouse ? "white" : Theme.text
-                    font.family: Theme.font; font.pixelSize: 20; font.weight: Font.DemiBold
-                    font.letterSpacing: 0.8
-                }
-                MouseArea {
-                    id: emptyOpen
-                    anchors.fill: parent; anchors.margins: -8
-                    hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+
+            Column {
+                id: emptyState
+                anchors.centerIn: parent
+                spacing: 18
+                scale: page.empty ? 1 : 0.96
+                Behavior on scale { NumberAnimation { duration: Theme.animSlow; easing.type: Easing.OutCubic } }
+                PlayButton {
+                    objectName: "emptyPlay"
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    width: 168; height: 168
                     onClicked: page.openFile()
+                }
+                // Match 0.8 `.pb-empty-open` (letter-spacing + soft cyan glow).
+                Item {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    width: emptyOpenLabel.implicitWidth
+                    height: emptyOpenLabel.implicitHeight
+                    Text {
+                        anchors.centerIn: parent
+                        textFormat: Text.PlainText
+                        text: emptyOpenLabel.text
+                        color: Qt.rgba(63 / 255, 208 / 255, 1, 0.45)
+                        font: emptyOpenLabel.font
+                        opacity: emptyOpen.containsMouse ? 0.85 : 0.55
+                        scale: 1.10
+                        z: -1
+                        Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
+                    }
+                    Text {
+                        id: emptyOpenLabel
+                        textFormat: Text.PlainText
+                        text: qsTr("Open…")
+                        color: emptyOpen.containsMouse ? "white" : Theme.text
+                        font.family: Theme.font; font.pixelSize: 20; font.weight: Font.DemiBold
+                        font.letterSpacing: 0.8
+                        Behavior on color { ColorAnimation { duration: Theme.animFast } }
+                    }
+                    MouseArea {
+                        id: emptyOpen
+                        anchors.fill: parent; anchors.margins: -8
+                        hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                        onClicked: page.openFile()
+                    }
                 }
             }
         }
