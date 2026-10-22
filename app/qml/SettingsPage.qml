@@ -106,6 +106,21 @@ Item {
                                     }
                                 }
                             }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Text {
+                                    textFormat: Text.PlainText
+                                    Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                    text: qsTr("Reduce motion — stop decorative animations (silk, breathing glow, Play ring spin)")
+                                    color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                                }
+                                HelpChip { key: "st-reduced-motion" }
+                                FlowToggle {
+                                    objectName: "reducedMotion"
+                                    checked: Theme.reducedMotion
+                                    onToggled: (c) => Theme.reducedMotion = c
+                                }
+                            }
                             Text {
                                 textFormat: Text.PlainText
                                 text: qsTr("Script folders"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13

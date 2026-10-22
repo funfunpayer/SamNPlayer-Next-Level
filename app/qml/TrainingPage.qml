@@ -268,12 +268,12 @@ Item {
                     property real dx: 0
                     // silk-bridge-drift: 28 s alternate, ±1.5 %, scale 1.04.
                     SequentialAnimation on dx {
-                        running: stage.visible; loops: Animation.Infinite
+                        running: stage.visible && !Theme.reducedMotion; loops: Animation.Infinite
                         NumberAnimation { from: -stage.width * 0.015; to: stage.width * 0.015; duration: 28000; easing.type: Easing.InOutSine }
                         NumberAnimation { to: -stage.width * 0.015; duration: 28000; easing.type: Easing.InOutSine }
                     }
                     SequentialAnimation on scale {
-                        running: stage.visible; loops: Animation.Infinite
+                        running: stage.visible && !Theme.reducedMotion; loops: Animation.Infinite
                         NumberAnimation { from: 1.0; to: 1.04; duration: 28000; easing.type: Easing.InOutSine }
                         NumberAnimation { to: 1.0; duration: 28000; easing.type: Easing.InOutSine }
                     }
