@@ -3,10 +3,14 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'docs/.PlayerPage.zlib.b64.a'
-      - 'docs/.PlayerPage.zlib.b64.b'
-      - 'docs/.TrainingPage.zlib.b64.a'
-      - 'docs/.TrainingPage.zlib.b64.b'
+      - 'docs/.PlayerPage.zlib.b64.0'
+      - 'docs/.PlayerPage.zlib.b64.1'
+      - 'docs/.PlayerPage.zlib.b64.2'
+      - 'docs/.PlayerPage.zlib.b64.3'
+      - 'docs/.TrainingPage.zlib.b64.0'
+      - 'docs/.TrainingPage.zlib.b64.1'
+      - 'docs/.TrainingPage.zlib.b64.2'
+      - 'docs/.TrainingPage.zlib.b64.3'
 permissions:
   contents: write
 jobs:
@@ -25,9 +29,8 @@ jobs:
           from pathlib import Path
 
           def decode(stem, markers):
-              a = Path(f"docs/.{stem}.zlib.b64.a").read_text().strip()
-              b = Path(f"docs/.{stem}.zlib.b64.b").read_text().strip()
-              raw = zlib.decompress(base64.b64decode(a + b))
+              parts = [Path(f"docs/.{stem}.zlib.b64.{i}").read_text().strip() for i in range(4)]
+              raw = zlib.decompress(base64.b64decode("".join(parts)))
               Path(f"app/qml/{stem}.qml").write_bytes(raw)
               for m in markers:
                   assert m in raw, f"{stem}: missing {m!r}"
