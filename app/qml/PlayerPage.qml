@@ -528,10 +528,18 @@ Item {
                     value: ctrl.playheadMs >= 0 ? ctrl.strokeNow : -1
                 }
                 Column {
+                    id: noVideoHint
                     anchors.centerIn: parent
-                    visible: ctrl.videoName === ""
+                    visible: ctrl.videoName === "" && !ctrl.noScriptForVideo
                     spacing: 10
-                    Image { source: "assets/empty-video.svg"; width: 120; height: 90; sourceSize: Qt.size(240, 180); anchors.horizontalCenter: parent.horizontalCenter; opacity: 0.8 }
+                    opacity: 0.92
+                    SequentialAnimation on anchors.verticalCenterOffset {
+                        running: noVideoHint.visible && Qt.application.state === Qt.ApplicationActive
+                        loops: Animation.Infinite
+                        NumberAnimation { from: -4; to: 4; duration: 3200; easing.type: Easing.InOutSine }
+                        NumberAnimation { to: -4; duration: 3200; easing.type: Easing.InOutSine }
+                    }
+                    Image { source: "assets/empty-video.svg"; width: 120; height: 90; sourceSize: Qt.size(240, 180); anchors.horizontalCenter: parent.horizontalCenter; opacity: 0.85 }
                     Text {
                         textFormat: Text.PlainText
                         anchors.horizontalCenter: parent.horizontalCenter
