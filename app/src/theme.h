@@ -43,6 +43,8 @@ private:
     Q_PROPERTY(int radiusSmall READ radiusSmall CONSTANT)
     Q_PROPERTY(int animFast READ animFast CONSTANT)
     Q_PROPERTY(int animNormal READ animNormal CONSTANT)
+    Q_PROPERTY(int animSlow READ animSlow CONSTANT)
+    Q_PROPERTY(int animAmbient READ animAmbient CONSTANT)
 
 public:
     explicit Theme(QObject* parent = nullptr) : QObject(parent) {}
@@ -52,6 +54,10 @@ public:
     int radiusSmall() const { return 12; }
     int animFast() const { return 140; }
     int animNormal() const { return 220; }
+    // Soft UI transitions (mode face, empty home settle).
+    int animSlow() const { return 420; }
+    // Long ambient loops (idle ring drift, empty bloom).
+    int animAmbient() const { return 9000; }
 };
 
 }  // namespace samn::ui
