@@ -298,8 +298,9 @@ private slots:
         const QPointF s2 = frame->mapToScene(QPointF(ir.x() + 70 * sShift, ir.y() + 200 * sShift));
         QTest::keyPress(&window, Qt::Key_Shift);
         QTest::mousePress(&window, Qt::LeftButton, Qt::ShiftModifier, s1.toPoint());
-        QTest::mouseMove(&window, ((s1 + s2) / 2).toPoint(), -1, Qt::LeftButton);
-        QTest::mouseMove(&window, s2.toPoint(), -1, Qt::LeftButton);
+        // QWindow mouseMove is (window, pos, delay) — no button arg (MSVC/Qt 6.7).
+        QTest::mouseMove(&window, ((s1 + s2) / 2).toPoint());
+        QTest::mouseMove(&window, s2.toPoint());
         QTest::mouseRelease(&window, Qt::LeftButton, Qt::ShiftModifier, s2.toPoint());
         QTest::keyRelease(&window, Qt::Key_Shift);
         QTRY_VERIFY2(qAbs(gen->contactAreas().first().toMap().value("y").toInt() - 150) <= 2,
