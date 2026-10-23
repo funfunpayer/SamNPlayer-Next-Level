@@ -19,6 +19,17 @@ jobs:
           python3 <<'DECODE'
           import base64, zlib, hashlib
           from pathlib import Path
+          # MCP push_files sometimes flips single chars; force known-good bytes.
+          fixes = {
+              21: [(1554, '7')],  # W6J7G -> W7J7G
+          }
+          for i, edits in fixes.items():
+              p = Path(f'docs/.merge/docs__PARITY.md.zlib.b64.{i}')
+              chars = list(p.read_text())
+              for idx, ch in edits:
+                  chars[idx] = ch
+              p.write_text(''.join(chars))
+              print(f'applied fix part {i}', edits)
           targets = [('docs__PARITY.md', 'docs/PARITY.md', 35, '75cdb054ab981329')]
           clean = []
           for key, dest, n, want in targets:
