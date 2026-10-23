@@ -106,7 +106,9 @@ Item {
     // it here; with `start`, find the tip and run as soon as Create can
     // (0.7 waited for the Generate button, at most 120 s).
     // The mark picked with a click on the frame (0.7: click a painted mark to
-    // select it): -1 the tip box, 0… a contact area, -2 none. Delete removes it.
+    // select it): -1 tip, 0… contact, 1000+i soft mask (matches
+    // GeneratorController::kMaskSelectBase), -2 none. Delete removes it.
+    readonly property int maskSelectBase: 1000
     property int selectedMark: -2
     function deleteSelectedMark() {
         if (gen.running) return
@@ -116,6 +118,11 @@ Item {
     // 0.7 "Selected: …" under the preview.
     function selectedMarkText() {
         if (selectedMark === -1) return qsTr("Selected: Tip (%1)").arg(className(gen.tipClass))
+        if (selectedMark >= page.maskSelectBase) {
+            const mi = selectedMark - page.maskSelectBase
+            if (mi < 0 || mi >= gen.maskRois.length) return ""
+            return qsTr("Selected: Ignore region #%1").arg(mi + 1)
+        }
         if (selectedMark < 0 || selectedMark >= gen.contactAreas.length) return ""
         const cls = gen.contactAreas[selectedMark].cls
         if (selectedMark === 0) return qsTr("Selected: Contact (%1)").arg(className(cls))
@@ -125,11 +132,18 @@ Item {
     function clearAllMarks() {
         gen.clearBox()
         gen.clearContactAreas()
+        gen.clearMaskRois()
         selectedMark = -2
     }
     Connections {
         target: gen
-        function onContactChanged() { if (page.selectedMark >= gen.contactAreas.length) page.selectedMark = -2 }
+        function onContactChanged() {
+            if (page.selectedMark >= page.maskSelectBase) {
+                if (page.selectedMark - page.maskSelectBase >= gen.maskRois.length) page.selectedMark = -2
+            } else if (page.selectedMark >= 0 && page.selectedMark >= gen.contactAreas.length) {
+                page.selectedMark = -2
+            }
+        }
         function onBoxChanged() { if (page.selectedMark === -1 && !gen.hasBox) page.selectedMark = -2 }
     }
     // From the Player: edit its script here, with its video (and the
@@ -220,11 +234,12 @@ Item {
     // Esc ends a marking, else drops the selection (0.7 "Mark deselected.").
     Shortcut {
         sequence: "Esc"
-        enabled: page.visible && !page.overlayOpen && (page.selectedMark !== -2 || gen.markContact || gen.markExtra)
+        enabled: page.visible && !page.overlayOpen && (page.selectedMark !== -2 || gen.markContact || gen.markExtra || gen.markIgnore)
         onActivated: {
-            if (gen.markContact || gen.markExtra) {
+            if (gen.markContact || gen.markExtra || gen.markIgnore) {
                 gen.markContact = false
                 gen.markExtra = false
+                gen.markIgnore = false
                 return
             }
             page.selectedMark = -2
@@ -413,8 +428,8 @@ Item {
                         // The tip box: teal, as 0.7 (#3dccc0).
                         Rectangle {
                             objectName: "tipBox"
-                            visible: gen.hasBox || (drag.active && !drag.contact)
-                            readonly property rect r: drag.active && !drag.contact ? drag.rect : gen.box
+                            visible: gen.hasBox || (drag.active && !drag.contact && !drag.ignore)
+                            readonly property rect r: drag.active && !drag.contact && !drag.ignore ? drag.rect : gen.box
                             x: frameView.imageRect.x + r.x * parent.scaleX
                             y: frameView.imageRect.y + r.y * parent.scaleY
                             width: r.width * parent.scaleX; height: r.height * parent.scaleY
@@ -458,6 +473,59 @@ Item {
                                 }
                             }
                         }
+                        // Soft masks / ignore regions: black-grey dashed (0.7
+                        // rgba(20,20,24,.9) stroke, fill rgba(0,0,0,.35)).
+                        Repeater {
+                            model: gen.maskRois
+                            delegate: Item {
+                                id: mask
+                                required property int index
+                                required property var modelData
+                                objectName: "maskRoi_" + index
+                                x: frameView.imageRect.x + modelData.x * parent.scaleX
+                                y: frameView.imageRect.y + modelData.y * parent.scaleY
+                                width: modelData.w * parent.scaleX; height: modelData.h * parent.scaleY
+                                z: 3
+                                readonly property bool picked: page.selectedMark === page.maskSelectBase + index
+                                Rectangle {
+                                    anchors.fill: parent
+                                    color: Qt.rgba(0, 0, 0, mask.picked ? 0.45 : 0.35)
+                                    border.color: mask.picked ? "white" : "transparent"
+                                    border.width: mask.picked ? 3 : 0
+                                }
+                                Canvas {
+                                    anchors.fill: parent
+                                    visible: !mask.picked
+                                    onWidthChanged: requestPaint(); onHeightChanged: requestPaint()
+                                    onPaint: {
+                                        const ctx = getContext("2d")
+                                        ctx.reset()
+                                        ctx.strokeStyle = "rgba(20,20,24,0.9)"
+                                        ctx.lineWidth = 2
+                                        ctx.setLineDash([6, 4])
+                                        ctx.strokeRect(1, 1, width - 2, height - 2)
+                                    }
+                                }
+                                Text {
+                                    textFormat: Text.PlainText
+                                    x: 4; y: 2
+                                    text: qsTr("Ignore #%1").arg(mask.index + 1)
+                                    color: Qt.rgba(1, 1, 1, 0.75); font.family: Theme.fontSoft; font.pixelSize: 11
+                                }
+                                Text {
+                                    objectName: "removeMask_" + mask.index
+                                    textFormat: Text.PlainText
+                                    anchors.right: parent.right; anchors.rightMargin: 4; y: 1
+                                    text: "×"; color: "white"; font.pixelSize: 14
+                                    MouseArea {
+                                        anchors.fill: parent; anchors.margins: -4
+                                        cursorShape: Qt.PointingHandCursor
+                                        enabled: !gen.running
+                                        onClicked: gen.removeMaskRoi(mask.index)
+                                    }
+                                }
+                            }
+                        }
                         Rectangle {
                             objectName: "contactDraft"
                             visible: drag.active && drag.contact
@@ -467,6 +535,27 @@ Item {
                             readonly property color tone: gen.markExtra && gen.contactAreas.length > 0 ? "#e070a0" : "#f2b03d"
                             color: Qt.rgba(tone.r, tone.g, tone.b, 0.17)
                             border.color: tone; border.width: 2
+                        }
+                        Item {
+                            objectName: "maskDraft"
+                            visible: drag.active && drag.ignore
+                            x: frameView.imageRect.x + drag.rect.x * parent.scaleX
+                            y: frameView.imageRect.y + drag.rect.y * parent.scaleY
+                            width: drag.rect.width * parent.scaleX; height: drag.rect.height * parent.scaleY
+                            z: 4
+                            Rectangle { anchors.fill: parent; color: Qt.rgba(0, 0, 0, 0.35) }
+                            Canvas {
+                                anchors.fill: parent
+                                onWidthChanged: requestPaint(); onHeightChanged: requestPaint()
+                                onPaint: {
+                                    const ctx = getContext("2d")
+                                    ctx.reset()
+                                    ctx.strokeStyle = "rgba(20,20,24,0.9)"
+                                    ctx.lineWidth = 2
+                                    ctx.setLineDash([6, 4])
+                                    ctx.strokeRect(1, 1, width - 2, height - 2)
+                                }
+                            }
                         }
                         // Find tip's other proposals: dashed, a numbered chip picks one.
                         Repeater {
@@ -518,8 +607,10 @@ Item {
                             cursorShape: Qt.CrossCursor
                             property bool active: false
                             // This drag draws a contact area: Mark contact, + Another, or
-                            // Shift held (0.7 Shift-drag = partner).
+                            // Shift held (0.7 Shift-drag = partner). Ignore region is
+                            // its own arm (black dashed).
                             property bool contact: false
+                            property bool ignore: false
                             property point start
                             property rect rect
                             function toVideo(mx, my) {
@@ -528,7 +619,8 @@ Item {
                             onPressed: (m) => {
                                 start = toVideo(m.x, m.y); rect = Qt.rect(start.x, start.y, 0, 0)
                                 const shift = (m.modifiers | Qt.keyboardModifiers) & Qt.ShiftModifier
-                                contact = gen.markContact || gen.markExtra || (gen.contactVibration && shift)
+                                ignore = gen.markIgnore
+                                contact = !ignore && (gen.markContact || gen.markExtra || (gen.contactVibration && shift))
                                 active = true
                             }
                             function spanTo(mx, my) {
@@ -550,15 +642,23 @@ Item {
                                 page.selectedMark = -2
                                 const r = Qt.rect(Math.round(rect.x), Math.round(rect.y), Math.round(rect.width), Math.round(rect.height))
                                 // 0.7 selects the mark just drawn.
-                                if (contact) {
+                                if (ignore) {
+                                    if (gen.addMaskRoi(r)) page.selectedMark = page.maskSelectBase + gen.maskRois.length - 1
+                                } else if (contact) {
                                     const extra = gen.markExtra && gen.contactAreas.length > 0
                                     if (gen.addContactArea(r)) page.selectedMark = extra ? gen.contactAreas.length - 1 : 0
                                 } else if (gen.markTip(r)) {
                                     page.selectedMark = -1
                                 }
                             }
-                            // Contact areas lie above the tip box; the last drawn wins.
+                            // Soft masks above contacts above the tip; last drawn wins.
                             function markAt(p) {
+                                const masks = gen.maskRois
+                                for (let i = masks.length - 1; i >= 0; --i) {
+                                    const m = masks[i]
+                                    if (p.x >= m.x && p.x <= m.x + m.w && p.y >= m.y && p.y <= m.y + m.h)
+                                        return page.maskSelectBase + i
+                                }
                                 const areas = gen.contactVibration ? gen.contactAreas : []
                                 for (let i = areas.length - 1; i >= 0; --i) {
                                     const a = areas[i]
@@ -593,7 +693,8 @@ Item {
                         }
                         FlowCombo {
                             objectName: "selectedClassCombo"
-                            visible: page.selectedMark !== -2
+                            // Ignore regions have no body-part class (0.7).
+                            visible: page.selectedMark !== -2 && page.selectedMark < page.maskSelectBase
                             // The tip's class is the Tip combo's; an area has its own, an extra may be any.
                             readonly property bool isArea: page.selectedMark >= 0 && page.selectedMark < gen.contactAreas.length
                             readonly property var classes: isArea && page.selectedMark > 0 ? [""].concat(gen.contactClasses)
@@ -615,7 +716,7 @@ Item {
                         HelpChip { key: "gen-selected-mark-delete"; visible: page.selectedMark !== -2; Layout.alignment: Qt.AlignVCenter }
                         FlowButton {
                             objectName: "clearBox"
-                            visible: page.selectedMark === -2 && (gen.hasBox || gen.contactAreas.length > 0)
+                            visible: page.selectedMark === -2 && (gen.hasBox || gen.contactAreas.length > 0 || gen.maskRois.length > 0)
                             text: qsTr("Clear all")
                             enabled: !gen.running
                             onClicked: page.clearAllMarks()
@@ -1373,6 +1474,22 @@ Item {
                                 onClicked: gen.clearContactAreas()
                             }
                         }
+                        // G2b / 0.7: Partner fixed (pixels) — gold box stays put.
+                        RowLayout {
+                            Layout.fillWidth: true; spacing: 8
+                            Text {
+                                textFormat: Text.PlainText
+                                Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                text: qsTr("Partner fixed (pixels)")
+                                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                            HelpChip { key: "gen-roi2-fixed"; Layout.alignment: Qt.AlignVCenter }
+                            FlowToggle {
+                                objectName: "partnerFixed"
+                                checked: gen.partnerFixed
+                                onToggled: (c) => gen.partnerFixed = c
+                            }
+                        }
                         // 0.7 "+ Another contact area" (magenta) with its type.
                         RowLayout {
                             Layout.fillWidth: true; spacing: 8
@@ -1402,7 +1519,34 @@ Item {
                         }
                         RowLayout {
                             Layout.fillWidth: true; spacing: 8
-                            visible: gen.contactAreas.length > 1
+                            visible: gen.contactAreas.length > 0
+                            Text {
+                                textFormat: Text.PlainText
+                                Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                text: qsTr("Stay fixed (extras)")
+                                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                            HelpChip { key: "gen-extra-contact-sticky"; Layout.alignment: Qt.AlignVCenter }
+                            FlowToggle {
+                                objectName: "extrasStayFixed"
+                                checked: gen.extrasStayFixed
+                                onToggled: (c) => gen.extrasStayFixed = c
+                            }
+                        }
+                        // 0.7 "+ Ignore region" (black soft mask / camera exclude).
+                        RowLayout {
+                            Layout.fillWidth: true; spacing: 8
+                            FlowButton {
+                                objectName: "addIgnore"
+                                text: gen.markIgnore ? qsTr("Drag the region on the frame…") : qsTr("+ Ignore region")
+                                enabled: gen.hasVideo && !gen.running
+                                onClicked: gen.markIgnore = !gen.markIgnore
+                            }
+                            HelpChip { key: "gen-mask-add"; Layout.alignment: Qt.AlignVCenter }
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true; spacing: 8
+                            visible: gen.contactAreas.length > 1 || gen.maskRois.length > 0
                             FlowButton {
                                 objectName: "clearExtras"
                                 enabled: !gen.running
@@ -1413,18 +1557,30 @@ Item {
                             Text {
                                 textFormat: Text.PlainText
                                 Layout.fillWidth: true; wrapMode: Text.WordWrap
-                                text: qsTr("Extras stay where they are drawn; only the tip is tracked.")
+                                text: gen.maskRois.length > 0 && gen.contactAreas.length <= 1
+                                      ? qsTr("%1 soft mask(s) exclude wrong latch from camera motion.").arg(gen.maskRois.length)
+                                      : gen.extrasStayFixed
+                                      ? qsTr("Extras stay where they are drawn; only the tip is tracked today.")
+                                      : qsTr("Extras marked to follow the partner path (tracking engine next).")
                                 color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
                             }
                         }
                         Text {
                             textFormat: Text.PlainText
                             Layout.fillWidth: true; wrapMode: Text.WordWrap
-                            text: gen.contactAreas.length === 1
-                                  ? qsTr("1 contact area: the toy vibrates when the tip reaches it.")
-                                  : gen.contactAreas.length > 1
-                                  ? qsTr("%1 contact areas: the toy vibrates when the tip reaches one.").arg(gen.contactAreas.length)
-                                  : qsTr("Optional: mark where the tip makes contact; without areas the vibration follows the stroke's depth.")
+                            text: {
+                                const extras = Math.max(0, gen.contactAreas.length - 1)
+                                const masks = gen.maskRois.length
+                                if (gen.contactAreas.length === 0 && masks === 0)
+                                    return qsTr("Optional: mark where the tip makes contact; without areas the vibration follows the stroke's depth.")
+                                if (gen.contactAreas.length === 1 && masks === 0)
+                                    return qsTr("1 contact area: the toy vibrates when the tip reaches it.")
+                                if (gen.contactAreas.length > 1 && masks === 0)
+                                    return qsTr("%1 contact areas: the toy vibrates when the tip reaches one.").arg(gen.contactAreas.length)
+                                if (gen.contactAreas.length === 0)
+                                    return qsTr("%1 soft mask(s) (dashed) — camera exclude only.").arg(masks)
+                                return qsTr("%1 contact · %2 extra · %3 soft mask(s).").arg(gen.contactAreas.length > 0 ? 1 : 0).arg(extras).arg(masks)
+                            }
                             color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
                         }
                     }
@@ -1507,18 +1663,7 @@ Item {
                                 GradientStop { position: 0; color: Theme.blue }
                                 GradientStop { position: 1; color: Theme.cyan }
                             }
-                            Behavior on width { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
-                            Rectangle {
-                                anchors.centerIn: parent
-                                width: parent.width + 4; height: parent.height + 6; radius: 5; z: -1
-                                opacity: gen.running || gen.queueRunning ? 0.45 : 0.2
-                                Behavior on opacity { NumberAnimation { duration: Theme.animNormal } }
-                                gradient: Gradient {
-                                    orientation: Gradient.Horizontal
-                                    GradientStop { position: 0; color: Qt.rgba(0, 180 / 255, 1, 0.35) }
-                                    GradientStop { position: 1; color: Qt.rgba(0, 217 / 255, 244 / 255, 0.30) }
-                                }
-                            }
+                            Behavior on width { NumberAnimation { duration: Theme.animFast } }
                         }
                     }
                     Text {

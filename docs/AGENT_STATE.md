@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 23 Oct 2026, Cursor, branch `cursor/look-empty-open-polish-2c42` — sharp Play/Editor curves (less muddy glow, paint dots); Flow look polish; crank/open untouched (`LOOK_FROM_08_ASSESSMENT.md`). Parallel Generator lane on `cursor/samn2-gen-*`.
+**Last update:** 23 Oct 2026, Cursor, branch `cursor/look-empty-open-polish-2c42` — sharp Play/Editor curves; Flow look; merged latest main.
 
 ## Rules
 
