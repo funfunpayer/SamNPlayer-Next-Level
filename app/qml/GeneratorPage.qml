@@ -1369,6 +1369,22 @@ Item {
                                 onClicked: gen.clearContactAreas()
                             }
                         }
+                        // G2b / 0.7: Partner fixed (pixels) — gold box stays put.
+                        RowLayout {
+                            Layout.fillWidth: true; spacing: 8
+                            Text {
+                                textFormat: Text.PlainText
+                                Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                text: qsTr("Partner fixed (pixels)")
+                                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                            HelpChip { key: "gen-roi2-fixed"; Layout.alignment: Qt.AlignVCenter }
+                            FlowToggle {
+                                objectName: "partnerFixed"
+                                checked: gen.partnerFixed
+                                onToggled: (c) => gen.partnerFixed = c
+                            }
+                        }
                         // 0.7 "+ Another contact area" (magenta) with its type.
                         RowLayout {
                             Layout.fillWidth: true; spacing: 8
@@ -1398,6 +1414,22 @@ Item {
                         }
                         RowLayout {
                             Layout.fillWidth: true; spacing: 8
+                            visible: gen.contactAreas.length > 0
+                            Text {
+                                textFormat: Text.PlainText
+                                Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                text: qsTr("Stay fixed (extras)")
+                                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                            HelpChip { key: "gen-extra-contact-sticky"; Layout.alignment: Qt.AlignVCenter }
+                            FlowToggle {
+                                objectName: "extrasStayFixed"
+                                checked: gen.extrasStayFixed
+                                onToggled: (c) => gen.extrasStayFixed = c
+                            }
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true; spacing: 8
                             visible: gen.contactAreas.length > 1
                             FlowButton {
                                 objectName: "clearExtras"
@@ -1409,7 +1441,9 @@ Item {
                             Text {
                                 textFormat: Text.PlainText
                                 Layout.fillWidth: true; wrapMode: Text.WordWrap
-                                text: qsTr("Extras stay where they are drawn; only the tip is tracked.")
+                                text: gen.extrasStayFixed
+                                      ? qsTr("Extras stay where they are drawn; only the tip is tracked today.")
+                                      : qsTr("Extras marked to follow the partner path (tracking engine next).")
                                 color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
                             }
                         }

@@ -67,10 +67,16 @@ class GeneratorController : public QObject {
     Q_PROPERTY(QStringList contactClasses READ contactClasses CONSTANT)
     Q_PROPERTY(bool markContact READ markContact WRITE setMarkContact NOTIFY contactChanged)
     // 0.7 "+ Another contact area": the next box drawn is an extra contact
-    // area (magenta) of extraClass ("" = any; generator.extra_class). The
-    // extras stay where they are drawn: only the tip is tracked.
+    // area (magenta) of extraClass ("" = any; generator.extra_class).
     Q_PROPERTY(bool markExtra READ markExtra WRITE setMarkExtra NOTIFY contactChanged)
     Q_PROPERTY(QString extraClass READ extraClass WRITE setExtraClass NOTIFY optionsChanged)
+    // G2b / 0.7 "Partner fixed (pixels)" and "Stay fixed" for extras
+    // (generator.partner_fixed, generator.extras_stay_fixed). They set the
+    // ContactMarkBox.fixed flag written into .samn. Partner / extra path
+    // tracking (track_multi) still follows; until then fixed=false means
+    // "intended to follow" in the file.
+    Q_PROPERTY(bool partnerFixed READ partnerFixed WRITE setPartnerFixed NOTIFY optionsChanged)
+    Q_PROPERTY(bool extrasStayFixed READ extrasStayFixed WRITE setExtrasStayFixed NOTIFY optionsChanged)
     Q_PROPERTY(QVariantList contactAreas READ contactAreas NOTIFY contactChanged)
     // The run.
     Q_PROPERTY(bool running READ running NOTIFY runChanged)
@@ -145,6 +151,10 @@ public:
     void setMarkExtra(bool v);
     QString extraClass() const { return extra_class_; }
     void setExtraClass(const QString& c);
+    bool partnerFixed() const { return partner_fixed_; }
+    void setPartnerFixed(bool v);
+    bool extrasStayFixed() const { return extras_stay_fixed_; }
+    void setExtrasStayFixed(bool v);
     QVariantList contactAreas() const;
     bool running() const { return running_; }
     int percent() const { return percent_; }
@@ -255,6 +265,10 @@ private:
     QString tip_class_ = QStringLiteral("glans");
     QString contact_class_ = QStringLiteral("nipples");
     QString extra_class_;
+    // 0.7 defaults with Contact vib: Partner fixed off, Stay fixed for extras
+    // follows trajectory capture (we default Stay fixed on until track_multi).
+    bool partner_fixed_ = false;
+    bool extras_stay_fixed_ = true;
     bool mark_contact_ = false, mark_extra_ = false;
     std::vector<samn::ContactMarkBox> contact_areas_;
     bool running_ = false;

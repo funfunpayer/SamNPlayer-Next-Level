@@ -79,6 +79,8 @@ void GeneratorController::loadSettings() {
         setTipClass(str("generator.tip_class", tip_class_));
         setContactClass(str("generator.contact_class", contact_class_));
         setExtraClass(str("generator.extra_class", extra_class_));
+        partner_fixed_ = flag("generator.partner_fixed", partner_fixed_);
+        extras_stay_fixed_ = flag("generator.extras_stay_fixed", extras_stay_fixed_);
         // 0.7 stored the sensitivity in percent (75).
         const auto span = s.get("generator.contact_vibration_span");
         if (span.is_number()) setContactSpan(span.get<double>() / 100.0);
@@ -416,6 +418,26 @@ SAMN_SETTER(setAutoOZone, auto_ozone_, "generator.auto_ozone")
 SAMN_SETTER(setContactVibration, contact_vibration_, "generator.contact_vibration")
 #undef SAMN_SETTER
 
+void GeneratorController::setPartnerFixed(bool v) {
+    if (v == partner_fixed_) return;
+    partner_fixed_ = v;
+    saveSetting("generator.partner_fixed", v);
+    if (!contact_areas_.empty()) {
+        contact_areas_.front().fixed = v;
+        emit contactChanged();
+    }
+    emit optionsChanged();
+}
+
+void GeneratorController::setExtrasStayFixed(bool v) {
+    if (v == extras_stay_fixed_) return;
+    extras_stay_fixed_ = v;
+    saveSetting("generator.extras_stay_fixed", v);
+    for (size_t i = 1; i < contact_areas_.size(); ++i) contact_areas_[i].fixed = v;
+    if (contact_areas_.size() > 1) emit contactChanged();
+    emit optionsChanged();
+}
+
 namespace {
 
 QStringList ToQt(const std::vector<std::string>& v) {
@@ -506,7 +528,7 @@ QVariantList GeneratorController::contactAreas() const {
     QVariantList out;
     for (const samn::ContactMarkBox& b : contact_areas_)
         out << QVariantMap{{"x", qint64(b.x)}, {"y", qint64(b.y)}, {"w", qint64(b.w)}, {"h", qint64(b.h)},
-                           {"cls", QString::fromStdString(b.cls)}};
+                           {"cls", QString::fromStdString(b.cls)}, {"fixed", b.fixed}};
     return out;
 }
 
@@ -532,15 +554,19 @@ bool GeneratorController::addContactArea(const QRect& area) {
         return false;
     }
     if (extra) {
-        // Only the tip is tracked (the engine follows no partner yet): an
-        // extra stays where it is drawn.
-        contact_areas_.push_back({r.x(), r.y(), r.width(), r.height(), extra_class_.toStdString(), true});
+        // Stay fixed (0.7): keep the magenta box where drawn; off = follow
+        // partner path once track_multi records it (G2b engine still open).
+        const bool stay = extras_stay_fixed_;
+        contact_areas_.push_back({r.x(), r.y(), r.width(), r.height(), extra_class_.toStdString(), stay});
         const int n = static_cast<int>(contact_areas_.size()) - 1;
-        setStatus(extra_class_.isEmpty() ? tr("Extra contact #%1 added, stay fixed.").arg(n)
-                                         : tr("Extra contact #%1 (%2) added, stay fixed.").arg(n).arg(extra_class_));
+        const QString how = stay ? tr("stay fixed") : tr("follows partner path");
+        setStatus(extra_class_.isEmpty() ? tr("Extra contact #%1 added, %2.").arg(n).arg(how)
+                                         : tr("Extra contact #%1 (%2) added, %3.").arg(n).arg(extra_class_).arg(how));
     } else {
         // 0.7 has one primary (gold); drawing it again moves it.
-        const samn::ContactMarkBox b{r.x(), r.y(), r.width(), r.height(), contact_class_.toStdString(), false};
+        // Partner fixed (pixels): on = keep the gold box; off = track it.
+        const samn::ContactMarkBox b{r.x(), r.y(), r.width(), r.height(), contact_class_.toStdString(),
+                                     partner_fixed_};
         if (contact_areas_.empty())
             contact_areas_.push_back(b);
         else
