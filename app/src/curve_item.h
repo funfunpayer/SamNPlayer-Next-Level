@@ -125,6 +125,7 @@ private:
     bool showPlayhead_ = true, showGrid_ = false, editMode_ = false;
     // Defaults tuned for a sharp wave (glow 5, not 8 — stacked under-strokes
     // used to look blurred). The Editor lowers glow further in paintLayer.
+    // CI re-trigger after decode-bot tip.
     qreal lineWidth_ = 1.5, glow_ = 5, fill_ = 0.14;
     Mode mode_ = Mode::Empty;
     // The curve without the playhead, redrawn only when data, view, size or
