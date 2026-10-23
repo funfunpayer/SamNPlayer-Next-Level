@@ -29,7 +29,7 @@ What remains open in `PARITY.md` for silk/play is mostly **reduced-motion** and 
 3. **Empty Player home:** calm ambient bloom + settle-in; still only Play + Open… (no wordmark clutter).
 4. **Transport:** progress trail glow, playhead knob pulse while playing.
 5. **Tabs / drop overlay / glass cards / silk:** quieter hover scale, fade-in drop, glass catch-light, slightly richer silk.
-6. **Training rings:** soft level follow, halo breathe, waveform pulse when live; silk bridge opacity drift; rings stage fade-in.
+6. **Training rings:** restored clear gauges (mockup): soft shell, level arc, gentle live halo; silk bridge drifts without opacity pulse.
 7. **Icon buttons / Library rows:** hover scale and cyan edge; “Feel without film” hint floats gently.
 8. **FlowTabs / toasts / window silk:** current-tab wash, toast scale-in, silk opacity breathe (pauses when inactive).
 9. **Inspector channels / Generator progress:** soft bar glow; Settings card settles a little slower.
