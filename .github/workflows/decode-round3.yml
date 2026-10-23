@@ -36,7 +36,7 @@ jobs:
 
           decode_parts("Main", "app/qml/Main.qml", 1, [b"silkDrift", b"transformOrigin: Item.BottomRight"])
           decode_parts("AGENT_STATE", "docs/AGENT_STATE.md", 2, [b"round 3", b"Last update"])
-          decode_parts("SettingsPage", "app/qml/SettingsPage.qml", 2, [b"SettingsPage", b"Behavior"])
+          decode_parts("SettingsPage", "app/qml/SettingsPage.qml", 2, [b"settingsCard", b"Theme.animSlow"])
           decode_parts("InspectorPanel", "app/qml/InspectorPanel.qml", 4, [b"duration: 140", b"component Channel"])
           decode_parts("GeneratorPage", "app/qml/GeneratorPage.qml", 4, [b"progressBar", b"z: -1"])
           PY
@@ -45,7 +45,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add app/qml/Main.qml app/qml/SettingsPage.qml app/qml/InspectorPanel.qml app/qml/GeneratorPage.qml docs/AGENT_STATE.md
-          # Remove zlib payloads (round3 + leftover Player/Training)
           git rm -f docs/.Main.zlib.b64.0 \
             docs/.AGENT_STATE.zlib.b64.0 docs/.AGENT_STATE.zlib.b64.1 \
             docs/.SettingsPage.zlib.b64.0 docs/.SettingsPage.zlib.b64.1 \
