@@ -2,16 +2,17 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 20 Oct 2026, Claude, branch `claude/samn2-help-chips`.
+**Last update:** 22 Oct 2026, Cursor, branch `cursor/samn2-gen-g2a-60e6` (took over Generator from Claude #111).
 
 ## Rules
 
 - **Owner:** talk in German; the code, the interface and the docs are in English.
 - **Branches:**
-  - Claude works on `claude/*`, Grok on `grok/*`. Never push to another agent's branch.
+  - Claude works on `claude/*`, Grok on `grok/*`, Cursor on `cursor/*`. Never push to another agent's branch.
   - Nothing reaches `main` without a PR.
   - Merge only on green CI.
   - Never force-push.
+  - **Routing / handoff:** one theme per agent; push often so another agent can take over (Manifest §6, D-122).
 - **Before every push:** run `git diff --stat` and check it. Never write a file from a shell substitution that may be empty, and never regenerate a workflow from scratch (see `ROADMAP.md` § Lessons).
 - **Decisions:** look in `DECISIONS.md` first. Never restart a decided question; record new decisions there.
 - **Never:**
@@ -87,6 +88,7 @@
 - **Optimize for** (#81, D-156): `core/include/samn/improve.h` (trim, fill gaps, heal tracking gaps), the Editor's *Optimize for* any device / Sam Neo 2, *Optimize after Create*.
 - **Teacher on a model server** (D-155 step 4, first part, #91; Owner 20 Oct: servers first): `core/teacher.h`, `LabelController` teacher settings, *Ask the teacher* (`A`).
 - **ONNX Runtime in the build** (D-155 step 4, 20 Oct, `claude/samn2-onnx-nudenet`): ONNX Runtime 1.22 from its NuGet package (FetchContent, pinned hash, `SAMN_WITH_ONNXRUNTIME`), beside every executable on Windows (`samn_copy_runtime_dlls`) and in the package with its licence; `vision/onnx_detector.h` (YOLOv8 decoding, NudeNet classes and their labels), tested on `tests/vision/data/tiny_yolo.onnx`.
+- **Generator G2a** (20 Oct Claude `claude/samn2-gen-g2` / #111; 22 Oct Cursor takeover `cursor/samn2-gen-g2a-60e6`): "+ Another contact area" (magenta) with "Extra type", Shift-drag and Shift-click on a candidate = contact, the mark just drawn is selected, "Selected: …" with its class, "Delete selected", Esc "Mark deselected.", "Clear extras", 0.7's lines after each mark (Snack 1 / Snack 2 / "Extra contact #N … stay fixed."). Extras stay fixed: the engine tracks only the tip. Windows CI: Shift via `keyPress` + `Qt.keyboardModifiers` (mouse modifiers alone failed on windows-latest); `QTest::mouseMove` stays 3-arg. Next: **G2b** partner tracking (port `track_multi`, Partner fixed / Stay fixed), measured against 0.7.
 - **Generator G1b** (20 Oct, `claude/samn2-gen-g1b`): the seek row while marking (Time (s), +1s, +5s), the "0–100 on video" chip and gauge on the preview; PARITY §3.8 (the Editor part of the Generator) checked against the code and the tests: drag, add, delete, clamp, save, undo / redo and the range tools are built. The Generator's help chips: Find tip, Time (s), Style, the four toggles, contact vibration, sensitivity, curve, mark contact, optimize after Create, the queue.
 - **Generator G1** (20 Oct, `claude/samn2-gen-g1`, the everyday Create path as in 0.7): the lede and step prompts verbatim, the preview coach, Create without a tip finds it first, the done line, the quality box with the post-generate review (`core/polarity.h`), the Create card scrolls. Next slices: G1b seek row and help chips, G2 marking, G3 feel, G4 advanced, G5 review panel, G6 queue/drop, G7 AI assist, G8 `.sam`.
 - **Help chips** (20 Oct, `claude/samn2-help-chips`): `HelpChip.qml` and 0.7's 189 `data-help` texts verbatim (`app/qml/HelpTexts.js`, `ci/help_texts.py`); placed in the Inspector, Training and Settings; the Generator's texts are ready for its slices (`help: "<0.7 id>"` on a row or card, `HelpChip { key: … }` elsewhere; `shell_qml_test::helpKeysInTheQmlSourcesExist` checks every key).
@@ -105,22 +107,20 @@
 - **Phases** (D-157, #85, #86 and `claude/samn2-phase-feel`): playback shaping per phase (`.samn` `phase_ranges`, `ApplyPhaseShape` in `PlaybackFrames`, Editor *Phases shape playback*); the Training's video stage follows the film's phases (skip intro / empty, climax: pause by default); the phase lane in the label editor; rule-based suggestions (`core/include/samn/phase_rules.h`, `vision/include/samn/vision/picture_signals.h`, *Suggest phases*).
 - **AI Train as a plugin mode** (#82 plan, #84, D-155, `docs/P4_AI_TRAIN.md`): the `Plugins` singleton and Settings switch, the fourth tab, the label editor (`label_track.h`, `LabelController`, `LabelEditor.qml`): classes with several objects, the contact point, *not in the picture* (X), *there but covered* (H), exclusion zones ("not this", `ExcludeZonesAt`), lanes, undo, export as images / YOLO labels / classes.txt.
 
-**Parity (20 Oct, after an audit of §6, §11, §12 against the code):** about 56 % of 0.7/0.8 by the `PARITY.md` checklist (268 done, 134 partly, 43 dropped on purpose, 233 open of 678; the SAM sidecar and RuntimeAdjust were added, they were in no list). Real GUI gaps found: error toasts with *Open Log*, the `?` help chips with 0.7's texts, the handbook, a reduced-motion setting, the idle ribbon graphic; Training lacks the script plan preview and the legacy dual ring. Order agreed with the Owner 20 Oct: these first (they serve the Generator too), then the Generator (§4, 30 %) in slices; `python3 ci/parity_status.py` recounts.
+**Parity (22 Oct, G2a on this branch):** recount with `python3 ci/parity_status.py` after merge. Owner GUI order: toasts ✅, help chips ✅, reduced motion on `cursor/reduced-motion-60e6` (#113), handbook + idle ribbon still open. Generator slices: G1/G1b ✅, **G2a on this PR**, then G2b → G3….
 
 ## Next (in order; the work list is `LESSONS.md` § Gaps, `TEST_PARITY.md` and `P3_GENERATOR.md`)
 
-0. **Now (AI Train, D-155):** step 5 is done up to the student as a teacher;
-   step 6 has the clip cutter. Next in step 6: script compare with labels,
-   then the golden-clip run (needs the Owner's clips in the private
-   testmedia repo, `clips/`); later the learned scene model for the phases
-   (D-157). The Owner tests the Windows build of 20 Oct
-   (main after #103) with real clips. No open issues (#4 closed by #90).
+0. **Generator (Cursor lane after Claude):** land G2a (`cursor/samn2-gen-g2a-60e6`); then **G2b** Partner fixed / Stay fixed + `track_multi` parity; then G3 feel, G4 advanced, G5 review, G6 queue/drop, G7 AI, G8 `.sam`.
+1. **Owner GUI leftovers:** handbook (§12), idle ribbon (§11), donation pages (Manifest §2). Parallel OK on another agent.
+2. **AI Train D-155:** script compare with labels, then golden-clip run (Owner clips).
+3. **Windows CI flakiness** under ctest; diagnostics already run functions alone.
+4. **P3.6** Quality Doctor; **P3.4** multi-point; Player finish / Svakom / Scene Map view; bug hunt; release.
 
-1. **Windows CI:** some app tests failed now and then with no output (stdout fully buffered when piped). Every app test now writes unbuffered (`tests/app/unbuffered_stdout.cpp`); find the cause on the next red run. Seen again on #95 (20 Oct): `device_transports_test` red under ctest with no output, every function green alone; a re-run passed. Each test function must also pass on its own (the diagnostics step runs them one by one); `label_controller` export no longer leans on the previous function.
-2. **P3.3 done** (19 Oct): the Generator remembers its choices (0.7 `generator.*` keys), contact sensitivity and curve; the Player shows the contact marks on the video (#67). Left for later: the feel probe, the body map, the partner path.
-3. **P3.6** Quality Doctor on the dense curve, the signal auto-retry and the stroke preview (feeds the adaptive detrend); then the controller reports Quality as its second number (GD-04).
-4. **P3.4** two-point / multi-point, rhythm grid, follow marks; **P3.9** improvements, each measured with `samn_compare` (first lever: memory templates of the subject, not the box, GD-10).
-5. Player finish (`PARITY.md` §1–3), donation pages (manifest), devices for Svakom and other toys, the Scene Map as a view in the Editor (D-145, no own mode), Settings / Tools; bug hunt; release.
+### Handoff note (for the next agent)
+- Active Generator work: branch `cursor/samn2-gen-g2a-60e6` (supersedes open #111 / #112 once merged).
+- Reduced motion: `cursor/reduced-motion-60e6` (#113) — separate, no Generator marking.
+- Do not push to `claude/*`. Merge only on green CI. Update this file every PR.
 
 Owner reminders (16–17 Oct): the Generator is the Editor; detection better than 0.7 but measured against it; curves stay real curves (audio too); every function of 0.7 and all earlier versions and plans comes along, what was removed on purpose stays out (and why is in `VERSIONS_AND_PLANS.md`).
 
