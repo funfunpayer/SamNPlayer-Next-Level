@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 22 Oct 2026, Cursor, branch `cursor/samn2-gen-ignore-60e6` (Ignore region soft masks + camera excludes; stacks on G2b).
+**Last update:** 23 Oct 2026, Cursor, branch `cursor/samn2-gen-ignore-60e6` (Ignore region; CI build fix for generator_qml_test). Parallel Look lane: #117.
 
 ## Rules
 
@@ -113,16 +113,17 @@
 
 ## Next (in order; the work list is `LESSONS.md` § Gaps, `TEST_PARITY.md` and `P3_GENERATOR.md`)
 
-0. **Generator (Cursor lane):** land **G2a** (#114), **G2b UI** (#115), **Ignore region** (`cursor/samn2-gen-ignore-60e6`); then **G2b engine** = `track_multi` / partner trajectory (P3.4); then G3 feel → G8 `.sam`.
-1. **Owner GUI leftovers:** handbook (§12), idle ribbon (§11), donation pages (Manifest §2). Parallel OK on another agent (#113 reduced motion).
-2. **AI Train D-155:** script compare with labels, then golden-clip run (Owner clips).
-3. **Windows CI flakiness** under ctest; diagnostics already run functions alone.
-4. **P3.6** Quality Doctor; Player finish / Svakom / Scene Map view; bug hunt; release.
+0. **Generator (this Cursor lane):** land **G2a** (#114 ✅ CI), **G2b UI** (#115), **Ignore** (#116); then **G2b engine** = `track_multi` / partner trajectory (P3.4); then G3 feel → G8 `.sam`.
+1. **Look polish (parallel Cursor, #117 `cursor/look-empty-open-polish-2c42`):** Flow motion (Player empty bloom, Training ring breathe, FlowTabs, silk, Inspector bars). Owns shell/Player/Training visuals. May touch `GeneratorPage.qml` for motion only — **Generator marking/engine stays on #114–#116**; merge Look after or rebase carefully if both edit that file.
+2. **Owner GUI leftovers:** handbook (§12), idle ribbon (§11), donation pages (Manifest §2). Reduced motion #113 (Ubuntu/Windows green; TSan cancelled).
+3. **AI Train D-155:** script compare with labels, then golden-clip run (Owner clips).
+4. **Windows CI flakiness** under ctest; diagnostics already run functions alone.
+5. **P3.6** Quality Doctor; Player finish / Svakom / Scene Map view; bug hunt; release.
 
 ### Handoff note (for the next agent)
-- Stack: G2a #114 → G2b #115 → Ignore `cursor/samn2-gen-ignore-60e6` (this tip). Merge in that order onto `main`.
-- Next code: engine partner tracking (`track_two` / `track_multi` Go ports + tests in TEST_PARITY). Soft masks already feed camera excludes.
-- Reduced motion: #113. Do not push to `claude/*`. Push often; update this file every PR.
+- **Routing:** one theme per agent. Generator stack #114→#115→#116; Look #117 parallel (do not steal Look files for feature work). Claude #111 superseded by #114.
+- Stack merge onto `main`: G2a → G2b → Ignore. Next code after Ignore: engine partner tracking (`track_two` / `track_multi`). Soft masks already feed camera excludes.
+- Do not push to `claude/*`. Push often; update this file every PR.
 
 Owner reminders (16–17 Oct): the Generator is the Editor; detection better than 0.7 but measured against it; curves stay real curves (audio too); every function of 0.7 and all earlier versions and plans comes along, what was removed on purpose stays out (and why is in `VERSIONS_AND_PLANS.md`).
 
