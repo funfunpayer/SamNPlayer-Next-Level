@@ -1,1 +1,1 @@
-PLACEHOLDER_LOAD_FROM_/tmp/mcp-push/a/app/src/editor_controller.cpp
+{{FILE:/tmp/EDITOR_CONTENT_EXACT.txt}}
