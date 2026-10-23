@@ -31,6 +31,8 @@ What remains open in `PARITY.md` for silk/play is mostly **reduced-motion** and 
 5. **Tabs / drop overlay / glass cards / silk:** quieter hover scale, fade-in drop, glass catch-light, slightly richer silk.
 6. **Training rings:** soft level follow, halo breathe, waveform pulse when live; silk bridge opacity drift; rings stage fade-in.
 7. **Icon buttons / Library rows:** hover scale and cyan edge; “Feel without film” hint floats gently.
+8. **FlowTabs / toasts / window silk:** current-tab wash, toast scale-in, silk opacity breathe (pauses when inactive).
+9. **Inspector channels / Generator progress:** soft bar glow; Settings card settles a little slower.
 
 Controller / crank / open-media logic untouched. Decorative motion pauses when the app is inactive.
 
