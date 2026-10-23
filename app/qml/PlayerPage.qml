@@ -770,6 +770,8 @@ Item {
                     visible: ctrl.showStrokeLane || !ctrl.hasScript
                     height: Math.max(60, parent.height - lanes.extraLanes * lanes.laneH - (audioLane.visible ? lanes.audioH : 0) - lanes.fixedH)
                     lane: "stroke"; lineColor: Theme.orange; showGrid: true
+                    // Sharp Play wave: soft bloom, not a muddy halo.
+                    lineWidth: 1.55; glow: 4.5; fill: 0.12
                     markerStartMs: ctrl.markerStartMs; markerEndMs: ctrl.markerEndMs
                     viewStartMs: ctrl.viewStartMs; viewEndMs: ctrl.viewEndMs
                     Component.onCompleted: ctrl.attachCurve(curve)
@@ -798,7 +800,7 @@ Item {
                     width: parent.width; height: lanes.laneH
                     visible: ctrl.showVibrationLane  // D-132: the script's channels, or the device's
                     lane: "vibration"; lineColor: Theme.laneVibration
-                    lineWidth: 1.15; glow: 4; fill: 0.2
+                    lineWidth: 1.2; glow: 3; fill: 0.14
                     viewStartMs: ctrl.viewStartMs; viewEndMs: ctrl.viewEndMs
                     Component.onCompleted: ctrl.attachCurve(vibLane)
                     WheelHandler {
@@ -812,7 +814,7 @@ Item {
                     width: parent.width; height: lanes.laneH
                     visible: ctrl.showSuctionLane
                     lane: "suction"; lineColor: Theme.laneSuction
-                    lineWidth: 1.15; glow: 4; fill: 0.2
+                    lineWidth: 1.2; glow: 3; fill: 0.14
                     viewStartMs: ctrl.viewStartMs; viewEndMs: ctrl.viewEndMs
                     Component.onCompleted: ctrl.attachCurve(sucLane)
                     WheelHandler {

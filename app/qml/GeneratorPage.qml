@@ -796,6 +796,10 @@ Item {
                                 lineColor: modelData === "stroke" ? Theme.orange : (modelData === "vibration" ? Theme.laneVibration : Theme.laneSuction)
                                 showGrid: modelData === "stroke"
                                 editMode: true
+                                // Paint-friendly: crisp line, little glow, clear dots (CurveItem).
+                                lineWidth: modelData === "stroke" ? 1.85 : 1.4
+                                glow: 1.5
+                                fill: 0.08
                                 markerStartMs: edit.markerStartMs; markerEndMs: edit.markerEndMs
                                 viewStartMs: edit.viewStartMs; viewEndMs: edit.viewEndMs
                                 playheadMs: page.playheadMs
