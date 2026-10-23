@@ -22,7 +22,7 @@ Item {
         width: root.width * 1.04; height: root.height * 0.9
         x: root.width * 0.18; y: -root.height * 0.12
         asynchronous: true
-        opacity: 0.55 * root.strength
+        opacity: 0.62 * root.strength
         transformOrigin: Item.Center
         property real dx: 0
         property real dy: 0
@@ -52,7 +52,7 @@ Item {
         width: root.width * 0.94; height: root.height * 0.85
         x: -root.width * 0.12; y: root.height * 0.3
         asynchronous: true
-        opacity: 0.45 * root.strength
+        opacity: 0.52 * root.strength
         transformOrigin: Item.Center
         property real dx: 0
         property real dy: 0

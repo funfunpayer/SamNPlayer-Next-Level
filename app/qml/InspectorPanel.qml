@@ -24,6 +24,7 @@ GlassCard {
     clip: true
 
     component Card: Rectangle {
+        id: card
         default property alias content: body.data
         property string title
         // A 0.7 help key (HelpTexts.js): a "?" after the title.
@@ -32,13 +33,19 @@ GlassCard {
         height: body.implicitHeight + head.height + 22
         radius: Theme.radiusSmall
         color: Qt.rgba(1, 1, 1, 0.025); border.color: Theme.cardBorder
+        // Soft top catch-light (matches GlassCard).
+        Rectangle {
+            anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+            anchors.margins: 1; height: 1; radius: 1
+            color: Qt.rgba(180 / 255, 220 / 255, 255 / 255, 0.08)
+        }
         Text {
             textFormat: Text.PlainText
             id: head
-            x: 12; y: 10; text: parent.title
+            x: 12; y: 10; text: card.title
             color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold
         }
-        HelpChip { key: parent.help; visible: key !== "" && text !== ""; x: head.x + head.implicitWidth + 6; y: head.y + (head.height - height) / 2 }
+        HelpChip { key: card.help; visible: key !== "" && text !== ""; x: head.x + head.implicitWidth + 6; y: head.y + (head.height - height) / 2 }
         Column { id: body; x: 12; y: head.y + head.height + 8; width: parent.width - 24; spacing: 8 }
     }
     component Note: Text {
@@ -99,22 +106,40 @@ GlassCard {
         HelpChip { key: sr.help; visible: key !== "" && text !== ""; anchors.verticalCenter: parent.verticalCenter }
     }
     component Channel: Item {
+        id: ch
         property string name
         property color dot
         property int value
         width: parent ? parent.width : 260; height: 26
-        Rectangle { y: 9; width: 8; height: 8; radius: 4; color: parent.dot }
-        Text { textFormat: Text.PlainText; x: 16; anchors.verticalCenter: parent.verticalCenter; text: parent.name; color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 13 }
+        Rectangle {
+            y: 9; width: 8; height: 8; radius: 4; color: ch.dot
+            SequentialAnimation on opacity {
+                running: ch.value > 0 && Qt.application.state === Qt.ApplicationActive
+                loops: Animation.Infinite
+                NumberAnimation { from: 0.55; to: 1.0; duration: 900; easing.type: Easing.InOutSine }
+                NumberAnimation { to: 0.55; duration: 900; easing.type: Easing.InOutSine }
+            }
+        }
+        Text { textFormat: Text.PlainText; x: 16; anchors.verticalCenter: parent.verticalCenter; text: ch.name; color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 13 }
         Rectangle {
             x: 100; anchors.verticalCenter: parent.verticalCenter
             width: parent.width - 150; height: 6; radius: 3; color: Qt.rgba(1, 1, 1, 0.08)
-            Rectangle { width: parent.width * parent.parent.value / 100; height: parent.height; radius: 3; color: parent.parent.dot
-                Behavior on width { NumberAnimation { duration: 90 } } }
+            Rectangle {
+                id: fill
+                width: parent.width * ch.value / 100; height: parent.height; radius: 3; color: ch.dot
+                Behavior on width { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: parent.width + 2; height: parent.height + 4; radius: 4; z: -1
+                    color: ch.dot; opacity: ch.value > 0 ? 0.28 : 0
+                    Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
+                }
+            }
         }
         Text {
             textFormat: Text.PlainText
             anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
-            text: root.ctrl.hasScript ? parent.value : "–"; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+            text: root.ctrl.hasScript ? ch.value : "–"; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
         }
     }
 

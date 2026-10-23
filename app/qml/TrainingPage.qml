@@ -263,17 +263,20 @@ Item {
                     fillMode: Image.Stretch
                     width: stage.width * 1.2; height: stage.height * 1.0
                     x: (stage.width - width) / 2 + dx; y: (stage.height - height) / 2 + stage.height * 0.04
-                    opacity: 0.9
+                    // Steady bridge (mockup infinity silk); only position/scale drift —
+                    // no opacity pulse (that made the rings look muddy).
+                    opacity: 0.88
                     asynchronous: true
                     property real dx: 0
-                    // silk-bridge-drift: 28 s alternate, ±1.5 %, scale 1.04.
+                    readonly property bool drift: stage.visible && ctl.stage === "rings"
+                        && Qt.application.state === Qt.ApplicationActive
                     SequentialAnimation on dx {
-                        running: stage.visible; loops: Animation.Infinite
+                        running: bridge.drift; loops: Animation.Infinite
                         NumberAnimation { from: -stage.width * 0.015; to: stage.width * 0.015; duration: 28000; easing.type: Easing.InOutSine }
                         NumberAnimation { to: -stage.width * 0.015; duration: 28000; easing.type: Easing.InOutSine }
                     }
                     SequentialAnimation on scale {
-                        running: stage.visible; loops: Animation.Infinite
+                        running: bridge.drift; loops: Animation.Infinite
                         NumberAnimation { from: 1.0; to: 1.04; duration: 28000; easing.type: Easing.InOutSine }
                         NumberAnimation { to: 1.0; duration: 28000; easing.type: Easing.InOutSine }
                     }
@@ -440,9 +443,13 @@ Item {
                 }
                 Row {
                     id: rings
-                    visible: ctl.stage === "rings"
+                    visible: opacity > 0.01
+                    opacity: ctl.stage === "rings" ? 1 : 0
+                    Behavior on opacity { NumberAnimation { duration: Theme.animSlow; easing.type: Easing.OutCubic } }
                     anchors.centerIn: parent
                     spacing: Math.max(30, stage.width * 0.12)
+                    scale: ctl.stage === "rings" ? 1 : 0.96
+                    Behavior on scale { NumberAnimation { duration: Theme.animSlow; easing.type: Easing.OutCubic } }
                     TrainingRing {
                         visible: ctl.vibrationAvailable
                         width: Math.min(236, stage.height - 64); height: width
