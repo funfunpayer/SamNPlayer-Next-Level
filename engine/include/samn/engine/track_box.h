@@ -29,6 +29,11 @@ struct TrackOptions {
     // motion estimate together with the tip box, so a wrong latch (knees,
     // background) does not pull the compensation. Video pixels.
     std::vector<cv::Rect> mask_rois;
+    // Optional gold contact / partner box (0.7 TrackTwoPoints FixedB /
+    // CaptureTrajectory). Stroke still comes from the tip; centres fill
+    // TrackResult::partner_xs / partner_ys for .samn trajectory.partner.
+    std::optional<cv::Rect> partner_box;
+    bool partner_fixed = false;  // true = keep the drawn box (no second CSRT)
     // Checked every frame; true stops the run (Result::canceled).
     std::function<bool()> cancel;
     // About every 1 % of frames: (done, total); total 0 when unknown.
@@ -51,6 +56,8 @@ struct TrackResult {
     std::vector<double> positions;  // chosen axis, pixels
     std::vector<double> xs, ys;     // box centre per frame (y camera-compensated)
     std::vector<double> frame_ys;   // box centre y in frame pixels, before compensation (tip path)
+    // Partner centres in frame pixels (same length as tip when partner_box set).
+    std::vector<double> partner_xs, partner_ys;
     bool horizontal = false;        // positions are xs
     cv::Size size;
     std::vector<int> scene_cuts;    // frame numbers counted from the first tracked frame

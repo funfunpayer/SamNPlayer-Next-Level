@@ -46,18 +46,22 @@ std::string FunscriptJson(const GenerateRequest& req, const std::vector<Action>&
     return nlohmann::json{{"actions", acts}, {"metadata", meta}}.dump(2);
 }
 
-// The tip's path for spatial contact (0.7 buildTrajectoryData): the box
-// centre in frame pixels, one point per kTipPathStepMs, 0.1 px.
+// Tip (+ optional partner) path for spatial contact (0.7 buildTrajectoryData):
+// box centres in frame pixels, one point per kTipPathStepMs, 0.1 px.
 constexpr int64_t kTipPathStepMs = 50;
 
-TrajectoryData TipPath(const TrackResult& tr) {
+TrajectoryData BuildTrajectory(const TrackResult& tr) {
     TrajectoryData t;
     t.width = tr.size.width;
     t.height = tr.size.height;
     const auto tenth = [](double v) { return std::round(v * 10.0) / 10.0; };
+    const bool have_partner =
+        !tr.partner_xs.empty() && tr.partner_xs.size() == tr.times_ms.size() &&
+        tr.partner_ys.size() == tr.times_ms.size();
     for (size_t i = 0; i < tr.times_ms.size() && i < tr.xs.size() && i < tr.frame_ys.size(); ++i) {
         if (!t.tip.empty() && tr.times_ms[i] - t.tip.back().at_ms < kTipPathStepMs) continue;
         t.tip.push_back({tr.times_ms[i], tenth(tr.xs[i]), tenth(tr.frame_ys[i])});
+        if (have_partner) t.partner.push_back({tr.times_ms[i], tenth(tr.partner_xs[i]), tenth(tr.partner_ys[i])});
     }
     return t;
 }
@@ -102,7 +106,7 @@ Document CompanionSamn(const GenerateRequest& req, const std::vector<Action>& ac
         marks.extras = req.extra_areas;
     }
     d.contact_marks = BuildContactMarks(marks);
-    if (d.contact_marks && HasContactAreas(*d.contact_marks)) d.trajectory = TipPath(tr);
+    if (d.contact_marks && HasContactAreas(*d.contact_marks)) d.trajectory = BuildTrajectory(tr);
     return d;
 }
 
@@ -128,6 +132,13 @@ void GenerateUnguarded(const GenerateRequest& req, uint64_t run_id, const std::f
     to.scene_cuts = req.scene_cuts;
     to.axis = req.axis;
     to.mask_rois = req.mask_rois;
+    // G2b engine: gold contact → partner path (fixed box or second CSRT).
+    // Stroke stays tip-driven; Tf/Tj distance stroke is a later slice.
+    if (req.contact_area && req.contact_area->w > 0 && req.contact_area->h > 0) {
+        to.partner_box = cv::Rect(static_cast<int>(req.contact_area->x), static_cast<int>(req.contact_area->y),
+                                  static_cast<int>(req.contact_area->w), static_cast<int>(req.contact_area->h));
+        to.partner_fixed = req.contact_area->fixed;
+    }
     to.cancel = cancel;
     // Progress from the first frame on (GD-21).
     to.on_progress = [&](int done, int total) {

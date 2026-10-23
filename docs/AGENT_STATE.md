@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 23 Oct 2026, Cursor, branch `cursor/samn2-gen-ignore-60e6` (Ignore region; CI build fix for generator_qml_test). Parallel Look lane: #117.
+**Last update:** 23 Oct 2026, Cursor, branch `cursor/samn2-gen-g2b-engine-60e6` (partner path in TrackBox / .samn; stacks on Ignore #116). Parallel Look #117.
 
 ## Rules
 
@@ -90,7 +90,8 @@
 - **ONNX Runtime in the build** (D-155 step 4, 20 Oct, `claude/samn2-onnx-nudenet`): ONNX Runtime 1.22 from its NuGet package (FetchContent, pinned hash, `SAMN_WITH_ONNXRUNTIME`), beside every executable on Windows (`samn_copy_runtime_dlls`) and in the package with its licence; `vision/onnx_detector.h` (YOLOv8 decoding, NudeNet classes and their labels), tested on `tests/vision/data/tiny_yolo.onnx`.
 - **Generator G2a** (20 Oct Claude `claude/samn2-gen-g2` / #111; 22 Oct Cursor takeover `cursor/samn2-gen-g2a-60e6` / #114): "+ Another contact area" (magenta) with "Extra type", Shift-drag and Shift-click on a candidate = contact, the mark just drawn is selected, "Selected: …" with its class, "Delete selected", Esc "Mark deselected.", "Clear extras", 0.7's lines after each mark. Windows CI: Shift via `keyPress` + `Qt.keyboardModifiers`; `QTest::mouseMove` 3-arg.
 - **Generator G2b UI** (22 Oct, `cursor/samn2-gen-g2b-60e6` / #115): 0.7 "Partner fixed (pixels)" and "Stay fixed (extras)" toggles; `ContactMarkBox.fixed` in `contactAreas` and remembered (`generator.partner_fixed`, `generator.extras_stay_fixed`); status "stay fixed" / "follows partner path". **Still open:** engine `track_multi` / partner path recording (P3.4) so fixed=false actually tracks.
-- **Generator Ignore region** (22 Oct, `cursor/samn2-gen-ignore-60e6`): "+ Ignore region" (`markIgnore`); black dashed soft masks (`maskRois`); status "Ignore region (black) #N added."; Clear extras drops masks; Create passes `GenerateRequest.mask_rois` → `TrackOptions.mask_rois` punched into `CameraMotionY` with the tip box. Tests `ignoreRegionsAreSoftMasks`, `track: mask rois are accepted…`.
+- **Generator Ignore region** (22 Oct, `cursor/samn2-gen-ignore-60e6` / #116): "+ Ignore region" (`markIgnore`); black dashed soft masks (`maskRois`); Create → `mask_rois` camera excludes. Tests `ignoreRegionsAreSoftMasks`, `track: mask rois…`.
+- **Generator G2b engine (partner path)** (23 Oct, `cursor/samn2-gen-g2b-engine-60e6`): gold contact → `TrackOptions.partner_box` / `partner_fixed`; second CSRT or fixed centres → `trajectory.partner` in `.samn` (tip stroke unchanged). Tests `track: fixed partner…`, `generate: non-fixed partner path…`. **Still open:** Tf/Tj distance stroke (`TrackTwoPoints` Positions), extras multi-path, Player overlay follow.
 - **Generator G1b** (20 Oct, `claude/samn2-gen-g1b`): the seek row while marking (Time (s), +1s, +5s), the "0–100 on video" chip and gauge on the preview; PARITY §3.8 (the Editor part of the Generator) checked against the code and the tests: drag, add, delete, clamp, save, undo / redo and the range tools are built. The Generator's help chips: Find tip, Time (s), Style, the four toggles, contact vibration, sensitivity, curve, mark contact, optimize after Create, the queue.
 - **Generator G1** (20 Oct, `claude/samn2-gen-g1`, the everyday Create path as in 0.7): the lede and step prompts verbatim, the preview coach, Create without a tip finds it first, the done line, the quality box with the post-generate review (`core/polarity.h`), the Create card scrolls. Next slices: G1b seek row and help chips, G2 marking, G3 feel, G4 advanced, G5 review panel, G6 queue/drop, G7 AI assist, G8 `.sam`.
 - **Help chips** (20 Oct, `claude/samn2-help-chips`): `HelpChip.qml` and 0.7's 189 `data-help` texts verbatim (`app/qml/HelpTexts.js`, `ci/help_texts.py`); placed in the Inspector, Training and Settings; the Generator's texts are ready for its slices (`help: "<0.7 id>"` on a row or card, `HelpChip { key: … }` elsewhere; `shell_qml_test::helpKeysInTheQmlSourcesExist` checks every key).
@@ -113,8 +114,8 @@
 
 ## Next (in order; the work list is `LESSONS.md` § Gaps, `TEST_PARITY.md` and `P3_GENERATOR.md`)
 
-0. **Generator (this Cursor lane):** land **G2a** (#114 ✅ CI), **G2b UI** (#115), **Ignore** (#116); then **G2b engine** = `track_multi` / partner trajectory (P3.4); then G3 feel → G8 `.sam`.
-1. **Look polish (parallel Cursor, #117 `cursor/look-empty-open-polish-2c42`):** Flow motion (Player empty bloom, Training ring breathe, FlowTabs, silk, Inspector bars). Owns shell/Player/Training visuals. May touch `GeneratorPage.qml` for motion only — **Generator marking/engine stays on #114–#116**; merge Look after or rebase carefully if both edit that file.
+0. **Generator (this Cursor lane):** land **G2a** (#114 ✅), **G2b UI** (#115 ✅), **Ignore** (#116), **G2b engine partner path** (this tip); then Tf/Tj distance stroke / extras multi; then G3 feel → G8 `.sam`.
+1. **Look polish (parallel Cursor, #117):** Flow motion. Owns shell/Player/Training visuals. May touch `GeneratorPage.qml` for motion only — **Generator marking/engine stays on #114–#116 + this tip**; reconcile if both edit that file.
 2. **Owner GUI leftovers:** handbook (§12), idle ribbon (§11), donation pages (Manifest §2). Reduced motion #113 (Ubuntu/Windows green; TSan cancelled).
 3. **AI Train D-155:** script compare with labels, then golden-clip run (Owner clips).
 4. **Windows CI flakiness** under ctest; diagnostics already run functions alone.
