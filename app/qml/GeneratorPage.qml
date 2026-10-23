@@ -1386,7 +1386,18 @@ Item {
                                 GradientStop { position: 0; color: Theme.blue }
                                 GradientStop { position: 1; color: Theme.cyan }
                             }
-                            Behavior on width { NumberAnimation { duration: Theme.animFast } }
+                            Behavior on width { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: parent.width + 4; height: parent.height + 6; radius: 5; z: -1
+                                opacity: gen.running || gen.queueRunning ? 0.45 : 0.2
+                                Behavior on opacity { NumberAnimation { duration: Theme.animNormal } }
+                                gradient: Gradient {
+                                    orientation: Gradient.Horizontal
+                                    GradientStop { position: 0; color: Qt.rgba(0, 180 / 255, 1, 0.35) }
+                                    GradientStop { position: 1; color: Qt.rgba(0, 217 / 255, 244 / 255, 0.30) }
+                                }
+                            }
                         }
                     }
                     Text {

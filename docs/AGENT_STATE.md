@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 22 Oct 2026, Cursor, branch `cursor/look-empty-open-polish-2c42` — Flow look + motion round 2 (Training ring breathe, Library/Icon hover, feel-without-film float); crank/open untouched (`LOOK_FROM_08_ASSESSMENT.md`).
+**Last update:** 23 Oct 2026, Cursor, branch `cursor/look-empty-open-polish-2c42` — Flow look + motion round 3 (FlowTabs/toasts/silk, Inspector bars, Generator progress); crank/open untouched (`LOOK_FROM_08_ASSESSMENT.md`).
 
 ## Rules
 
