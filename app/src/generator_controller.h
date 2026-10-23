@@ -76,9 +76,9 @@ class GeneratorController : public QObject {
     Q_PROPERTY(QVariantList maskRois READ maskRois NOTIFY contactChanged)
     // G2b / 0.7 "Partner fixed (pixels)" and "Stay fixed" for extras
     // (generator.partner_fixed, generator.extras_stay_fixed). They set the
-    // ContactMarkBox.fixed flag written into .samn. Partner / extra path
-    // tracking (track_multi) still follows; until then fixed=false means
-    // "intended to follow" in the file.
+    // ContactMarkBox.fixed flag written into .samn. Generate records the
+    // gold partner path (fixed centres or second CSRT → trajectory.partner);
+    // extras multi-path and Tf/Tj distance stroke still follow.
     Q_PROPERTY(bool partnerFixed READ partnerFixed WRITE setPartnerFixed NOTIFY optionsChanged)
     Q_PROPERTY(bool extrasStayFixed READ extrasStayFixed WRITE setExtrasStayFixed NOTIFY optionsChanged)
     Q_PROPERTY(QVariantList contactAreas READ contactAreas NOTIFY contactChanged)

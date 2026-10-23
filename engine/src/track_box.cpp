@@ -66,6 +66,20 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
     if (!tracker) return fail(why);
     tracker->Init(frame.bgr, box);
 
+    // Optional partner (gold contact): fixed box or a second CSRT. Stroke is
+    // still tip-only; centres feed .samn trajectory.partner (G2b engine).
+    const bool want_partner = opts.partner_box && opts.partner_box->width > 0 && opts.partner_box->height > 0;
+    std::unique_ptr<vision::Tracker> partner_tracker;
+    cv::Rect partner_last;
+    if (want_partner) {
+        partner_last = *opts.partner_box;
+        if (!opts.partner_fixed) {
+            partner_tracker = vision::CreateTracker(vision::TrackerKind::kCsrt, &why);
+            if (!partner_tracker) return fail(why);
+            partner_tracker->Init(frame.bgr, partner_last);
+        }
+    }
+
     const bool needs_gray = opts.camera_compensation || opts.scene_cuts || opts.appearance_memory;
     cv::Mat prev_gray, gray;
     if (needs_gray) cv::cvtColor(frame.bgr, prev_gray, cv::COLOR_BGR2GRAY);
@@ -81,6 +95,10 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
     res.times_ms.push_back(frame.pts_us / 1000);
     res.xs.push_back(Centre(box).x);
     res.ys.push_back(Centre(box).y);
+    if (want_partner) {
+        res.partner_xs.push_back(Centre(partner_last).x);
+        res.partner_ys.push_back(Centre(partner_last).y);
+    }
     std::vector<double> camera_dy{0.0};
     cv::Rect last = box;
     Coast coast;
@@ -154,6 +172,16 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
             }
         }
 
+        if (want_partner) {
+            if (opts.partner_fixed || cut || !partner_tracker) {
+                // Fixed (or after a cut): keep the last known centre.
+            } else if (auto pb = partner_tracker->Update(frame.bgr)) {
+                partner_last = *pb;
+            }
+            res.partner_xs.push_back(Centre(partner_last).x);
+            res.partner_ys.push_back(Centre(partner_last).y);
+        }
+
         if (opts.camera_compensation) {
             double dy = 0;
             if (!cut) {
@@ -161,6 +189,7 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
                 // latch regions out of the camera estimate.
                 std::vector<cv::Rect> excludes = opts.mask_rois;
                 excludes.push_back(last);
+                if (want_partner) excludes.push_back(partner_last);
                 dy = CameraMotionY(prev_gray, gray, excludes);
                 if (dy == 0.0) ++res.stats.camera_frames_lost;
             }

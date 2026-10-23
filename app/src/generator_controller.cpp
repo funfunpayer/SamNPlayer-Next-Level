@@ -573,7 +573,7 @@ bool GeneratorController::addContactArea(const QRect& area) {
     }
     if (extra) {
         // Stay fixed (0.7): keep the magenta box where drawn; off = follow
-        // partner path once track_multi records it (G2b engine still open).
+        // partner path once extras multi-path records it.
         const bool stay = extras_stay_fixed_;
         contact_areas_.push_back({r.x(), r.y(), r.width(), r.height(), extra_class_.toStdString(), stay});
         const int n = static_cast<int>(contact_areas_.size()) - 1;
