@@ -19,7 +19,7 @@ jobs:
           fetch-depth: 0
           ref: cursor/look-empty-open-polish-2c42
 
-      - name: Merge main (resolve AGENT_STATE)
+      - name: Merge main (resolve AGENT_STATE + keep ours on other conflicts)
         env:
           RESOLVED: docs/AGENT_STATE.resolved.md
         run: |
@@ -35,13 +35,19 @@ jobs:
             test -f "$RESOLVED"
             cp "$RESOLVED" docs/AGENT_STATE.md
             git add docs/AGENT_STATE.md
-            # Drop any other conflict leftovers if identical after ours content.
+            # Look polish owns these paths vs main's generator lane; keep ours.
+            while IFS= read -r f; do
+              [ -z "$f" ] && continue
+              echo "Keeping ours: $f"
+              git checkout --ours -- "$f"
+              git add "$f"
+            done < <(git diff --name-only --diff-filter=U)
             if git diff --name-only --diff-filter=U | grep -q .; then
               echo "Unresolved conflicts:" >&2
               git diff --name-only --diff-filter=U >&2
               exit 1
             fi
-            git commit -m "merge: origin/main into look polish (AGENT_STATE resolved)"
+            git commit -m "merge: origin/main into look polish (AGENT_STATE resolved, ours on conflicts)"
           fi
           # Remove the one-shot trigger + helper so they do not linger on main.
           rm -f docs/.merge-main-trigger docs/AGENT_STATE.resolved.md \
