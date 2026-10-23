@@ -43,12 +43,7 @@ jobs:
             while IFS= read -r f; do git rm -f --ignore-unmatch "$f" || true; done < /tmp/clean_list.txt
           fi
           git rm -f --ignore-unmatch .github/workflows/decode-generator-qml-test.yml || true
-          # drop leftover stale merge artifact if present
           git rm -f --ignore-unmatch docs/.merge/tests__app__generator_qml_test.cpp.zlib.b64.2 || true
           git rm -f --ignore-unmatch docs/.merge/part21.chunk.6 || true
-          git commit -m "fix(test): sync generator_qml imageRect assert with main
-
-Offscreen CI twitches imageRect by ~1–2 px; main already checks width only.
-
-Decoded from zlib parts (placeholder tip repaired)."
+          git commit -m "fix(test): sync generator_qml imageRect assert with main"
           git push
