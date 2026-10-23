@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'docs/.merge/docs__PARITY.md.zlib.b64.34'
+      - 'docs/.merge/part21.chunk.6'
 permissions:
   contents: write
 jobs:
@@ -19,9 +20,19 @@ jobs:
           python3 <<'DECODE'
           import base64, zlib, hashlib
           from pathlib import Path
+          # Rebuild part 21 from verified chunks if present (avoids MCP single-char corruption).
+          chunk_dir = Path('docs/.merge')
+          chunks = [chunk_dir / f'part21.chunk.{i}' for i in range(7)]
+          if all(p.exists() for p in chunks):
+              rebuilt = ''.join(p.read_text().strip() for p in chunks)
+              assert len(rebuilt) == 3500, len(rebuilt)
+              want21 = 'b27100f5a737cab4'
+              got21 = hashlib.sha256(rebuilt.encode()).hexdigest()[:16]
+              assert got21 == want21, (got21, want21)
+              Path('docs/.merge/docs__PARITY.md.zlib.b64.21').write_text(rebuilt)
+              print('rebuilt part 21 from chunks', got21, 'OK')
           # MCP push_files sometimes flips single chars; force known-good bytes.
           fixes = {
-              21: [(1554, '7')],  # W6J7G -> W7J7G
               27: [(3070, '1')],  # W3uk -> W1uk
           }
           for i, edits in fixes.items():
@@ -41,6 +52,7 @@ jobs:
               Path(dest).write_bytes(raw)
               print(dest, len(raw), got, "OK")
               clean += [f"docs/.merge/{key}.zlib.b64.{i}" for i in range(n)]
+              clean += [f"docs/.merge/part21.chunk.{i}" for i in range(7)]
           Path("/tmp/clean_list.txt").write_text("\n".join(clean))
           DECODE
       - name: Commit decoded files
