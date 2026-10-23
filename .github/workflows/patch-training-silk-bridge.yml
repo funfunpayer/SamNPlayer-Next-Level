@@ -1,0 +1,81 @@
+name: Patch TrainingPage silk bridge
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'docs/.patch-training-silk-bridge'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: cursor/look-empty-open-polish-2c42
+      - name: Apply silk-bridge patch
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          p = Path("app/qml/TrainingPage.qml")
+          text = p.read_text()
+          old = """                    x: (stage.width - width) / 2 + dx; y: (stage.height - height) / 2 + stage.height * 0.04
+                    opacity: 0.92
+                    asynchronous: true
+                    property real dx: 0
+                    // silk-bridge-drift: 28 s alternate, ±1.5 %, scale 1.04; pause when hidden.
+                    readonly property bool drift: stage.visible && ctl.stage === "rings"
+                        && Qt.application.state === Qt.ApplicationActive
+                    SequentialAnimation on dx {
+                        running: bridge.drift; loops: Animation.Infinite
+                        NumberAnimation { from: -stage.width * 0.015; to: stage.width * 0.015; duration: 28000; easing.type: Easing.InOutSine }
+                        NumberAnimation { to: -stage.width * 0.015; duration: 28000; easing.type: Easing.InOutSine }
+                    }
+                    SequentialAnimation on scale {
+                        running: bridge.drift; loops: Animation.Infinite
+                        NumberAnimation { from: 1.0; to: 1.04; duration: 28000; easing.type: Easing.InOutSine }
+                        NumberAnimation { to: 1.0; duration: 28000; easing.type: Easing.InOutSine }
+                    }
+                    SequentialAnimation on opacity {
+                        running: bridge.drift; loops: Animation.Infinite
+                        NumberAnimation { from: 0.78; to: 0.96; duration: 9000; easing.type: Easing.InOutSine }
+                        NumberAnimation { to: 0.78; duration: 9000; easing.type: Easing.InOutSine }
+                    }
+"""
+          new = """                    x: (stage.width - width) / 2 + dx; y: (stage.height - height) / 2 + stage.height * 0.04
+                    // Steady bridge (mockup infinity silk); only position/scale drift —
+                    // no opacity pulse (that made the rings look muddy).
+                    opacity: 0.88
+                    asynchronous: true
+                    property real dx: 0
+                    readonly property bool drift: stage.visible && ctl.stage === "rings"
+                        && Qt.application.state === Qt.ApplicationActive
+                    SequentialAnimation on dx {
+                        running: bridge.drift; loops: Animation.Infinite
+                        NumberAnimation { from: -stage.width * 0.015; to: stage.width * 0.015; duration: 28000; easing.type: Easing.InOutSine }
+                        NumberAnimation { to: -stage.width * 0.015; duration: 28000; easing.type: Easing.InOutSine }
+                    }
+                    SequentialAnimation on scale {
+                        running: bridge.drift; loops: Animation.Infinite
+                        NumberAnimation { from: 1.0; to: 1.04; duration: 28000; easing.type: Easing.InOutSine }
+                        NumberAnimation { to: 1.0; duration: 28000; easing.type: Easing.InOutSine }
+                    }
+"""
+          if old not in text:
+              if "no opacity pulse" in text and "SequentialAnimation on opacity" not in text[text.find("silkBridge"):text.find("silkBridge")+900]:
+                  print("already patched")
+              else:
+                  raise SystemExit("old silkBridge block not found")
+          else:
+              p.write_text(text.replace(old, new, 1))
+              print("patched OK")
+          PY
+      - name: Commit TrainingPage and clean trigger
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/qml/TrainingPage.qml
+          git rm -f docs/.patch-training-silk-bridge .github/workflows/patch-training-silk-bridge.yml || true
+          git commit -m "fix(Training): clear ring gauges again (mockup look)" || exit 0
+          git push
