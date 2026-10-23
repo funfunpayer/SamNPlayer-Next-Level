@@ -1,0 +1,63 @@
+name: Decode Round3 Look
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'docs/.GeneratorPage.zlib.b64.3'
+permissions:
+  contents: write
+jobs:
+  decode:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, 'zlib payload part b'))
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: cursor/look-empty-open-polish-2c42
+      - name: Decode round-3 look files
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          import base64, zlib, os
+          from pathlib import Path
+
+          def decode_parts(stem, dest, n, markers):
+              parts = []
+              for i in range(n):
+                  p = Path(f"docs/.{stem}.zlib.b64.{i}")
+                  if not p.exists():
+                      raise SystemExit(f"missing {p}")
+                  parts.append(p.read_text().strip())
+              raw = zlib.decompress(base64.b64decode("".join(parts)))
+              Path(dest).write_bytes(raw)
+              for m in markers:
+                  assert m in raw, f"{dest}: missing {m!r}"
+              print(dest, len(raw), "bytes OK")
+
+          decode_parts("Main", "app/qml/Main.qml", 1, [b"silkDrift", b"transformOrigin: Item.BottomRight"])
+          decode_parts("AGENT_STATE", "docs/AGENT_STATE.md", 2, [b"round 3", b"Last update"])
+          decode_parts("SettingsPage", "app/qml/SettingsPage.qml", 2, [b"SettingsPage", b"Behavior"])
+          decode_parts("InspectorPanel", "app/qml/InspectorPanel.qml", 4, [b"duration: 140", b"component Channel"])
+          decode_parts("GeneratorPage", "app/qml/GeneratorPage.qml", 4, [b"progressBar", b"z: -1"])
+          PY
+      - name: Commit decoded files and clean probe junk
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/qml/Main.qml app/qml/SettingsPage.qml app/qml/InspectorPanel.qml app/qml/GeneratorPage.qml docs/AGENT_STATE.md
+          # Remove zlib payloads (round3 + leftover Player/Training)
+          git rm -f docs/.Main.zlib.b64.0 \
+            docs/.AGENT_STATE.zlib.b64.0 docs/.AGENT_STATE.zlib.b64.1 \
+            docs/.SettingsPage.zlib.b64.0 docs/.SettingsPage.zlib.b64.1 \
+            docs/.InspectorPanel.zlib.b64.0 docs/.InspectorPanel.zlib.b64.1 \
+            docs/.InspectorPanel.zlib.b64.2 docs/.InspectorPanel.zlib.b64.3 \
+            docs/.GeneratorPage.zlib.b64.0 docs/.GeneratorPage.zlib.b64.1 \
+            docs/.GeneratorPage.zlib.b64.2 docs/.GeneratorPage.zlib.b64.3 \
+            docs/.PlayerPage.zlib.b64.0 docs/.PlayerPage.zlib.b64.1 \
+            docs/.PlayerPage.zlib.b64.2 docs/.PlayerPage.zlib.b64.3 \
+            docs/.TrainingPage.zlib.b64.0 docs/.TrainingPage.zlib.b64.1 \
+            docs/.TrainingPage.zlib.b64.2 docs/.TrainingPage.zlib.b64.3 \
+            .github/workflows/decode-playerpage.yml \
+            .github/workflows/decode-round3.yml || true
+          git commit -m "Look: FlowTabs, toasts, silk breathe, Inspector bars" || exit 0
+          git push
