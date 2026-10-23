@@ -263,10 +263,11 @@ Item {
                     fillMode: Image.Stretch
                     width: stage.width * 1.2; height: stage.height * 1.0
                     x: (stage.width - width) / 2 + dx; y: (stage.height - height) / 2 + stage.height * 0.04
-                    opacity: 0.92
+                    // Steady bridge (mockup infinity silk); only position/scale drift —
+                    // no opacity pulse (that made the rings look muddy).
+                    opacity: 0.88
                     asynchronous: true
                     property real dx: 0
-                    // silk-bridge-drift: 28 s alternate, ±1.5 %, scale 1.04; pause when hidden.
                     readonly property bool drift: stage.visible && ctl.stage === "rings"
                         && Qt.application.state === Qt.ApplicationActive
                     SequentialAnimation on dx {
@@ -278,11 +279,6 @@ Item {
                         running: bridge.drift; loops: Animation.Infinite
                         NumberAnimation { from: 1.0; to: 1.04; duration: 28000; easing.type: Easing.InOutSine }
                         NumberAnimation { to: 1.0; duration: 28000; easing.type: Easing.InOutSine }
-                    }
-                    SequentialAnimation on opacity {
-                        running: bridge.drift; loops: Animation.Infinite
-                        NumberAnimation { from: 0.78; to: 0.96; duration: 9000; easing.type: Easing.InOutSine }
-                        NumberAnimation { to: 0.78; duration: 9000; easing.type: Easing.InOutSine }
                     }
                 }
                 Text {
