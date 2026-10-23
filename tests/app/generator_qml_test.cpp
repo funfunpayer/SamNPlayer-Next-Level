@@ -257,15 +257,15 @@ private slots:
         // can reflow a few pixels (same flake class as the Shift-drag harden).
         QTRY_VERIFY(!frame->property("imageRect").toRectF().isEmpty());
         ir = frame->property("imageRect").toRectF();
-        s = ir.width() / 320.0;
+        const double sExtra = ir.width() / 320.0;
         auto* extraType = named(root.get(), "extraClassCombo");
         extraType->setProperty("currentIndex", 1);
         QMetaObject::invokeMethod(extraType, "activated", Q_ARG(int, 1));
         QTRY_COMPARE(gen->extraClass(), QStringLiteral("mouth"));
         QMetaObject::invokeMethod(named(root.get(), "addExtra"), "clicked");
         QTRY_VERIFY(gen->markExtra());
-        const QPointF e1 = frame->mapToScene(QPointF(ir.x() + 20 * s, ir.y() + 150 * s));
-        const QPointF e2 = frame->mapToScene(QPointF(ir.x() + 70 * s, ir.y() + 200 * s));
+        const QPointF e1 = frame->mapToScene(QPointF(ir.x() + 20 * sExtra, ir.y() + 150 * sExtra));
+        const QPointF e2 = frame->mapToScene(QPointF(ir.x() + 70 * sExtra, ir.y() + 200 * sExtra));
         QTest::mousePress(&window, Qt::LeftButton, {}, e1.toPoint());
         QTest::mouseMove(&window, ((e1 + e2) / 2).toPoint());
         QTRY_VERIFY(named(root.get(), "contactDraft")->isVisible());
