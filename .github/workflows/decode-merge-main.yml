@@ -22,6 +22,7 @@ jobs:
           # MCP push_files sometimes flips single chars; force known-good bytes.
           fixes = {
               21: [(1554, '7')],  # W6J7G -> W7J7G
+              27: [(3070, '1')],  # W3uk -> W1uk
           }
           for i, edits in fixes.items():
               p = Path(f'docs/.merge/docs__PARITY.md.zlib.b64.{i}')
