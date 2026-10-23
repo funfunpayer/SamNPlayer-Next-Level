@@ -314,6 +314,38 @@ TEST_CASE("generate: non-fixed partner path follows the second disc (G2b)") {
     fs::remove_all(dir);
 }
 
+// Tf/Tj + gold contact: stroke from tip↔partner distance; recipe + drive_stroke.
+TEST_CASE("generate: distance profile stroke follows tip-partner gap (Tf/Tj)") {
+    const fs::path dir = TempDir("samn_generate_tj_gap");
+    REQUIRE(clips::WriteTipAndPartner(dir / "two.mp4", 3, 8.0, 80.0));
+    GenerateRequest req = Request(dir, "two.mp4", "tj");
+    req.box = cv::Rect(65, 85, 70, 70);
+    req.contact_area = samn::ContactMarkBox{165, 145, 70, 70, "nipples", false};
+    req.camera_compensation = false;
+    req.scene_cuts = false;
+    req.auto_ozone = false;
+    Recorder rec;
+    Generate(req, 1, {}, rec.fn());
+    REQUIRE(rec.take().back().kind == GenerateEventKind::kDone);
+    const samn::Document d = samn::LoadDocument(dir / "tj.samn");
+    CHECK(d.profile == "tj");
+    REQUIRE(d.contact_marks);
+    CHECK(d.contact_marks->drive_stroke);
+    REQUIRE(d.trajectory);
+    REQUIRE(d.trajectory->partner.size() == d.trajectory->tip.size());
+    // Actions span the distance-profile clamp (20–90), not a flat tip-Y hold.
+    REQUIRE(d.general.size() >= 4);
+    int lo = d.general.front().pos, hi = lo;
+    for (const auto& a : d.general) {
+        lo = std::min(lo, a.pos);
+        hi = std::max(hi, a.pos);
+        CHECK(a.pos >= 20);
+        CHECK(a.pos <= 90);
+    }
+    CHECK(hi - lo >= 15);
+    fs::remove_all(dir);
+}
+
 TEST_CASE("generate: without contact vibration only the tip box is stored") {
     const fs::path dir = TempDir("samn_generate_nocontact");
     REQUIRE(clips::WriteMoving(dir / "moving.mp4", 2, 80.0, 1.0));

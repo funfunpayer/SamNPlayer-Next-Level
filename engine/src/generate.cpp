@@ -132,12 +132,14 @@ void GenerateUnguarded(const GenerateRequest& req, uint64_t run_id, const std::f
     to.scene_cuts = req.scene_cuts;
     to.axis = req.axis;
     to.mask_rois = req.mask_rois;
-    // G2b engine: gold contact → partner path (fixed box or second CSRT).
-    // Stroke stays tip-driven; Tf/Tj distance stroke is a later slice.
+    // G2b: gold contact → partner path (fixed box or second CSRT).
+    // Tf/Tj: tip↔partner 2D distance drives the stroke (GD-08); everyday
+    // contact vibration stays tip-axis.
     if (req.contact_area && req.contact_area->w > 0 && req.contact_area->h > 0) {
         to.partner_box = cv::Rect(static_cast<int>(req.contact_area->x), static_cast<int>(req.contact_area->y),
                                   static_cast<int>(req.contact_area->w), static_cast<int>(req.contact_area->h));
         to.partner_fixed = req.contact_area->fixed;
+        to.distance_stroke = IsDistanceProfile(req.signal.profile);
     }
     to.cancel = cancel;
     // Progress from the first frame on (GD-21).

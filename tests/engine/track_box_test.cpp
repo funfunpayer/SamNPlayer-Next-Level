@@ -221,6 +221,28 @@ TEST_CASE("track: fixed partner centres stay put; tracked partner moves") {
     CHECK(Ptp(tracked->partner_xs) >= 30);
 }
 
+// Tf/Tj: tip barely moves on Y; partner swings on X → distance stroke range
+// follows the gap, not tip Y (GD-08 / P3.4).
+TEST_CASE("track: distance stroke follows tip-partner gap not tip Y") {
+    TempDir dir;
+    const fs::path clip = dir.path / "gap.mp4";
+    REQUIRE(clips::WriteTipAndPartner(clip, 3, 8.0, 80.0));
+    TrackOptions o = Plain();
+    o.partner_box = cv::Rect(165, 145, 70, 70);
+    o.partner_fixed = false;
+    o.distance_stroke = true;
+    o.camera_compensation = false;
+    o.scene_cuts = false;
+    std::string error;
+    auto r = TrackBox(clip, cv::Rect(65, 85, 70, 70), o, &error);
+    REQUIRE_MESSAGE(r, error);
+    CHECK(r->distance_stroke);
+    CHECK_FALSE(r->horizontal);
+    REQUIRE(r->positions.size() == r->times_ms.size());
+    CHECK(Ptp(r->ys) <= 20);
+    CHECK(Ptp(r->positions) >= 35);
+}
+
 // ---- building blocks ----
 
 TEST_CASE("parts: savgol keeps a parabola and matches scipy interp at the edges") {
