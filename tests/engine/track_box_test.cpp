@@ -186,6 +186,41 @@ TEST_CASE("track: a missing file is an error, not an empty track") {
     CHECK(error.find("not found") != std::string::npos);
 }
 
+// Soft masks (0.7 maskRois) are punched out of camera motion with the tip
+// box; tracking still follows the ROI (masks do not drive the stroke).
+TEST_CASE("track: mask rois are accepted as camera excludes") {
+    TempDir dir;
+    const fs::path clip = dir.path / "panning_mask.mp4";
+    REQUIRE(clips::WritePanning(clip, 8, 80.0));
+    TrackOptions o = Plain();
+    o.camera_compensation = true;
+    o.mask_rois = {cv::Rect(0, 0, 40, 40), cv::Rect(clips::kW - 50, clips::kH - 50, 40, 40)};
+    const TrackResult r = Track(clip, o);
+    CHECK(r.stats.total_frames > 0);
+    CHECK(std::abs(Ptp(r.positions) - 80.0) <= 40);
+}
+
+TEST_CASE("track: fixed partner centres stay put; tracked partner moves") {
+    TempDir dir;
+    const fs::path clip = dir.path / "two.mp4";
+    REQUIRE(clips::WriteTipAndPartner(clip, 3, 60.0, 80.0));
+    TrackOptions o = Plain();
+    o.partner_box = cv::Rect(165, 145, 70, 70);
+    o.partner_fixed = true;
+    std::string error;
+    auto fixed = TrackBox(clip, cv::Rect(65, 85, 70, 70), o, &error);
+    REQUIRE_MESSAGE(fixed, error);
+    REQUIRE(fixed->partner_xs.size() == fixed->times_ms.size());
+    CHECK(std::abs(fixed->partner_xs.front() - 200.0) <= 5);
+    CHECK(std::abs(fixed->partner_xs.back() - fixed->partner_xs.front()) <= 1);
+
+    o.partner_fixed = false;
+    auto tracked = TrackBox(clip, cv::Rect(65, 85, 70, 70), o, &error);
+    REQUIRE_MESSAGE(tracked, error);
+    REQUIRE(tracked->partner_xs.size() == tracked->times_ms.size());
+    CHECK(Ptp(tracked->partner_xs) >= 30);
+}
+
 // ---- building blocks ----
 
 TEST_CASE("parts: savgol keeps a parabola and matches scipy interp at the edges") {

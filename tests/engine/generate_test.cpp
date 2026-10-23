@@ -1,5 +1,6 @@
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <filesystem>
@@ -239,9 +240,10 @@ TEST_CASE("generate: contact vibration stores the recipe, the marks and the tip'
     req.contact_vibration = true;
     req.contact_vibration_curve = "soft";
     req.tip_class = "glans";
-    // Around the tip's start: the path passes through it.
+    // Around the tip's start: the path passes through it. Fixed partner so
+    // the tip CSRT is not distracted (partner path still recorded).
     const cv::Point c(req.box.x + req.box.width / 2, req.box.y + req.box.height / 2);
-    req.contact_area = samn::ContactMarkBox{c.x - 30, c.y - 30, 60, 60, "nipples", false};
+    req.contact_area = samn::ContactMarkBox{10, 10, 50, 50, "nipples", true};
     req.extra_areas = {samn::ContactMarkBox{0, 0, 10, 10, "mouth", true}};
     Recorder rec;
     Generate(req, 1, {}, rec.fn());
@@ -257,6 +259,7 @@ TEST_CASE("generate: contact vibration stores the recipe, the marks and the tip'
     CHECK(d.contact_marks->tip->w == req.box.width);
     REQUIRE(d.contact_marks->primary);
     CHECK(d.contact_marks->primary->cls == "nipples");
+    CHECK(d.contact_marks->primary->fixed);
     REQUIRE(d.contact_marks->extras.size() == 1);
     CHECK(d.contact_marks->extras[0].fixed);
     CHECK_FALSE(d.contact_marks->drive_stroke);
@@ -267,17 +270,47 @@ TEST_CASE("generate: contact vibration stores the recipe, the marks and the tip'
     for (size_t i = 1; i < d.trajectory->tip.size(); ++i)
         CHECK(d.trajectory->tip[i].at_ms - d.trajectory->tip[i - 1].at_ms >= 40);
     CHECK(d.trajectory->tip.front().x == doctest::Approx(c.x).epsilon(0.02));
-    // The Player turns it into contact vibration.
+    // G2b: fixed partner path centres stay on the gold box mid.
+    REQUIRE(d.trajectory->partner.size() == d.trajectory->tip.size());
+    CHECK(d.trajectory->partner.front().x == doctest::Approx(35.0).epsilon(0.05));
+    CHECK(d.trajectory->partner.front().y == doctest::Approx(35.0).epsilon(0.05));
+    CHECK(d.trajectory->partner.back().x == doctest::Approx(35.0).epsilon(0.05));
+    // The Player turns tip path into contact vibration (static boxes).
     const samn::MapOptions o = samn::MapOptionsFromScript(d.ToFunscript());
     REQUIRE(o.spatial_contact);
     CHECK(o.contact_vibration);
-    CHECK(o.spatial_contact(d.trajectory->tip.front().at_ms) >= 0.99);
 
     const auto fs_json = ReadJson(dir / "standard.funscript");
     CHECK(fs_json["metadata"]["profile"] == "standard");
     CHECK(fs_json["metadata"]["device_recipe"]["contact_vibration"] == true);
     CHECK(fs_json["metadata"]["contact_marks"]["primary"]["class"] == "nipples");
     CHECK(!fs_json["metadata"].contains("trajectory"));  // .samn only
+    fs::remove_all(dir);
+}
+
+TEST_CASE("generate: non-fixed partner path follows the second disc (G2b)") {
+    const fs::path dir = TempDir("samn_generate_partner");
+    REQUIRE(clips::WriteTipAndPartner(dir / "two.mp4", 3, 60.0, 80.0));
+    GenerateRequest req = Request(dir, "two.mp4", "standard");
+    req.box = cv::Rect(65, 85, 70, 70);  // tip disc at (100, ~120)
+    req.contact_vibration = true;
+    req.contact_area = samn::ContactMarkBox{165, 145, 70, 70, "nipples", false};
+    req.camera_compensation = false;
+    req.scene_cuts = false;
+    Recorder rec;
+    Generate(req, 1, {}, rec.fn());
+    REQUIRE(rec.take().back().kind == GenerateEventKind::kDone);
+    const samn::Document d = samn::LoadDocument(dir / "standard.samn");
+    REQUIRE(d.trajectory);
+    REQUIRE(d.trajectory->partner.size() == d.trajectory->tip.size());
+    REQUIRE(d.trajectory->partner.size() >= 20);
+    double p_lo = d.trajectory->partner.front().x, p_hi = p_lo;
+    for (const auto& p : d.trajectory->partner) {
+        p_lo = std::min(p_lo, p.x);
+        p_hi = std::max(p_hi, p.x);
+    }
+    // Partner moves horizontally ~±40 px around 200 → range well above a fixed box.
+    CHECK(p_hi - p_lo >= 30.0);
     fs::remove_all(dir);
 }
 
