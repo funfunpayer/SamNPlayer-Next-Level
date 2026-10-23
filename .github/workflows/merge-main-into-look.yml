@@ -1,0 +1,54 @@
+# One-shot: merge origin/main into this look-polish branch so the PR is not
+# DIRTY (GitHub skips pull_request CI while there are merge conflicts).
+# Triggered by docs/.merge-main-trigger; deletes itself after a successful push.
+name: Merge Main Into Look
+on:
+  push:
+    branches: [cursor/look-empty-open-polish-2c42]
+    paths: [docs/.merge-main-trigger]
+
+permissions:
+  contents: write
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: cursor/look-empty-open-polish-2c42
+
+      - name: Merge main (resolve AGENT_STATE)
+        env:
+          RESOLVED: docs/AGENT_STATE.resolved.md
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          if git merge-base --is-ancestor origin/main HEAD; then
+            echo "main already contained; nothing to merge"
+            exit 0
+          fi
+          if ! git merge --no-edit origin/main; then
+            test -f "$RESOLVED"
+            cp "$RESOLVED" docs/AGENT_STATE.md
+            git add docs/AGENT_STATE.md
+            # Drop any other conflict leftovers if identical after ours content.
+            if git diff --name-only --diff-filter=U | grep -q .; then
+              echo "Unresolved conflicts:" >&2
+              git diff --name-only --diff-filter=U >&2
+              exit 1
+            fi
+            git commit -m "merge: origin/main into look polish (AGENT_STATE resolved)"
+          fi
+          # Remove the one-shot trigger + helper so they do not linger on main.
+          rm -f docs/.merge-main-trigger docs/AGENT_STATE.resolved.md \
+                .github/workflows/merge-main-into-look.yml
+          git add -A
+          git status -sb
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: drop one-shot merge-main helper"
+          fi
+          git push origin HEAD:cursor/look-empty-open-polish-2c42
