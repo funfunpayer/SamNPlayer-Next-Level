@@ -30,10 +30,14 @@ struct TrackOptions {
     // background) does not pull the compensation. Video pixels.
     std::vector<cv::Rect> mask_rois;
     // Optional gold contact / partner box (0.7 TrackTwoPoints FixedB /
-    // CaptureTrajectory). Stroke still comes from the tip; centres fill
-    // TrackResult::partner_xs / partner_ys for .samn trajectory.partner.
+    // CaptureTrajectory). Centres fill TrackResult::partner_xs / partner_ys
+    // for .samn trajectory.partner. Stroke stays tip-axis unless
+    // distance_stroke is set (Tf/Tj).
     std::optional<cv::Rect> partner_box;
     bool partner_fixed = false;  // true = keep the drawn box (no second CSRT)
+    // When true with partner_box: positions = TipPartnerDistance each frame
+    // (GD-08). Tip/partner centres and trajectory still recorded as usual.
+    bool distance_stroke = false;
     // Checked every frame; true stops the run (Result::canceled).
     std::function<bool()> cancel;
     // About every 1 % of frames: (done, total); total 0 when unknown.
@@ -53,12 +57,13 @@ struct TrackStats {
 
 struct TrackResult {
     std::vector<int64_t> times_ms;  // video time per frame
-    std::vector<double> positions;  // chosen axis, pixels
+    std::vector<double> positions;  // chosen axis, or tip↔partner distance (pixels)
     std::vector<double> xs, ys;     // box centre per frame (y camera-compensated)
     std::vector<double> frame_ys;   // box centre y in frame pixels, before compensation (tip path)
     // Partner centres in frame pixels (same length as tip when partner_box set).
     std::vector<double> partner_xs, partner_ys;
-    bool horizontal = false;        // positions are xs
+    bool horizontal = false;        // positions are xs (false when distance_stroke)
+    bool distance_stroke = false;   // positions are TipPartnerDistance
     cv::Size size;
     std::vector<int> scene_cuts;    // frame numbers counted from the first tracked frame
     TrackStats stats;

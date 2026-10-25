@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 25 Oct 2026, Claude, branch `claude/takeover-look-polish` (Cursor paused; Claude finishes #113, #119, #117, then Player/Editor §3).
+**Last update:** 25 Oct 2026, Claude, branch `claude/takeover-tf-tj` (Cursor paused; Claude finished #113 → #120, #117 → #122, #119 → this; next Player/Editor §3).
 
 ## Rules
 
@@ -93,7 +93,8 @@
 - **Generator G2a** (20 Oct Claude `claude/samn2-gen-g2` / #111; 22 Oct Cursor takeover `cursor/samn2-gen-g2a-60e6` / #114): "+ Another contact area" (magenta) with "Extra type", Shift-drag and Shift-click on a candidate = contact, the mark just drawn is selected, "Selected: …" with its class, "Delete selected", Esc "Mark deselected.", "Clear extras", 0.7's lines after each mark. Windows CI: Shift via `keyPress` + `Qt.keyboardModifiers`; `QTest::mouseMove` 3-arg.
 - **Generator G2b UI** (22 Oct, `cursor/samn2-gen-g2b-60e6` / #115): 0.7 "Partner fixed (pixels)" and "Stay fixed (extras)" toggles; `ContactMarkBox.fixed` in `contactAreas` and remembered (`generator.partner_fixed`, `generator.extras_stay_fixed`); status "stay fixed" / "follows partner path". **Still open:** engine `track_multi` / partner path recording (P3.4) so fixed=false actually tracks.
 - **Generator Ignore region** (22 Oct, `cursor/samn2-gen-ignore-60e6` / #116): "+ Ignore region" (`markIgnore`); black dashed soft masks (`maskRois`); Create → `mask_rois` camera excludes. Tests `ignoreRegionsAreSoftMasks`, `track: mask rois…`.
-- **Generator G2b engine (partner path)** (23 Oct, `cursor/samn2-gen-g2b-engine-60e6`): gold contact → `TrackOptions.partner_box` / `partner_fixed`; second CSRT or fixed centres → `trajectory.partner` in `.samn` (tip stroke unchanged). Tests `track: fixed partner…`, `generate: non-fixed partner path…`. **Still open:** Tf/Tj distance stroke (`TrackTwoPoints` Positions), extras multi-path, Player overlay follow.
+- **Generator G2b engine (partner path)** (23 Oct, `cursor/samn2-gen-g2b-engine-60e6` / #116): gold contact → `TrackOptions.partner_box` / `partner_fixed`; second CSRT or fixed centres → `trajectory.partner` in `.samn` (tip stroke unchanged). Tests `track: fixed partner…`, `generate: non-fixed partner path…`.
+- **Generator Tf/Tj distance stroke** (23 Oct, `cursor/samn2-gen-tf-tj-distance-60e6`): `TipPartnerDistance` (GD-08 2D hypot, near edge, overlap → 0); `TrackOptions.distance_stroke` when profile is Tf/Tj + gold contact → positions from tip↔partner gap; recipe / `drive_stroke` unchanged. UI still does not offer Tf/Tj (D-053). Tests `tip_distance:*`, `track: distance stroke…`, `generate: distance profile stroke…`. **Still open:** extras multi-path (`track_multi`), Player overlay follow.
 - **Generator G1b** (20 Oct, `claude/samn2-gen-g1b`): the seek row while marking (Time (s), +1s, +5s), the "0–100 on video" chip and gauge on the preview; PARITY §3.8 (the Editor part of the Generator) checked against the code and the tests: drag, add, delete, clamp, save, undo / redo and the range tools are built. The Generator's help chips: Find tip, Time (s), Style, the four toggles, contact vibration, sensitivity, curve, mark contact, optimize after Create, the queue.
 - **Generator G1** (20 Oct, `claude/samn2-gen-g1`, the everyday Create path as in 0.7): the lede and step prompts verbatim, the preview coach, Create without a tip finds it first, the done line, the quality box with the post-generate review (`core/polarity.h`), the Create card scrolls. Next slices: G1b seek row and help chips, G2 marking, G3 feel, G4 advanced, G5 review panel, G6 queue/drop, G7 AI assist, G8 `.sam`.
 - **Help chips** (20 Oct, `claude/samn2-help-chips`): `HelpChip.qml` and 0.7's 189 `data-help` texts verbatim (`app/qml/HelpTexts.js`, `ci/help_texts.py`); placed in the Inspector, Training and Settings; the Generator's texts are ready for its slices (`help: "<0.7 id>"` on a row or card, `HelpChip { key: … }` elsewhere; `shell_qml_test::helpKeysInTheQmlSourcesExist` checks every key).
@@ -116,16 +117,16 @@
 
 ## Next (in order; the work list is `LESSONS.md` § Gaps, `TEST_PARITY.md` and `P3_GENERATOR.md`)
 
-0. **Generator (this Cursor lane):** land **G2a** (#114 ✅), **G2b UI** (#115 ✅), **Ignore** (#116), **G2b engine partner path** (this tip); then Tf/Tj distance stroke / extras multi; then G3 feel → G8 `.sam`.
-1. **Look polish (parallel Cursor, #117):** Flow motion. Owns shell/Player/Training visuals. May touch `GeneratorPage.qml` for motion only — **Generator marking/engine stays on #114–#116 + this tip**; reconcile if both edit that file.
-2. **Owner GUI leftovers:** handbook (§12), idle ribbon (§11), donation pages (Manifest §2). Reduced motion ✅ (Claude takeover of #113).
+0. **Generator:** G2 stack ✅ (#114–#116); Tf/Tj distance stroke ✅ (Cursor #119, finished by Claude); next extras multi (`track_multi`), then G3 feel → G8 `.sam`. Cursor is paused (25 Oct); Claude finishes Cursor's open PRs, then Player/Editor §3.
+1. **Look polish:** ✅ (#122, Claude takeover of Cursor #117; reduced-motion gates and a window-wide loop test added).
+2. **Owner GUI leftovers:** handbook (§12), idle ribbon (§11), donation pages (Manifest §2). Reduced motion ✅ (#120).
 3. **AI Train D-155:** script compare with labels, then golden-clip run (Owner clips).
 4. **Windows CI flakiness** under ctest; diagnostics already run functions alone.
 5. **P3.6** Quality Doctor; Player finish / Svakom / Scene Map view; bug hunt; release.
 
 ### Handoff note (for the next agent)
-- **Routing:** one theme per agent. Generator stack #114→#115→#116; Look #117 parallel (do not steal Look files for feature work). Claude #111 superseded by #114.
-- Stack merge onto `main`: G2a → G2b → Ignore. Next code after Ignore: engine partner tracking (`track_two` / `track_multi`). Soft masks already feed camera excludes.
+- **Routing:** one theme per agent. Generator Tf/Tj distance on this tip; Look #117 parallel (do not steal Look files for feature work).
+- Next after this tip: extras multi-path / Player partner overlay; then G3 feel. Soft masks + partner path + distance stroke are on `main` once this merges.
 - Do not push to `claude/*`. Push often; update this file every PR.
 
 Owner reminders (16–17 Oct): the Generator is the Editor; detection better than 0.7 but measured against it; curves stay real curves (audio too); every function of 0.7 and all earlier versions and plans comes along, what was removed on purpose stays out (and why is in `VERSIONS_AND_PLANS.md`).
