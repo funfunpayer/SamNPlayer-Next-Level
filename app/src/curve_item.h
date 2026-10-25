@@ -123,7 +123,10 @@ private:
     QColor playheadColor_{0xff, 0xff, 0xff};
     QString lane_ = QStringLiteral("stroke"), label_;
     bool showPlayhead_ = true, showGrid_ = false, editMode_ = false;
-    qreal lineWidth_ = 1.5, glow_ = 8, fill_ = 0.16;
+    // Defaults tuned for a sharp wave (glow 5, not 8 — stacked under-strokes
+    // used to look blurred). The Editor lowers glow further in paintLayer.
+    // CI re-trigger after main merge 2.
+    qreal lineWidth_ = 1.5, glow_ = 5, fill_ = 0.14;
     Mode mode_ = Mode::Empty;
     // The curve without the playhead, redrawn only when data, view, size or
     // style change: while playing, a frame is one blit plus a line.

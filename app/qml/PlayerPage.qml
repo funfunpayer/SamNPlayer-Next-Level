@@ -13,7 +13,7 @@ Item {
     property alias controller: ctrl
 
     property real speed: 1.0
-    // Nothing open yet: the Flow stage welcomes (0.7 "Ready when you are").
+    // Nothing open yet: round Play + Open… (D-138 / 0.8 #550), not the old welcome stage.
     readonly property bool empty: !ctrl.hasScript && ctrl.videoName === ""
     // Video fullscreen (0.7: button, double-click, Esc leaves).
     property bool fullStage: false
@@ -367,28 +367,77 @@ Item {
         }
 
         // Empty state (Owner 15 Oct, 0.8 #550): one real round Play button,
-        // "Open…" under it, centred. No wordmark or stage art.
-        Column {
-            id: emptyState
+        // "Open…" under it, centred. No wordmark or stage art. Soft bloom and
+        // a calm settle-in so the home feels alive without clutter.
+        Item {
+            id: emptyHome
             visible: page.empty
-            anchors.centerIn: parent
-            spacing: 18
-            PlayButton {
-                objectName: "emptyPlay"
-                anchors.horizontalCenter: parent.horizontalCenter
-                width: 168; height: 168
-                onClicked: page.openFile()
+            anchors.fill: parent
+            opacity: page.empty ? 1 : 0
+            Behavior on opacity { NumberAnimation { duration: Theme.animSlow; easing.type: Easing.OutCubic } }
+
+            // Ambient stage bloom (static composition + slow breathe).
+            Rectangle {
+                anchors.centerIn: parent
+                width: Math.min(parent.width * 0.72, 520); height: width * 0.62
+                radius: width / 2
+                rotation: 0
+                gradient: Gradient {
+                    GradientStop { position: 0; color: Qt.rgba(0, 180 / 255, 1, 0.10) }
+                    GradientStop { position: 0.55; color: Qt.rgba(1, 138 / 255, 35 / 255, 0.06) }
+                    GradientStop { position: 1; color: "transparent" }
+                }
+                SequentialAnimation on opacity {
+                    running: page.empty && Qt.application.state === Qt.ApplicationActive && !Theme.reducedMotion
+                    loops: Animation.Infinite
+                    NumberAnimation { from: 0.55; to: 1.0; duration: 3800; easing.type: Easing.InOutSine }
+                    NumberAnimation { from: 1.0; to: 0.55; duration: 3800; easing.type: Easing.InOutSine }
+                }
             }
-            Text {
-                textFormat: Text.PlainText
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: qsTr("Open…"); color: emptyOpen.containsMouse ? "white" : Theme.text
-                font.family: Theme.font; font.pixelSize: 20; font.weight: Font.DemiBold
-                MouseArea {
-                    id: emptyOpen
-                    anchors.fill: parent; anchors.margins: -8
-                    hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+
+            Column {
+                id: emptyState
+                anchors.centerIn: parent
+                spacing: 18
+                scale: page.empty ? 1 : 0.96
+                Behavior on scale { NumberAnimation { duration: Theme.animSlow; easing.type: Easing.OutCubic } }
+                PlayButton {
+                    objectName: "emptyPlay"
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    width: 168; height: 168
                     onClicked: page.openFile()
+                }
+                // Match 0.8 `.pb-empty-open` (letter-spacing + soft cyan glow).
+                Item {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    width: emptyOpenLabel.implicitWidth
+                    height: emptyOpenLabel.implicitHeight
+                    Text {
+                        anchors.centerIn: parent
+                        textFormat: Text.PlainText
+                        text: emptyOpenLabel.text
+                        color: Qt.rgba(63 / 255, 208 / 255, 1, 0.45)
+                        font: emptyOpenLabel.font
+                        opacity: emptyOpen.containsMouse ? 0.85 : 0.55
+                        scale: 1.10
+                        z: -1
+                        Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
+                    }
+                    Text {
+                        id: emptyOpenLabel
+                        textFormat: Text.PlainText
+                        text: qsTr("Open…")
+                        color: emptyOpen.containsMouse ? "white" : Theme.text
+                        font.family: Theme.font; font.pixelSize: 20; font.weight: Font.DemiBold
+                        font.letterSpacing: 0.8
+                        Behavior on color { ColorAnimation { duration: Theme.animFast } }
+                    }
+                    MouseArea {
+                        id: emptyOpen
+                        anchors.fill: parent; anchors.margins: -8
+                        hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                        onClicked: page.openFile()
+                    }
                 }
             }
         }
@@ -413,7 +462,7 @@ Item {
                 // Silk drifts behind the video (0.8 #550); the video covers
                 // it where it plays, the bands show in the letterbox and
                 // when there is no video.
-                SilkLayer { running: stage.visible && Qt.application.state === Qt.ApplicationActive }
+                SilkLayer { running: stage.visible && Qt.application.state === Qt.ApplicationActive && !Theme.reducedMotion }
                 VideoOutput {
                     id: videoOut
                     anchors.fill: parent
@@ -479,10 +528,18 @@ Item {
                     value: ctrl.playheadMs >= 0 ? ctrl.strokeNow : -1
                 }
                 Column {
+                    id: noVideoHint
                     anchors.centerIn: parent
-                    visible: ctrl.videoName === ""
+                    visible: ctrl.videoName === "" && !ctrl.noScriptForVideo
                     spacing: 10
-                    Image { source: "assets/empty-video.svg"; width: 120; height: 90; sourceSize: Qt.size(240, 180); anchors.horizontalCenter: parent.horizontalCenter; opacity: 0.8 }
+                    opacity: 0.92
+                    SequentialAnimation on anchors.verticalCenterOffset {
+                        running: noVideoHint.visible && Qt.application.state === Qt.ApplicationActive && !Theme.reducedMotion
+                        loops: Animation.Infinite
+                        NumberAnimation { from: -4; to: 4; duration: 3200; easing.type: Easing.InOutSine }
+                        NumberAnimation { to: -4; duration: 3200; easing.type: Easing.InOutSine }
+                    }
+                    Image { source: "assets/empty-video.svg"; width: 120; height: 90; sourceSize: Qt.size(240, 180); anchors.horizontalCenter: parent.horizontalCenter; opacity: 0.85 }
                     Text {
                         textFormat: Text.PlainText
                         anchors.horizontalCenter: parent.horizontalCenter
@@ -713,6 +770,8 @@ Item {
                     visible: ctrl.showStrokeLane || !ctrl.hasScript
                     height: Math.max(60, parent.height - lanes.extraLanes * lanes.laneH - (audioLane.visible ? lanes.audioH : 0) - lanes.fixedH)
                     lane: "stroke"; lineColor: Theme.orange; showGrid: true
+                    // Sharp Play wave: soft bloom, not a muddy halo.
+                    lineWidth: 1.55; glow: 4.5; fill: 0.12
                     markerStartMs: ctrl.markerStartMs; markerEndMs: ctrl.markerEndMs
                     viewStartMs: ctrl.viewStartMs; viewEndMs: ctrl.viewEndMs
                     Component.onCompleted: ctrl.attachCurve(curve)
@@ -741,7 +800,7 @@ Item {
                     width: parent.width; height: lanes.laneH
                     visible: ctrl.showVibrationLane  // D-132: the script's channels, or the device's
                     lane: "vibration"; lineColor: Theme.laneVibration
-                    lineWidth: 1.15; glow: 4; fill: 0.2
+                    lineWidth: 1.2; glow: 3; fill: 0.14
                     viewStartMs: ctrl.viewStartMs; viewEndMs: ctrl.viewEndMs
                     Component.onCompleted: ctrl.attachCurve(vibLane)
                     WheelHandler {
@@ -755,7 +814,7 @@ Item {
                     width: parent.width; height: lanes.laneH
                     visible: ctrl.showSuctionLane
                     lane: "suction"; lineColor: Theme.laneSuction
-                    lineWidth: 1.15; glow: 4; fill: 0.2
+                    lineWidth: 1.2; glow: 3; fill: 0.14
                     viewStartMs: ctrl.viewStartMs; viewEndMs: ctrl.viewEndMs
                     Component.onCompleted: ctrl.attachCurve(sucLane)
                     WheelHandler {

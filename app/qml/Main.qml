@@ -26,6 +26,7 @@ ApplicationWindow {
     // The silk bands of the Flow look in their corners, large and slowly
     // drifting: blue from the top right, orange from the bottom left, behind
     // every mode (Owner, 19 Oct: as strong as on the Training stage).
+    readonly property bool silkDrift: win.visible && Qt.application.state === Qt.ApplicationActive && !Theme.reducedMotion
     Image {
         id: silkTop
         anchors.right: parent.right; anchors.top: parent.top
@@ -33,17 +34,23 @@ ApplicationWindow {
         width: parent.width * 0.66; fillMode: Image.PreserveAspectFit
         source: "assets/bg-top.svg"; sourceSize.width: 2000
         asynchronous: true
+        opacity: 0.92
         property real driftX: 0
         property real driftY: 0
         SequentialAnimation on driftX {
-            running: win.visible && !Theme.reducedMotion; loops: Animation.Infinite
+            running: win.silkDrift; loops: Animation.Infinite
             NumberAnimation { to: -win.width * 0.025; duration: 32000; easing.type: Easing.InOutSine }
             NumberAnimation { to: 0; duration: 32000; easing.type: Easing.InOutSine }
         }
         SequentialAnimation on driftY {
-            running: win.visible && !Theme.reducedMotion; loops: Animation.Infinite
+            running: win.silkDrift; loops: Animation.Infinite
             NumberAnimation { to: win.height * 0.02; duration: 32000; easing.type: Easing.InOutSine }
             NumberAnimation { to: 0; duration: 32000; easing.type: Easing.InOutSine }
+        }
+        SequentialAnimation on opacity {
+            running: win.silkDrift; loops: Animation.Infinite
+            NumberAnimation { from: 0.78; to: 1.0; duration: 11000; easing.type: Easing.InOutSine }
+            NumberAnimation { to: 0.78; duration: 11000; easing.type: Easing.InOutSine }
         }
     }
     Image {
@@ -53,17 +60,23 @@ ApplicationWindow {
         width: parent.width * 0.58; fillMode: Image.PreserveAspectFit
         source: "assets/bg-bottom.svg"; sourceSize.width: 2000
         asynchronous: true
+        opacity: 0.88
         property real driftX: 0
         property real driftY: 0
         SequentialAnimation on driftX {
-            running: win.visible && !Theme.reducedMotion; loops: Animation.Infinite
+            running: win.silkDrift; loops: Animation.Infinite
             NumberAnimation { to: win.width * 0.03; duration: 40000; easing.type: Easing.InOutSine }
             NumberAnimation { to: 0; duration: 40000; easing.type: Easing.InOutSine }
         }
         SequentialAnimation on driftY {
-            running: win.visible && !Theme.reducedMotion; loops: Animation.Infinite
+            running: win.silkDrift; loops: Animation.Infinite
             NumberAnimation { to: win.height * 0.02; duration: 40000; easing.type: Easing.InOutSine }
             NumberAnimation { to: 0; duration: 40000; easing.type: Easing.InOutSine }
+        }
+        SequentialAnimation on opacity {
+            running: win.silkDrift; loops: Animation.Infinite
+            NumberAnimation { from: 0.72; to: 0.95; duration: 14000; easing.type: Easing.InOutSine }
+            NumberAnimation { to: 0.72; duration: 14000; easing.type: Easing.InOutSine }
         }
     }
 
@@ -139,7 +152,9 @@ ApplicationWindow {
     Rectangle {
         objectName: "dropOverlay"
         anchors.fill: parent
-        visible: drop.containsDrag
+        visible: opacity > 0.01
+        opacity: drop.containsDrag ? 1 : 0
+        Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
         color: Qt.rgba(0, 20 / 255, 45 / 255, 0.72)
         border.color: Theme.cyan; border.width: 2
         Text {
@@ -147,6 +162,8 @@ ApplicationWindow {
             anchors.centerIn: parent
             text: qsTr("Drop a video or script here")
             color: "white"; font.family: Theme.font; font.pixelSize: 22
+            scale: drop.containsDrag ? 1.0 : 0.96
+            Behavior on scale { NumberAnimation { duration: Theme.animSlow; easing.type: Easing.OutBack } }
         }
     }
     // Ctrl+O from every mode opens in the Player (0.7 top-bar Open).
@@ -289,8 +306,16 @@ ApplicationWindow {
                 color: Theme.bgBottom
                 border.color: Theme.danger
                 opacity: 0
-                Component.onCompleted: opacity = 1
-                Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
+                scale: 0.96
+                transformOrigin: Item.BottomRight
+                Component.onCompleted: { opacity = 1; scale = 1 }
+                Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
+                Behavior on scale { NumberAnimation { duration: Theme.animSlow; easing.type: Easing.OutCubic } }
+                // Soft danger wash behind the card.
+                Rectangle {
+                    anchors.fill: parent; anchors.margins: -2; radius: parent.radius + 2; z: -1
+                    color: Qt.rgba(1, 0.42, 0.48, 0.14)
+                }
                 MouseArea { anchors.fill: parent; onClicked: Notices.dismiss(toast.modelData.id) }
                 RowLayout {
                     id: toastRow
