@@ -5,6 +5,7 @@
 
 #include <opencv2/imgproc.hpp>
 
+#include "samn/engine/tip_distance.h"
 #include "samn/vision/frame_reader.h"
 #include "samn/vision/tracker.h"
 #include "track_parts.h"
@@ -66,9 +67,11 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
     if (!tracker) return fail(why);
     tracker->Init(frame.bgr, box);
 
-    // Optional partner (gold contact): fixed box or a second CSRT. Stroke is
-    // still tip-only; centres feed .samn trajectory.partner (G2b engine).
+    // Optional partner (gold contact): fixed box or a second CSRT. Centres
+    // feed .samn trajectory.partner (G2b). With distance_stroke, positions
+    // come from TipPartnerDistance (Tf/Tj / GD-08).
     const bool want_partner = opts.partner_box && opts.partner_box->width > 0 && opts.partner_box->height > 0;
+    const bool distance_stroke = opts.distance_stroke && want_partner;
     std::unique_ptr<vision::Tracker> partner_tracker;
     cv::Rect partner_last;
     if (want_partner) {
@@ -92,6 +95,7 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
 
     TrackResult res;
     res.size = reader->size();
+    res.distance_stroke = distance_stroke;
     res.times_ms.push_back(frame.pts_us / 1000);
     res.xs.push_back(Centre(box).x);
     res.ys.push_back(Centre(box).y);
@@ -99,8 +103,15 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
         res.partner_xs.push_back(Centre(partner_last).x);
         res.partner_ys.push_back(Centre(partner_last).y);
     }
+    std::vector<double> distances;
+    double last_good_distance = 0;
+    if (distance_stroke) {
+        last_good_distance = TipPartnerDistance(box, partner_last);
+        distances.push_back(last_good_distance);
+    }
     std::vector<double> camera_dy{0.0};
     cv::Rect last = box;
+    bool tip_ok = true;  // last frame had a real tip box (found or coast)
     Coast coast;
     coast.ObserveOk(box);
     DispGuard guard;
@@ -154,9 +165,11 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
                 res.xs.push_back(Centre(*c).x);
                 res.ys.push_back(Centre(*c).y);
                 last = *c;
+                tip_ok = true;
             } else {
                 res.xs.push_back(res.xs.back());
                 res.ys.push_back(res.ys.back());
+                tip_ok = false;
             }
         } else {
             coast.ObserveOk(*found);
@@ -164,6 +177,7 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
             res.xs.push_back(Centre(*found).x);
             res.ys.push_back(Centre(*found).y);
             last = *found;
+            tip_ok = true;
             // Only crops that still resemble the start feed the memory, so
             // slow drift never poisons a later reacquire.
             if (memory && idx % kRememberEveryNFrames == 0) {
@@ -172,14 +186,28 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
             }
         }
 
+        bool partner_ok = want_partner;
         if (want_partner) {
             if (opts.partner_fixed || cut || !partner_tracker) {
                 // Fixed (or after a cut): keep the last known centre.
             } else if (auto pb = partner_tracker->Update(frame.bgr)) {
                 partner_last = *pb;
+                partner_ok = true;
+            } else {
+                partner_ok = false;  // brief miss: hold last box, gap for distance
             }
             res.partner_xs.push_back(Centre(partner_last).x);
             res.partner_ys.push_back(Centre(partner_last).y);
+        }
+
+        if (distance_stroke) {
+            // GD-08: tip loss or no usable partner holds the last good gap.
+            if (tip_ok && partner_ok) {
+                last_good_distance = TipPartnerDistance(last, partner_last);
+                distances.push_back(last_good_distance);
+            } else {
+                distances.push_back(last_good_distance);
+            }
         }
 
         if (opts.camera_compensation) {
@@ -211,9 +239,15 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
 
     res.stats.vertical_range = Ptp(res.ys);
     res.stats.horizontal_range = Ptp(res.xs);
-    const bool auto_x = res.stats.horizontal_range > res.stats.vertical_range * 1.5 && res.stats.horizontal_range > 5;
-    res.horizontal = opts.axis == TrackAxis::kX || (opts.axis == TrackAxis::kAuto && auto_x);
-    res.positions = res.horizontal ? res.xs : res.ys;
+    if (distance_stroke) {
+        res.horizontal = false;
+        res.positions = std::move(distances);
+    } else {
+        const bool auto_x =
+            res.stats.horizontal_range > res.stats.vertical_range * 1.5 && res.stats.horizontal_range > 5;
+        res.horizontal = opts.axis == TrackAxis::kX || (opts.axis == TrackAxis::kAuto && auto_x);
+        res.positions = res.horizontal ? res.xs : res.ys;
+    }
 
     res.stats.total_frames = idx;
     res.stats.valid_frames = valid;
