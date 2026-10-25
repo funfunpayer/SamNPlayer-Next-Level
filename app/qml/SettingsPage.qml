@@ -44,8 +44,8 @@ Item {
         objectName: "settingsCard"
         anchors.centerIn: parent
         width: Math.min(parent.width - 48, 980); height: Math.min(parent.height - 48, 720)
-        scale: root.open ? 1 : 0.97
-        Behavior on scale { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
+        scale: root.open ? 1 : 0.96
+        Behavior on scale { NumberAnimation { duration: Theme.animSlow; easing.type: Easing.OutCubic } }
         MouseArea { anchors.fill: parent }  // clicks on the card stay on it
         ColumnLayout {
             anchors.fill: parent; anchors.margins: 20; spacing: 14

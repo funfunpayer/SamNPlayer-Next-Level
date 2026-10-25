@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 25 Oct 2026, Claude, branch `claude/takeover-tf-tj` (Cursor paused; Claude finishes #119, #117, then Player/Editor §3).
+**Last update:** 25 Oct 2026, Claude, branch `claude/takeover-tf-tj` (Cursor paused; Claude finished #113 → #120, #117 → #122, #119 → this; next Player/Editor §3).
 
 ## Rules
 
@@ -88,6 +88,7 @@
 - **Optimize for** (#81, D-156): `core/include/samn/improve.h` (trim, fill gaps, heal tracking gaps), the Editor's *Optimize for* any device / Sam Neo 2, *Optimize after Create*.
 - **Teacher on a model server** (D-155 step 4, first part, #91; Owner 20 Oct: servers first): `core/teacher.h`, `LabelController` teacher settings, *Ask the teacher* (`A`).
 - **ONNX Runtime in the build** (D-155 step 4, 20 Oct, `claude/samn2-onnx-nudenet`): ONNX Runtime 1.22 from its NuGet package (FetchContent, pinned hash, `SAMN_WITH_ONNXRUNTIME`), beside every executable on Windows (`samn_copy_runtime_dlls`) and in the package with its licence; `vision/onnx_detector.h` (YOLOv8 decoding, NudeNet classes and their labels), tested on `tests/vision/data/tiny_yolo.onnx`.
+- **Look vs 0.8 #550** (23 Oct Cursor `cursor/look-empty-open-polish-2c42` / #117; 25 Oct Claude takeover `claude/takeover-look-polish`): sharp Play/Editor curves (CurveItem line width, glow, fill; a 16 px hit radius for painting), Training rings, the empty Play + Open stand, Flow tabs, transport and Play-ring motion (`docs/LOOK_FROM_08_ASSESSMENT.md`). Every new loop honours reduced motion and the app being inactive; `Theme.animSlow` / `animAmbient` are 0 under reduced motion. The branch's encoded-upload workflow and `docs/.merge/` chunks were dropped (the chunks were corrupt and had truncated `generator_qml_test.cpp`).
 - **Reduced motion** (22 Oct, `cursor/reduced-motion-60e6`, D-092 / Owner GUI order): Settings → General toggle; `Theme.reducedMotion` (`ui.reduced_motion`, `SAMN_NO_ANIM` for tests); silk, Play ring, mode-tab breathe, Training drift and DualRing decorative loops stop; `animFast`/`animNormal` become 0. Test `reducedMotionStopsDecorativeAnimations`. Finished by Claude (takeover) after Cursor paused.
 - **Generator G2a** (20 Oct Claude `claude/samn2-gen-g2` / #111; 22 Oct Cursor takeover `cursor/samn2-gen-g2a-60e6` / #114): "+ Another contact area" (magenta) with "Extra type", Shift-drag and Shift-click on a candidate = contact, the mark just drawn is selected, "Selected: …" with its class, "Delete selected", Esc "Mark deselected.", "Clear extras", 0.7's lines after each mark. Windows CI: Shift via `keyPress` + `Qt.keyboardModifiers`; `QTest::mouseMove` 3-arg.
 - **Generator G2b UI** (22 Oct, `cursor/samn2-gen-g2b-60e6` / #115): 0.7 "Partner fixed (pixels)" and "Stay fixed (extras)" toggles; `ContactMarkBox.fixed` in `contactAreas` and remembered (`generator.partner_fixed`, `generator.extras_stay_fixed`); status "stay fixed" / "follows partner path". **Still open:** engine `track_multi` / partner path recording (P3.4) so fixed=false actually tracks.
@@ -117,7 +118,7 @@
 ## Next (in order; the work list is `LESSONS.md` § Gaps, `TEST_PARITY.md` and `P3_GENERATOR.md`)
 
 0. **Generator:** G2 stack ✅ (#114–#116); Tf/Tj distance stroke ✅ (Cursor #119, finished by Claude); next extras multi (`track_multi`), then G3 feel → G8 `.sam`. Cursor is paused (25 Oct); Claude finishes Cursor's open PRs, then Player/Editor §3.
-1. **Look polish (Cursor #117):** Flow motion, being finished by Claude on `claude/takeover-look-polish` (reduced motion gates added).
+1. **Look polish:** ✅ (#122, Claude takeover of Cursor #117; reduced-motion gates and a window-wide loop test added).
 2. **Owner GUI leftovers:** handbook (§12), idle ribbon (§11), donation pages (Manifest §2). Reduced motion ✅ (#120).
 3. **AI Train D-155:** script compare with labels, then golden-clip run (Owner clips).
 4. **Windows CI flakiness** under ctest; diagnostics already run functions alone.

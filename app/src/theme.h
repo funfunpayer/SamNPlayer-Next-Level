@@ -51,6 +51,8 @@ private:
     Q_PROPERTY(bool reducedMotion READ reducedMotion WRITE setReducedMotion NOTIFY reducedMotionChanged)
     Q_PROPERTY(int animFast READ animFast NOTIFY reducedMotionChanged)
     Q_PROPERTY(int animNormal READ animNormal NOTIFY reducedMotionChanged)
+    Q_PROPERTY(int animSlow READ animSlow NOTIFY reducedMotionChanged)
+    Q_PROPERTY(int animAmbient READ animAmbient NOTIFY reducedMotionChanged)
 
 public:
     explicit Theme(QObject* parent = nullptr) : QObject(parent) {
@@ -85,6 +87,11 @@ public:
     }
     int animFast() const { return reduced_motion_ ? 0 : 140; }
     int animNormal() const { return reduced_motion_ ? 0 : 220; }
+    // Soft UI transitions (mode face, empty home settle).
+    int animSlow() const { return reduced_motion_ ? 0 : 420; }
+    // Long ambient loops (idle ring drift, empty bloom); loops also check
+    // reducedMotion and stop.
+    int animAmbient() const { return reduced_motion_ ? 0 : 9000; }
 
 signals:
     void reducedMotionChanged();

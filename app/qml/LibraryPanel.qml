@@ -32,8 +32,12 @@ GlassCard {
         property bool expanded: false
         signal clicked()
         width: parent ? parent.width : 200; height: 34; radius: 10
-        color: primary ? Qt.rgba(0, 120 / 255, 1, 0.22) : area.containsMouse ? Qt.rgba(1, 1, 1, 0.06) : "transparent"
-        border.color: primary ? Theme.cardBorder : "transparent"
+        color: primary ? Qt.rgba(0, 120 / 255, 1, 0.22) : area.containsMouse ? Qt.rgba(1, 1, 1, 0.08) : "transparent"
+        border.color: primary ? Theme.cyan : area.containsMouse ? Qt.rgba(90 / 255, 170 / 255, 255 / 255, 0.28) : "transparent"
+        scale: area.pressed ? 0.98 : 1.0
+        Behavior on color { ColorAnimation { duration: Theme.animFast } }
+        Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
+        Behavior on scale { NumberAnimation { duration: Theme.animFast } }
         Icon { x: 9; anchors.verticalCenter: parent.verticalCenter; name: it.icon; width: 17; height: 17; color: Theme.cyan }
         Text {
             textFormat: Text.PlainText

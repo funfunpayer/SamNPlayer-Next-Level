@@ -748,6 +748,18 @@ private slots:
 
     // D-092 / UI-07: Settings → General "Reduce motion" stops decorative
     // loops and zeros Theme.animFast / animNormal; the choice is kept.
+    // Running endless animations (loops: Animation.Infinite) in the window.
+    static int RunningLoops(QObject* root) {
+        int n = 0;
+        for (QObject* o : root->findChildren<QObject*>()) {
+            bool isAnimation = false;
+            for (const QMetaObject* m = o->metaObject(); m; m = m->superClass())
+                if (qstrcmp(m->className(), "QQuickAbstractAnimation") == 0) isAnimation = true;
+            if (isAnimation && o->property("running").toBool() && o->property("loops").toInt() < 0) ++n;  // Animation.Infinite
+        }
+        return n;
+    }
+
     void reducedMotionStopsDecorativeAnimations() {
         {
             Shell s;
@@ -758,6 +770,8 @@ private slots:
             QVERIFY(!theme->reducedMotion());
             QCOMPARE(theme->animFast(), 140);
             QCOMPARE(theme->animNormal(), 220);
+            QCOMPARE(theme->animSlow(), 420);
+            QVERIFY(RunningLoops(s.window) > 0);  // the Flow look moves
             QTest::keyClick(s.window, Qt::Key_Comma, Qt::ControlModifier);
             QQuickItem* page = s.one("SettingsPage");
             QTRY_VERIFY_WITH_TIMEOUT(page->isVisible(), kWait);
@@ -770,6 +784,10 @@ private slots:
             QTRY_VERIFY(theme->reducedMotion());
             QCOMPARE(theme->animFast(), 0);
             QCOMPARE(theme->animNormal(), 0);
+            QCOMPARE(theme->animSlow(), 0);
+            QCOMPARE(theme->animAmbient(), 0);
+            // No endless loop keeps running (a 0 ms loop would also spin).
+            QTRY_COMPARE(RunningLoops(s.window), 0);
             if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT_REDUCED"); !shot.isEmpty()) {
                 QTest::qWait(200);
                 s.window->grabWindow().save(QString::fromLocal8Bit(shot));
