@@ -613,7 +613,7 @@ Two things share this name: the device **Training** mode (stop-start, plateau, s
 - **Learned:** a float animation moved the play mark of the empty Player to the top-left corner so only a corner showed (0.7.0); a continuously running animation made the test tool's "element is stable" check never pass (cosmetic drift, found by disabling all animations and re-sampling); a 3D tilt needs perspective on the parent and the rotation on the child. Reduced motion is a requirement (D-092).
 - **Source:** `CL` 0.7.0 "Empty Player / Create stage"; `HANDOFF` "Pitfalls", "Reusable GUI pattern".
 - **Rule:** animate transforms around a fixed anchor; a test hook switches animations off; honour a reduced-motion setting.
-- **Status:** todo (P5). `app/qml/` has about 30 animation elements, no reduced-motion setting and no switch for tests (`SAMN_SCREENSHOT_DELAY_MS` only waits).
+- **Status:** covered (Settings → General "Reduce motion", `Theme.reducedMotion` / `ui.reduced_motion`, `SAMN_NO_ANIM=1` for tests; decorative loops and `Theme.animFast`/`animNormal` honour it).
 
 ### UI-08 Keyboard, focus, contrast
 - **Learned:** 0.7 had arrow-key/Home/End tab navigation, focus states and an accessibility pass (0.5.6); D-092 requires keyboard, contrast, focus and reduced motion.

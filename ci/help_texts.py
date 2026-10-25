@@ -4,12 +4,22 @@
 element's id (or the id its label is for) where it has one, else
 <file>.<label>. Run with the old repo's frontend folder:
   python3 ci/help_texts.py ../SamNPlayer/cmd/gui-wails/frontend > app/qml/HelpTexts.js
-With --check it compares instead of writing (exit 1 on a difference)."""
+With --check it compares instead of writing (exit 1 on a difference).
+Texts for controls 0.7 did not have live in SAMN2 below, so a rerun keeps them."""
 import html
 import json
 import os
 import re
 import sys
+
+
+# SamN2's own controls (no 0.7 data-help): key, text, where, label.
+SAMN2 = [
+    ('st-reduced-motion',
+     'Stops decorative motion: silk bands, breathing glow on the mode tab, Play ring spin and Training stage '
+     'drift. Transitions snap. Useful for screenshots, accessibility, or a calmer window.',
+     'SamN2 D-092, Settings → General', 'Reduce motion'),
+]
 
 
 def slug(s):
@@ -48,6 +58,8 @@ def extract(root):
                 line = src.count('\n', 0, m.start()) + 1
                 seen[text] = key
                 out.append({'key': key, 'text': text, 'source': f'{rel}:{line}', 'label': label})
+    for key, text, source, label in SAMN2:
+        out.append({'key': key, 'text': text, 'source': source, 'label': label})
     return out
 
 

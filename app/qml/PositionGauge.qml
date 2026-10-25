@@ -31,7 +31,7 @@ Item {
                 GradientStop { position: 0; color: Theme.orange }
                 GradientStop { position: 1; color: Theme.cyan }
             }
-            Behavior on height { NumberAnimation { duration: 80 } }
+            Behavior on height { NumberAnimation { duration: Theme.reducedMotion ? 0 : 80 } }
         }
         Rectangle {
             visible: root.value >= 0

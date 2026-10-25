@@ -9,6 +9,8 @@ Item {
     id: root
     property bool running: true
     property real strength: 1.0  // scales the opacities
+    // D-092: decorative drift stops under reduced motion.
+    readonly property bool drift: running && !Theme.reducedMotion
     anchors.fill: parent
     enabled: false  // never takes input; declared first, so it stays behind its siblings
 
@@ -29,17 +31,17 @@ Item {
         transform: Translate { x: top.dx; y: top.dy }
         // silk-drift-1: 32 s alternate, -4% / +2.8%, scale 1.07, opacity .52-.62.
         SequentialAnimation on dx {
-            running: root.running; loops: Animation.Infinite
+            running: root.drift; loops: Animation.Infinite
             NumberAnimation { to: -root.width * 0.04; duration: 32000; easing.type: Easing.InOutSine }
             NumberAnimation { to: 0; duration: 32000; easing.type: Easing.InOutSine }
         }
         SequentialAnimation on dy {
-            running: root.running; loops: Animation.Infinite
+            running: root.drift; loops: Animation.Infinite
             NumberAnimation { to: root.height * 0.028; duration: 32000; easing.type: Easing.InOutSine }
             NumberAnimation { to: 0; duration: 32000; easing.type: Easing.InOutSine }
         }
         SequentialAnimation on scale {
-            running: root.running; loops: Animation.Infinite
+            running: root.drift; loops: Animation.Infinite
             NumberAnimation { from: 1.0; to: 1.07; duration: 32000; easing.type: Easing.InOutSine }
             NumberAnimation { to: 1.0; duration: 32000; easing.type: Easing.InOutSine }
         }
@@ -59,17 +61,17 @@ Item {
         transform: Translate { x: bottom.dx; y: bottom.dy }
         // silk-drift-2: 40 s alternate-reverse, +4.5% / -3.2%, scale 1.06.
         SequentialAnimation on dx {
-            running: root.running; loops: Animation.Infinite
+            running: root.drift; loops: Animation.Infinite
             NumberAnimation { to: root.width * 0.045; duration: 40000; easing.type: Easing.InOutSine }
             NumberAnimation { to: 0; duration: 40000; easing.type: Easing.InOutSine }
         }
         SequentialAnimation on dy {
-            running: root.running; loops: Animation.Infinite
+            running: root.drift; loops: Animation.Infinite
             NumberAnimation { to: -root.height * 0.032; duration: 40000; easing.type: Easing.InOutSine }
             NumberAnimation { to: 0; duration: 40000; easing.type: Easing.InOutSine }
         }
         SequentialAnimation on scale {
-            running: root.running; loops: Animation.Infinite
+            running: root.drift; loops: Animation.Infinite
             NumberAnimation { from: 1.0; to: 1.06; duration: 40000; easing.type: Easing.InOutSine }
             NumberAnimation { to: 1.0; duration: 40000; easing.type: Easing.InOutSine }
         }

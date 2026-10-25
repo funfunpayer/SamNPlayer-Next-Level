@@ -81,7 +81,7 @@ Item {
                     color: "transparent"; border.width: 4
                     border.color: Qt.rgba(0, 217 / 255, 244 / 255, 0.35)
                     SequentialAnimation on opacity {
-                        running: tab.current; loops: Animation.Infinite
+                        running: tab.current && !Theme.reducedMotion; loops: Animation.Infinite
                         NumberAnimation { from: 0.25; to: 0.9; duration: 1800; easing.type: Easing.InOutSine }
                         NumberAnimation { from: 0.9; to: 0.25; duration: 1800; easing.type: Easing.InOutSine }
                     }
@@ -156,7 +156,7 @@ Item {
                     width: 9; height: 9; radius: 4.5
                     color: chip.stateName === "connected" ? "#3ddc84" : chip.stateName === "connecting" ? Theme.orange : "#5d6b7a"
                     SequentialAnimation on opacity {
-                        running: chip.stateName === "connecting"; loops: Animation.Infinite
+                        running: chip.stateName === "connecting" && !Theme.reducedMotion; loops: Animation.Infinite
                         alwaysRunToEnd: true
                         NumberAnimation { from: 1; to: 0.3; duration: 500 }
                         NumberAnimation { from: 0.3; to: 1; duration: 500 }
