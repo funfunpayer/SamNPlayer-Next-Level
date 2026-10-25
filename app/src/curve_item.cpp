@@ -6,6 +6,7 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <algorithm>
+#include <climits>
 #include <cmath>
 
 namespace samn::ui {
@@ -27,6 +28,12 @@ void CurveItem::setActions(std::vector<samn::Action> actions) {
     actions_ = std::move(actions);
     emit actionsChanged();
     updateMode();
+    invalidate();
+}
+
+void CurveItem::setGhost(std::vector<samn::Action> ghost) {
+    ghost_ = std::move(ghost);
+    emit actionsChanged();
     invalidate();
 }
 
@@ -245,6 +252,46 @@ void CurveItem::paintLayer(QPainter* p, double w, double h, Mode mode) {
         for (int pos : {0, 50, 100}) {
             const double y = std::round(Y(pos)) + 0.5;
             p->drawLine(QPointF(0, y), QPointF(w, y));
+        }
+    }
+    // The stroke ghost under a feel lane (0.7: alpha 0.3, 1 px). A dense
+    // stroke draws one min-max column per pixel.
+    if (ghost_.size() >= 2) {
+        const auto [v0, v1] = timeWindow();
+        auto lo = std::lower_bound(ghost_.begin(), ghost_.end(), int64_t(std::floor(v0)),
+                                   [](const samn::Action& a, int64_t t) { return a.at < t; });
+        auto hi = std::upper_bound(ghost_.begin(), ghost_.end(), int64_t(std::ceil(v1)),
+                                   [](int64_t t, const samn::Action& a) { return t < a.at; });
+        if (lo != ghost_.begin()) --lo;
+        if (hi != ghost_.end()) ++hi;
+        QColor c = ghostColor_;
+        c.setAlphaF(0.3);
+        p->setPen(QPen(c, 1));
+        p->setBrush(Qt::NoBrush);
+        if (hi - lo > std::ptrdiff_t(w) * 3) {
+            int col = INT_MIN;
+            double ymin = 0, ymax = 0;
+            auto flush = [&] {
+                if (col != INT_MIN) p->drawLine(QPointF(col + 0.5, ymin), QPointF(col + 0.5, ymax));
+            };
+            for (auto it = lo; it != hi; ++it) {
+                const int x = int(std::floor(X(double(it->at))));
+                const double y = Y(it->pos);
+                if (x != col) {
+                    flush();
+                    col = x;
+                    ymin = ymax = y;
+                } else {
+                    ymin = std::min(ymin, y);
+                    ymax = std::max(ymax, y);
+                }
+            }
+            flush();
+        } else {
+            QPolygonF line;
+            line.reserve(int(hi - lo));
+            for (auto it = lo; it != hi; ++it) line << QPointF(X(double(it->at)), Y(it->pos));
+            p->drawPolyline(line);
         }
     }
     for (size_t i = 0; i < chapters_.size(); ++i) {

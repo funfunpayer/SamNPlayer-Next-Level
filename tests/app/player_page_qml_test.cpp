@@ -198,9 +198,15 @@ private:
         QVERIFY(page->property("scriptOnly").toBool());
         QCOMPARE(clock->property("duration").toLongLong(), qint64(6000));
 
+        // 0.7 transport: the Extended-O trigger shows while it is on and
+        // works only while playing.
+        auto* eo = named(page, "extendedOButton");
+        QVERIFY(eo && eo->isVisible());
+        QVERIFY(!eo->isEnabled());
         QMetaObject::invokeMethod(page, "togglePlay");
         QTRY_VERIFY(page->property("playing").toBool());
         QTRY_VERIFY_WITH_TIMEOUT(ctrl->playheadMs() >= 200, 3000);  // the playhead moves
+        QTRY_VERIFY(eo->isEnabled());
         QMetaObject::invokeMethod(page, "togglePlay");
         QTRY_VERIFY(!page->property("playing").toBool());
         const qint64 held = clock->property("position").toLongLong();

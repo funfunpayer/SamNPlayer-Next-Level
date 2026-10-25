@@ -152,6 +152,10 @@ public:
     // Vibration and suction from the stroke with the script's feel recipe
     // (0.7 BakeNeoAxes; a plain funscript uses the standard recipe).
     Q_INVOKABLE bool axesFromStroke();
+    // A new empty feel lane ("vibration" or "suction") to draw in: 0.7
+    // seeds it with the stroke's times at 0, so the dots are there to pull
+    // up. One undo step; false when the lane already has points.
+    Q_INVOKABLE bool addLane(const QString& lane);
     // "Optimize for" (0.8 OptimizeLoadedFor, D-156): "general" heals the
     // tracker-loss windows and fills long gaps in the stroke so the script works
     // on any device; "neo2" also turns contact vibration on (soft, 0.75) and
@@ -221,6 +225,8 @@ signals:
 
 private:
     std::string laneKey(const CurveItem* curve) const;
+    // A lane curve's points and, on a feel lane, the stroke ghost.
+    void feedCurve(CurveItem* curve) const;
     int64_t snap(double ms) const;
     int64_t timelineMs() const;
     bool applyRange(const QString& label, const std::function<std::vector<samn::Action>(const std::vector<samn::Action>&)>& op,

@@ -702,6 +702,15 @@ Item {
                         readonly property var rates: [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
                         currentIndex: rates.indexOf(page.speed)
                         onActivated: (i) => page.speed = rates[i]
+                    },
+                    // 0.7 Extended-O trigger (key E): shown while Extended-O is on,
+                    // usable while playing and not already running.
+                    FlowButton {
+                        objectName: "extendedOButton"
+                        visible: ctrl.output.extendedOEnabled
+                        enabled: ctrl.output.canTriggerExtendedO
+                        text: qsTr("Extended-O")
+                        onClicked: ctrl.output.triggerExtendedO()
                     }
                 ]
             }

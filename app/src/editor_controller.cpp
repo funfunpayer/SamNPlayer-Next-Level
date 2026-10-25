@@ -249,7 +249,14 @@ void EditorController::attachCurve(CurveItem* curve) {
     curves_.erase(std::remove_if(curves_.begin(), curves_.end(), [](const QPointer<CurveItem>& c) { return c.isNull(); }),
                   curves_.end());
     curves_.emplace_back(curve);
-    curve->setActions(session_.Axis(laneKey(curve)));
+    feedCurve(curve);
+}
+
+void EditorController::feedCurve(CurveItem* curve) const {
+    const std::string lane = laneKey(curve);
+    curve->setActions(session_.Axis(lane));
+    // 0.7: a feel lane shows the stroke faintly for timing.
+    curve->setGhost(lane == "stroke" ? std::vector<samn::Action>{} : session_.Axis("stroke"));
 }
 
 std::string EditorController::laneKey(const CurveItem* curve) const {
@@ -258,7 +265,7 @@ std::string EditorController::laneKey(const CurveItem* curve) const {
 
 void EditorController::pushCurves() {
     for (const auto& c : curves_)
-        if (c) c->setActions(session_.Axis(laneKey(c)));
+        if (c) feedCurve(c);
     emit curvesChanged();
     // Only a new or removed lane rebuilds the lane list (not every drag move).
     if (const QStringList now = lanes(); now != lanes_) {
@@ -444,6 +451,37 @@ bool EditorController::axesFromStroke() {
         setStatus(tr("Vibration and suction written from the stroke (%1 and %2 points).")
                       .arg(session_.Axis("vibration").size())
                       .arg(session_.Axis("suction").size()));
+    return true;
+}
+
+bool EditorController::addLane(const QString& lane) {
+    if (!hasScript() || drag_index_ >= 0 || busy_) return false;
+    if (lane != QLatin1String("vibration") && lane != QLatin1String("suction")) return false;
+    const std::string key = lane.toStdString();
+    if (!session_.Axis(key).empty()) return false;
+    const std::vector<samn::Action>& stroke = session_.Axis("stroke");
+    if (stroke.size() < 2) {
+        setStatus(tr("The stroke needs at least 2 points."));
+        return false;
+    }
+    // 0.7 edit mode on an empty feel axis: the stroke's times at 0.
+    std::vector<samn::Action> seeded;
+    seeded.reserve(stroke.size());
+    for (const samn::Action& a : stroke) seeded.push_back({a.at, 0});
+    // Feel lanes live in the .samn beside a plain funscript.
+    if (samn_path_.isEmpty()) {
+        samn_path_ = QString::fromStdString(samn::CompanionSamnPath(path_.toStdString()));
+        emit scriptChanged();
+    }
+    session_.Begin(lane == QLatin1String("vibration") ? "new vibration lane" : "new suction lane");
+    session_.Replace(key, seeded, {});
+    if (!session_.Commit()) return false;
+    setActiveLane(lane);
+    pushCurves();
+    if (stepDone())
+        setStatus(tr("New %1 lane: %2 points at 0 on the stroke's times — drag them up.")
+                      .arg(lane == QLatin1String("vibration") ? tr("vibration") : tr("suction"))
+                      .arg(seeded.size()));
     return true;
 }
 
