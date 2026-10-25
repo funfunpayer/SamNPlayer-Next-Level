@@ -25,6 +25,7 @@
 #include "icon_provider.h"
 #include "player_controller.h"
 #include "plugins.h"
+#include "theme.h"
 #include "update_checker.h"
 
 Q_IMPORT_QML_PLUGIN(SamNPlugin)
@@ -234,8 +235,9 @@ private slots:
     }
 
     // --- item 53: flow_wiring_test ---
-    // Every "?" names a 0.7 help text that exists (HelpTexts.js), and the
-    // catalogue holds 0.7's 189 data-help texts (ci/help_texts.py).
+    // Every "?" names a help text that exists (HelpTexts.js). The catalogue
+    // holds 0.7's 189 data-help texts (ci/help_texts.py); SamN2 may add more
+    // (e.g. st-reduced-motion for D-092).
     void helpKeysInTheQmlSourcesExist() {
         QFile cat(QStringLiteral(SAMN_APP_QML_DIR) + "/HelpTexts.js");
         QVERIFY(cat.open(QIODevice::ReadOnly));
@@ -245,7 +247,7 @@ private slots:
         static const QRegularExpression entry(QStringLiteral("^    \"([^\"]+)\": \"(.+)\",$"), QRegularExpression::MultilineOption);
         auto e = entry.globalMatch(js);
         while (e.hasNext()) keys.insert(e.next().captured(1));
-        QCOMPARE(keys.size(), 189);
+        QVERIFY2(keys.size() >= 189, qPrintable(QString("help catalogue has %1 keys, need ≥ 189").arg(keys.size())));
         static const QRegularExpression use(QStringLiteral("(?:HelpChip\\s*\\{[^}]*?\\bkey|\\bhelp)\\s*:\\s*\"([\\w.\\-]+)\""));
         int found = 0;
         QDirIterator qml(QStringLiteral(SAMN_APP_QML_DIR), {"*.qml"}, QDir::Files);
@@ -740,6 +742,46 @@ private slots:
             QTest::qWait(2500);
             QVERIFY(!card->isVisible());
             s.window->findChild<samn::ui::UpdateChecker*>()->setSupportNoteAtStart(true);
+        }
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
+
+    // D-092 / UI-07: Settings → General "Reduce motion" stops decorative
+    // loops and zeros Theme.animFast / animNormal; the choice is kept.
+    void reducedMotionStopsDecorativeAnimations() {
+        {
+            Shell s;
+            loadShell(s);
+            QVERIFY(s.window);
+            auto* theme = s.engine.singletonInstance<samn::ui::Theme*>(qmlTypeId("SamN", 1, 0, "Theme"));
+            QVERIFY(theme);
+            QVERIFY(!theme->reducedMotion());
+            QCOMPARE(theme->animFast(), 140);
+            QCOMPARE(theme->animNormal(), 220);
+            QTest::keyClick(s.window, Qt::Key_Comma, Qt::ControlModifier);
+            QQuickItem* page = s.one("SettingsPage");
+            QTRY_VERIFY_WITH_TIMEOUT(page->isVisible(), kWait);
+            QQuickItem* toggle = nullptr;
+            for (QQuickItem* i : descendants(s.root()))
+                if (i->objectName() == QLatin1String("reducedMotion")) toggle = i;
+            QVERIFY(toggle && toggle->isVisible());
+            QTest::mouseClick(s.window, Qt::LeftButton, {},
+                              toggle->mapToScene(QPointF(toggle->width() / 2, toggle->height() / 2)).toPoint());
+            QTRY_VERIFY(theme->reducedMotion());
+            QCOMPARE(theme->animFast(), 0);
+            QCOMPARE(theme->animNormal(), 0);
+            if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT_REDUCED"); !shot.isEmpty()) {
+                QTest::qWait(200);
+                s.window->grabWindow().save(QString::fromLocal8Bit(shot));
+            }
+        }
+        {
+            Shell s;
+            loadShell(s);
+            QVERIFY(s.window);
+            auto* theme = s.engine.singletonInstance<samn::ui::Theme*>(qmlTypeId("SamN", 1, 0, "Theme"));
+            QVERIFY(theme && theme->reducedMotion());
+            theme->setReducedMotion(false);
         }
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }

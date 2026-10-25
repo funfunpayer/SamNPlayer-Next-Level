@@ -366,6 +366,8 @@ const texts = {
     "st-open-ai-train": "Switches to the AI Train tab (label tip ROIs / train ONNX; also Train Go profile model).",
     // src/settings.js:97 (Open user handbook)
     "st-open-handbook": "Opens the in-app user handbook: Create, Play, gaps, AI path, troubleshooting.",
+    // SamN2 D-092, Settings → General (Reduce motion)
+    "st-reduced-motion": "Stops decorative motion: silk bands, breathing glow on the mode tab, Play ring spin and Training stage drift. Transitions snap. Useful for screenshots, accessibility, or a calmer window.",
     // index.html:80 (♥ Donate)
     "topbar-donate": "SamNPlayer is free. A donation keeps the project alive and makes new features possible.",
     // src/training.js:311 (Cycles)

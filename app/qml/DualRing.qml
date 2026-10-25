@@ -34,7 +34,7 @@ Item {
         // Suction breathes the whole ring: together, then apart.
         property real sucAmp: Math.min(1, Math.max(0, root.suction)) * 0.18
         SequentialAnimation on scale {
-            running: root.sucPulsing
+            running: root.sucPulsing && !Theme.reducedMotion
             loops: Animation.Infinite
             onRunningChanged: if (!running) wrap.scale = 1
             NumberAnimation { to: 1 - wrap.sucAmp; duration: 1050 * 0.35; easing.type: Easing.InOutSine }
@@ -52,7 +52,7 @@ Item {
             opacity: root.live ? 1 : 0.55
             readonly property int period: root.live ? 1800 : 3600
             SequentialAnimation on scale {
-                loops: Animation.Infinite
+                running: !Theme.reducedMotion; loops: Animation.Infinite
                 NumberAnimation { from: 0.96; to: 1.04; duration: halo.period / 2; easing.type: Easing.InOutSine }
                 NumberAnimation { from: 1.04; to: 0.96; duration: halo.period / 2; easing.type: Easing.InOutSine }
             }
@@ -66,7 +66,7 @@ Item {
                 origin.x: 64; origin.y: 64
                 axis { x: 1; y: -1.3; z: 0 }
                 SequentialAnimation on angle {
-                    loops: Animation.Infinite
+                    running: !Theme.reducedMotion; loops: Animation.Infinite
                     NumberAnimation { from: 7; to: -7; duration: 2750; easing.type: Easing.InOutSine }
                     NumberAnimation { from: -7; to: 7; duration: 2750; easing.type: Easing.InOutSine }
                 }
@@ -92,7 +92,7 @@ Item {
                 opacity: root.trackOpacity(root.vibration)
                 property real amp: Math.min(1, Math.max(0, root.vibration)) * 0.14
                 SequentialAnimation on scale {
-                    running: root.vibPulsing
+                    running: root.vibPulsing && !Theme.reducedMotion
                     loops: Animation.Infinite
                     onRunningChanged: if (!running) vibTrack.scale = 1
                     NumberAnimation { to: 1 + vibTrack.amp; duration: 275; easing.type: Easing.InOutSine }
@@ -119,7 +119,10 @@ Item {
             Shape {
                 anchors.fill: parent
                 layer.enabled: true; layer.samples: 4
-                RotationAnimator on rotation { from: 0; to: 360; duration: 4500; loops: Animation.Infinite }
+                RotationAnimator on rotation {
+                    from: 0; to: 360; duration: 4500; loops: Animation.Infinite
+                    running: !Theme.reducedMotion
+                }
                 ShapePath {
                     strokeWidth: 2.5; fillColor: "transparent"; capStyle: ShapePath.RoundCap
                     strokeColor: Qt.rgba(1, 1, 1, 0.62)
@@ -132,7 +135,7 @@ Item {
             anchors.centerIn: parent
             spacing: 2
             SequentialAnimation on scale {
-                running: root.live
+                running: root.live && !Theme.reducedMotion
                 loops: Animation.Infinite
                 onRunningChanged: if (!running) parent.scale = 1
                 NumberAnimation { to: 1.04; duration: 600; easing.type: Easing.InOutSine }
