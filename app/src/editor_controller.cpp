@@ -273,7 +273,8 @@ double EditorController::press(CurveItem* curve, double x, double y) {
     drag_lane_ = laneKey(curve);
     drag_curve_ = curve;
     setActiveLane(curve->lane());
-    const int hit = curve->hitPoint(x, y);
+    // Slightly generous hit so painting a wave feels continuous (dots ~9 px).
+    const int hit = curve->hitPoint(x, y, 16);
     if (hit >= 0) {
         session_.Begin("move point");
         drag_index_ = hit;
@@ -307,7 +308,7 @@ void EditorController::release() {
 
 bool EditorController::deleteAt(CurveItem* curve, double x, double y) {
     if (!curve || !hasScript()) return false;
-    const int hit = curve->hitPoint(x, y);
+    const int hit = curve->hitPoint(x, y, 16);
     if (hit < 0) return false;
     setActiveLane(curve->lane());
     if (!session_.DeletePoint(laneKey(curve), size_t(hit))) {

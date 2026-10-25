@@ -40,6 +40,7 @@ Item {
         property real frac: root.duration > 0 ? Math.min(1, root.position / root.duration) : 0
         Rectangle { anchors.verticalCenter: parent.verticalCenter; width: parent.width; height: 6; radius: 3; color: Qt.rgba(1, 1, 1, 0.10) }
         Rectangle {
+            id: filled
             anchors.verticalCenter: parent.verticalCenter
             width: parent.width * progress.frac; height: 6; radius: 3
             gradient: Gradient {
@@ -48,14 +49,55 @@ Item {
                 GradientStop { position: 0.55; color: Theme.cyan }
                 GradientStop { position: 1; color: Theme.orange }
             }
+            // Soft trail glow under the fill (pleasant, not loud).
+            Rectangle {
+                anchors.centerIn: parent
+                width: parent.width + 4; height: parent.height + 6; radius: 5; z: -1
+                opacity: root.playing ? 0.55 : 0.28
+                Behavior on opacity { NumberAnimation { duration: Theme.animNormal } }
+                gradient: Gradient {
+                    orientation: Gradient.Horizontal
+                    GradientStop { position: 0; color: Qt.rgba(0, 180 / 255, 1, 0.35) }
+                    GradientStop { position: 1; color: Qt.rgba(1, 138 / 255, 35 / 255, 0.30) }
+                }
+            }
         }
-        Rectangle {
-            x: parent.width * progress.frac - 8; anchors.verticalCenter: parent.verticalCenter
-            width: 16; height: 16; radius: 8
-            color: "#dff8ff"; border.color: Theme.blue; border.width: 3
+        // Playhead knob with a quiet pulse while playing.
+        Item {
+            id: knob
+            x: parent.width * progress.frac - width / 2
+            anchors.verticalCenter: parent.verticalCenter
+            width: 18; height: 18
+            Rectangle {
+                anchors.centerIn: parent
+                width: 22; height: 22; radius: 11
+                color: Qt.rgba(63 / 255, 208 / 255, 1, 0.22)
+                visible: root.playing
+                SequentialAnimation on scale {
+                    running: root.playing && Qt.application.state === Qt.ApplicationActive && !Theme.reducedMotion
+                    loops: Animation.Infinite
+                    NumberAnimation { to: 1.25; duration: 900; easing.type: Easing.InOutSine }
+                    NumberAnimation { to: 1.0; duration: 900; easing.type: Easing.InOutSine }
+                }
+                SequentialAnimation on opacity {
+                    running: root.playing && Qt.application.state === Qt.ApplicationActive && !Theme.reducedMotion
+                    loops: Animation.Infinite
+                    NumberAnimation { to: 0.15; duration: 900; easing.type: Easing.InOutSine }
+                    NumberAnimation { to: 0.40; duration: 900; easing.type: Easing.InOutSine }
+                }
+            }
+            Rectangle {
+                anchors.centerIn: parent
+                width: progressDrag.containsMouse || progressDrag.pressed ? 18 : 16
+                height: width; radius: width / 2
+                color: "#dff8ff"; border.color: Theme.blue; border.width: 3
+                Behavior on width { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+            }
         }
         MouseArea {
+            id: progressDrag
             anchors.fill: parent
+            hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
             function seek(mx) { if (root.duration > 0) root.seekRequested(Math.max(0, Math.min(1, mx / width)) * root.duration) }
             onPressed: (m) => seek(m.x)

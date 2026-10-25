@@ -160,19 +160,21 @@ void CurveItem::updateMode() {
 
 namespace {
 
-// QPainter has no shadow blur: a glow is a few wide, faint strokes under the
-// line, falling off like 0.7's canvas shadowBlur.
+// QPainter has no shadow blur: a glow is a few faint under-strokes. Keep them
+// tight — wide stacked strokes (0.7's three full-glow layers) looked muddy and
+// made the wave hard to read / hard to paint in the Editor.
 void StrokeWithGlow(QPainter* p, const QPainterPath& path, const QColor& color, qreal width, qreal glow) {
-    if (glow > 0) {
-        const qreal steps[] = {1.0, 0.6, 0.3};
-        const int alphas[] = {18, 34, 60};
-        for (int i = 0; i < 3; ++i) {
+    if (glow > 0.5) {
+        const qreal steps[] = {0.5, 0.22};
+        const int alphas[] = {26, 44};
+        for (int i = 0; i < 2; ++i) {
             QColor c = color;
             c.setAlpha(alphas[i]);
             p->setPen(QPen(c, width + glow * steps[i], Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
             p->drawPath(path);
         }
     }
+    // Crisp core on top so the stroke stays pickable and sharp.
     p->setPen(QPen(color, width, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
     p->drawPath(path);
 }
@@ -305,8 +307,8 @@ void CurveItem::paintLayer(QPainter* p, double w, double h, Mode mode) {
                 path.quadTo(c, m);
             }
             path.lineTo(wave.back().at, Y(wave.back().pos));
-            FillToBase(p, path, lineColor_, 0.22, top, baseY);
-            StrokeWithGlow(p, path, lineColor_, std::max<qreal>(1.6, lineWidth_), std::max<qreal>(8, glow_));
+            FillToBase(p, path, lineColor_, 0.18, top, baseY);
+            StrokeWithGlow(p, path, lineColor_, std::max<qreal>(1.6, lineWidth_), std::max<qreal>(4.0, glow_));
             QFont f(QStringLiteral("Figtree"));
             f.setPixelSize(10);
             f.setWeight(QFont::DemiBold);
@@ -327,16 +329,31 @@ void CurveItem::paintLayer(QPainter* p, double w, double h, Mode mode) {
         };
         if (mode == Mode::Smooth) {
             const QPainterPath path = smoothPath();
-            if (fill_ > 0) FillToBase(p, path, lineColor_, fill_, top, baseY);
-            StrokeWithGlow(p, path, lineColor_, lineWidth_, glow_);
-            // Keyframe dots: they are readable here.
+            // Edit: thin fill + little glow so dots stay crisp for painting.
+            const qreal drawFill = editMode_ ? std::min<qreal>(fill_, 0.10) : fill_;
+            const qreal drawGlow = editMode_ ? std::min<qreal>(glow_, 2.0) : glow_;
+            const qreal drawWidth = editMode_ ? std::max<qreal>(lineWidth_, 1.75) : lineWidth_;
+            if (drawFill > 0) FillToBase(p, path, lineColor_, drawFill, top, baseY);
+            StrokeWithGlow(p, path, lineColor_, drawWidth, drawGlow);
+            // Keyframe dots: larger + rim in the Editor so they can be painted.
             const size_t n = last - first + 1;
             const size_t step = n > size_t(kMaxDots) ? (n + kMaxDots - 1) / kMaxDots : 1;
-            p->setPen(Qt::NoPen);
-            p->setBrush(editMode_ ? QColor(255, 255, 255) : QColor(255, 255, 255, 217));
-            const qreal r = editMode_ ? 3.5 : 2.2;
-            for (size_t i = first; i <= last; i += step)
-                p->drawEllipse(QPointF(X(double(actions_[i].at)), Y(actions_[i].pos)), r, r);
+            const qreal r = editMode_ ? 4.5 : 2.2;
+            for (size_t i = first; i <= last; i += step) {
+                const QPointF c(X(double(actions_[i].at)), Y(actions_[i].pos));
+                if (editMode_) {
+                    p->setPen(QPen(QColor(2, 10, 22, 200), 1.25));
+                    p->setBrush(QColor(255, 255, 255));
+                    p->drawEllipse(c, r, r);
+                    p->setPen(Qt::NoPen);
+                    p->setBrush(lineColor_);
+                    p->drawEllipse(c, 1.6, 1.6);
+                } else {
+                    p->setPen(Qt::NoPen);
+                    p->setBrush(QColor(255, 255, 255, 220));
+                    p->drawEllipse(c, r, r);
+                }
+            }
         } else if (last - first > size_t(w) * 3) {
             // Far more points than pixels: each 1 px column draws the span of
             // its points. Looks the same as the fine line, costs O(width).
