@@ -78,6 +78,9 @@ void GeneratorController::loadSettings() {
         contact_vibration_ = flag("generator.contact_vibration", contact_vibration_);
         setTipClass(str("generator.tip_class", tip_class_));
         setContactClass(str("generator.contact_class", contact_class_));
+        setExtraClass(str("generator.extra_class", extra_class_));
+        partner_fixed_ = flag("generator.partner_fixed", partner_fixed_);
+        extras_stay_fixed_ = flag("generator.extras_stay_fixed", extras_stay_fixed_);
         // 0.7 stored the sensitivity in percent (75).
         const auto span = s.get("generator.contact_vibration_span");
         if (span.is_number()) setContactSpan(span.get<double>() / 100.0);
@@ -337,7 +340,8 @@ bool GeneratorController::openVideo(const QString& pathOrUrl) {
                       .arg(codec.empty() ? tr("codec unknown") : QString::fromStdString(codec));
     box_ = QRect();
     contact_areas_.clear();  // drawn on the old video
-    mark_contact_ = false;
+    mask_rois_.clear();
+    mark_contact_ = mark_extra_ = mark_ignore_ = false;
     emit contactChanged();
     cancelFind();  // a search on the old video ends; its result is not used
     tip_candidates_.clear();
@@ -415,6 +419,26 @@ SAMN_SETTER(setAutoOZone, auto_ozone_, "generator.auto_ozone")
 SAMN_SETTER(setContactVibration, contact_vibration_, "generator.contact_vibration")
 #undef SAMN_SETTER
 
+void GeneratorController::setPartnerFixed(bool v) {
+    if (v == partner_fixed_) return;
+    partner_fixed_ = v;
+    saveSetting("generator.partner_fixed", v);
+    if (!contact_areas_.empty()) {
+        contact_areas_.front().fixed = v;
+        emit contactChanged();
+    }
+    emit optionsChanged();
+}
+
+void GeneratorController::setExtrasStayFixed(bool v) {
+    if (v == extras_stay_fixed_) return;
+    extras_stay_fixed_ = v;
+    saveSetting("generator.extras_stay_fixed", v);
+    for (size_t i = 1; i < contact_areas_.size(); ++i) contact_areas_[i].fixed = v;
+    if (contact_areas_.size() > 1) emit contactChanged();
+    emit optionsChanged();
+}
+
 namespace {
 
 QStringList ToQt(const std::vector<std::string>& v) {
@@ -474,9 +498,40 @@ void GeneratorController::setPosOverlay(bool on) {
     emit optionsChanged();
 }
 
+void GeneratorController::setExtraClass(const QString& c) {
+    if (c == extra_class_ || (!c.isEmpty() && !contactClasses().contains(c))) return;
+    extra_class_ = c;
+    saveSetting("generator.extra_class", c.toStdString());
+    emit optionsChanged();
+}
+
 void GeneratorController::setMarkContact(bool v) {
     if (v == mark_contact_) return;
     mark_contact_ = v;
+    if (v) {
+        mark_extra_ = mark_ignore_ = false;
+        setStatus(tr("Contact area: drag on preview (gold)."));
+    }
+    emit contactChanged();
+}
+
+void GeneratorController::setMarkExtra(bool v) {
+    if (v == mark_extra_) return;
+    mark_extra_ = v;
+    if (v) {
+        mark_contact_ = mark_ignore_ = false;
+        setStatus(tr("Another contact area: drag on preview (magenta)."));
+    }
+    emit contactChanged();
+}
+
+void GeneratorController::setMarkIgnore(bool v) {
+    if (v == mark_ignore_) return;
+    mark_ignore_ = v;
+    if (v) {
+        mark_contact_ = mark_extra_ = false;
+        setStatus(tr("Ignore region: drag on preview (black)."));
+    }
     emit contactChanged();
 }
 
@@ -484,34 +539,144 @@ QVariantList GeneratorController::contactAreas() const {
     QVariantList out;
     for (const samn::ContactMarkBox& b : contact_areas_)
         out << QVariantMap{{"x", qint64(b.x)}, {"y", qint64(b.y)}, {"w", qint64(b.w)}, {"h", qint64(b.h)},
-                           {"cls", QString::fromStdString(b.cls)}};
+                           {"cls", QString::fromStdString(b.cls)}, {"fixed", b.fixed}};
     return out;
+}
+
+QVariantList GeneratorController::maskRois() const {
+    QVariantList out;
+    for (const QRect& r : mask_rois_)
+        out << QVariantMap{{"x", r.x()}, {"y", r.y()}, {"w", r.width()}, {"h", r.height()}};
+    return out;
+}
+
+bool GeneratorController::markTip(const QRect& box) {
+    setBox(box);
+    if (!hasBox()) return false;
+    // 0.7 generator.js, after the tip box is painted.
+    setStatus(contact_vibration_
+                  ? tr("Snack 1 done — tip box is the stroke tracker (CSRT). Next: Mark contact (gold), or skip to "
+                       "Create.")
+                  : tr("Tip box set — CSRT follows this look; Find tip again after a big camera-angle change."));
+    return true;
 }
 
 bool GeneratorController::addContactArea(const QRect& area) {
     // The same rule as the tip box: inside the frame, at least 8 px.
     const QRect r = area.normalized().intersected(QRect(QPoint(0, 0), video_size_));
-    mark_contact_ = false;
+    // The first area is the primary whatever was asked: the engine reads it so.
+    const bool extra = mark_extra_ && !contact_areas_.empty();
+    mark_contact_ = mark_extra_ = mark_ignore_ = false;
     if (!hasVideo() || r.width() < 8 || r.height() < 8) {
         emit contactChanged();
         return false;
     }
-    contact_areas_.push_back({r.x(), r.y(), r.width(), r.height(), contact_class_.toStdString(), false});
+    if (extra) {
+        // Stay fixed (0.7): keep the magenta box where drawn; off = follow
+        // partner path once extras multi-path records it.
+        const bool stay = extras_stay_fixed_;
+        contact_areas_.push_back({r.x(), r.y(), r.width(), r.height(), extra_class_.toStdString(), stay});
+        const int n = static_cast<int>(contact_areas_.size()) - 1;
+        const QString how = stay ? tr("stay fixed") : tr("follows partner path");
+        setStatus(extra_class_.isEmpty() ? tr("Extra contact #%1 added, %2.").arg(n).arg(how)
+                                         : tr("Extra contact #%1 (%2) added, %3.").arg(n).arg(extra_class_).arg(how));
+    } else {
+        // 0.7 has one primary (gold); drawing it again moves it.
+        // Partner fixed (pixels): on = keep the gold box; off = track it.
+        const samn::ContactMarkBox b{r.x(), r.y(), r.width(), r.height(), contact_class_.toStdString(),
+                                     partner_fixed_};
+        if (contact_areas_.empty())
+            contact_areas_.push_back(b);
+        else
+            contact_areas_.front() = b;
+        setStatus(contact_vibration_
+                      ? tr("Snack 2 done — partner touch (gold). Optional: + Another, or continue to Feel → Create.")
+                      : tr("Optional contact zone set."));
+    }
     emit contactChanged();
     return true;
+}
+
+bool GeneratorController::addMaskRoi(const QRect& area) {
+    const QRect r = area.normalized().intersected(QRect(QPoint(0, 0), video_size_));
+    mark_ignore_ = mark_contact_ = mark_extra_ = false;
+    if (!hasVideo() || r.width() < 8 || r.height() < 8) {
+        emit contactChanged();
+        return false;
+    }
+    mask_rois_.push_back(r);
+    // 0.7: "Ignore region (black) #N added…" (1-based).
+    setStatus(tr("Ignore region (black) #%1 added.").arg(static_cast<int>(mask_rois_.size())));
+    emit contactChanged();
+    return true;
+}
+
+void GeneratorController::removeMaskRoi(int index) {
+    if (index < 0 || index >= static_cast<int>(mask_rois_.size())) return;
+    mask_rois_.erase(mask_rois_.begin() + index);
+    emit contactChanged();
+}
+
+void GeneratorController::clearMaskRois() {
+    if (mask_rois_.empty() && !mark_ignore_) return;
+    mask_rois_.clear();
+    mark_ignore_ = false;
+    emit contactChanged();
 }
 
 void GeneratorController::removeContactArea(int index) {
     if (index < 0 || index >= static_cast<int>(contact_areas_.size())) return;
     contact_areas_.erase(contact_areas_.begin() + index);
+    // An extra moved up to primary takes a class (the primary has one).
+    if (index == 0 && !contact_areas_.empty() && contact_areas_.front().cls.empty())
+        contact_areas_.front().cls = contact_class_.toStdString();
+    emit contactChanged();
+}
+
+void GeneratorController::setAreaClass(int index, const QString& cls) {
+    if (index < 0 || index >= static_cast<int>(contact_areas_.size())) return;
+    const bool primary = index == 0;
+    if (primary ? !contactClasses().contains(cls) : (!cls.isEmpty() && !contactClasses().contains(cls))) return;
+    if (contact_areas_[index].cls == cls.toStdString()) return;
+    contact_areas_[index].cls = cls.toStdString();
+    setStatus(primary ? tr("Contact type → %1").arg(cls)
+                      : tr("Extra contact class → %1").arg(cls.isEmpty() ? tr("any") : cls));
     emit contactChanged();
 }
 
 void GeneratorController::clearContactAreas() {
-    if (contact_areas_.empty() && !mark_contact_) return;
+    if (contact_areas_.empty() && !mark_contact_ && !mark_extra_) return;
     contact_areas_.clear();
-    mark_contact_ = false;
+    mark_contact_ = mark_extra_ = false;
     emit contactChanged();
+}
+
+void GeneratorController::clearExtras() {
+    mark_extra_ = mark_ignore_ = false;
+    const bool had_extras = contact_areas_.size() > 1;
+    const bool had_masks = !mask_rois_.empty();
+    if (had_extras) contact_areas_.resize(1);
+    mask_rois_.clear();
+    setStatus(had_masks && !had_extras ? tr("Soft masks cleared.")
+              : had_masks              ? tr("Extra contact areas and soft masks cleared.")
+                                       : tr("Extra contact areas cleared."));
+    emit contactChanged();
+}
+
+void GeneratorController::deleteMark(int index) {
+    if (index == -1) {
+        if (!hasBox()) return;
+        clearBox();
+        setStatus(tr("Tip mark cleared — Find tip area or paint again."));
+    } else if (index >= kMaskSelectBase) {
+        const int mi = index - kMaskSelectBase;
+        if (mi < 0 || mi >= static_cast<int>(mask_rois_.size())) return;
+        removeMaskRoi(mi);
+        setStatus(tr("Ignore region removed."));
+    } else if (index >= 0 && index < static_cast<int>(contact_areas_.size())) {
+        removeContactArea(index);
+        setStatus(index == 0 ? tr("Contact mark cleared.") : tr("Extra contact removed."));
+    }
 }
 
 std::filesystem::path GeneratorController::funscriptPath() const {
@@ -568,6 +733,7 @@ bool GeneratorController::create(bool overwrite) {
         req.contact_area = contact_areas_.front();
         req.extra_areas.assign(contact_areas_.begin() + 1, contact_areas_.end());
     }
+    for (const QRect& r : mask_rois_) req.mask_rois.emplace_back(r.x(), r.y(), r.width(), r.height());
     const uint64_t id = runner_->Start(std::move(req));
     if (id == 0) return false;
     run_id_ = id;

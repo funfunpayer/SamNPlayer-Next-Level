@@ -66,6 +66,21 @@ class GeneratorController : public QObject {
     Q_PROPERTY(QStringList tipClasses READ tipClasses CONSTANT)
     Q_PROPERTY(QStringList contactClasses READ contactClasses CONSTANT)
     Q_PROPERTY(bool markContact READ markContact WRITE setMarkContact NOTIFY contactChanged)
+    // 0.7 "+ Another contact area": the next box drawn is an extra contact
+    // area (magenta) of extraClass ("" = any; generator.extra_class).
+    Q_PROPERTY(bool markExtra READ markExtra WRITE setMarkExtra NOTIFY contactChanged)
+    Q_PROPERTY(QString extraClass READ extraClass WRITE setExtraClass NOTIFY optionsChanged)
+    // 0.7 "+ Ignore region": the next box drawn is a soft mask (black dashed);
+    // punched out of camera-motion compensation, does not drive the stroke.
+    Q_PROPERTY(bool markIgnore READ markIgnore WRITE setMarkIgnore NOTIFY contactChanged)
+    Q_PROPERTY(QVariantList maskRois READ maskRois NOTIFY contactChanged)
+    // G2b / 0.7 "Partner fixed (pixels)" and "Stay fixed" for extras
+    // (generator.partner_fixed, generator.extras_stay_fixed). They set the
+    // ContactMarkBox.fixed flag written into .samn. Generate records the
+    // gold partner path (fixed centres or second CSRT → trajectory.partner);
+    // extras multi-path and Tf/Tj distance stroke still follow.
+    Q_PROPERTY(bool partnerFixed READ partnerFixed WRITE setPartnerFixed NOTIFY optionsChanged)
+    Q_PROPERTY(bool extrasStayFixed READ extrasStayFixed WRITE setExtrasStayFixed NOTIFY optionsChanged)
     Q_PROPERTY(QVariantList contactAreas READ contactAreas NOTIFY contactChanged)
     // The run.
     Q_PROPERTY(bool running READ running NOTIFY runChanged)
@@ -136,7 +151,21 @@ public:
     QStringList contactClasses() const;
     bool markContact() const { return mark_contact_; }
     void setMarkContact(bool v);
+    bool markExtra() const { return mark_extra_; }
+    void setMarkExtra(bool v);
+    QString extraClass() const { return extra_class_; }
+    void setExtraClass(const QString& c);
+    bool markIgnore() const { return mark_ignore_; }
+    void setMarkIgnore(bool v);
+    QVariantList maskRois() const;
+    bool partnerFixed() const { return partner_fixed_; }
+    void setPartnerFixed(bool v);
+    bool extrasStayFixed() const { return extras_stay_fixed_; }
+    void setExtrasStayFixed(bool v);
     QVariantList contactAreas() const;
+    // Selection encoding for Delete selected / click: tip = -1, contact =
+    // 0.., mask = kMaskSelectBase + index (1000..), none = -2.
+    static constexpr int kMaskSelectBase = 1000;
     bool running() const { return running_; }
     int percent() const { return percent_; }
     QString progressText() const { return progress_text_; }
@@ -157,11 +186,29 @@ public:
     // Loads the marking frame at ms (clamped to the clip).
     Q_INVOKABLE void seekPreview(double ms);
     Q_INVOKABLE void clearBox();
-    // A contact area with the current contact class (inside the frame, at
-    // least 8 px; false otherwise). Marking ends after one area.
+    // The tip box drawn by hand, with 0.7's line on what comes next.
+    Q_INVOKABLE bool markTip(const QRect& box);
+    // A contact area (inside the frame, at least 8 px; false otherwise),
+    // with 0.7's line on it. While marking an extra it is appended with the
+    // extra class; otherwise it is the primary (contact class), replacing
+    // one drawn before. Marking ends after one area.
     Q_INVOKABLE bool addContactArea(const QRect& area);
     Q_INVOKABLE void removeContactArea(int index);
+    // Soft mask / ignore region (inside the frame, at least 8 px).
+    Q_INVOKABLE bool addMaskRoi(const QRect& area);
+    Q_INVOKABLE void removeMaskRoi(int index);
+    Q_INVOKABLE void clearMaskRois();
+    // The class of area index (the primary takes a contact class, an extra
+    // also "" for any).
+    Q_INVOKABLE void setAreaClass(int index, const QString& cls);
     Q_INVOKABLE void clearContactAreas();
+    // 0.7 "Clear extras": extras and soft masks go; tip and primary stay.
+    Q_INVOKABLE void clearExtras();
+    // The preview's selection, removed (0.7 Delete selected): -1 the tip box,
+    // 0.. a contact area, kMaskSelectBase+i a soft mask.
+    Q_INVOKABLE void deleteMark(int index);
+    // A line from the page on the status (0.7 "Mark deselected.").
+    Q_INVOKABLE void showStatus(const QString& s) { setStatus(s); }
     // Starts the run. Without overwrite an existing script stops it (the page
     // asks first, 0.7 confirm). false when it cannot start.
     Q_INVOKABLE bool create(bool overwrite = false);
@@ -231,8 +278,14 @@ private:
     void saveSetting(const char* key, const nlohmann::json& value);
     QString tip_class_ = QStringLiteral("glans");
     QString contact_class_ = QStringLiteral("nipples");
-    bool mark_contact_ = false;
+    QString extra_class_;
+    // 0.7 defaults with Contact vib: Partner fixed off, Stay fixed for extras
+    // follows trajectory capture (we default Stay fixed on until track_multi).
+    bool partner_fixed_ = false;
+    bool extras_stay_fixed_ = true;
+    bool mark_contact_ = false, mark_extra_ = false, mark_ignore_ = false;
     std::vector<samn::ContactMarkBox> contact_areas_;
+    std::vector<QRect> mask_rois_;
     bool running_ = false;
     int percent_ = 0;
     QString progress_text_;

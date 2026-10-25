@@ -67,6 +67,23 @@ inline bool WritePanning(const std::filesystem::path& p, int seconds, double amp
     return true;
 }
 
+// Tip disc (left) moves vertically; partner disc (right) moves horizontally.
+// Ground for G2b partner path: tip ROI ~ (65, mid-35, 70, 70), partner ~
+// (mid-35, 145, 70, 70) at t=0.
+inline bool WriteTipAndPartner(const std::filesystem::path& p, int seconds, double tip_amp, double partner_amp) {
+    auto w = Writer(p);
+    if (!w.isOpened()) return false;
+    const cv::Mat bg = Texture(kW, kH, 17, 160);
+    for (int i = 0; i < int(kFps * seconds); ++i) {
+        const double t = i / kFps;
+        cv::Mat f = bg.clone();
+        Disc(f, 100, int(120 + tip_amp / 2 * std::sin(2 * kPi * t)));
+        Disc(f, int(200 + partner_amp / 2 * std::sin(2 * kPi * 0.7 * t)), 180);
+        w.write(f);
+    }
+    return true;
+}
+
 // A hard cut to another, darker background at frame cut_at.
 inline bool WriteHardCut(const std::filesystem::path& p, int seconds, int cut_at, double amp) {
     auto w = Writer(p);
