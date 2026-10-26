@@ -144,6 +144,13 @@ SampleGateResult GateSamples(const std::vector<double>& times_ms, const std::vec
     return r;
 }
 
+double BoxOutsideShare(double x, double y, double w, double h, double width, double height) {
+    if (!(w > 0 && h > 0)) return kNaN;
+    const double ix = std::max(0.0, std::min(x + w, width) - std::max(x, 0.0));
+    const double iy = std::max(0.0, std::min(y + h, height) - std::max(y, 0.0));
+    return 1.0 - (ix * iy) / (w * h);
+}
+
 const char* WindowStateName(WindowState s) {
     switch (s) {
         case WindowState::kPass: return "pass";
@@ -261,6 +268,8 @@ std::vector<WindowVerdict> VerifyWindows(const std::vector<double>& y, const Fra
         v.c2 = (has(c.foreground) && fg_ref > 1e-9) ? MeanOf(c.foreground, a, b) / fg_ref : kNaN;
         // c7 appearance against the original seed (independent)
         v.c7 = has(c.appearance) ? MeanOf(c.appearance, a, b) : kNaN;
+        // c9 box outside the picture (geometry, not the tracker's opinion)
+        v.c9 = has(c.box_outside) ? MeanOf(c.box_outside, a, b) : kNaN;
 
         // A writer that cannot be computed is not "unknown": it is lost.
         const bool lost = std::isfinite(v.c4) ? v.c4 < o.c4_min : Finite(y, a, b).size() < static_cast<size_t>(len) * 7 / 10;
@@ -288,6 +297,7 @@ std::vector<WindowVerdict> VerifyWindows(const std::vector<double>& y, const Fra
         if (std::isfinite(v.c1) && v.c1 < o.c1_min) { ++independent_fail; AddReason(&r, "c1 flow", v.c1, "<", o.c1_min); }
         if (std::isfinite(v.c2) && v.c2 < o.c2_min) { ++independent_fail; AddReason(&r, "c2 foreground", v.c2, "<", o.c2_min); }
         if (std::isfinite(v.c7) && v.c7 < o.c7_min) { ++independent_fail; AddReason(&r, "c7 appearance", v.c7, "<", o.c7_min); }
+        if (std::isfinite(v.c9) && v.c9 > o.c9_max) { ++independent_fail; AddReason(&r, "c9 outside", v.c9, ">", o.c9_max); }
         if (lost) { ++trigger_fail; AddReason(&r, "c4 ok", std::isfinite(v.c4) ? v.c4 : 0.0, "<", o.c4_min); }
         if (std::isfinite(v.c3) && v.c3 > o.c3_max) { ++trigger_fail; AddReason(&r, "c3 hampel", v.c3, ">", o.c3_max); }
         if (std::isfinite(v.c8) && v.c8 < o.c8_min) { ++trigger_fail; AddReason(&r, "c8 range", v.c8, "<", o.c8_min); }

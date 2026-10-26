@@ -129,8 +129,14 @@
 2. **Owner GUI leftovers:** handbook (§12), idle ribbon (§11), donation pages (Manifest §2). Reduced motion ✅ (#120).
 3. **AI Train D-155:** script compare with labels, then golden-clip run (Owner clips).
 4. **Windows CI flakiness** under ctest; diagnostics already run functions alone.
-5. **Self-checking engine** (`docs/P3_SELF_CHECK_ENGINE.md`, Owner 26 Oct): slices SC-1 sample gate (Hampel, gaps) → SC-2 checker signals in `TrackBox` → SC-3 window verifier → SC-4 fast lane → SC-5 verified repair → SC-6 golden gate. SC-1 and SC-3 built (`engine/include/samn/engine/self_check.h`, 13 tests in `tests/engine/self_check_test.cpp`); on the synthetic scenes the C++ verifier fails 17 of 17 bad windows with no false alarm and keeps the pause as "still". Next: SC-2 (checker signals in `TrackBox`). The bench scripts and scenes are in the private test-media repo, `synthetic/motion-bench-2026-10/`.
+5. **Self-checking engine** (`docs/P3_SELF_CHECK_ENGINE.md`, Owner 26 Oct, PR #133 on `claude/next-self-check-engine`): SC-1 sample gate and SC-3 window verifier are built (`engine/include/samn/engine/self_check.h`, 14 tests), with checkers c1–c4, c8 and c9 (box outside the picture, found on the Owner clip). Next in order: SC-2 checker signals recorded in `TrackBox` → wire `GateSamples` in front of the P3.2 chain behind a switch → SC-4 fast lane → SC-5 verified repair with YOLO-family re-anchoring → SC-6 golden gate. AI blocks the Owner asked for (YOLO, MediaPipe, OpenCV DL, Whisper, CLIP): roles and licences in §5a of the design.
 6. **P3.6** Quality Doctor; Player finish / Svakom / Scene Map view; bug hunt; release.
+
+### Handoff: self-checking engine (26 Oct, for the session that merges it all)
+- **PR #133** (`claude/next-self-check-engine`): design + SC-1 + SC-3 + c9. CI was green on Linux, ASan/UBSan and TSan at the first push; check Windows and the push with c9.
+- **Evidence:** synthetic scenes and bench scripts in the private test media, `synthetic/motion-bench-2026-10/` (branch `claude/next-project-prep-o1ckxh` there, not yet in its main). Owner clip `clips/owner-av1-256x144/` (main of the test media). AV1 does not decode in OpenCV's FFmpeg on Linux here; transcode to H.264 with `ffmpeg -c:v libdav1d` first.
+- **Open questions for the Owner:** the claude-router skill (vimoxshah/claude-router) as `.claude/` files in this repo; installing it in `~/.claude` was blocked in the cloud session.
+- **Old branch** `claude/next-project-prep-o1ckxh` here holds the closed PR #2 (old import); leave it, do not force-push.
 
 ### Handoff note (for the next agent)
 - **Routing:** one theme per agent. Generator Tf/Tj distance on this tip; Look #117 parallel (do not steal Look files for feature work).

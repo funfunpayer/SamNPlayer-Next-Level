@@ -42,6 +42,9 @@ SampleGateResult GateSamples(const std::vector<double>& times_ms, const std::vec
 
 // ---------- SC-3: window verifier ----------
 
+// Share of a box's area that lies outside a picture of the given size.
+double BoxOutsideShare(double x, double y, double w, double h, double width, double height);
+
 // Per-frame checker signals, all the same length as the track. An empty
 // vector means "this checker did not run": it is unknown, never a pass.
 struct FrameChecks {
@@ -50,6 +53,7 @@ struct FrameChecks {
     std::vector<uint8_t> tracker_ok;  // c4: 1 = the tracker returned a box
     std::vector<double> camera_inliers;  // c6: RANSAC inlier fraction of the camera estimate (0..1)
     std::vector<double> appearance;      // c7: match against the original seed (0..1)
+    std::vector<double> box_outside;     // c9: share of the box area outside the picture (0..1)
     // Fast lane: foreground fraction of the whole (small, stabilised) frame.
     // Tells a pause (nothing moves) from a box that lost its target.
     std::vector<double> scene_motion;
@@ -71,6 +75,7 @@ struct VerifyOptions {
     double c4_min = 0.7;             // tracker ok-rate
     double c6_min = 0.4;             // camera trust; below it c1 is unknown
     double c7_min = 0.5;             // appearance against the original seed
+    double c9_max = 0.3;             // box outside the picture: a tracker pinned at the border
     double c8_min = 0.25;            // range relative to the typical window range (75th percentile
                                      // over the clip, so it holds while up to 3/4 of windows are broken)
     double still_flow = 0.3;         // px/frame: median |box_flow| under this is quiet
@@ -85,7 +90,7 @@ struct WindowVerdict {
     int first = 0, end = 0;          // [first, end) frame indices
     WindowState state = WindowState::kPass;
     // NaN = unknown (checker did not run or had too little data)
-    double c1 = 0, c2 = 0, c3 = 0, c4 = 0, c6 = 0, c7 = 0, c8 = 0;
+    double c1 = 0, c2 = 0, c3 = 0, c4 = 0, c6 = 0, c7 = 0, c8 = 0, c9 = 0;
     std::string reasons;             // e.g. "c1 flow 0.05 < 0.4; c4 ok 0.20 < 0.7"
 };
 

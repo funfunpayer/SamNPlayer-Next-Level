@@ -130,6 +130,29 @@ Without an independent signal a pause cannot be told from a box on still
 background, so the verifier fails it instead of guessing: "still" needs the
 fast lane's quiet scene or the seed's appearance (c7).
 
+### 3.2 First real clip (Owner clip `owner-av1-256x144`, private test media)
+
+256×144, 570 s from the Owner's box at 305 s; reference = the 0.7 script and
+0.7's own tip path (`trajectory.tip`). There is no ground truth, so "right"
+means "near 0.7's box".
+
+- The writer here was **plain CSRT** (no camera compensation, no scene
+  re-anchoring, unlike the full Next chain). It followed 0.7's box for about
+  10 s, then drifted. From 20 s on it was **pinned at the picture border**
+  for 59 % of all frames; median distance to 0.7's box 112 px in a 256 px
+  frame.
+- **c1–c8 missed that:** 102 of the 129 windows they passed had the box at
+  the border. CSRT still found motion there, so flow and foreground agreed.
+- **c9 "box outside the picture"** (share of the box area outside the frame;
+  geometry, not the tracker's opinion) fixed it. 167 of 168 border-pinned
+  windows now fail; passes fell from 129 to 28; of the 8 windows where the box
+  is within 25 px of 0.7's box, 7 pass.
+- So on this clip the verifier says, correctly, that a single CSRT seed is
+  wrong for most of the clip. That is the case the repair (SC-5) exists for.
+  Next measurement: the full Next chain (camera compensation, cuts) as the
+  writer, then SC-5, against 0.7's windowed r (README of the clip: median r
+  0.49 over 30 s windows).
+
 ## 4. The engine: three lanes
 
 ```
@@ -223,6 +246,7 @@ frames and a non-zero spread, else the checker reports "unknown").
 | c5 | periodicity | E(f0)+E(2 f0) over the total power of the detrended box signal, f0 from the fast lane (GD-15 score) | < 0.2 with a tempo present | independent of the box's own tracking |
 | c6 | camera trust | RANSAC inlier fraction of the camera estimate (GD-14) | < 0.4 | context: c1 is "unknown" when this fails |
 | c7 | appearance | match of the box against the **original** seed template (GD-11 `matchesOriginal`, window sized from the original) | below the P3.1 gate | independent |
+| c9 | box outside the picture | mean share of the box area outside the frame (`BoxOutsideShare`) | > 0.3 | independent (geometry) |
 | c8 | range collapse | (p98 − p2) of y in W ÷ the median of that over the shot | < 0.25 | own (trigger) |
 
 Window state: **still** if the fast lane sees no motion at the stroke's tempo in the window and c8 shows a collapsed range (a pause, kept as written); else **fail** if any independent checker fails, or two triggers fail
@@ -240,8 +264,32 @@ Sample rules from the document, applied to the raw track before the P3.2 chain:
   curve; each segment is normalised on its own (`PostOptions::scene_ranges`
   already does that per shot).
 
-c1–c4 were measured in §3; c5–c8 are new and not measured yet. Thresholds above are first values. Each is pinned from both
+c1–c4 were measured in §3, c8 and c9 on the Owner clip in §3.2; c5–c7 are not measured yet. Thresholds above are first values. Each is pinned from both
 sides with a test (GD-15 rule) and calibrated on the golden clips at P3.8.
+
+## 5a. AI building blocks in the engine (Owner, 26 Oct)
+
+The Owner asked for YOLO, MediaPipe, OpenCV deep-learning models, Whisper and
+CLIP in the engine. Each one gets a role inside the three lanes. None of them
+writes the stroke (GD-01, D-064, D-139). Each one is chosen by measurement
+(`samn_compare`, D-143), not by its name. Inference runs in C++ through ONNX
+Runtime (already in the build, D-155) or OpenCV dnn. Python is only for
+training (D-108).
+
+| Block | Role in the engine | Lane | Licence (code / weights) | Notes |
+|---|---|---|---|---|
+| **YOLO** (v8 / 11, ONNX) | Body-part boxes: proposals for Find tip and for verified re-acquisition (SC-5, P3.7); an independent checker "is the box on the tracked body part" (new c10) | fast lane (every n-th frame) + repair | Ultralytics: AGPL-3.0 for code **and** weights → if it wins the measurement, the project moves to AGPL-3.0-or-later (D-143) | RF-DETR (Apache-2.0) is our own student (D-155) and the first challenger; NudeNet (teacher) is already in AI Train. |
+| **MediaPipe** (hands, pose, face) | Pose / hand keypoints as a second, independent witness: is a hand or a hip at the box; its keypoint motion against the box motion (like c1) | checker lane, fast lane | Apache-2.0 (code and the published models) | The C++ framework needs Bazel; the plan is its models as ONNX/TFLite through ONNX Runtime, not the framework. Licence of each model card checked first (GD-17). |
+| **OpenCV + DL models** | Already the base: DIS/Farneback flow (c1), MOG2 (c2), RAFT (BSD) as a stronger flow checker; TrackerNano/Vit as challengers to CSRT, never a silent swap (REJ-12) | all lanes | Apache-2.0; RAFT BSD | P3_GENERATOR "Own engine and C++ toolbox". |
+| **Whisper** (whisper.cpp) | Speech-Hold (D-157 phases); speech and sound segments as context for the verifier (a window full of speech and no motion is a likely pause, not a failure) | fast lane (audio beside video, D-142) | MIT (code); weights MIT | Never a position source (REJ-26). Silero VAD (MIT) first, Whisper only where words matter. |
+| **CLIP** (OpenCLIP, ONNX) | Scene type per shot ("close-up", "two people", "empty picture", the D-157 phases) for the fast lane: it chooses the profile, the detrend window and whether repair should run; also search by text in the Editor | fast lane | OpenAI CLIP MIT; OpenCLIP MIT (weights: check each checkpoint's dataset licence) | A proposal the user confirms (D-129); a wrong scene type must not override the measured signal. |
+
+The order of work: (1) YOLO-family proposals for SC-5 repair, because the
+Owner clip shows that the repair needs a re-anchor (§3.2); (2) MediaPipe
+keypoints as c10/c11 checkers; (3) CLIP scene type in the fast lane;
+(4) Whisper/VAD with the phase work. Each step has the same gate: no
+regression on the goldens, and a win on clips where today's result is wrong
+(GD-16).
 
 ## 6. Rules this design keeps
 

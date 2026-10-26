@@ -255,6 +255,26 @@ TEST_CASE("Verifier: windows never span a scene cut") {
     CHECK(v[6].end == 450);
 }
 
+TEST_CASE("Verifier: a box pinned at the picture border fails although flow agrees") {
+    // Owner clip, 26 Oct: CSRT drifted to the border after 20 s and kept
+    // finding motion there; flow and foreground passed 102 such windows.
+    CHECK(BoxOutsideShare(10, 10, 40, 40, 256, 144) == doctest::Approx(0.0));
+    CHECK(BoxOutsideShare(-20, 10, 40, 40, 256, 144) == doctest::Approx(0.5));
+    CHECK(BoxOutsideShare(236, 124, 40, 40, 256, 144) == doctest::Approx(0.75));
+    CHECK(std::isnan(BoxOutsideShare(0, 0, 0, 40, 256, 144)));
+
+    const auto y = Stroke(900);
+    auto c = Healthy(y);
+    c.box_outside.assign(y.size(), 0.0);
+    for (int i = 300; i < 420; ++i) c.box_outside[static_cast<size_t>(i)] = 0.5;
+    for (int i = 600; i < 660; ++i) c.box_outside[static_cast<size_t>(i)] = 0.2;  // touching, not pinned
+    const auto v = VerifyWindows(y, c, VerifyOptions{});
+    CHECK(v[5].state == WindowState::kFail);
+    CHECK(v[5].reasons.find("c9") != std::string::npos);
+    CHECK(v[10].state == WindowState::kPass);
+    CHECK(Count(v, WindowState::kPass) == 13);
+}
+
 TEST_CASE("Verifier: missing checkers are unknown, never a pass by default") {
     const auto y = Stroke(300);
     const auto v = VerifyWindows(y, FrameChecks{}, VerifyOptions{});
