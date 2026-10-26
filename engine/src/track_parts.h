@@ -19,8 +19,10 @@ bool IsSceneCut(const cv::Mat& prev_gray, const cv::Mat& gray);
 
 // Vertical camera shift between two gray frames from background features
 // outside the excluded boxes (10 px padding). 0 means "no reliable
-// estimate", not "no motion".
-double CameraMotionY(const cv::Mat& prev_gray, const cv::Mat& gray, const std::vector<cv::Rect>& excludes);
+// estimate", not "no motion". inlier_fraction (optional) receives the RANSAC
+// inlier share of the matched features, 0 without an estimate (GD-14).
+double CameraMotionY(const cv::Mat& prev_gray, const cv::Mat& gray, const std::vector<cv::Rect>& excludes,
+                     double* inlier_fraction = nullptr);
 
 // Savitzky-Golay smoothing like scipy savgol_filter(mode="interp").
 std::vector<double> Savgol(const std::vector<double>& y, int window, int polyorder);

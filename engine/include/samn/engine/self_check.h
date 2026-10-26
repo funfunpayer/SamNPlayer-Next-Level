@@ -48,7 +48,8 @@ double BoxOutsideShare(double x, double y, double w, double h, double width, dou
 // Per-frame checker signals, all the same length as the track. An empty
 // vector means "this checker did not run": it is unknown, never a pass.
 struct FrameChecks {
-    std::vector<double> box_flow;     // c1: vertical flow in the box minus the camera (outside median), px/frame
+    std::vector<double> box_flow;     // c1: flow in the box minus the camera (outside median) on the written axis, px/frame
+    std::vector<double> box_flow_cross;  // the same on the other axis: a quiet axis while this moves is a wrong axis
     std::vector<double> foreground;   // c2: foreground fraction inside the box (0..1)
     std::vector<uint8_t> tracker_ok;  // c4: 1 = the tracker returned a box
     std::vector<double> camera_inliers;  // c6: RANSAC inlier fraction of the camera estimate (0..1)
@@ -74,12 +75,14 @@ struct VerifyOptions {
     double c3_max = 0.1;             // Hampel rate
     double c4_min = 0.7;             // tracker ok-rate
     double c6_min = 0.4;             // camera trust; below it c1 is unknown
-    double c7_min = 0.5;             // appearance against the original seed
+    double c7_min = 0.55;            // appearance against the original seed (= AppearanceMemory::kMinScore)
     double c9_max = 0.3;             // box outside the picture: a tracker pinned at the border
     double c8_min = 0.25;            // range relative to the typical window range (75th percentile
                                      // over the clip, so it holds while up to 3/4 of windows are broken)
     double still_flow = 0.3;         // px/frame: median |box_flow| under this is quiet
-    double still_scene = 0.02;       // scene_motion under this is a quiet scene
+    double cross_axis_flow = 0.9;    // px/frame on the other axis that rules out "quiet" (3 x still_flow)
+    double still_scene = 0.02;       // scene_motion under a quarter of this is a quiet scene
+    double still_scene_ratio = 0.3;  // ... or under this share of the clip's usual scene motion
     double foreground_ref = 0;       // 0 = median of c2 over the first 10 windows of the clip
     SampleGateOptions hampel;        // c3 uses the same Hampel rule as the gate
 };

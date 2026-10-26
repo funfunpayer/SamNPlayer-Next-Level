@@ -8,7 +8,9 @@
 
 namespace samn::engine {
 
-double CameraMotionY(const cv::Mat& prev_gray, const cv::Mat& gray, const std::vector<cv::Rect>& excludes) {
+double CameraMotionY(const cv::Mat& prev_gray, const cv::Mat& gray, const std::vector<cv::Rect>& excludes,
+                     double* inlier_fraction) {
+    if (inlier_fraction) *inlier_fraction = 0.0;
     const int h = prev_gray.rows, w = prev_gray.cols, pad = 10;
     cv::Mat mask(h, w, CV_8U, cv::Scalar(255));
     for (const cv::Rect& r : excludes) {
@@ -35,6 +37,8 @@ double CameraMotionY(const cv::Mat& prev_gray, const cv::Mat& gray, const std::v
     cv::Mat inliers;
     const cv::Mat t = cv::estimateAffinePartial2D(good_prev, good_curr, inliers, cv::RANSAC);
     if (t.empty()) return 0.0;
+    if (inlier_fraction && !inliers.empty())
+        *inlier_fraction = static_cast<double>(cv::countNonZero(inliers)) / static_cast<double>(inliers.total());
     return t.at<double>(1, 2);
 }
 

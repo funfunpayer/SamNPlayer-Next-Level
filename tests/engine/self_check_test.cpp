@@ -275,6 +275,70 @@ TEST_CASE("Verifier: a box pinned at the picture border fails although flow agre
     CHECK(Count(v, WindowState::kPass) == 13);
 }
 
+TEST_CASE("Verifier: a box on still background fails while the scene moves") {
+    // Wrong from the first frame: the writer is flat, the flow in the box is
+    // noise and nothing moves there, so its own values look "normal" (their
+    // references are its own windows). The scene moving elsewhere gives it away.
+    std::mt19937 rng(4);
+    std::normal_distribution<double> noise(0, 0.1);
+    std::vector<double> y(600);
+    FrameChecks c;
+    for (size_t i = 0; i < y.size(); ++i) {
+        y[i] = 40 + noise(rng);
+        c.box_flow.push_back(noise(rng));
+        c.foreground.push_back(0.0);
+        c.tracker_ok.push_back(1);
+        c.scene_motion.push_back(0.08);
+    }
+    auto v = VerifyWindows(y, c, VerifyOptions{});
+    REQUIRE(v.size() == 10);
+    CHECK(Count(v, WindowState::kFail) == 10);
+    CHECK(v[3].reasons.find("box quiet, scene moves") != std::string::npos);
+
+    // The same box with the seed's look confirmed is a pause, not a failure.
+    c.appearance.assign(y.size(), 0.8);
+    v = VerifyWindows(y, c, VerifyOptions{});
+    CHECK(Count(v, WindowState::kStill) == 10);
+}
+
+TEST_CASE("Verifier: a quiet written axis with motion on the other axis is a wrong axis, not a pause") {
+    // The real C++ chain on the occlusion scene: one jump made the axis choice
+    // pick x while the stroke stayed vertical; the x track was flat and the
+    // seed's look matched, which read as "still".
+    std::mt19937 rng(8);
+    std::normal_distribution<double> noise(0, 0.1);
+    std::vector<double> y(600);
+    FrameChecks c;
+    const auto vertical = Stroke(600);
+    for (size_t i = 0; i < y.size(); ++i) {
+        y[i] = 428 + noise(rng);
+        c.box_flow.push_back(noise(rng));
+        c.tracker_ok.push_back(1);
+        c.appearance.push_back(0.87);
+    }
+    c.box_flow_cross = FlowOf(vertical);
+    auto v = VerifyWindows(y, c, VerifyOptions{});
+    CHECK(Count(v, WindowState::kStill) == 0);
+    CHECK(Count(v, WindowState::kFail) == static_cast<int>(v.size()));
+    CHECK(v[2].reasons.find("other axis") != std::string::npos);
+
+    c.box_flow_cross.assign(y.size(), 0.05);  // nothing moves on the other axis either: a pause
+    v = VerifyWindows(y, c, VerifyOptions{});
+    CHECK(Count(v, WindowState::kStill) == static_cast<int>(v.size()));
+}
+
+TEST_CASE("Verifier: appearance alone does not fail a window (the template does not follow a zoom)") {
+    const auto y = Stroke(600);
+    auto c = Healthy(y);
+    c.appearance.assign(y.size(), 0.3);
+    auto v = VerifyWindows(y, c, VerifyOptions{});
+    CHECK(Count(v, WindowState::kSuspect) == static_cast<int>(v.size()));
+    CHECK(v[1].reasons.find("c7") != std::string::npos);
+    for (size_t i = 0; i < c.tracker_ok.size(); ++i) c.tracker_ok[i] = (i % 3) ? 1 : 0;  // plus a shaky tracker
+    v = VerifyWindows(y, c, VerifyOptions{});
+    CHECK(Count(v, WindowState::kFail) == static_cast<int>(v.size()));
+}
+
 TEST_CASE("Verifier: missing checkers are unknown, never a pass by default") {
     const auto y = Stroke(300);
     const auto v = VerifyWindows(y, FrameChecks{}, VerifyOptions{});

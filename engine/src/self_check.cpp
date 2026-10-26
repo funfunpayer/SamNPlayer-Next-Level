@@ -227,6 +227,15 @@ std::vector<WindowVerdict> VerifyWindows(const std::vector<double>& y, const Fra
         fg_ref = Median(first);
     }
     const double range_ref = Quantile(ranges, 0.75);
+    // The scene's usual motion: a pause is a drop against it, because the
+    // absolute foreground share depends on how big the moving part is.
+    std::vector<double> scene_means;
+    if (has(c.scene_motion))
+        for (const auto& [a, b] : spans) {
+            const double m = MeanOf(c.scene_motion, a, b);
+            if (std::isfinite(m)) scene_means.push_back(m);
+        }
+    const double scene_ref = Median(scene_means);
 
     for (const auto& [a, b] : spans) {
         const int len = b - a;
@@ -266,7 +275,8 @@ std::vector<WindowVerdict> VerifyWindows(const std::vector<double>& y, const Fra
             v.c1 = WindowCorrelation(Slice(vel, a, b), Slice(c.box_flow, a, b));
         // c2 foreground presence (independent)
         v.c2 = (has(c.foreground) && fg_ref > 1e-9) ? MeanOf(c.foreground, a, b) / fg_ref : kNaN;
-        // c7 appearance against the original seed (independent)
+        // c7 appearance against the original seed (trigger: the template does
+        // not follow a zoom, so alone it is not enough to call a box wrong)
         v.c7 = has(c.appearance) ? MeanOf(c.appearance, a, b) : kNaN;
         // c9 box outside the picture (geometry, not the tracker's opinion)
         v.c9 = has(c.box_outside) ? MeanOf(c.box_outside, a, b) : kNaN;
@@ -274,30 +284,53 @@ std::vector<WindowVerdict> VerifyWindows(const std::vector<double>& y, const Fra
         // A writer that cannot be computed is not "unknown": it is lost.
         const bool lost = std::isfinite(v.c4) ? v.c4 < o.c4_min : Finite(y, a, b).size() < static_cast<size_t>(len) * 7 / 10;
 
-        // Still: the writer's range collapsed, the box sees no motion, the
-        // tracker holds the box, and something independent confirms it is a
-        // pause and not a lost target (a quiet scene, or the seed's look).
-        bool still = false;
-        if (!lost && std::isfinite(v.c8) && v.c8 < o.c8_min) {
-            bool box_quiet = true;
+        // A quiet box: no motion inside it (flow), or, without flow, a
+        // collapsed range. Quiet is a pause only when something independent
+        // confirms the target is still there (the seed's look) or that
+        // nothing moves anywhere (the fast lane's scene motion). A quiet box
+        // while the scene moves sits on still background: the target is
+        // elsewhere, even when the writer's own values look normal.
+        bool still = false, dead = false, wrong_axis = false;
+        if (!lost) {
+            bool quiet = std::isfinite(v.c8) && v.c8 < o.c8_min;
             if (has(c.box_flow)) {
                 std::vector<double> mag;
                 for (int i = a; i < b; ++i)
                     if (std::isfinite(c.box_flow[static_cast<size_t>(i)])) mag.push_back(std::fabs(c.box_flow[static_cast<size_t>(i)]));
-                box_quiet = !mag.empty() && Median(mag) < o.still_flow;
+                quiet = !mag.empty() && Median(mag) < o.still_flow;
+            }
+            // Quiet on the written axis while the box moves on the other one:
+            // the axis is wrong, not the motion paused.
+            if (quiet && has(c.box_flow_cross)) {
+                std::vector<double> mag;
+                for (int i = a; i < b; ++i)
+                    if (std::isfinite(c.box_flow_cross[static_cast<size_t>(i)]))
+                        mag.push_back(std::fabs(c.box_flow_cross[static_cast<size_t>(i)]));
+                if (!mag.empty() && Median(mag) >= o.cross_axis_flow) {
+                    quiet = false;
+                    wrong_axis = true;
+                }
             }
             const double scene = has(c.scene_motion) ? MeanOf(c.scene_motion, a, b) : kNaN;
-            const bool confirmed = (std::isfinite(scene) && scene < o.still_scene) ||
-                                   (std::isfinite(v.c7) && v.c7 >= o.c7_min);
-            still = box_quiet && confirmed;
+            const bool scene_quiet = std::isfinite(scene) &&
+                                     (scene < o.still_scene * 0.25 ||
+                                      (std::isfinite(scene_ref) && scene < o.still_scene_ratio * scene_ref));
+            if (quiet) {
+                if ((std::isfinite(v.c7) && v.c7 >= o.c7_min) || scene_quiet)
+                    still = true;
+                else if (std::isfinite(scene))
+                    dead = true;
+            }
         }
 
         int independent_fail = 0, trigger_fail = 0;
         std::string r;
         if (std::isfinite(v.c1) && v.c1 < o.c1_min) { ++independent_fail; AddReason(&r, "c1 flow", v.c1, "<", o.c1_min); }
         if (std::isfinite(v.c2) && v.c2 < o.c2_min) { ++independent_fail; AddReason(&r, "c2 foreground", v.c2, "<", o.c2_min); }
-        if (std::isfinite(v.c7) && v.c7 < o.c7_min) { ++independent_fail; AddReason(&r, "c7 appearance", v.c7, "<", o.c7_min); }
+        if (std::isfinite(v.c7) && v.c7 < o.c7_min) { ++trigger_fail; AddReason(&r, "c7 appearance", v.c7, "<", o.c7_min); }
         if (std::isfinite(v.c9) && v.c9 > o.c9_max) { ++independent_fail; AddReason(&r, "c9 outside", v.c9, ">", o.c9_max); }
+        if (dead) { ++independent_fail; r += r.empty() ? "box quiet, scene moves" : "; box quiet, scene moves"; }
+        if (wrong_axis) { ++independent_fail; r += r.empty() ? "motion on the other axis" : "; motion on the other axis"; }
         if (lost) { ++trigger_fail; AddReason(&r, "c4 ok", std::isfinite(v.c4) ? v.c4 : 0.0, "<", o.c4_min); }
         if (std::isfinite(v.c3) && v.c3 > o.c3_max) { ++trigger_fail; AddReason(&r, "c3 hampel", v.c3, ">", o.c3_max); }
         if (std::isfinite(v.c8) && v.c8 < o.c8_min) { ++trigger_fail; AddReason(&r, "c8 range", v.c8, "<", o.c8_min); }

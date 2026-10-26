@@ -153,6 +153,39 @@ means "near 0.7's box".
   writer, then SC-5, against 0.7's windowed r (README of the clip: median r
   0.49 over 30 s windows).
 
+### 3.3 The real C++ chain with recorded checks (SC-2)
+
+`TrackBox` with `record_checks` (the Next chain: CSRT, camera compensation,
+scene cuts, appearance memory, guards) and `VerifyWindows` on its signals.
+
+**Synthetic scenes** (Find tip box from 0.7, 2 s windows): 13 of 13 bad
+windows fail, 0 false alarms; the four pause windows of s8 are "still"; the
+zoom scene gives 7 "suspect" windows (c7 alone, see below). The chain itself
+is better than the plain CSRT of §3: the scene cut of s10 leaves no bad
+window. Three rules came out of this run and are now pinned by tests:
+
+- **Scene motion from flow, not MOG2.** MOG2 learns a regular stroke into its
+  background model within a few cycles, so a steady scene read as "nothing
+  moves" and a box on still background passed as a pause. The scene motion
+  is now the share of pixels whose flow differs from the frame's median by
+  more than 1 px, and a pause is a drop against the clip's usual level.
+- **c7 is a trigger, not an independent checker.** The seed template does
+  not follow a zoom: on s4 the box was right (c1 0.99) while c7 fell to 0.26.
+- **Wrong axis.** On s9 one jump made the axis choice pick x while the stroke
+  stayed vertical; the flat x track with a matching look read as a pause.
+  The flow on the other axis (`box_flow_cross`) now turns such a window into
+  a failure ("motion on the other axis"). The axis choice itself uses the raw
+  range (`Ptp`) and should use a robust spread or the principal axis (§5b).
+
+**Owner clip** (full chain, 570 s): the box stays near 0.7's (median 15 px,
+64 % of frames within 25 px; the plain CSRT of §3.2 was 112 px off). But the
+scene-cut test fires 1992 times (as 0.7's did, about one frame in eight at
+256×144); windows never span a cut, so 37 % of the frames get no verdict, and
+on the rest "fail" and "pass" windows are about equally far from 0.7's box
+(33 and 30 px). "Still" windows sit near 0.7's box (9 px). So on this clip the
+verifier is not yet useful, and the first thing to fix is the cut detector
+(fast lane, SC-4), measured on this clip, before any threshold is tuned.
+
 ## 4. The engine: three lanes
 
 ```
@@ -330,7 +363,7 @@ a decision our engine should make itself, and check:
 | Slice | Content | Done when |
 |---|---|---|
 | SC-1 ✅ | `GateSamples` (Hampel + gap semantics + segments) in `engine/src/self_check.cpp`; not yet wired in front of the P3.2 chain (off by default when it is) | Unit tests on synthetic tracks (spikes, short and long gaps); P3.2 parity unchanged when off |
-| SC-2 | Checker signals recorded per frame by `TrackBox` (`TrackResult::checks`: flow-in-box, foreground, ok, inliers, appearance score) | Bit-identical positions with checks on and off; signals tested on generated patterns |
+| SC-2 ✅ | `TrackOptions::record_checks` → `TrackResult::checks` (flow in the box on both axes, foreground, scene motion, tracker ok, camera inliers, appearance, box outside) | Positions bit-identical on/off; moving, panning and wrong-box clips tested (`tests/engine/track_checks_test.cpp`) |
 | SC-3 ✅ (verifier) | `VerifyWindows()` → `WindowVerdict` list (pass / suspect / fail / still + reasons), per shot; into the quality report with SC-2 | The s9 / s10 style patterns are flagged, s1–s8 style patterns are not |
 | SC-4 | `FastLane()` → `FastLaneReport` (shots, tempo, camera trust, foreground refs, regions) on a worker thread, progress from frame 1 (GD-21) | Runtime under ¼ of the full run on the same clip; the shot and tempo tests pass |
 | SC-5 | Repair: re-acquire per failed window, verify, keep or gap | The occlusion and cut patterns repair; nothing that passed changes |
