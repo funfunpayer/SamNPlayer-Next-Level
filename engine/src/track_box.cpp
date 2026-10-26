@@ -191,7 +191,12 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
             }
             res.lost.push_back(tip_ok ? 0 : 1);
         } else {
-            res.lost.push_back(0);
+            // CSRT never reports a loss when it is wrong (GD-11): a box that
+            // no longer resembles the first crop is marked lost (spec T6).
+            // Only the flag changes, so a run without gap handling, which
+            // ignores the flags, keeps every position as before.
+            const auto likeness = memory ? memory->MatchesOriginal(gray, *found) : std::nullopt;
+            res.lost.push_back(likeness && *likeness < AppearanceMemory::kMinScore ? 1 : 0);
             coast.ObserveOk(*found);
             ++valid;
             res.xs.push_back(Centre(*found).x);
@@ -200,10 +205,8 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
             tip_ok = true;
             // Only crops that still resemble the start feed the memory, so
             // slow drift never poisons a later reacquire.
-            if (memory && idx % kRememberEveryNFrames == 0) {
-                const auto score = memory->MatchesOriginal(gray, *found);
-                if (!score || *score >= AppearanceMemory::kMinScore) memory->Remember(gray, *found);
-            }
+            if (memory && idx % kRememberEveryNFrames == 0)
+                if (!likeness || *likeness >= AppearanceMemory::kMinScore) memory->Remember(gray, *found);
         }
 
         bool partner_ok = want_partner;

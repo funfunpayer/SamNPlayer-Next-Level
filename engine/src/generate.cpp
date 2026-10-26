@@ -14,6 +14,11 @@
 namespace samn::engine {
 
 namespace {
+// Motion under this share of the box size is tracker wobble (spec FR-15).
+constexpr double kMinTravelShare = 0.02;
+}  // namespace
+
+namespace {
 
 // 0.7 writeNativeFunscriptNamed: actions plus the native_pipeline record.
 std::string FunscriptJson(const GenerateRequest& req, const std::vector<Action>& actions, const TrackResult& tr,
@@ -177,6 +182,19 @@ void GenerateUnguarded(const GenerateRequest& req, uint64_t run_id, const std::f
             } catch (const std::exception& e) {
                 emit(GenerateEventKind::kNote, std::string("tracking cache not written: ") + e.what());
             }
+        }
+    }
+    // Spec FR-15 / T5: a box that hardly moves (under 2 % of its size between
+    // the 2nd and 98th percentile) is tracker wobble, not a stroke. 0.7's
+    // error, not a flat script: a flat script would hide a wrong box (GD-11).
+    if (!tr->distance_stroke && tr->positions.size() > 4) {
+        const double travel = Percentile(tr->positions, 98) - Percentile(tr->positions, 2);
+        const double size = tr->horizontal ? req.box.width : req.box.height;
+        if (size > 0 && travel < kMinTravelShare * size) {
+            emit(GenerateEventKind::kError,
+                 "no discernible motion in the tracked region: check the box size and place (avoid near-full-frame "
+                 "boxes); the filters need visible stroke motion");
+            return;
         }
     }
     const std::vector<double> times(tr->times_ms.begin(), tr->times_ms.end());
