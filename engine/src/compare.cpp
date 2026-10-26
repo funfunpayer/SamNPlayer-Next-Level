@@ -118,6 +118,7 @@ ClipReport RunClip(const CompareClip& clip, const CompareSettings& s, const std:
 
     TrackOptions to;
     to.cancel = cancel;
+    to.start_ms = clip.start_ms;
     auto tr = TrackBox(clip.video, clip.box, to, &r.error);
     if (!tr) return r;
     if (tr->canceled) {
@@ -174,6 +175,10 @@ std::optional<std::vector<CompareClip>> LoadManifest(const std::filesystem::path
             if (!v.is_number_integer()) return fail(clip.name + ": the box needs whole numbers");
         clip.box = cv::Rect(b[0].get<int>(), b[1].get<int>(), b[2].get<int>(), b[3].get<int>());
         if (clip.box.width <= 0 || clip.box.height <= 0) return fail(clip.name + ": the box is empty");
+        if (c.contains("start_ms")) {
+            if (!c["start_ms"].is_number() || c["start_ms"].get<double>() < 0) return fail(clip.name + ": start_ms must be a time >= 0");
+            clip.start_ms = static_cast<int64_t>(c["start_ms"].get<double>());
+        }
         clip.signal.profile = c.value("profile", std::string("standard"));
         if (c.contains("reference") && c["reference"].is_string()) clip.reference = resolve(c["reference"]);
         if (c.contains("old") && c["old"].is_string()) clip.old_output = resolve(c["old"]);

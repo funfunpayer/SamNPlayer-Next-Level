@@ -26,6 +26,7 @@ struct CompareClip {
     std::string name;
     std::filesystem::path video;
     cv::Rect box;
+    int64_t start_ms = 0;                       // the box is drawn here (0.7 startTimeSec)
     SignalOptions signal;                       // profile and overrides
     std::optional<std::filesystem::path> reference;  // human or other trusted script
     std::optional<std::filesystem::path> old_output;  // 0.7's script for the same clip and box
@@ -66,7 +67,7 @@ struct ClipReport {
 // checked every frame.
 ClipReport RunClip(const CompareClip& clip, const CompareSettings& s, const std::function<bool()>& cancel = {});
 
-// Manifest: {"clips": [{"name", "video", "box": [x,y,w,h], "profile",
+// Manifest: {"clips": [{"name", "video", "box": [x,y,w,h], "start_ms", "profile",
 // "reference", "old"}], "window_ms", "max_lag_ms"}; relative paths are
 // relative to the manifest. nullopt with *error on a bad manifest.
 std::optional<std::vector<CompareClip>> LoadManifest(const std::filesystem::path& path, CompareSettings* settings,

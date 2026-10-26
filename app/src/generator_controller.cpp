@@ -118,9 +118,10 @@ bool GeneratorController::findTip() {
     emit findingChanged();
     setStatus(tr("Looking for the rhythmic motion…"));
     QPointer<GeneratorController> self(this);
-    finder_ = std::thread([self, cancel = find_cancel_, forVideo = video_path_,
+    finder_ = std::thread([self, cancel = find_cancel_, forVideo = video_path_, startMs = int64_t(std::llround(preview_ms_)),
                            video = std::filesystem::path(video_path_.toStdU16String())] {
         samn::engine::TipFindOptions o;
+        o.start_ms = startMs;  // 0.7: from the shown frame
         o.cancel = [cancel] { return cancel->load(); };
         std::string error;
         std::optional<samn::engine::TipFindResult> r;
@@ -129,7 +130,7 @@ bool GeneratorController::findTip() {
         } catch (const std::exception& e) {
             error = e.what();
         }
-        QMetaObject::invokeMethod(qApp, [self, r = std::move(r), error, forVideo] {
+        QMetaObject::invokeMethod(qApp, [self, r = std::move(r), error, forVideo, startMs] {
             if (!self) return;
             self->finding_ = false;
             emit self->findingChanged();
@@ -151,6 +152,7 @@ bool GeneratorController::findTip() {
             self->tip_candidates_ = list;
             emit self->tipCandidatesChanged();
             self->setBox(QRect(r->box.x, r->box.y, r->box.width, r->box.height));
+            self->box_ms_ = double(startMs);  // found from there, whatever is shown now
             // Below this the "rhythm" is compression noise (a still clip
             // scores about 0.002, a clear stroke above 1).
             const bool weak = r->candidates.empty() || r->candidates.front().score < 0.05;
@@ -379,8 +381,11 @@ void GeneratorController::setBox(const QRect& box) {
     // Inside the frame; 0.7 treats boxes under 8 px as a click, not a box.
     const QRect r = box.normalized().intersected(QRect(QPoint(0, 0), video_size_));
     const QRect next = r.width() >= 8 && r.height() >= 8 ? r : QRect();
-    if (next == box_) return;
+    // The box belongs to the frame it was drawn on: tracking starts there
+    // (0.7 startTimeSec), not at 0 where the tip is somewhere else.
+    if (next == box_ && box_ms_ == preview_ms_) return;
     box_ = next;
+    box_ms_ = preview_ms_;
     emit boxChanged();
     emit stepChanged();
 }
@@ -718,6 +723,7 @@ bool GeneratorController::create(bool overwrite) {
     engine::GenerateRequest req;
     req.video = std::filesystem::path(video_path_.toStdU16String());
     req.box = cv::Rect(box_.x(), box_.y(), box_.width(), box_.height());
+    req.start_ms = int64_t(std::llround(box_ms_));
     req.camera_compensation = camera_;
     req.scene_cuts = scene_cuts_;
     req.signal.profile = profile_.toStdString();
