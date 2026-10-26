@@ -37,7 +37,13 @@ cd "$tmp/FFmpeg-$version"
 # become "D" and "/a/..."; MSYS2 converts the -I/-L paths for cl.exe itself.
 export PKG_CONFIG_PATH="$deps/lib/pkgconfig"
 # shellcheck disable=SC2086
-./configure --prefix="$out" $qt_options --enable-libdav1d --toolchain=msvc --enable-shared --disable-static
+# FFmpeg's own "av1" decoder works only through a GPU AV1 decoder, and Qt
+# picks it first when the GPU has a video device at all: without AV1 support
+# it fails at the first frame and Qt does not try another decoder (CI log,
+# 26 Oct: "Your platform doesn't support hardware accelerated AV1
+# decoding"). Without it, AV1 always decodes with dav1d on the CPU; H.264,
+# HEVC and VP9 keep the GPU.
+./configure --prefix="$out" $qt_options --enable-libdav1d --disable-decoder=av1 --toolchain=msvc --enable-shared --disable-static
 make -j"$(nproc)"
 make install
 cp "$deps/bin/dav1d.dll" "$(cygpath -u "$out")/bin/"
