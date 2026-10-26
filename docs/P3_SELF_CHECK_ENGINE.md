@@ -106,6 +106,30 @@ Checkers c1–c4 of §5, 13 windows per scene (3–29 s):
   correlate. The verifier needs a fourth state, **still**, set when the fast
   lane sees no motion at the stroke's tempo in that window (c5, c8).
 
+### 3.1 The C++ verifier on the same scenes (SC-1, SC-3)
+
+`engine/include/samn/engine/self_check.h` (`GateSamples`, `VerifyWindows`)
+was run on the per-frame signals of the same first runs (writer track, flow in
+the box, foreground in the box, tracker ok, fast-lane scene motion; the cut of
+s10 given as scene_cut would report it):
+
+| | Bad windows | Failed | Missed | False alarms | Still |
+|---|---|---|---|---|---|
+| with the fast-lane scene motion | 17 | 17 | 0 | 0 | 1 (the s8 pause) |
+| without it | 17 | 17 | 0 | 1 (the s8 pause) | 0 |
+
+Two things the first version got wrong and the tests now pin:
+- **Windows across a scene cut** passed by accident (the cut frames look like
+  big motion to flow and background model). Windows are now tiled per shot
+  and the first 5 frames of a shot get no verdict.
+- **The range reference** was the median window range; with more than half
+  of the windows broken (s10 after the cut) the median was the broken range.
+  It is now the 75th percentile.
+
+Without an independent signal a pause cannot be told from a box on still
+background, so the verifier fails it instead of guessing: "still" needs the
+fast lane's quiet scene or the seed's appearance (c7).
+
 ## 4. The engine: three lanes
 
 ```
@@ -237,9 +261,9 @@ sides with a test (GD-15 rule) and calibrated on the golden clips at P3.8.
 
 | Slice | Content | Done when |
 |---|---|---|
-| SC-1 | `SampleValidity` + Hampel + gap semantics in front of the P3.2 chain (`engine/src/sample_gate.cpp`), off by default | Unit tests on synthetic tracks (spikes, short and long gaps); P3.2 parity unchanged when off |
+| SC-1 ✅ | `GateSamples` (Hampel + gap semantics + segments) in `engine/src/self_check.cpp`; not yet wired in front of the P3.2 chain (off by default when it is) | Unit tests on synthetic tracks (spikes, short and long gaps); P3.2 parity unchanged when off |
 | SC-2 | Checker signals recorded per frame by `TrackBox` (`TrackResult::checks`: flow-in-box, foreground, ok, inliers, appearance score) | Bit-identical positions with checks on and off; signals tested on generated patterns |
-| SC-3 | `VerifyWindows()` → `WindowVerdict` list (state + reasons), into the quality report | The s9 / s10 style patterns are flagged, s1–s8 style patterns are not |
+| SC-3 ✅ (verifier) | `VerifyWindows()` → `WindowVerdict` list (pass / suspect / fail / still + reasons), per shot; into the quality report with SC-2 | The s9 / s10 style patterns are flagged, s1–s8 style patterns are not |
 | SC-4 | `FastLane()` → `FastLaneReport` (shots, tempo, camera trust, foreground refs, regions) on a worker thread, progress from frame 1 (GD-21) | Runtime under ¼ of the full run on the same clip; the shot and tempo tests pass |
 | SC-5 | Repair: re-acquire per failed window, verify, keep or gap | The occlusion and cut patterns repair; nothing that passed changes |
 | SC-6 | `samn_compare` gate: engine with self-check vs without vs 0.7 on the goldens | Report in `docs/benchmarks/`; default on only after the gate |
