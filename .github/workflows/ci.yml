@@ -173,6 +173,8 @@ jobs:
           log="$cfg/logs/samnplayer2.log"
           [ -f "$log" ] && cat "$log" || echo "(no log written)"
           if [ "$rc" -ne 0 ]; then echo "::error::The package exited with $rc (124 = hung)."; exit 1; fi
+          # How long the start takes on a real Windows install (Owner 26 Oct).
+          grep -h "Startup:" "$log" | sed 's/^.*Startup:/::notice title=Startup::/' || true
           test -s "$GITHUB_WORKSPACE/package.png"
           if grep -Eiq "no QtMultimedia backends|could not be loaded|cannot load library|failed to load plugin|module .* is not installed" "$log"; then
             echo "::error::The package is missing a library or plugin (see the log above)."
