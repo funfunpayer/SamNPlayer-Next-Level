@@ -75,6 +75,17 @@ private slots:
         QTRY_COMPARE(badDone.count(), 1);
         QVERIFY(!bad->errorString().isEmpty());
         delete bad;
+
+        // A frame the video does not give (past its end): an empty tile of
+        // the asked height, no error (the strip shows a placeholder).
+        QQuickImageResponse* past = provider.requestImageResponse(FrameProvider::idFor(clip_, 600000, 54), QSize());
+        QSignalSpy pastDone(past, &QQuickImageResponse::finished);
+        QTRY_COMPARE(pastDone.count(), 1);
+        QVERIFY(past->errorString().isEmpty());
+        QQuickTextureFactory* empty = past->textureFactory();
+        QCOMPARE(empty->image().height(), 54);
+        delete empty;
+        delete past;
     }
 };
 

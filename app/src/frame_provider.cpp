@@ -2,7 +2,10 @@
 
 #include <QQuickTextureFactory>
 #include <QRunnable>
+#include <algorithm>
 #include <cmath>
+#include <QColor>
+#include <QFileInfo>
 
 #include "frame_cache.h"
 
@@ -20,7 +23,15 @@ public:
 
     void run() override {
         image_ = FrameCache::shared().At(path_, ms_, height_).image;
-        if (image_.isNull()) error_ = QStringLiteral("no frame at %1 ms").arg(ms_);
+        if (image_.isNull() && !QFileInfo(path_).isFile()) {
+            error_ = QStringLiteral("no video at %1").arg(path_);
+        } else if (image_.isNull()) {
+            // A frame the video does not give is a quiet empty tile in the
+            // strip (0.7's placeholder for unreadable frames), not a warning.
+            const int h = std::max(1, height_);
+            image_ = QImage(h * 16 / 9, h, QImage::Format_ARGB32_Premultiplied);
+            image_.fill(QColor(255, 255, 255, 10));
+        }
         emit finished();
     }
 
