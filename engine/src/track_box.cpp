@@ -16,6 +16,18 @@ namespace {
 
 constexpr int kRememberEveryNFrames = 25;
 
+// Spread between the 2nd and 98th percentile.
+double RobustRange(std::vector<double> v) {
+    if (v.size() < 2) return 0;
+    auto at = [&](double p) {
+        const size_t k = static_cast<size_t>(p * double(v.size() - 1));
+        std::nth_element(v.begin(), v.begin() + k, v.end());
+        return v[k];
+    };
+    const double hi = at(0.98), lo = at(0.02);
+    return hi - lo;
+}
+
 double Ptp(const std::vector<double>& v) {
     if (v.empty()) return 0;
     const auto [lo, hi] = std::minmax_element(v.begin(), v.end());
@@ -266,8 +278,13 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
         res.horizontal = false;
         res.positions = std::move(distances);
     } else {
-        const bool auto_x =
-            res.stats.horizontal_range > res.stats.vertical_range * 1.5 && res.stats.horizontal_range > 5;
+        // 0.7 compares the full ranges; a few frames where coast or camera
+        // compensation throw the centre out of the picture decided the axis
+        // (Owner's clip: y -42..222 in a 144 px frame picked Y where 0.7's
+        // own run picked X). The 2nd..98th percentile spread decides instead;
+        // a clean track gives the same choice as before.
+        const double h = RobustRange(res.xs), v = RobustRange(res.ys);
+        const bool auto_x = h > v * 1.5 && h > 5;
         res.horizontal = opts.axis == TrackAxis::kX || (opts.axis == TrackAxis::kAuto && auto_x);
         res.positions = res.horizontal ? res.xs : res.ys;
     }

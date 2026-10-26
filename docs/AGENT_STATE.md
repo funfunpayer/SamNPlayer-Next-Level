@@ -14,6 +14,12 @@
     - **T5:** a still disc gives a script instead of the "no discernible motion" error; CSRT wobble is read as motion.
     - **T6:** CSRT does not report the vanished disc as lost (LESSONS GD-11), so the gap gets actions; gap handling needs a loss signal beyond the CSRT result (appearance-memory score).
   - Two test bugs fixed after the run (T10 overwrite guard, FR-7 progress bound); not re-run yet.
+- **Owner's clip (26 Oct, private, never in the repo), findings and fixes on this branch:**
+  - The Generator tracked from 0 with a box drawn at the shown frame; Find tip also searched from 0. Now both start at the frame the box belongs to (`box_ms_`, 0.7 startTimeSec).
+  - 0.7 used the horizontal axis on that clip (its tip x vs its script r up to -0.86, y about 0). We picked y because a few coasted / compensated frames threw the centre out of the picture; the axis is now chosen from the 2nd..98th percentile spread.
+  - 0.7's scene-cut test fires on about one frame in eight of a 256x144 clip (2004 cuts). A spike-relative test removed them but made tracking worse: the false cuts re-anchor CSRT through the appearance memory, as in 0.7. Kept as 0.7 for now; a better re-anchor comes with the D-159 tip work.
+  - `samn_compare` manifests take `start_ms`.
+- **Owner rule for the curves (26 Oct):** stroke and suction curves must swing smoothly (smoothed, no corners or jumps); vibration is different (pulses and steps are allowed). Applies to the D-159 defaults and Auto.
 - **Next, in the Owner's order (D-159):**
   1. Make the spec values the Generator default, with an *Auto* switch (on at first start) that adapts them per 8 s section from video tempo, noise and audio tempo. Auto keeps the values where the measurement is unsure. Then fit the values to the target device (stroker minimum interval 100 ms).
   2. *Tip automatically*: the rhythm grid over the whole frame (GD-15) finds where the stroke is, the detector confirms it, CSRT follows. A box is drawn only to override.
