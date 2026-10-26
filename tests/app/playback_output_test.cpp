@@ -645,6 +645,40 @@ private slots:
         QVERIFY(p.axisLanes().isEmpty());
     }
 
+    // 0.7 lane / legend selection: the main curve shows the picked lane;
+    // Up / Down step through the shown lanes; a lane that goes away and a
+    // new script fall back to the stroke.
+    void theMainCurveShowsThePickedLane() {
+        const QString script = writeScript(files_.path(), "pick.funscript", zigzag(40, 250));
+        writeScript(files_.path(), "pick.twist.funscript", zigzag(40, 250));
+        DeviceController dev;
+        PlayerController p;
+        p.setDevice(&dev);
+        QVERIFY(p.openScript(script));
+        QCOMPARE(p.laneChoices(), (QStringList{"stroke", "twist"}));
+        QCOMPARE(p.activeLane(), QStringLiteral("stroke"));
+        QSignalSpy changed(&p, &PlayerController::activeLaneChanged);
+        p.setActiveLane("twist");
+        QCOMPARE(p.activeLane(), QStringLiteral("twist"));
+        QCOMPARE(changed.count(), 1);
+        p.setActiveLane("vibration");  // not shown: back to the stroke
+        QCOMPARE(p.activeLane(), QStringLiteral("stroke"));
+        p.stepActiveLane(-1);  // wraps
+        QCOMPARE(p.activeLane(), QStringLiteral("twist"));
+        p.stepActiveLane(1);
+        QCOMPARE(p.activeLane(), QStringLiteral("stroke"));
+        // A Sam Neo 2 class device has no twist: the pick falls back.
+        p.setActiveLane("twist");
+        connectMock(dev);
+        QCOMPARE(p.laneChoices(), (QStringList{"stroke", "vibration", "suction"}));
+        QCOMPARE(p.activeLane(), QStringLiteral("stroke"));
+        p.setActiveLane("suction");
+        QCOMPARE(p.activeLane(), QStringLiteral("suction"));
+        // A new script starts on the stroke.
+        QVERIFY(p.openScript(script));
+        QCOMPARE(p.activeLane(), QStringLiteral("stroke"));
+    }
+
     void noScriptNoLanes() {
         DeviceController dev;
         PlayerController p;
