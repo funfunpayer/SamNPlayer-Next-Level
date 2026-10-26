@@ -118,6 +118,7 @@ ClipReport RunClip(const CompareClip& clip, const CompareSettings& s, const std:
 
     TrackOptions to;
     to.cancel = cancel;
+    to.start_ms = clip.start_ms;
     to.end_ms = clip.end_ms;
     to.max_analysis_fps = clip.max_analysis_fps;
     auto tr = TrackBox(clip.video, clip.box, to, &r.error);
@@ -178,9 +179,10 @@ std::optional<std::vector<CompareClip>> LoadManifest(const std::filesystem::path
         clip.box = cv::Rect(b[0].get<int>(), b[1].get<int>(), b[2].get<int>(), b[3].get<int>());
         if (clip.box.width <= 0 || clip.box.height <= 0) return fail(clip.name + ": the box is empty");
         clip.signal.profile = c.value("profile", std::string("standard"));
-        for (const char* key : {"end_ms", "max_analysis_fps", "max_gap_ms", "outlier_mad_factor"})
+        for (const char* key : {"start_ms", "end_ms", "max_analysis_fps", "max_gap_ms", "outlier_mad_factor"})
             if (c.contains(key) && (!c[key].is_number() || c[key].get<double>() < 0))
                 return fail(clip.name + ": \"" + key + "\" must be a number of at least 0");
+        clip.start_ms = c.value("start_ms", int64_t{0});
         clip.end_ms = c.value("end_ms", int64_t{0});
         clip.max_analysis_fps = c.value("max_analysis_fps", 0.0);
         clip.signal.max_gap_ms = c.value("max_gap_ms", 0.0);

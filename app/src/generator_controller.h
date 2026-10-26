@@ -320,6 +320,7 @@ private:
     double preview_ms_ = 0;
     QImage frame_;
     QRect box_;
+    double box_ms_ = 0;  // the video time the box was drawn or found at
     QString profile_ = QStringLiteral("standard");
     bool invert_ = false, camera_ = true, scene_cuts_ = true, auto_ozone_ = true;
     bool gap_handling_ = false, outlier_rejection_ = false, track_cache_ = false;
