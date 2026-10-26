@@ -195,12 +195,27 @@ jobs:
   sanitizers:
     name: Sanitizers (core, ASan + UBSan)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
+      # The Azure apt mirror is at times so slow that installing OpenCV alone
+      # ran past the job limit (#113, #119, #123). The downloaded packages are
+      # cached; recommends are not needed for building.
+      - name: apt package cache
+        uses: actions/cache@v4
+        with:
+          path: ~/apt-cache
+          key: apt-opencv-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}
+          restore-keys: apt-opencv-${{ runner.os }}-
       - name: OpenCV (samn_vision)
-        run: sudo apt-get update && sudo apt-get install -y libopencv-dev libopencv-contrib-dev
+        run: |
+          mkdir -p ~/apt-cache/partial
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends -o Acquire::Retries=3 \
+            -o Dir::Cache::Archives="$HOME/apt-cache" libopencv-dev libopencv-contrib-dev
+          sudo rm -f ~/apt-cache/lock
+          sudo chown -R "$USER" ~/apt-cache
 
       - name: Configure
         run: |
@@ -226,12 +241,27 @@ jobs:
   tsan:
     name: Thread sanitizer (engine runner)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
+      # The Azure apt mirror is at times so slow that installing OpenCV alone
+      # ran past the job limit (#113, #119, #123). The downloaded packages are
+      # cached; recommends are not needed for building.
+      - name: apt package cache
+        uses: actions/cache@v4
+        with:
+          path: ~/apt-cache
+          key: apt-opencv-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}
+          restore-keys: apt-opencv-${{ runner.os }}-
       - name: OpenCV (samn_vision)
-        run: sudo apt-get update && sudo apt-get install -y libopencv-dev libopencv-contrib-dev
+        run: |
+          mkdir -p ~/apt-cache/partial
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends -o Acquire::Retries=3 \
+            -o Dir::Cache::Archives="$HOME/apt-cache" libopencv-dev libopencv-contrib-dev
+          sudo rm -f ~/apt-cache/lock
+          sudo chown -R "$USER" ~/apt-cache
 
       - name: Configure
         run: |
