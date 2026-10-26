@@ -71,6 +71,12 @@ public:
     // Every cut of a marks.json, the clips beside it; its source is relative
     // to the marks file unless absolute, its max_width wins over the preset.
     Q_INVOKABLE bool cutMarks(const QString& marksFile);
+    // A whole video the player cannot show (a codec without a decoder here,
+    // e.g. AV1 without GPU support) as H.264 beside it, <stem>-h264.mp4, at
+    // its own size; its .funscript and .samn are copied along under the new
+    // name. Asynchronous; converted(path) when done.
+    Q_INVOKABLE bool convertForPlayback(const QString& source, double durationS);
+    Q_INVOKABLE QString convertedName(const QString& source) const;
     // Stops the cut; the unfinished file is removed.
     Q_INVOKABLE void cancel();
     // 0.7's copy-paste command for the same cut (to run it elsewhere), ""
@@ -96,12 +102,14 @@ signals:
     void toolChanged();
     void settingsChanged();
     void cutChanged();
+    void converted(const QString& path);
 
 private:
     struct Job {
         QString input, output, name;
         double start_s = 0, end_s = 0;
         int max_width = 1280;
+        bool whole = false;  // convertForPlayback: copy the scripts along
     };
     void startJobs(QList<Job> jobs);
     void runNext();
@@ -111,6 +119,7 @@ private:
     void setToolStatus(const QString& s);
     void setStatus(const QString& s);
     QString cutScript(const Job& job) const;
+    QString copyScripts(const Job& job) const;
     samn::Settings& settings();
 
     std::unique_ptr<samn::Settings> settings_;
