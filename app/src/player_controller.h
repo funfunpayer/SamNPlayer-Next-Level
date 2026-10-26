@@ -219,6 +219,9 @@ public:
     // text): the error bar names the class and the file (0.7 0.5.41).
     // The message goes away once the video plays.
     Q_INVOKABLE void reportMediaError(int error, const QString& detail);
+    // The video plays but no frame comes (a codec this PC cannot decode,
+    // e.g. AV1 without GPU support); codec as the player names it, or "".
+    Q_INVOKABLE void reportNoPicture(const QString& codec);
     // Tooltip text for the heatmap at a script time: "12.3s · 45%".
     Q_INVOKABLE QString heatTooltip(double ms) const;
     // Bookmarks: at the playhead (video time); name default "Bookmark", 80 chars.

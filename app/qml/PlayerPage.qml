@@ -107,6 +107,42 @@ Item {
     }
     Binding { target: ctrl.output; property: "speed"; value: page.speed }
 
+    // A video whose picture never comes: the sound and the clock run, but
+    // no frame reaches the screen (Owner 26 Oct: AV1 on a GPU without an
+    // AV1 decoder, where Qt's FFmpeg has no software decoder and reports no
+    // error). After 1.5 s of playing without a frame the stage says so and
+    // offers an H.264 copy.
+    property bool frameSeen: false
+    property bool noPicture: false
+    property bool convertWhenReady: false
+    Connections {
+        objectName: "frameWatch"
+        target: videoOut.videoSink
+        function onVideoFrameChanged() { page.frameSeen = true }
+    }
+    Timer {
+        objectName: "noPictureWatch"
+        interval: 500; repeat: true
+        running: !page.frameSeen && !page.noPicture && media.hasVideo && media.playbackState === MediaPlayer.PlayingState
+        onTriggered: if (media.position >= 1500 && !page.frameSeen) {
+            page.noPicture = true
+            ctrl.reportNoPicture(media.metaData.stringValue(MediaMetaData.VideoCodec))
+        }
+    }
+    ClipPrepController {
+        id: convertCtl
+        onConverted: (path) => ctrl.openPath(path)
+        onToolChanged: if (page.convertWhenReady && ffmpegReady) {
+            page.convertWhenReady = false
+            convertCtl.convertForPlayback(ctrl.localPath(media.source.toString()), media.duration / 1000)
+        }
+    }
+    function convertVideo() {
+        media.pause()
+        if (convertCtl.ffmpegReady) convertCtl.convertForPlayback(ctrl.localPath(media.source.toString()), media.duration / 1000)
+        else { page.convertWhenReady = true; convertCtl.fetchFfmpeg() }
+    }
+
     MediaPlayer {
         id: media
         objectName: "media"
@@ -125,7 +161,7 @@ Item {
         // A seek before the video is loaded (a project's saved position)
         // waits here; clamped to a duration of 0 it would land at 0.
         property real pendingSeekMs: -1
-        onSourceChanged: pendingSeekMs = -1
+        onSourceChanged: { pendingSeekMs = -1; page.frameSeen = false; page.noPicture = false }
         onMediaStatusChanged: {
             if (mediaStatus === MediaPlayer.LoadedMedia && pendingSeekMs >= 0) {
                 const ms = pendingSeekMs
@@ -419,7 +455,10 @@ Item {
                 PlayButton {
                     objectName: "emptyPlay"
                     anchors.horizontalCenter: parent.horizontalCenter
-                    width: 168; height: 168
+                    // Grows with the stage, 96..140 px (Owner 26 Oct: 168 px was
+                    // too big on small windows and at 150 % scaling).
+                    width: Math.round(Math.max(96, Math.min(140, Math.min(emptyHome.width, emptyHome.height) * 0.2)))
+                    height: width
                     onClicked: page.openFile()
                 }
                 // Match 0.8 `.pb-empty-open` (letter-spacing + soft cyan glow).
@@ -482,6 +521,49 @@ Item {
                     id: videoOut
                     anchors.fill: parent
                     visible: ctrl.videoName !== ""
+                }
+                Rectangle {
+                    objectName: "noPictureCard"
+                    visible: page.noPicture && ctrl.videoName !== ""
+                    anchors.centerIn: parent
+                    width: Math.min(parent.width - 32, 460); height: noPicCol.implicitHeight + 28
+                    radius: Theme.radiusSmall
+                    color: Qt.rgba(0.05, 0.07, 0.10, 0.92); border.color: Qt.rgba(1, 0.4, 0.35, 0.5)
+                    Column {
+                        id: noPicCol
+                        anchors.centerIn: parent; width: parent.width - 28; spacing: 10
+                        Text {
+                            textFormat: Text.PlainText
+                            width: parent.width; wrapMode: Text.Wrap
+                            text: qsTr("No picture: this PC cannot decode the video. Sound and script play on.")
+                            color: "#ffd0c8"; font.family: Theme.fontSoft; font.pixelSize: 14
+                        }
+                        Text {
+                            objectName: "noPictureStatus"
+                            textFormat: Text.PlainText
+                            width: parent.width; wrapMode: Text.Wrap
+                            visible: text !== ""
+                            text: convertCtl.cutting ? convertCtl.status + "  " + convertCtl.progress + " %"
+                                  : convertCtl.fetching ? convertCtl.toolStatus : convertCtl.status
+                            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                        }
+                        Row {
+                            spacing: 8
+                            FlowButton {
+                                objectName: "convertVideo"
+                                primary: true
+                                enabled: !convertCtl.cutting && !convertCtl.fetching
+                                text: qsTr("Convert to H.264")
+                                onClicked: page.convertVideo()
+                            }
+                            FlowButton {
+                                objectName: "cancelConvert"
+                                visible: convertCtl.cutting
+                                text: qsTr("Stop")
+                                onClicked: convertCtl.cancel()
+                            }
+                        }
+                    }
                 }
                 // The script's contact marks on the picture (0.7 playback.js
                 // contact overlay): tip blue and moving with the recorded tip
