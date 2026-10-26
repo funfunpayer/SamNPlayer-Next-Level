@@ -291,6 +291,26 @@ keypoints as c10/c11 checkers; (3) CLIP scene type in the fast lane;
 regression on the goldens, and a win on clips where today's result is wrong
 (GD-16).
 
+## 5b. What the MTFG workflow teaches (Owner link, 26 Oct)
+
+Source: a community walkthrough of Motion Tracking Funscript Generator v0.5
+(the OFS extension from `michael-mueller-git/Python-Funscript-Editor`; check
+its licence before copying any code, ideas are free). Its author tracks by
+hand, segment by segment, and fixes the rest manually. Every manual step is
+a decision our engine should make itself, and check:
+
+| What the user does by hand in MTFG | What the engine does instead | Where |
+|---|---|---|
+| Splits the clip into segments by kind (one moving part → y; two moving people → their distance; a sideways motion → x; untrackable → skip) | Fast lane: shots, scene type (CLIP, §5a), tempo; per segment the method (single box, two-box distance GD-08) and the "skip" decision (verifier fail → gap) | SC-4 |
+| Rotates the view until the motion lies on an axis | **Principal motion axis:** project the box path onto the first principal component of its displacement in each window (PCA of dx, dy), instead of choosing x or y. Needs no user and also settles the x/y question the Owner clip raised (0.7 followed x there, Next first chose y). New value, measured against x/y on the goldens before it is a default. | SC-2 / P3.2 |
+| "Supervised tracking": a stay area; stop or ignore data when the feature leaves it | The verifier's c9 (box outside the picture) generalised to a stay area per shot (from the fast lane's moving region or the user's mark); samples outside are invalid (sample gate) | SC-1 / SC-3 |
+| Stops tracking before an occlusion | Verifier fail → gap, then verified re-acquisition | SC-3 / SC-5 |
+| Tracks "anything distinct that moves in sync" when the main part is hidden | Find tip and re-acquisition may anchor on any feature whose rhythm matches the stroke (rhythm grid GD-15, c5) | SC-5 |
+| Tracks fast and slow sections separately with different point density | Post-processing parameters per tempo segment from the fast lane (peak distance, simplification) | SC-4 + P3.2 |
+| Processes every frame when the motion is fast | Never skip frames in the writer lane; only the fast lane subsamples | (kept) |
+| Keeps the timing from tracking, fixes the stroke length by hand ("true to the video, but nobody can feel it") | Amplitude stays a profile decision (dynamic range, feel recipes); timing is what the self-check guarantees | P3.2 / feel |
+| Post-processing tabs: local min/max, second derivative, distance minimisation, evenly spaced intermediate points | Already covered by peaks + adaptive keyframes + RDP (P3.2); "evenly intermediate" points are a candidate profile option, measured before it is added | P3.2 |
+
 ## 6. Rules this design keeps
 
 | Rule | How |
