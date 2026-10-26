@@ -95,6 +95,18 @@ Item {
         nameFilters: [qsTr("Scripts (*.funscript *.samn)"), qsTr("All files (*)")]
         onAccepted: edit.open(selectedFile.toString())
     }
+    // 0.7: inverting a whole channel asks first (a marked range does not).
+    MessageDialog {
+        id: invertAllDialog
+        objectName: "invertAllDialog"
+        title: qsTr("Invert the curve?")
+        text: qsTr("Invert the whole %1 curve? (Undo can bring it back.)").arg(page.laneTitle(edit.activeLane))
+        buttons: MessageDialog.Ok | MessageDialog.Cancel
+        onAccepted: edit.invert()
+    }
+    function laneTitle(lane) {
+        return lane === "vibration" ? qsTr("Vibration") : lane === "suction" ? qsTr("Suction") : qsTr("Stroke")
+    }
     MessageDialog {
         id: overwriteDialog
         title: qsTr("Replace the script?")
@@ -870,7 +882,7 @@ Item {
                         FlowButton { objectName: "tool_softer"; text: qsTr("Softer"); icon: "minus"; enabled: edit.hasMarker; onClicked: edit.scaleRange(0.8, softEdges.checked) }
                         FlowButton { objectName: "tool_stronger"; text: qsTr("Stronger"); icon: "plus"; enabled: edit.hasMarker; onClicked: edit.scaleRange(1.25, softEdges.checked) }
                         FlowButton { objectName: "tool_simplify"; text: qsTr("Simplify"); icon: "curve"; enabled: edit.hasMarker; onClicked: edit.simplifyRange(2) }
-                        FlowButton { objectName: "tool_invert"; text: edit.hasMarker ? qsTr("Invert range") : qsTr("Invert all"); icon: "invert"; onClicked: edit.invert() }
+                        FlowButton { objectName: "tool_invert"; text: edit.hasMarker ? qsTr("Invert range") : qsTr("Invert all"); icon: "invert"; onClicked: edit.hasMarker ? edit.invert() : invertAllDialog.open() }
                         RowLayout {
                             spacing: 6
                             FlowToggle { id: softEdges; objectName: "softEdges"; checked: true }
@@ -918,6 +930,19 @@ Item {
                             objectName: "tool_axes"
                             text: qsTr("Vibration & suction from the stroke"); icon: "effects"
                             onClicked: edit.axesFromStroke()
+                        }
+                        // 0.7: an empty feel lane starts with the stroke's times at 0.
+                        FlowButton {
+                            objectName: "tool_addVibration"
+                            visible: edit.hasScript && edit.lanes.indexOf("vibration") < 0
+                            text: qsTr("+ Vibration lane"); icon: "plus"
+                            onClicked: edit.addLane("vibration")
+                        }
+                        FlowButton {
+                            objectName: "tool_addSuction"
+                            visible: edit.hasScript && edit.lanes.indexOf("suction") < 0
+                            text: qsTr("+ Suction lane"); icon: "plus"
+                            onClicked: edit.addLane("suction")
                         }
                         FlowButton {
                             objectName: "tool_sound"

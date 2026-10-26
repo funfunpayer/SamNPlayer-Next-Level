@@ -405,11 +405,31 @@ private slots:
         QMetaObject::invokeMethod(invertRange, "clicked");
         QTRY_VERIFY(edit->property("canUndo").toBool());
         QCOMPARE(edit->property("undoText").toString(), QStringLiteral("Undo: Invert range"));
+        // Without a marker the whole curve flips only after 0.7's question.
+        QMetaObject::invokeMethod(edit, "clearMarker");
+        QTRY_COMPARE(invertRange->property("text").toString(), QStringLiteral("Invert all"));
+        auto* ask = root->findChild<QObject*>("invertAllDialog");
+        QVERIFY(ask);
+        QMetaObject::invokeMethod(invertRange, "clicked");  // opens the question (no native dialog offscreen)
+        QCOMPARE(ask->property("text").toString(), QStringLiteral("Invert the whole Stroke curve? (Undo can bring it back.)"));
+        QCOMPARE(edit->property("undoText").toString(), QStringLiteral("Undo: Invert range"));  // nothing yet
+        QMetaObject::invokeMethod(ask, "accepted");
+        QTRY_COMPARE(edit->property("undoText").toString(), QStringLiteral("Undo: Invert curve"));
 
-        // A create tool writes new lanes, which appear under the stroke.
+        // A create tool writes new lanes, which appear under the stroke; the
+        // "+ … lane" buttons are only there while a lane is missing.
+        QVERIFY(named(root.get(), "tool_addVibration")->isVisible());
+        QVERIFY(named(root.get(), "tool_addSuction")->isVisible());
         QMetaObject::invokeMethod(named(root.get(), "tool_axes"), "clicked");
         QTRY_VERIFY(named(root.get(), "lane_vibration"));
         QTRY_VERIFY(named(root.get(), "lane_suction"));
+        QTRY_VERIFY(!named(root.get(), "tool_addVibration")->isVisible());
+        QVERIFY(!named(root.get(), "tool_addSuction")->isVisible());
+        // 0.7 stroke ghost: the feel lanes carry the stroke for timing.
+        QCOMPARE(named(root.get(), "lane_stroke")->property("ghostPoints").toInt(), 0);
+        QTRY_VERIFY(named(root.get(), "lane_vibration")->property("ghostPoints").toInt() >= 2);
+        QCOMPARE(named(root.get(), "lane_suction")->property("ghostPoints").toInt(),
+                 named(root.get(), "lane_vibration")->property("ghostPoints").toInt());
         QCOMPARE(edit->property("undoText").toString(), QStringLiteral("Undo: vibration and suction from the stroke"));
 
         // Scenes (D-145): the side tab switches the right panel; "+ Scene here"

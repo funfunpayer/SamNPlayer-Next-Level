@@ -40,6 +40,10 @@ class CurveItem : public QQuickPaintedItem {
     Q_PROPERTY(qreal lineWidth MEMBER lineWidth_ NOTIFY styleChanged)
     Q_PROPERTY(qreal glow MEMBER glow_ NOTIFY styleChanged)
     Q_PROPERTY(qreal fill MEMBER fill_ NOTIFY styleChanged)
+    // 0.7 stroke ghost: a feel lane shows the stroke faintly (alpha 0.3,
+    // 1 px) for timing. ghostPoints counts the points it has.
+    Q_PROPERTY(QColor ghostColor MEMBER ghostColor_ NOTIFY styleChanged)
+    Q_PROPERTY(int ghostPoints READ ghostPoints NOTIFY actionsChanged)
     Q_PROPERTY(QString mode READ modeName NOTIFY modeChanged)
     // The Editor's grabbed point (drawn large and gold, 0.7); -1 = none.
     Q_PROPERTY(int activeIndex READ activeIndex WRITE setActiveIndex NOTIFY activeIndexChanged)
@@ -56,6 +60,8 @@ public:
 
     explicit CurveItem(QQuickItem* parent = nullptr);
     void setActions(std::vector<samn::Action> actions);
+    void setGhost(std::vector<samn::Action> ghost);
+    int ghostPoints() const { return int(ghost_.size()); }
     void setMarks(std::vector<int64_t> bookmarks, std::vector<std::pair<int64_t, int64_t>> chapters);
     // O-marker bands and the beat grid (period in ms, 0 = off).
     void setOverlays(std::vector<Band> bands, double beatPeriodMs);
@@ -120,6 +126,8 @@ private:
     int activeIndex_ = -1;
     double viewStart_ = 0, viewEnd_ = -1;
     QColor lineColor_{0xff, 0x8a, 0x23};
+    QColor ghostColor_{0xff, 0x8a, 0x23};
+    std::vector<samn::Action> ghost_;
     QColor playheadColor_{0xff, 0xff, 0xff};
     QString lane_ = QStringLiteral("stroke"), label_;
     bool showPlayhead_ = true, showGrid_ = false, editMode_ = false;

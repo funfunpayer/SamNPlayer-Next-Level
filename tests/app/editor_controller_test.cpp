@@ -307,6 +307,34 @@ private slots:
         QCOMPARE(QString::fromStdString(doc.playback_source), QStringLiteral("recipe"));
     }
 
+    // 0.7 edit mode on an empty feel axis: a new lane starts with the
+    // stroke's times at 0, in the .samn, one undo step.
+    void aNewFeelLaneStartsOnTheStrokeTimesAtZero() {
+        const QString path = script("lane.funscript");
+        const QString samnPath = dir_.filePath("lane.samn");
+        EditorController e;
+        QVERIFY(e.open(path));
+        QVERIFY(!e.addLane("stroke"));
+        QVERIFY(!e.addLane("roll"));
+        QVERIFY(e.addLane("vibration"));
+        QCOMPARE(e.lanes(), (QStringList{"stroke", "vibration"}));
+        QCOMPARE(e.activeLane(), QStringLiteral("vibration"));
+        const auto& stroke = e.session().Axis("stroke");
+        const auto& vib = e.session().Axis("vibration");
+        QCOMPARE(vib.size(), stroke.size());
+        for (size_t i = 0; i < vib.size(); ++i) {
+            QCOMPARE(vib[i].at, stroke[i].at);
+            QCOMPARE(vib[i].pos, 0);
+        }
+        QCOMPARE(e.undoText(), QStringLiteral("Undo: new vibration lane"));
+        QVERIFY(e.status().startsWith("New vibration lane: 5 points at 0"));
+        QCOMPARE(e.playPath(), samnPath);
+        QCOMPARE(samn::LoadDocument(Fs(samnPath)).vibration.size(), stroke.size());
+        QVERIFY(!e.addLane("vibration"));  // it has points now
+        QVERIFY(e.undo());
+        QCOMPARE(e.lanes(), QStringList{"stroke"});
+    }
+
     // D-156 (0.8 OptimizeLoadedFor): "Any device" heals the tracker-loss
     // windows and fills long holes; "Sam Neo 2" also writes vibration and
     // suction; each is one undo step and saved at once.
