@@ -194,7 +194,15 @@ private:
         QVERIFY(f.open(QIODevice::WriteOnly));
         f.write(R"({"actions":[{"at":0,"pos":0},{"at":2000,"pos":100},{"at":4000,"pos":0},{"at":6000,"pos":100}]})");
         f.close();
+        // A 0.7 companion axis file beside it shows as its own lane.
+        QFile twist(dir.filePath(QStringLiteral("alone.twist.funscript")));
+        QVERIFY(twist.open(QIODevice::WriteOnly));
+        twist.write(R"({"actions":[{"at":0,"pos":50},{"at":3000,"pos":90},{"at":6000,"pos":10}]})");
+        twist.close();
         QVERIFY(ctrl->openPath(script));
+        QTRY_VERIFY(named(page, "axisLane_twist"));
+        QVERIFY(named(page, "axisLane_twist")->isVisible());
+        QVERIFY(named(page, "axisLane_twist")->height() >= 34);
         QVERIFY(page->property("scriptOnly").toBool());
         QCOMPARE(clock->property("duration").toLongLong(), qint64(6000));
 

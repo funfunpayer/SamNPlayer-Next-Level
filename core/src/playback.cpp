@@ -47,6 +47,17 @@ std::optional<std::string> find_matching_video(const std::string& script_path) {
     return std::nullopt;
 }
 
+std::vector<std::pair<std::string, std::string>> companion_axis_files(const std::string& script_path) {
+    std::vector<std::pair<std::string, std::string>> out;
+    const std::string stem = stem_of(script_path);
+    for (const char* axis : {"surge", "sway", "twist", "roll", "pitch"}) {
+        std::string cand = stem + "." + axis + ".funscript";
+        std::error_code ec;
+        if (fs::is_regular_file(fs::u8path(cand), ec)) out.emplace_back(axis, std::move(cand));
+    }
+    return out;
+}
+
 std::optional<double> position_at(const std::vector<Action>& actions, int64_t t_ms) {
     if (actions.empty()) return std::nullopt;
     auto it = std::upper_bound(actions.begin(), actions.end(), t_ms,

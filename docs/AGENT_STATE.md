@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 26 Oct 2026, Claude, branch `claude/samn2-player-editor-p2` (Player/Editor §3, slice P2: compact editor tools).
+**Last update:** 26 Oct 2026, Claude, branch `claude/samn2-player-editor-p3` (Player/Editor §3, slice P3: companion axis lanes).
 
 ## Rules
 
@@ -88,6 +88,7 @@
 - **Optimize for** (#81, D-156): `core/include/samn/improve.h` (trim, fill gaps, heal tracking gaps), the Editor's *Optimize for* any device / Sam Neo 2, *Optimize after Create*.
 - **Teacher on a model server** (D-155 step 4, first part, #91; Owner 20 Oct: servers first): `core/teacher.h`, `LabelController` teacher settings, *Ask the teacher* (`A`).
 - **ONNX Runtime in the build** (D-155 step 4, 20 Oct, `claude/samn2-onnx-nudenet`): ONNX Runtime 1.22 from its NuGet package (FetchContent, pinned hash, `SAMN_WITH_ONNXRUNTIME`), beside every executable on Windows (`samn_copy_runtime_dlls`) and in the package with its licence; `vision/onnx_detector.h` (YOLOv8 decoding, NudeNet classes and their labels), tested on `tests/vision/data/tiny_yolo.onnx`.
+- **Player/Editor P3** (26 Oct, `claude/samn2-player-editor-p3`): 0.7 companion axis files beside the script (`<stem>.surge/sway/twist/roll/pitch.funscript`, `samn::companion_axis_files`) load with it, show as read lanes in the Player (0.7 colours, at least 34 px, only the axes a connected device has) and drive those axes (TCode L1/L2/R0/R1/R2). Next: lane selection / legend chips (P4), Curve select and "+ Axis…" for these files.
 - **Player/Editor P2** (26 Oct, `claude/samn2-player-editor-p2`, Owner: "Werkzeuge kompakt"): the range tools are one row of icon buttons with tooltips (Delete, Cap, Softer, Stronger, Simplify, Invert) and the marked range; Optimize for, the whole-lane tools, "+ … lane", Vibration from the sound, Stroke from the beat bar, Soft edges and Snap moved into a "Tools…" menu (a tool closes it; the Cancel button shows the running tool's progress). Feel lanes keep at least 34 px (0.7), the stroke 60 px: at 1400×820 they were ~10 px. `IconButton` now shows its tip as a tooltip and names itself for screen readers.
 - **CI: sanitizer apt cache** (26 Oct, `claude/ci-sanitizer-apt`): the ASan and TSan jobs ran out of their 30 min while apt was still downloading OpenCV from a slow mirror (#113, #119, #123). The `.deb` files are now cached (`actions/cache`, `~/apt-cache`), installed without recommends with 3 retries, and the jobs have 45 min.
 - **Player/Editor P1** (25 Oct, `claude/samn2-player-editor-p1`): *Invert all* asks first (0.7 confirm); "+ Vibration lane" / "+ Suction lane" seed a missing feel lane with the stroke's times at 0 (`EditorController::addLane`); feel lanes draw the stroke ghost (alpha 0.3, 1 px); the Player transport gets the Extended-O trigger; PARITY §3 rechecked for these items (Previous / Stop were already built). The lane-height problem found here is fixed in P2.

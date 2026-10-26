@@ -7,6 +7,7 @@
 #include <QUrl>
 #include <QVariantList>
 #include <QtQml/qqmlregistration.h>
+#include <map>
 #include <memory>
 #include <optional>
 #include <random>
@@ -136,6 +137,10 @@ class PlayerController : public QObject {
     Q_PROPERTY(bool showStrokeLane READ showStrokeLane NOTIFY lanesChanged)
     Q_PROPERTY(bool showVibrationLane READ showVibrationLane NOTIFY lanesChanged)
     Q_PROPERTY(bool showSuctionLane READ showSuctionLane NOTIFY lanesChanged)
+    // 0.7 companion axis files beside the script (<stem>.surge.funscript …)
+    // as read lanes, in the order surge, sway, twist, roll, pitch; with a
+    // device connected only the axes it has. They also drive those axes.
+    Q_PROPERTY(QStringList axisLanes READ axisLanes NOTIFY lanesChanged)
     // Sleep timer: stops playing after this many minutes of play (0 = off).
     Q_PROPERTY(int sleepMinutes READ sleepMinutes WRITE setSleepMinutes NOTIFY sleepChanged)
     // False: the lane is the device preview from the stroke (mapper), not
@@ -347,6 +352,7 @@ public:
     bool showStrokeLane() const;
     bool showVibrationLane() const;
     bool showSuctionLane() const;
+    QStringList axisLanes() const;
     double viewStartMs() const { return double(view_.start_ms); }
     double viewEndMs() const { return double(view_.end_ms); }
     bool zoomed() const { return samn::IsZoomed(view_, timelineMs()); }
@@ -447,6 +453,7 @@ private:
     int offsetMs_ = 0;
     QString toolNote_;
     bool vibrationFromScript_ = false, suctionFromScript_ = false;
+    std::map<std::string, std::vector<samn::Action>> axisActions_;
     qint64 videoDurationMs_ = 0;
     samn::ViewWindow view_;
     qint64 videoMs_ = 0, playheadMs_ = -1;
