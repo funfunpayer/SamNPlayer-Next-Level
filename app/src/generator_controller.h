@@ -47,6 +47,14 @@ class GeneratorController : public QObject {
     Q_PROPERTY(bool cameraCompensation READ cameraCompensation WRITE setCameraCompensation NOTIFY optionsChanged)
     Q_PROPERTY(bool sceneCuts READ sceneCuts WRITE setSceneCuts NOTIFY optionsChanged)
     Q_PROPERTY(bool autoOZone READ autoOZone WRITE setAutoOZone NOTIFY optionsChanged)
+    // Opt-in, off by default (0.7 behaviour when off): bridge tracking gaps up
+    // to kGapBridgeMs and leave longer ones without actions; treat single-
+    // frame outliers as lost; keep raw tracks in config_dir()/cache/track so
+    // a new feel does not track again (generator.gap_handling,
+    // generator.outlier_rejection, generator.track_cache).
+    Q_PROPERTY(bool gapHandling READ gapHandling WRITE setGapHandling NOTIFY optionsChanged)
+    Q_PROPERTY(bool outlierRejection READ outlierRejection WRITE setOutlierRejection NOTIFY optionsChanged)
+    Q_PROPERTY(bool trackCache READ trackCache WRITE setTrackCache NOTIFY optionsChanged)
     // Contact vibration (0.7 Step 2 "Tip & contact", on by default): the
     // tip's class, and contact areas the tip's path can reach; the Player
     // vibrates when it does. contactAreas: {x, y, w, h, cls} in video pixels,
@@ -133,6 +141,12 @@ public:
     void setSceneCuts(bool v);
     bool autoOZone() const { return auto_ozone_; }
     void setAutoOZone(bool v);
+    bool gapHandling() const { return gap_handling_; }
+    void setGapHandling(bool v);
+    bool outlierRejection() const { return outlier_rejection_; }
+    void setOutlierRejection(bool v);
+    bool trackCache() const { return track_cache_; }
+    void setTrackCache(bool v);
     bool contactVibration() const { return contact_vibration_; }
     void setContactVibration(bool v);
     double contactSpan() const { return contact_span_; }
@@ -266,6 +280,7 @@ private:
     QRect box_;
     QString profile_ = QStringLiteral("standard");
     bool invert_ = false, camera_ = true, scene_cuts_ = true, auto_ozone_ = true;
+    bool gap_handling_ = false, outlier_rejection_ = false, track_cache_ = false;
     bool contact_vibration_ = true;
     double contact_span_ = 0.75;
     QString contact_curve_ = QStringLiteral("soft");
@@ -276,6 +291,8 @@ private:
     std::unique_ptr<samn::Settings> settings_;
     void loadSettings();
     void saveSetting(const char* key, const nlohmann::json& value);
+    // The opt-in gap, outlier and cache switches into a run's options.
+    void applySwitches(engine::SignalOptions& signal, std::filesystem::path& track_cache_dir) const;
     QString tip_class_ = QStringLiteral("glans");
     QString contact_class_ = QStringLiteral("nipples");
     QString extra_class_;

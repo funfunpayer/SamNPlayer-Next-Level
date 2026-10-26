@@ -24,6 +24,7 @@
 #include "samn/polarity.h"
 #include "samn/samn_file.h"
 #include "samn/script_quality.h"
+#include "samn/settings.h"
 #include "samn/vision/frame_reader.h"
 
 namespace samn::ui {
@@ -39,6 +40,10 @@ QString Clock(double ms) {
     const int s = int(ms / 1000);
     return QStringLiteral("%1:%2").arg(s / 60).arg(s % 60, 2, 10, QLatin1Char('0'));
 }
+
+// The values behind the opt-in switches (spec FR-12, FR-13 defaults).
+constexpr double kGapBridgeMs = 500;
+constexpr double kOutlierMadFactor = 5;
 
 }  // namespace
 
@@ -75,6 +80,9 @@ void GeneratorController::loadSettings() {
         camera_ = flag("generator.camera_compensation", camera_);
         scene_cuts_ = flag("generator.scene_cuts", scene_cuts_);
         auto_ozone_ = flag("generator.auto_ozone", auto_ozone_);
+        gap_handling_ = flag("generator.gap_handling", gap_handling_);
+        outlier_rejection_ = flag("generator.outlier_rejection", outlier_rejection_);
+        track_cache_ = flag("generator.track_cache", track_cache_);
         contact_vibration_ = flag("generator.contact_vibration", contact_vibration_);
         setTipClass(str("generator.tip_class", tip_class_));
         setContactClass(str("generator.contact_class", contact_class_));
@@ -90,6 +98,13 @@ void GeneratorController::loadSettings() {
     } catch (const std::exception&) {
         // Unreadable settings: the defaults stay.
     }
+}
+
+void GeneratorController::applySwitches(engine::SignalOptions& signal,
+                                        std::filesystem::path& track_cache_dir) const {
+    signal.max_gap_ms = gap_handling_ ? kGapBridgeMs : 0;
+    signal.outlier_mad_factor = outlier_rejection_ ? kOutlierMadFactor : 0;
+    track_cache_dir = track_cache_ ? samn::config_dir() / "cache" / "track" : std::filesystem::path();
 }
 
 void GeneratorController::saveSetting(const char* key, const nlohmann::json& value) {
@@ -240,6 +255,7 @@ bool GeneratorController::runQueue(bool overwrite) {
     settings.scene_cuts = scene_cuts_;
     settings.auto_ozone = auto_ozone_;
     settings.overwrite = overwrite;
+    applySwitches(settings.signal, settings.track_cache_dir);
     settings.contact_vibration = contact_vibration_;
     settings.contact_vibration_span = contact_span_;
     settings.contact_vibration_curve = contact_curve_.toStdString();
@@ -416,6 +432,9 @@ SAMN_SETTER(setInvert, invert_, nullptr)
 SAMN_SETTER(setCameraCompensation, camera_, "generator.camera_compensation")
 SAMN_SETTER(setSceneCuts, scene_cuts_, "generator.scene_cuts")
 SAMN_SETTER(setAutoOZone, auto_ozone_, "generator.auto_ozone")
+SAMN_SETTER(setGapHandling, gap_handling_, "generator.gap_handling")
+SAMN_SETTER(setOutlierRejection, outlier_rejection_, "generator.outlier_rejection")
+SAMN_SETTER(setTrackCache, track_cache_, "generator.track_cache")
 SAMN_SETTER(setContactVibration, contact_vibration_, "generator.contact_vibration")
 #undef SAMN_SETTER
 
@@ -724,6 +743,7 @@ bool GeneratorController::create(bool overwrite) {
     req.signal.invert = invert_;
     req.output = funscriptPath();
     req.overwrite = overwrite;
+    applySwitches(req.signal, req.track_cache_dir);
     req.auto_ozone = auto_ozone_;
     req.contact_vibration = contact_vibration_;
     req.contact_vibration_span = contact_span_;

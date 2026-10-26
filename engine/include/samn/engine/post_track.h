@@ -7,6 +7,7 @@
 // adaptive keyframes → minimum interval → RDP. Speed limit and clamp are
 // separate steps.
 
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <utility>
@@ -47,6 +48,38 @@ std::optional<PostResult> PositionsToActions(const std::vector<double>& times_ms
 std::vector<Action> LimitSpeed(const std::vector<Action>& actions, double max_units_per_s, int* changed);
 
 std::vector<Action> ClampActionsPos(const std::vector<Action>& actions, int lo, int hi);
+
+// Gap handling and outlier rejection before post-processing (opt-in; with
+// everything off the track goes to PositionsToActions as in 0.7). A lost
+// tracker is not a measurement (LESSONS GD-19): short gaps are bridged with
+// a line, long ones split the track and get no actions.
+struct GapOptions {
+    double max_gap_ms = 0;          // longer gaps split the track; 0 = never split
+    double outlier_mad_factor = 0;  // 0 = no outlier rejection
+    int outlier_neighbours = 3;     // window: this many samples on each side
+};
+
+struct GapPlan {
+    std::vector<double> values;                  // outliers and bridged gaps filled linearly
+    std::vector<std::pair<int, int>> segments;   // [start, end) sample runs to post-process
+    int outliers = 0;
+    int bridged = 0;  // gaps filled with a line
+    int split = 0;    // gaps longer than max_gap_ms
+};
+
+// Below this the local MAD is noise: a still subject has a MAD of 0, and a
+// 1 px wobble must not count as an outlier.
+constexpr double kOutlierMadFloor = 1.0;
+
+// Samples further than factor x the MAD of their neighbours (not counting
+// themselves or samples already marked bad) from those neighbours' median.
+std::vector<uint8_t> FindOutliers(const std::vector<double>& y, const std::vector<uint8_t>& bad, int neighbours,
+                                  double factor);
+
+// bad: 1 = no measurement (a lost frame); empty = all good. Outliers are
+// found first (when on) and treated like lost samples.
+GapPlan PlanGaps(const std::vector<double>& times_ms, const std::vector<double>& y, std::vector<uint8_t> bad,
+                 const GapOptions& options);
 
 // Building blocks, public for tests and the Editor.
 std::vector<double> RollingDetrend(const std::vector<double>& values, double window_ms, double step_ms);

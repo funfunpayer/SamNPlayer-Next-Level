@@ -1436,7 +1436,10 @@ Item {
                         model: [{ text: qsTr("Invert motion direction"), key: "invert", help: "gen-invert" },
                                 { text: qsTr("Camera motion compensation"), key: "cameraCompensation", help: "gen-camcomp" },
                                 { text: qsTr("Scene-cut detection"), key: "sceneCuts", help: "gen-scenecut" },
-                                { text: qsTr("Suggest O-zone automatically"), key: "autoOZone", help: "gen-auto-ozone" }]
+                                { text: qsTr("Suggest O-zone automatically"), key: "autoOZone", help: "gen-auto-ozone" },
+                                { text: qsTr("Bridge short tracking gaps"), key: "gapHandling", help: "gen-gaps" },
+                                { text: qsTr("Ignore single-frame jumps"), key: "outlierRejection", help: "gen-outliers" },
+                                { text: qsTr("Reuse the tracking"), key: "trackCache", help: "gen-track-cache" }]
                         delegate: RowLayout {
                             required property var modelData
                             Layout.fillWidth: true

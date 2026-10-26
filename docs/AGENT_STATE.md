@@ -2,7 +2,24 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 26 Oct 2026, Claude, branch `claude/samn2-player-editor-p4` (Player/Editor §3, slice P4: lane picking).
+**Last update:** 26 Oct 2026, Claude, branch `claude/samn2-generator-spec` (Generator behaviour spec, D-158/D-159; work in progress, handed over below).
+
+## Handover: `claude/samn2-generator-spec` (26 Oct, in progress, not yet a PR)
+
+- **Done on the branch:** `docs/GENERATOR_SPEC.md`; opt-in gap handling, MAD outliers, end time, analysis-rate cap, raw-track cache, aliasing note (D-158); Generator toggles *Bridge short tracking gaps*, *Ignore single-frame jumps*, *Reuse the tracking*; `tests/engine/spec_generator_test.cpp` (one case per spec test id); MSVC 17.14 fix in `tests/core/device_protocol_test.cpp` (raw string moved out of `CHECK`).
+- **Local Windows run (MSVC 17.14, Qt 6.7.3, vcpkg OpenCV 4.14):** build green; core, vision, identifiers and every app test up to `label_controller_test` green. Red:
+  - `train_controller_test` (not touched here; check whether it fails on `main` too).
+  - New spec cases with real findings:
+    - **T4:** with 30 % of a 60 fps track dropped, some extrema are 50–66 ms off; the tolerance is 40.
+    - **T5:** a still disc gives a script instead of the "no discernible motion" error; CSRT wobble is read as motion.
+    - **T6:** CSRT does not report the vanished disc as lost (LESSONS GD-11), so the gap gets actions; gap handling needs a loss signal beyond the CSRT result (appearance-memory score).
+  - Two test bugs fixed after the run (T10 overwrite guard, FR-7 progress bound); not re-run yet.
+- **Next, in the Owner's order (D-159):**
+  1. Make the spec values the Generator default, with an *Auto* switch (on at first start) that adapts them per 8 s section from video tempo, noise and audio tempo. Auto keeps the values where the measurement is unsure. Then fit the values to the target device (stroker minimum interval 100 ms).
+  2. *Tip automatically*: the rhythm grid over the whole frame (GD-15) finds where the stroke is, the detector confirms it, CSRT follows. A box is drawn only to override.
+  3. Extended camera stabilisation: all four similarity parameters, a RANSAC inlier gate, keyframe and two-pass smoothing after OpenCV videostab, and a phase-correlation fallback.
+  4. AV1: merge `claude/samn2-av1-dav1d` (remove the duplicated `smokePlay()` in `Main.qml`) and enable `ffmpeg[dav1d]` for the Generator's vcpkg FFmpeg. DirectML for ONNX Runtime.
+  5. Black-box comparison with the other generator on synthetic probe clips and the Owner's clips through `samn_compare`.
 
 ## Rules
 

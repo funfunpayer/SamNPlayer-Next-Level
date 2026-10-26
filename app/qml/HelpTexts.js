@@ -74,6 +74,7 @@ const texts = {
     "gen-extras-clear": "Clear extra contact areas and soft masks (keeps tip + first contact mark).",
     // src/gen_feel.js:85 (Mix)
     "gen-feel-balance": "Move the weight between vibration and suction. Centre = both full.",
+    "gen-gaps": "Opt-in: where the tracker lost the tip for up to 0.5 s the curve is bridged with a line; longer losses get no points instead of a held position. Off = as before.",
     // src/generator.js:404 (Import candidates…)
     "gen-import-contact-candidates": "Writes teacher-consensus boxes into the companion .samn as unreviewed auto region marks. Needs an existing scene map.",
     // src/generator.js:567 (Audio check)
@@ -96,6 +97,7 @@ const texts = {
     "gen-mask-add": "Ignore region (black): exclude a wrong latch (knees, background). Same as Scene map → Ignore. Does not drive the stroke; use when auto tip/heatmap fails onto the wrong part.",
     // src/generator.js:24 (User handbook)
     "gen-open-handbook": "Opens the in-app handbook: Create steps, gaps, AI export, Play map.",
+    "gen-outliers": "Opt-in: a single frame that jumps far from its neighbours (5 × their median deviation) is treated as a tracking loss, not as a stroke. Off = as before.",
     // src/generator.js:515 (Optimize for)
     "gen-optimize-target": "After Create, optimize the new script: for any device (fill gaps only) or for Sam Neo 2 (adds contact vibration and baked vibration / suction).",
     // src/generator.js:468 (Re-find region after each cut (Python-only; soft-ignored on )
@@ -152,6 +154,7 @@ const texts = {
     "gen-suggest-profile": "Compares the motion signature to saved scenes first, optionally to a local AI server. Suggestion only — nothing is applied automatically.",
     // src/generator.js:191 (+ Another contact area)
     "gen-target-add": "Add another touch point (magenta) — e.g. second nipple or mouth. Same contact-vibe set. With tip trajectory on, extras can follow unless Stay fixed is checked.",
+    "gen-track-cache": "Opt-in: keeps the raw tracking of a video in the settings folder (cache/track), so a second Create with another feel skips the tracking. Safe to delete at any time.",
     // src/generator.js:58 (Use Player video)
     "gen-use-player-video": "Use the video that is linked in Play, so Create and Play work on the same clip.",
     // src/gen_feel.js:92 (Vibration follows suction)

@@ -9,6 +9,7 @@
 #include "samn/fileio.h"
 #include "samn/ozone.h"
 #include "samn/samn_file.h"
+#include "samn/engine/track_cache.h"
 
 namespace samn::engine {
 
@@ -125,9 +126,15 @@ void GenerateUnguarded(const GenerateRequest& req, uint64_t run_id, const std::f
         emit(GenerateEventKind::kError, "the script exists already: " + req.output.filename().u8string());
         return;
     }
+    if (req.end_ms > 0 && req.end_ms <= req.start_ms) {
+        emit(GenerateEventKind::kError, "the end time must lie after the start time");
+        return;
+    }
     TrackOptions to;
     to.start_ms = req.start_ms;
+    to.end_ms = req.end_ms;
     to.max_frames = req.max_frames;
+    to.max_analysis_fps = req.max_analysis_fps;
     to.camera_compensation = req.camera_compensation;
     to.scene_cuts = req.scene_cuts;
     to.axis = req.axis;
@@ -147,22 +154,46 @@ void GenerateUnguarded(const GenerateRequest& req, uint64_t run_id, const std::f
         emit(GenerateEventKind::kProgress, "tracking", total > 0 ? std::min(99, done * 100 / total) : -1);
     };
     std::string error;
-    const auto tr = TrackBox(req.video, req.box, to, &error);
-    if (!tr) {
-        emit(GenerateEventKind::kError, error);
-        return;
+    const std::string cache_key =
+        req.track_cache_dir.empty() ? std::string() : TrackCacheKey(req.video, req.box, to);
+    std::optional<TrackResult> tr;
+    if (!cache_key.empty()) tr = LoadTrackCache(req.track_cache_dir, cache_key);
+    if (tr) {
+        emit(GenerateEventKind::kNote, "tracking: from the cache");
+    } else {
+        tr = TrackBox(req.video, req.box, to, &error);
+        if (!tr) {
+            emit(GenerateEventKind::kError, error);
+            return;
+        }
+        if (tr->canceled) {
+            emit(GenerateEventKind::kCanceled, "canceled");
+            return;
+        }
+        if (!cache_key.empty()) {
+            // A cache that cannot be written costs speed next time, not this script.
+            try {
+                SaveTrackCache(req.track_cache_dir, cache_key, *tr);
+            } catch (const std::exception& e) {
+                emit(GenerateEventKind::kNote, std::string("tracking cache not written: ") + e.what());
+            }
+        }
     }
-    if (tr->canceled) {
-        emit(GenerateEventKind::kCanceled, "canceled");
-        return;
-    }
+    const std::vector<double> times(tr->times_ms.begin(), tr->times_ms.end());
+    if (auto warn = AliasingWarning(times, tr->positions)) emit(GenerateEventKind::kNote, *warn);
     std::string note;
     const SignalOptions so = ApplyDefaultDetrend(req.signal, req.stroke_hint, &note);
     if (!note.empty()) emit(GenerateEventKind::kNote, note);
-    const auto sig = RunSignal(std::vector<double>(tr->times_ms.begin(), tr->times_ms.end()), tr->positions, so, &error);
+    const auto sig = RunSignal(times, tr->positions, tr->lost, so, &error);
     if (!sig) {
         emit(GenerateEventKind::kError, error);
         return;
+    }
+    if (sig->outliers > 0 || sig->bridged_gaps > 0 || sig->split_gaps > 0) {
+        char buf[128];
+        std::snprintf(buf, sizeof buf, "POST: %d outliers, %d gaps bridged, %d gaps left without actions",
+                      sig->outliers, sig->bridged_gaps, sig->split_gaps);
+        emit(GenerateEventKind::kNote, buf);
     }
     if (cancel && cancel()) {
         emit(GenerateEventKind::kCanceled, "canceled");

@@ -8,6 +8,7 @@
 // confidence and aliasing, the sample count of every pair, and a manifest
 // with content hashes. A default is chosen only from these numbers.
 
+#include <cstdint>
 #include <filesystem>
 #include <functional>
 #include <optional>
@@ -27,6 +28,8 @@ struct CompareClip {
     std::filesystem::path video;
     cv::Rect box;
     SignalOptions signal;                       // profile and overrides
+    int64_t end_ms = 0;                         // 0 = to the end
+    double max_analysis_fps = 0;                // 0 = every frame
     std::optional<std::filesystem::path> reference;  // human or other trusted script
     std::optional<std::filesystem::path> old_output;  // 0.7's script for the same clip and box
 };
@@ -67,8 +70,10 @@ struct ClipReport {
 ClipReport RunClip(const CompareClip& clip, const CompareSettings& s, const std::function<bool()>& cancel = {});
 
 // Manifest: {"clips": [{"name", "video", "box": [x,y,w,h], "profile",
-// "reference", "old"}], "window_ms", "max_lag_ms"}; relative paths are
-// relative to the manifest. nullopt with *error on a bad manifest.
+// "reference", "old", and the opt-in switches "end_ms", "max_analysis_fps",
+// "max_gap_ms", "outlier_mad_factor"}], "window_ms", "max_lag_ms"};
+// relative paths are relative to the manifest. nullopt with *error on a bad
+// manifest.
 std::optional<std::vector<CompareClip>> LoadManifest(const std::filesystem::path& path, CompareSettings* settings,
                                                      std::string* error);
 

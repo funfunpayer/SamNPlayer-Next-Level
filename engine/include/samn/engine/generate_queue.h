@@ -19,6 +19,7 @@ struct QueueSettings {
     bool scene_cuts = true;
     bool auto_ozone = true;
     bool overwrite = false;  // otherwise a video that has a script is skipped
+    std::filesystem::path track_cache_dir;  // empty = no tracking cache
     // Contact vibration and the tip class; contact areas are marked per
     // video, so the queue has none.
     bool contact_vibration = false;

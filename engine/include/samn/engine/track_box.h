@@ -20,7 +20,11 @@ enum class TrackAxis { kAuto, kX, kY };
 
 struct TrackOptions {
     int64_t start_ms = 0;        // video time of the first tracked frame
+    int64_t end_ms = 0;          // video time of the last tracked frame; 0 = to the end
     int max_frames = 0;          // 0 = to the end
+    // Analysis rate cap: a frame closer than 1 / max_analysis_fps to the last
+    // tracked frame is skipped and gives no sample. 0 = every frame (0.7).
+    double max_analysis_fps = 0;
     bool camera_compensation = true;
     bool scene_cuts = true;
     bool appearance_memory = true;
@@ -58,6 +62,9 @@ struct TrackStats {
 struct TrackResult {
     std::vector<int64_t> times_ms;  // video time per frame
     std::vector<double> positions;  // chosen axis, or tip↔partner distance (pixels)
+    // 1 where the frame had no tip box (not found and the coast spent): its
+    // position only repeats the last one. Same length as times_ms.
+    std::vector<uint8_t> lost;
     std::vector<double> xs, ys;     // box centre per frame (y camera-compensated)
     std::vector<double> frame_ys;   // box centre y in frame pixels, before compensation (tip path)
     // Partner centres in frame pixels (same length as tip when partner_box set).

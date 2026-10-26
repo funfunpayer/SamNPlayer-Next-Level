@@ -97,6 +97,7 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
     res.size = reader->size();
     res.distance_stroke = distance_stroke;
     res.times_ms.push_back(frame.pts_us / 1000);
+    res.lost.push_back(0);
     res.xs.push_back(Centre(box).x);
     res.ys.push_back(Centre(box).y);
     if (want_partner) {
@@ -116,7 +117,18 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
     coast.ObserveOk(box);
     DispGuard guard;
 
-    Progress progress(opts.on_progress, ProgressTotal(reader->frameCount(), frame.index, opts.max_frames));
+    const int64_t first_index = frame.index;
+    int total = ProgressTotal(reader->frameCount(), first_index, opts.max_frames);
+    if (opts.end_ms > 0 && reader->fps() > 0) {
+        const int64_t first_ms = frame.pts_us / 1000;
+        const int span = static_cast<int>(std::max<int64_t>(0, opts.end_ms - first_ms) * reader->fps() / 1000) + 1;
+        total = total > 0 ? std::min(total, span) : span;
+    }
+    // A skipped frame counts as done, so progress follows the video, not the samples.
+    const bool rate_cap = opts.max_analysis_fps > 0;
+    // 1 ms of slack: millisecond times of a 60 fps clip are 16/17 ms apart.
+    const double min_step_ms = rate_cap ? 1000.0 / opts.max_analysis_fps - 1.0 : 0;
+    Progress progress(opts.on_progress, total);
     progress.Report(0);
 
     // A fresh CSRT on the found box, as 0.7 did after every reacquire.
@@ -132,6 +144,12 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
             TrackResult canceled;
             canceled.canceled = true;
             return canceled;
+        }
+        const int64_t frame_ms = frame.pts_us / 1000;
+        if (opts.end_ms > 0 && frame_ms > opts.end_ms) break;
+        if (rate_cap && frame_ms - res.times_ms.back() < min_step_ms) {
+            progress.Report(static_cast<int>(frame.index - first_index));
+            continue;
         }
         if (needs_gray) cv::cvtColor(frame.bgr, gray, cv::COLOR_BGR2GRAY);
         const bool cut = opts.scene_cuts && IsSceneCut(prev_gray, gray);
@@ -171,7 +189,9 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
                 res.ys.push_back(res.ys.back());
                 tip_ok = false;
             }
+            res.lost.push_back(tip_ok ? 0 : 1);
         } else {
+            res.lost.push_back(0);
             coast.ObserveOk(*found);
             ++valid;
             res.xs.push_back(Centre(*found).x);
@@ -227,8 +247,8 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
         }
 
         if (needs_gray) std::swap(prev_gray, gray);
-        res.times_ms.push_back(frame.pts_us / 1000);
-        progress.Report(idx);
+        res.times_ms.push_back(frame_ms);
+        progress.Report(rate_cap ? static_cast<int>(frame.index - first_index) : idx);
         ++idx;
         if (opts.max_frames > 0 && idx >= opts.max_frames) break;
     }
