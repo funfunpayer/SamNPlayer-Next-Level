@@ -69,6 +69,26 @@ class GeneratorController : public QObject {
     Q_PROPERTY(QString optimizeTarget READ optimizeTarget WRITE setOptimizeTarget NOTIFY optionsChanged)
     // 0.7 "0–100 on video" over the preview (default on; generator.pos_overlay).
     Q_PROPERTY(bool posOverlay READ posOverlay WRITE setPosOverlay NOTIFY optionsChanged)
+    // 0.7 gen_feel.js "How it feels" follows the device. feelDevice: "auto"
+    // (the connected one; a Sam Neo 2 without one), "neo2", "vibrator" or
+    // "stroker"; connectedKind is set by the page from the device; feelKind
+    // is the result. Only what that device can use shows unless showAllFeel.
+    // The Sam Neo 2 feel (sceneFeel "auto" / "" Classic / oral / intercourse
+    // / breast / hand, feelBalance -100 vibration .. 100 suction, vibFollow)
+    // is written into the new script right after Create (0.7
+    // SaveFeelSettings); vibSource ("", "sound+contact", "sound") is the
+    // vibrator's vibration. Remembered (0.7 localStorage gen.feel).
+    Q_PROPERTY(QString feelDevice READ feelDevice WRITE setFeelDevice NOTIFY feelChanged)
+    Q_PROPERTY(QString connectedKind READ connectedKind WRITE setConnectedKind NOTIFY feelChanged)
+    Q_PROPERTY(QString feelKind READ feelKind NOTIFY feelChanged)
+    Q_PROPERTY(bool showAllFeel READ showAllFeel WRITE setShowAllFeel NOTIFY feelChanged)
+    Q_PROPERTY(QString sceneFeel READ sceneFeel WRITE setSceneFeel NOTIFY feelChanged)
+    Q_PROPERTY(QString autoScene READ autoScene NOTIFY feelChanged)
+    Q_PROPERTY(int feelBalance READ feelBalance WRITE setFeelBalance NOTIFY feelChanged)
+    Q_PROPERTY(bool vibFollow READ vibFollow WRITE setVibFollow NOTIFY feelChanged)
+    Q_PROPERTY(QString vibSource READ vibSource WRITE setVibSource NOTIFY feelChanged)
+    Q_PROPERTY(QString feelSummary READ feelSummary NOTIFY feelChanged)
+    Q_PROPERTY(QString feelHint READ feelHint NOTIFY feelChanged)
     Q_PROPERTY(QString tipClass READ tipClass WRITE setTipClass NOTIFY optionsChanged)
     Q_PROPERTY(QString contactClass READ contactClass WRITE setContactClass NOTIFY optionsChanged)
     Q_PROPERTY(QStringList tipClasses READ tipClasses CONSTANT)
@@ -156,6 +176,27 @@ public:
     QString optimizeTarget() const { return optimize_target_; }
     bool posOverlay() const { return pos_overlay_; }
     void setPosOverlay(bool on);
+    QString feelDevice() const { return feel_device_; }
+    void setFeelDevice(const QString& d);
+    QString connectedKind() const { return connected_kind_; }
+    void setConnectedKind(const QString& k);
+    QString feelKind() const;
+    bool showAllFeel() const { return show_all_feel_; }
+    void setShowAllFeel(bool on);
+    QString sceneFeel() const { return scene_feel_; }
+    void setSceneFeel(const QString& s);
+    QString autoScene() const;
+    int feelBalance() const { return feel_balance_; }
+    void setFeelBalance(int b);
+    bool vibFollow() const { return vib_follow_; }
+    void setVibFollow(bool on);
+    QString vibSource() const { return vib_source_; }
+    void setVibSource(const QString& s);
+    QString feelSummary() const;
+    QString feelHint() const;
+    // The Sam Neo 2 feel written after Create into the new .samn and the
+    // .funscript beside it; false when nothing was to change.
+    bool applyFeel(const QString& samnPath);
     void setOptimizeTarget(const QString& target);
     QString tipClass() const { return tip_class_; }
     void setTipClass(const QString& c);
@@ -250,6 +291,7 @@ signals:
     void previewChanged();
     void boxChanged();
     void optionsChanged();
+    void feelChanged();
     void runChanged();
     void progressChanged();
     void statusChanged();
@@ -286,6 +328,9 @@ private:
     QString contact_curve_ = QStringLiteral("soft");
     QString optimize_target_;
     bool pos_overlay_ = true;
+    QString feel_device_ = QStringLiteral("auto"), connected_kind_, scene_feel_ = QStringLiteral("auto"), vib_source_;
+    bool show_all_feel_ = false, vib_follow_ = false;
+    int feel_balance_ = 0;
     // The choices are remembered (0.7 "generator.*" settings); the invert
     // switch belongs to one video and is not.
     std::unique_ptr<samn::Settings> settings_;

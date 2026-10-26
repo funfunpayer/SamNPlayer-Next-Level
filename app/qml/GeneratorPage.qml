@@ -23,6 +23,8 @@ Item {
     property url playerVideoUrl
     property alias controller: gen
     property alias editor: edit
+    // The connected device: "How it feels" follows it (0.7 gen_feel.js).
+    property DeviceController device: null
     // "Play in the Player": the Player plays, it does not edit (D-144).
     signal reviewRequested(string path)
 
@@ -31,8 +33,15 @@ Item {
         // 0.8 "Optimize after Create" (D-156): the new script is optimized right away.
         onCreated: (path) => {
             library.noteScriptGenerated(path)
-            if (edit.open(path) && gen.optimizeTarget !== "") edit.optimizeFor(gen.optimizeTarget)
+            if (!edit.open(path)) return
+            if (gen.optimizeTarget !== "") edit.optimizeFor(gen.optimizeTarget)
+            // 0.7 Step 3: a vibrator gets its vibration from the video's sound.
+            if (gen.feelKind === "vibrator" && gen.vibSource !== "") edit.vibrationFromSound(gen.vibSource === "sound+contact")
         }
+        connectedKind: !page.device || !page.device.connected ? ""
+                       : page.device.capSuction ? "neo2"
+                       : page.device.capLinear ? "stroker"
+                       : page.device.capVibration ? "vibrator" : ""
         onVideoChanged: if (gen.hasVideo) library.noteVideoOpened(gen.videoPath)
     }
     EditorController {
@@ -1432,6 +1441,127 @@ Item {
                         }
                         HelpChip { key: "generator.style"; Layout.alignment: Qt.AlignVCenter }
                     }
+                    // 0.7 gen_feel.js: the feel follows the device. Only what the
+                    // chosen device can use shows, unless "Show all".
+                    RowLayout {
+                        Layout.fillWidth: true; spacing: 8
+                        Text {
+                            textFormat: Text.PlainText
+                            text: qsTr("For device"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                        }
+                        FlowCombo {
+                            objectName: "feelDeviceCombo"
+                            Layout.fillWidth: true
+                            enabled: !gen.running
+                            textRole: "label"; valueRole: "value"
+                            model: [{ label: gen.connectedKind ? qsTr("Connected device") : qsTr("Auto (Sam Neo 2)"), value: "auto" },
+                                    { label: qsTr("Sam Neo 2"), value: "neo2" },
+                                    { label: qsTr("Vibrator"), value: "vibrator" },
+                                    { label: qsTr("Stroker"), value: "stroker" }]
+                            currentIndex: Math.max(0, indexOfValue(gen.feelDevice))
+                            onActivated: gen.feelDevice = currentValue
+                        }
+                        Text {
+                            textFormat: Text.PlainText
+                            text: qsTr("Show all"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                        }
+                        FlowToggle {
+                            objectName: "toggle_showAllFeel"
+                            checked: gen.showAllFeel
+                            onToggled: (c) => gen.showAllFeel = c
+                        }
+                    }
+                    Text {
+                        objectName: "feelHint"
+                        textFormat: Text.PlainText
+                        visible: text !== ""
+                        Layout.fillWidth: true; wrapMode: Text.WordWrap
+                        text: gen.feelHint; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                    }
+                    ColumnLayout {
+                        objectName: "neoFeel"
+                        visible: gen.feelKind === "neo2" || gen.showAllFeel
+                        Layout.fillWidth: true; spacing: 6
+                        RowLayout {
+                            Layout.fillWidth: true; spacing: 8
+                            Text {
+                                textFormat: Text.PlainText
+                                text: qsTr("Scene"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                            FlowCombo {
+                                objectName: "sceneFeelCombo"
+                                Layout.fillWidth: true
+                                enabled: !gen.running
+                                textRole: "label"; valueRole: "value"
+                                model: [{ label: qsTr("Auto (from the contact area)"), value: "auto" },
+                                        { label: qsTr("Classic"), value: "" },
+                                        { label: qsTr("Oral"), value: "oral" },
+                                        { label: qsTr("Intercourse"), value: "intercourse" },
+                                        { label: qsTr("Breast"), value: "breast" },
+                                        { label: qsTr("Hand"), value: "hand" }]
+                                currentIndex: Math.max(0, indexOfValue(gen.sceneFeel))
+                                onActivated: gen.sceneFeel = currentValue
+                            }
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true; spacing: 8
+                            Text {
+                                textFormat: Text.PlainText
+                                text: qsTr("Vibration"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                            FlowSlider {
+                                objectName: "feelBalance"
+                                Layout.fillWidth: true
+                                enabled: !gen.running
+                                from: -100; to: 100; value: gen.feelBalance
+                                onMoved: (v) => gen.feelBalance = Math.round(v)
+                            }
+                            Text {
+                                textFormat: Text.PlainText
+                                text: qsTr("Suction"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Text {
+                                textFormat: Text.PlainText
+                                Layout.fillWidth: true
+                                text: qsTr("Vibration follows suction"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                            }
+                            FlowToggle {
+                                objectName: "toggle_vibFollow"
+                                enabled: !gen.running
+                                checked: gen.vibFollow
+                                onToggled: (c) => gen.vibFollow = c
+                            }
+                        }
+                        Text {
+                            objectName: "feelSummary"
+                            textFormat: Text.PlainText
+                            Layout.fillWidth: true; wrapMode: Text.WordWrap
+                            text: gen.feelSummary; color: Theme.cyan; font.family: Theme.fontSoft; font.pixelSize: 12
+                        }
+                    }
+                    RowLayout {
+                        objectName: "vibSourceRow"
+                        visible: gen.feelKind === "vibrator" || gen.showAllFeel
+                        Layout.fillWidth: true; spacing: 8
+                        Text {
+                            textFormat: Text.PlainText
+                            text: qsTr("Vibration from"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                        }
+                        FlowCombo {
+                            objectName: "vibSourceCombo"
+                            Layout.fillWidth: true
+                            enabled: !gen.running
+                            textRole: "label"; valueRole: "value"
+                            model: [{ label: qsTr("Motion only"), value: "" },
+                                    { label: qsTr("Sound + contact"), value: "sound+contact" },
+                                    { label: qsTr("Sound only"), value: "sound" }]
+                            currentIndex: Math.max(0, indexOfValue(gen.vibSource))
+                            onActivated: gen.vibSource = currentValue
+                        }
+                    }
                     Repeater {
                         model: [{ text: qsTr("Invert motion direction"), key: "invert", help: "gen-invert" },
                                 { text: qsTr("Camera motion compensation"), key: "cameraCompensation", help: "gen-camcomp" },
@@ -1460,6 +1590,8 @@ Item {
                     // Contact vibration (0.7 Step 2 "Tip & contact"): the
                     // classes and areas show only while it is on.
                     RowLayout {
+                        // A stroker cannot vibrate (0.7 gen_feel.js).
+                        visible: gen.feelKind !== "stroker" || gen.showAllFeel
                         Layout.fillWidth: true
                         Text {
                             textFormat: Text.PlainText
@@ -1476,7 +1608,7 @@ Item {
                     }
                     ColumnLayout {
                         objectName: "contactMarks"
-                        visible: gen.contactVibration
+                        visible: gen.contactVibration && (gen.feelKind !== "stroker" || gen.showAllFeel)
                         Layout.fillWidth: true; spacing: 6
                         RowLayout {
                             Layout.fillWidth: true; spacing: 8

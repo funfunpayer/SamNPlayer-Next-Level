@@ -210,6 +210,28 @@ private slots:
                           invert->mapToScene(QPointF(invert->width() / 2, invert->height() / 2)).toPoint());
         QTRY_VERIFY(gen->invert());
 
+        // G3: the feel follows the device. Nothing connected: Sam Neo 2.
+        QVERIFY(named(root.get(), "neoFeel")->isVisible());
+        QVERIFY(!named(root.get(), "vibSourceRow")->isVisible());
+        QMetaObject::invokeMethod(named(root.get(), "feelBalance"), "moved", Q_ARG(double, 42.0));
+        QTRY_COMPARE(gen->feelBalance(), 40);
+        QTRY_VERIFY(named(root.get(), "feelSummary")->property("text").toString().contains("suction 40%"));
+        auto* feelDevice = named(root.get(), "feelDeviceCombo");
+        feelDevice->setProperty("currentIndex", 2);
+        QMetaObject::invokeMethod(feelDevice, "activated", Q_ARG(int, 2));
+        QTRY_COMPARE(gen->feelKind(), QStringLiteral("vibrator"));
+        QTRY_VERIFY(named(root.get(), "vibSourceRow")->isVisible());
+        QVERIFY(!named(root.get(), "neoFeel")->isVisible());
+        QVERIFY(named(root.get(), "feelHint")->isVisible());
+        gen->setFeelDevice("stroker");
+        QTRY_VERIFY(!named(root.get(), "contactMarks")->isVisible());
+        gen->setShowAllFeel(true);
+        QTRY_VERIFY(named(root.get(), "neoFeel")->isVisible());
+        QVERIFY(named(root.get(), "contactMarks")->isVisible());
+        gen->setShowAllFeel(false);
+        gen->setFeelDevice("auto");
+        gen->setFeelBalance(0);
+
         // Contact: on by default; "Mark contact area" makes the next drag a
         // contact area and leaves the tip box alone.
         QVERIFY(gen->contactVibration());
