@@ -120,6 +120,20 @@ The Editor creates curves as well as editing them, and writes them into the
 - **Vibration that follows the sound** (`samn/audio_envelope.h`, 0.7 "Write
   as vibration curve").
 
+- **Vibration texture on a stroker** (Owner link 26 Oct: the OFS extension
+  MakeVibrations / MakeVibrationsExt): for linear devices without a
+  vibration motor, a small fast oscillation is laid over the stroke: points
+  inserted at a frequency f (MakeVibrationsExt default 25), alternately
+  +A/2 and -A/2 around the stroke line, so A·f is the average speed it aims
+  for, then clipped by a speed limit (its example 600 units/s). Its known
+  flaws are fixed by design: the texture is a parameter, not baked points,
+  so applying it again replaces instead of stacking; it uses our `LimitSpeed`
+  and the device's own limit; the start and end of a range fade in and out.
+  Preferred place: playback shaping per phase (D-157), so the stroke in the
+  file stays clean; as an Editor tool it bakes into a range with one undo step.
+  The script has no licence (only a request for credit), so ours is written
+  from the description, not copied.
+
 Each tool writes through the Editor's history (one undo step) and is checked
 against 0.7 with the same inputs before it becomes a default.
 
