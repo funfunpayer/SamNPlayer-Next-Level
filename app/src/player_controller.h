@@ -141,6 +141,13 @@ class PlayerController : public QObject {
     // as read lanes, in the order surge, sway, twist, roll, pitch; with a
     // device connected only the axes it has. They also drive those axes.
     Q_PROPERTY(QStringList axisLanes READ axisLanes NOTIFY lanesChanged)
+    // 0.7 lane / legend selection: the axis the main curve shows (its lane
+    // is bound to this; "stroke",
+    // "vibration", "suction" or a companion axis), picked from laneChoices
+    // (the shown lanes; the stroke always). Not remembered: a new script
+    // starts on the stroke.
+    Q_PROPERTY(QString activeLane READ activeLane WRITE setActiveLane NOTIFY activeLaneChanged)
+    Q_PROPERTY(QStringList laneChoices READ laneChoices NOTIFY lanesChanged)
     // Sleep timer: stops playing after this many minutes of play (0 = off).
     Q_PROPERTY(int sleepMinutes READ sleepMinutes WRITE setSleepMinutes NOTIFY sleepChanged)
     // False: the lane is the device preview from the stroke (mapper), not
@@ -353,6 +360,11 @@ public:
     bool showVibrationLane() const;
     bool showSuctionLane() const;
     QStringList axisLanes() const;
+    QString activeLane() const { return activeLane_; }
+    void setActiveLane(const QString& lane);
+    QStringList laneChoices() const;
+    // Up / Down on the lanes: the next or previous choice (wraps).
+    Q_INVOKABLE void stepActiveLane(int delta);
     double viewStartMs() const { return double(view_.start_ms); }
     double viewEndMs() const { return double(view_.end_ms); }
     bool zoomed() const { return samn::IsZoomed(view_, timelineMs()); }
@@ -380,6 +392,7 @@ signals:
     // The Emergency stop was pressed: the page pauses the video.
     void emergencyStopped();
     void lanesChanged();
+    void activeLaneChanged();
     void playlistChanged();
     void speedHighlightChanged();
     void scriptChanged();
@@ -454,6 +467,7 @@ private:
     QString toolNote_;
     bool vibrationFromScript_ = false, suctionFromScript_ = false;
     std::map<std::string, std::vector<samn::Action>> axisActions_;
+    QString activeLane_ = QStringLiteral("stroke");
     qint64 videoDurationMs_ = 0;
     samn::ViewWindow view_;
     qint64 videoMs_ = 0, playheadMs_ = -1;

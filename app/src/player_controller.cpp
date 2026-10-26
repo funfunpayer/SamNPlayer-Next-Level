@@ -59,6 +59,11 @@ std::vector<samn::Action> laneFrom(const std::vector<samn::Frame>& frames, bool 
 PlayerController::PlayerController(QObject* parent)
     : QObject(parent), output_(&settings()), mapping_(&settings(), &output_) {
     connect(&output_, &PlaybackOutput::emergencyStopped, this, &PlayerController::emergencyStopped);
+    // A picked lane that is no longer shown (device changed, script closed)
+    // falls back to the stroke.
+    connect(this, &PlayerController::lanesChanged, this, [this] {
+        if (activeLane_ != QLatin1String("stroke") && !laneChoices().contains(activeLane_)) setActiveLane({});
+    });
     connect(&mapping_, &MappingSettings::mappingChanged, this, [this] {
         if (!opening_) remap(false);
     });
@@ -106,6 +111,31 @@ bool PlayerController::showVibrationLane() const {
 bool PlayerController::showSuctionLane() const {
     if (stroke_.empty()) return false;
     return device_ && device_->connected() ? device_->capSuction() : suctionFromScript_;
+}
+
+QStringList PlayerController::laneChoices() const {
+    if (stroke_.empty()) return {};
+    QStringList out{QStringLiteral("stroke")};
+    if (showVibrationLane()) out << QStringLiteral("vibration");
+    if (showSuctionLane()) out << QStringLiteral("suction");
+    out << axisLanes();
+    return out;
+}
+
+void PlayerController::setActiveLane(const QString& lane) {
+    const QString next = laneChoices().contains(lane) ? lane : QStringLiteral("stroke");
+    if (next == activeLane_) return;
+    activeLane_ = next;
+    emit activeLaneChanged();
+    pushToViews();
+}
+
+void PlayerController::stepActiveLane(int delta) {
+    const QStringList choices = laneChoices();
+    if (choices.size() < 2) return;
+    const int i = std::max<int>(0, int(choices.indexOf(activeLane_)));
+    const int n = int(choices.size());
+    setActiveLane(choices[((i + delta) % n + n) % n]);
 }
 
 QStringList PlayerController::axisLanes() const {
@@ -542,6 +572,11 @@ bool PlayerController::openScript(const QString& pathIn, const QString& videoIn)
     // D-132: a lane the file carries shows without a device.
     vibrationFromScript_ = !doc.vibration.empty();
     suctionFromScript_ = !doc.suction.empty();
+    // A new script starts on the stroke.
+    if (activeLane_ != QLatin1String("stroke")) {
+        activeLane_ = QStringLiteral("stroke");
+        emit activeLaneChanged();
+    }
     // 0.7 companion axis files (multi-axis devices); an unreadable one is left out.
     axisActions_.clear();
     for (const auto& [axis, file] : samn::companion_axis_files(u8(path))) {

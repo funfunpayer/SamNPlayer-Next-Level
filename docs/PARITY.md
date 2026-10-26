@@ -10,13 +10,13 @@
 
 ## Status (19 Oct 2026)
 
-Table refreshed with Player/Editor P3 (26 Oct); checked earlier against the code on `main` after #68, plus the Settings page (General, Device, Log, About) the update check (D-147) and the open-media flow (Create script → Generator, always-create); the Tools Home page is dropped (D-148) (`python3 ci/parity_status.py` prints this table; "partly" counts as half). Items marked partly say what is in and what is missing.
+Table refreshed with Player/Editor P4 (26 Oct); checked earlier against the code on `main` after #68, plus the Settings page (General, Device, Log, About) the update check (D-147) and the open-media flow (Create script → Generator, always-create); the Tools Home page is dropped (D-148) (`python3 ci/parity_status.py` prints this table; "partly" counts as half). Items marked partly say what is in and what is missing.
 
 | Section | Done | Partly | Dropped on purpose | Open | Share |
 |---|---|---|---|---|---|
 | 1. App shell, navigation, global behaviour | 15 | 8 | 7 | 9 | 67 % |
 | 2. Tools Home, Settings, Log, Legal, Update, Open-media/Library entry | 26 | 12 | 15 | 17 | 67 % |
-| 3. Player and Editor | 64 | 41 | 0 | 22 | 67 % |
+| 3. Player and Editor | 67 | 41 | 0 | 19 | 69 % |
 | 4. Generator | 13 | 29 | 0 | 27 | 40 % |
 | 5. Training | 29 | 0 | 1 | 0 | 100 % |
 | 6. Suite-only tools: AI Train and Benchmark | 2 | 9 | 1 | 4 | 47 % |
@@ -28,7 +28,7 @@ Table refreshed with Player/Editor P3 (26 Oct); checked earlier against the code
 | 12. Help, handbook, legal, notifications | 0 | 3 | 0 | 1 | 38 % |
 | 13. Wails-bound backend methods | 103 | 5 | 16 | 100 | 54 % |
 | 9. After 0.7.0: what landed in the old repo since | 6 | 1 | 0 | 8 | 43 % |
-| **All 678** | 289 | 133 | 44 | 212 | **59 %** |
+| **All 678** | 292 | 133 | 44 | 209 | **59 %** |
 
 The core and the file formats are further than the table shows: many open lines in §13 are 0.7 backend methods for tools not ported yet (AI training, benchmark, updates, plugins), and one C++ function often covers several of them. The biggest open blocks are §2 (hardware info, handbook, donate, the beat bar), the rest of §4 (Quality Doctor, review panel, rhythm grid, AI helpers) and §6 (AI Train, Benchmark).
 
@@ -250,12 +250,12 @@ Source of truth: `cmd/gui-wails/main.go`, `frontend/index.html`, `frontend/src/m
 
 ### 3.4 Lanes, audio level lane, legend
 
-- [ ] Feel lanes — one 34 px lane per channel the script carries (vibration, suction, then companion axes surge, sway, twist, roll, pitch), same zoom/time axis as the curve, glow curve with fill 0.2; active axis lane has a lighter background and thicker line (1.6, glow 7 vs 1.15, glow 4); lane names drawn in canvas as UPPERCASE 10 px labels (or in a name column in the V1 layout); lane separators 1 px rgba(255,255,255,.08); playhead through all lanes (playback.js:2178-2266) _(partly: vibration and suction lanes, 34 px, glow 4, fill 0.2, 1 px separators, names in a column left of the lanes, playhead through all lanes, D-132 (`app/qml/PlayerPage.qml`, tests `lanesFollowTheDevice`, `noScriptNoLanes`, `chaptersBookmarksHeatmapLanes`); companion axis lanes Surge … Pitch in 0.7's colours (test `companionAxisFilesBecomeLanesAndDriveTheAxes`); missing: the active-lane highlight)_
-- [ ] Lane interaction — click a lane = select that axis for the main curve; Up/Down on the focused lanes canvas cycles editable channels; audio lane is not selectable; aria-label lists lanes (playback.js:2208, 5099-5115)
-- [ ] Axis legend chips Stroke / Vibration / Suction (+ companion options) — visible when an editable feel axis exists; `aria-pressed`, Left/Right/Up/Down/Home/End move and select (playback.js:2197-2206, 5079-5098)
+- [x] Feel lanes — one 34 px lane per channel the script carries (vibration, suction, then companion axes surge, sway, twist, roll, pitch), same zoom/time axis as the curve, glow curve with fill 0.2; active axis lane has a lighter background and thicker line (1.6, glow 7 vs 1.15, glow 4); lane names drawn in canvas as UPPERCASE 10 px labels (or in a name column in the V1 layout); lane separators 1 px rgba(255,255,255,.08); playhead through all lanes (playback.js:2178-2266) _(SN2: vibration and suction lanes, 34 px, glow, fill 0.2, 1 px separators, names in a column left of the lanes, playhead through all lanes, D-132; the companion axis lanes Surge … Pitch in 0.7's colours; the picked lane is lighter with a thicker line (1.6, glow 6 vs 1.2, glow 3) (`app/qml/PlayerPage.qml`; tests `lanesFollowTheDevice`, `companionAxisFilesBecomeLanesAndDriveTheAxes`, `theMainCurveShowsThePickedLane`, `scriptWithoutVideoPlaysOnItsClock`))_
+- [x] Lane interaction — click a lane = select that axis for the main curve; Up/Down on the focused lanes canvas cycles editable channels; audio lane is not selectable; aria-label lists lanes (playback.js:2208, 5099-5115) _(SN2: a click on a lane or its name picks it for the main curve (`PlayerController::activeLane`); Up / Down on a focused lane name step through the shown lanes, wrapping; the audio lane is not selectable; the names are buttons for screen readers, checked when picked (tests `theMainCurveShowsThePickedLane`, `scriptWithoutVideoPlaysOnItsClock`))_
+- [ ] Axis legend chips Stroke / Vibration / Suction (+ companion options) — visible when an editable feel axis exists; `aria-pressed`, Left/Right/Up/Down/Home/End move and select (playback.js:2197-2206, 5079-5098) _(partly: the lane-name column is the legend: Stroke, Vibration, Suction and the companion axes, the picked one highlighted and marked checked, Up / Down move and pick; missing: Left / Right / Home / End)_
 - [ ] Companion axis files beside the script (clip.surge/sway/twist/roll/pitch.funscript) show as read lanes and become entries in the Curve select; a missing file removes the entry; "+ Axis…" lists axes without a file; picking one creates a centred axis file (`CreateScriptAxis`) and switches to it (playback.js:2120-2168, 5116-5135) _(partly: `<stem>.surge/sway/twist/roll/pitch.funscript` beside the script are read lanes in the Player in 0.7's order and colours, and drive those axes on a multi-axis device; with a device connected only its axes show (`samn::companion_axis_files`, `PlayerController::axisLanes`; tests `companion axis scripts beside a script…`, `companionAxisFilesBecomeLanesAndDriveTheAxes`, `scriptWithoutVideoPlaysOnItsClock`); missing: the Curve select entries, "+ Axis…" creating an axis file, editing them in the Editor)_
 - [x] Audio Level lane — `GetAudioLevelEnvelope()` (50 ms steps, 0-1) drawn as a mirrored bar waveform (one bar per ~2 CSS px, peak per bar, colour `--axis-audio` default #93aec4, alpha 0.85, label "AUDIO LEVEL"); default ON (localStorage `pb.audioLane`), needs linked video; reloaded when the video/script changes (playback.js:2270-2294, 2556-2575) → SamN2: app/src/audio_level.cpp (decoded by Qt, offset-aware)
-- [ ] Changing axis in Curve select reloads the curve; while editing it re-enters edit mode for the new axis (playback.js:5136-5148)
+- [x] Changing axis in Curve select reloads the curve; while editing it re-enters edit mode for the new axis (playback.js:5136-5148) _(SN2: picking a lane redraws the main curve at once in that lane's colour with its name on the curve; a new script starts on the stroke, a lane that goes away (device change) falls back to it; editing lives in the Editor (D-137), which shows every lane (test `theMainCurveShowsThePickedLane`))_
 
 ### 3.5 Audio Analysis card and Sound Curve
 
