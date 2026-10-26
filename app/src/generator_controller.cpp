@@ -43,6 +43,8 @@ QString Clock(double ms) {
 }  // namespace
 
 GeneratorController::GeneratorController(QObject* parent) : QObject(parent) {
+    // The auto scene follows the marked contact area.
+    connect(this, &GeneratorController::contactChanged, this, &GeneratorController::feelChanged);
     // Events arrive on the worker thread; each one is handed to this object
     // on the UI thread. A destroyed controller drops them (QPointer).
     QPointer<GeneratorController> self(this);
@@ -87,6 +89,12 @@ void GeneratorController::loadSettings() {
         setContactCurve(str("generator.contact_vibration_curve", contact_curve_));
         setOptimizeTarget(str("generator.optimize_target", optimize_target_));
         pos_overlay_ = flag("generator.pos_overlay", pos_overlay_);
+        setFeelDevice(str("generator.feel.device", feel_device_));
+        setSceneFeel(str("generator.feel.scene", scene_feel_));
+        setVibSource(str("generator.feel.vib_source", vib_source_));
+        if (const auto b = s.get("generator.feel.balance"); b.is_number()) setFeelBalance(b.get<int>());
+        vib_follow_ = flag("generator.feel.follow", vib_follow_);
+        show_all_feel_ = flag("generator.feel.show_all", show_all_feel_);
     } catch (const std::exception&) {
         // Unreadable settings: the defaults stay.
     }
@@ -464,6 +472,7 @@ void GeneratorController::setContactClass(const QString& c) {
     contact_class_ = c;
     saveSetting("generator.contact_class", c.toStdString());
     emit optionsChanged();
+    emit feelChanged();
 }
 
 void GeneratorController::setContactSpan(double span) {
@@ -503,6 +512,128 @@ void GeneratorController::setExtraClass(const QString& c) {
     extra_class_ = c;
     saveSetting("generator.extra_class", c.toStdString());
     emit optionsChanged();
+}
+
+namespace {
+const QStringList kFeelDevices{"auto", "neo2", "vibrator", "stroker"};
+const QStringList kSceneFeels{"auto", "", "oral", "intercourse", "breast", "hand"};
+const QStringList kVibSources{"", "sound+contact", "sound"};
+QString SceneTitle(const QString& s) {
+    if (s == QLatin1String("oral")) return QObject::tr("Oral");
+    if (s == QLatin1String("intercourse")) return QObject::tr("Intercourse");
+    if (s == QLatin1String("breast")) return QObject::tr("Breast");
+    if (s == QLatin1String("hand")) return QObject::tr("Hand");
+    return QObject::tr("Classic");
+}
+}  // namespace
+
+void GeneratorController::setFeelDevice(const QString& d) {
+    if (d == feel_device_ || !kFeelDevices.contains(d)) return;
+    feel_device_ = d;
+    saveSetting("generator.feel.device", d.toStdString());
+    emit feelChanged();
+}
+
+void GeneratorController::setConnectedKind(const QString& k) {
+    const QString v = k == QLatin1String("neo2") || k == QLatin1String("vibrator") || k == QLatin1String("stroker") ? k : QString();
+    if (v == connected_kind_) return;
+    connected_kind_ = v;
+    emit feelChanged();
+}
+
+QString GeneratorController::feelKind() const {
+    // 0.7: auto follows the connected device, a Sam Neo 2 without one.
+    if (feel_device_ != QLatin1String("auto")) return feel_device_;
+    return connected_kind_.isEmpty() ? QStringLiteral("neo2") : connected_kind_;
+}
+
+void GeneratorController::setShowAllFeel(bool on) {
+    if (on == show_all_feel_) return;
+    show_all_feel_ = on;
+    saveSetting("generator.feel.show_all", on);
+    emit feelChanged();
+}
+
+void GeneratorController::setSceneFeel(const QString& sc) {
+    if (sc == scene_feel_ || !kSceneFeels.contains(sc)) return;
+    scene_feel_ = sc;
+    saveSetting("generator.feel.scene", sc.toStdString());
+    emit feelChanged();
+}
+
+QString GeneratorController::autoScene() const {
+    // 0.7 sceneFromHints with the contact mark's class (no AI scene type yet),
+    // but only when a contact area is marked: the class defaults to nipples,
+    // and every plain Create would otherwise get the breast feel.
+    if (contact_areas_.empty()) return {};
+    if (contact_class_ == QLatin1String("mouth")) return QStringLiteral("oral");
+    if (contact_class_ == QLatin1String("nipples") || contact_class_ == QLatin1String("breasts")) return QStringLiteral("breast");
+    return {};
+}
+
+void GeneratorController::setFeelBalance(int b) {
+    // 0.7 slider: -100..100 in steps of 10.
+    const int v = int(std::lround(std::clamp(b, -100, 100) / 10.0)) * 10;
+    if (v == feel_balance_) return;
+    feel_balance_ = v;
+    saveSetting("generator.feel.balance", v);
+    emit feelChanged();
+}
+
+void GeneratorController::setVibFollow(bool on) {
+    if (on == vib_follow_) return;
+    vib_follow_ = on;
+    saveSetting("generator.feel.follow", on);
+    emit feelChanged();
+}
+
+void GeneratorController::setVibSource(const QString& src) {
+    if (src == vib_source_ || !kVibSources.contains(src)) return;
+    vib_source_ = src;
+    saveSetting("generator.feel.vib_source", src.toStdString());
+    emit feelChanged();
+}
+
+QString GeneratorController::feelSummary() const {
+    // 0.7 "Sam Neo 2 feel · Oral · mix suction 30% · vibration follows suction".
+    const QString scene = scene_feel_ == QLatin1String("auto") ? autoScene() : scene_feel_;
+    QStringList parts{SceneTitle(scene)};
+    if (feel_balance_ != 0)
+        parts << tr("mix %1 %2%").arg(feel_balance_ > 0 ? tr("suction") : tr("vibration")).arg(std::abs(feel_balance_));
+    if (vib_follow_) parts << tr("vibration follows suction");
+    return parts.join(QStringLiteral(" · "));
+}
+
+QString GeneratorController::feelHint() const {
+    if (show_all_feel_) return {};
+    const QString k = feelKind();
+    if (k == QLatin1String("vibrator"))
+        return tr("Vibrator: contact vibration, or the video's sound (Vibration below). Suction feel hidden.");
+    if (k == QLatin1String("stroker"))
+        return tr("Stroker: the stroke is all it needs — vibration and suction settings hidden.");
+    return {};
+}
+
+bool GeneratorController::applyFeel(const QString& samnPath) {
+    if (feelKind() != QLatin1String("neo2") || samnPath.isEmpty()) return false;
+    const QString scene = scene_feel_ == QLatin1String("auto") ? autoScene() : scene_feel_;
+    const double balance = feel_balance_ / 100.0;
+    // Classic, centre mix and follow off leave the script exactly as before (0.7).
+    if (scene.isEmpty() && !vib_follow_ && feel_balance_ == 0) return false;
+    try {
+        const std::filesystem::path samn(samnPath.toStdU16String());
+        samn::Document doc = samn::LoadDocument(samn);
+        doc.ApplyFeelRecipe(scene.toStdString(), vib_follow_, balance);
+        if (samn::NormalizePlaybackSource(doc.playback_source) == samn::PlaybackAxes) doc.BakeNeoAxes();
+        samn::SaveDocument(samn, doc);
+        // The new .funscript plays the same feel (0.7 SaveFeelSettings).
+        doc.ExportFunscript(funscriptPath());
+    } catch (const std::exception& e) {
+        appendLog(tr("Feel not saved: %1").arg(QString::fromUtf8(e.what())));
+        return false;
+    }
+    appendLog(tr("Sam Neo 2 feel: %1").arg(feelSummary()));
+    return true;
 }
 
 void GeneratorController::setMarkContact(bool v) {
@@ -824,7 +955,10 @@ void GeneratorController::onEvent(const engine::GenerateEvent& e) {
     emit progressChanged();
     emit outputChanged();
     emit stepChanged();
-    if (e.kind == engine::GenerateEventKind::kDone) emit created(output_path_);
+    if (e.kind == engine::GenerateEventKind::kDone) {
+        applyFeel(output_path_);  // 0.7: the feel goes in right after Create
+        emit created(output_path_);
+    }
 }
 
 // 0.7's quality box (Quality Doctor on the actions, the tracker's loss) and
