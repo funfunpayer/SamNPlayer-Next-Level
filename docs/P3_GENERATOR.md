@@ -95,6 +95,7 @@ External plugins may use the same interface out of process (JSON lines on stdin/
 | P3.5 | Backends in C++ (flow, grid LK, region fusion) as checkers for the hybrid check (item 1), not as writers | Python tests ported as C++ tests; benchmark on golden clips |
 | P3.6 | Quality Doctor, contact, scene map, audio check / segments / tempo; metrics as windowed fractions on the detrended signal (GD-14) | Tests ported; Player BPM "From audio" and Speech-Hold get their data |
 | P3.7 | AI inference via ONNX (auto tip, body parts, contact detector) + verified re-acquisition (item 2) | Same detections as 0.7's Python on the sample frames, from C++ |
+| SC-1…SC-6 | Self-checking engine with a fast lane: sample gate, checker signals, window verifier, fast lane, verified repair (`P3_SELF_CHECK_ENGINE.md`); extends P3.5–P3.7 | Each slice's test, then the P3.8 gate |
 | P3.9 | Better detection items 3–6 and the C++ retests, each behind a switch until the benchmark shows it beats 0.7 | Benchmark |
 
 The Generator and the Editor are one mode (Owner 16 Oct, D-137): the same page creates a script and edits it, and a script opened for editing lands there with editing on. The full Editor (dot editing, range tools, Undo, multi-axis, E1–E10) is P4 and is built into that page; P3.3 already edits the Generator's result there.

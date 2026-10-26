@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 26 Oct 2026, Claude, branch `claude/samn2-player-editor-p4` (Player/Editor §3, slice P4: lane picking).
+**Last update:** 26 Oct 2026, Claude, branch `claude/next-project-prep-o1ckxh` (design: self-checking engine with a fast lane, `docs/P3_SELF_CHECK_ENGINE.md`).
 
 ## Rules
 
@@ -129,7 +129,8 @@
 2. **Owner GUI leftovers:** handbook (§12), idle ribbon (§11), donation pages (Manifest §2). Reduced motion ✅ (#120).
 3. **AI Train D-155:** script compare with labels, then golden-clip run (Owner clips).
 4. **Windows CI flakiness** under ctest; diagnostics already run functions alone.
-5. **P3.6** Quality Doctor; Player finish / Svakom / Scene Map view; bug hunt; release.
+5. **Self-checking engine** (`docs/P3_SELF_CHECK_ENGINE.md`, Owner 26 Oct): slices SC-1 sample gate (Hampel, gaps) → SC-2 checker signals in `TrackBox` → SC-3 window verifier → SC-4 fast lane → SC-5 verified repair → SC-6 golden gate. Design only so far; measured on synthetic scenes: 18 of 18 bad windows found, 0 false alarms, verified repair 0.00/0.16 → 1.00.
+6. **P3.6** Quality Doctor; Player finish / Svakom / Scene Map view; bug hunt; release.
 
 ### Handoff note (for the next agent)
 - **Routing:** one theme per agent. Generator Tf/Tj distance on this tip; Look #117 parallel (do not steal Look files for feature work).
