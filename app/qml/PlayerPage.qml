@@ -118,7 +118,15 @@ Item {
     Connections {
         objectName: "frameWatch"
         target: videoOut.videoSink
-        function onVideoFrameChanged() { page.frameSeen = true }
+        function onVideoFrameChanged() {
+            if (!page.frameSeen) ctrl.reportFirstPicture(media.metaData.stringValue(MediaMetaData.VideoCodec))
+            page.frameSeen = true
+        }
+    }
+    // Plays the open video as soon as it is loaded (the package smoke test).
+    function playWhenReady() {
+        if (media.mediaStatus === MediaPlayer.LoadedMedia || media.mediaStatus === MediaPlayer.BufferedMedia) media.play()
+        else media.playWhenLoaded = true
     }
     Timer {
         objectName: "noPictureWatch"

@@ -1268,6 +1268,12 @@ void PlayerController::reportMediaError(int error, const QString& detail) {
     mediaError_ = true;
 }
 
+void PlayerController::reportFirstPicture(const QString& codec) {
+    qInfo().noquote() << QStringLiteral("Video: first picture%1%2")
+                             .arg(codec.isEmpty() ? QString() : QStringLiteral(" (%1)").arg(codec))
+                             .arg(videoName().isEmpty() ? QString() : QStringLiteral(": ") + videoName());
+}
+
 void PlayerController::reportNoPicture(const QString& codec) {
     QString msg = codec.isEmpty() ? tr("No picture: this PC cannot decode the video")
                                   : tr("No picture: this PC cannot decode %1 video").arg(codec);

@@ -308,7 +308,10 @@ ApplicationWindow {
                 opacity: 0
                 scale: 0.96
                 transformOrigin: Item.BottomRight
-                Component.onCompleted: { opacity = 1; scale = 1 }
+                // Test hook (SAMN_SMOKE_PLAY, main.cpp): play the video opened at start.
+    function smokePlay() { win.mode = 0; player.playWhenReady() }
+
+    Component.onCompleted: { opacity = 1; scale = 1 }
                 Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
                 Behavior on scale { NumberAnimation { duration: Theme.animSlow; easing.type: Easing.OutCubic } }
                 // Soft danger wash behind the card.
@@ -361,6 +364,9 @@ ApplicationWindow {
             Shortcut { sequence: "Ctrl+" + (index + 1); onActivated: win.mode = index }
         }
     }
+
+    // Test hook (SAMN_SMOKE_PLAY, main.cpp): play the video opened at start.
+    function smokePlay() { win.mode = 0; player.playWhenReady() }
 
     Component.onCompleted: {
         if (win.mode >= top.modes.length) win.mode = 0  // a plugin mode that is off

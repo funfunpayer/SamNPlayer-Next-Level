@@ -222,6 +222,9 @@ public:
     // The video plays but no frame comes (a codec this PC cannot decode,
     // e.g. AV1 without GPU support); codec as the player names it, or "".
     Q_INVOKABLE void reportNoPicture(const QString& codec);
+    // The first frame of the open video reached the screen: one log line
+    // (which codec, so a decoder problem shows in the log).
+    Q_INVOKABLE void reportFirstPicture(const QString& codec);
     // Tooltip text for the heatmap at a script time: "12.3s · 45%".
     Q_INVOKABLE QString heatTooltip(double ms) const;
     // Bookmarks: at the playhead (video time); name default "Bookmark", 80 chars.

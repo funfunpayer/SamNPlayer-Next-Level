@@ -49,6 +49,9 @@ int main(int argc, char** argv) {
     engine.load(QUrl(QStringLiteral("qrc:/qt/qml/SamN/qml/Main.qml")));
     // A broken interface must fail loudly (the CI smoke test relies on it).
     if (engine.rootObjects().isEmpty()) return 1;
+    // Test hook: SAMN_SMOKE_PLAY=1 plays the video opened at start (the
+    // package smoke test checks that its first picture comes).
+    if (qEnvironmentVariableIsSet("SAMN_SMOKE_PLAY")) QMetaObject::invokeMethod(engine.rootObjects().value(0), "smokePlay");
     // Test hook: SAMN_SCREENSHOT=file.png [SAMN_SCREENSHOT_DELAY_MS] saves the
     // window and quits (used for visual checks with test-pattern media only).
     if (const QString shot = qEnvironmentVariable("SAMN_SCREENSHOT"); !shot.isEmpty()) {
