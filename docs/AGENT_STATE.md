@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 26 Oct 2026, Claude, branch `claude/next-project-prep-o1ckxh` (design: self-checking engine with a fast lane, `docs/P3_SELF_CHECK_ENGINE.md`).
+**Last update:** 26 Oct 2026, Claude, branch `claude/next-self-check-engine` (self-checking engine with a fast lane, `docs/P3_SELF_CHECK_ENGINE.md`).
 
 ## Rules
 
