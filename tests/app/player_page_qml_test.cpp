@@ -203,6 +203,24 @@ private:
         QTRY_VERIFY(named(page, "axisLane_twist"));
         QVERIFY(named(page, "axisLane_twist")->isVisible());
         QVERIFY(named(page, "axisLane_twist")->height() >= 34);
+        // 0.7 legend chips: a click on a lane's name shows it in the main curve;
+        // Up / Down move on (two lanes: stroke and twist, wrapping).
+        auto* twistName = named(page, "laneName_twist");
+        QVERIFY(twistName && twistName->isVisible());
+        QTest::mouseClick(page->window(), Qt::LeftButton, {},
+                          twistName->mapToScene(QPointF(twistName->width() / 2, twistName->height() / 2)).toPoint());
+        QTRY_COMPARE(ctrl->activeLane(), QStringLiteral("twist"));
+        QCOMPARE(named(page, "mainCurve")->property("lane").toString(), QStringLiteral("twist"));
+        QCOMPARE(named(page, "mainCurveLane")->property("text").toString(), QStringLiteral("Twist"));
+        QVERIFY(twistName->property("active").toBool());
+        QTest::keyClick(page->window(), Qt::Key_Down);
+        QTRY_COMPARE(ctrl->activeLane(), QStringLiteral("stroke"));
+        QCOMPARE(named(page, "mainCurve")->property("lane").toString(), QStringLiteral("stroke"));
+        // A click on the lane itself picks it too (0.7).
+        auto* twistLane = named(page, "axisLane_twist");
+        QTest::mouseClick(page->window(), Qt::LeftButton, {},
+                          twistLane->mapToScene(QPointF(twistLane->width() / 2, twistLane->height() / 2)).toPoint());
+        QTRY_COMPARE(ctrl->activeLane(), QStringLiteral("twist"));
         QVERIFY(page->property("scriptOnly").toBool());
         QCOMPARE(clock->property("duration").toLongLong(), qint64(6000));
 

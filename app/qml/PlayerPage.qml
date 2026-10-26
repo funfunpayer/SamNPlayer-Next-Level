@@ -48,6 +48,14 @@ Item {
     function axisTitle(axis) {
         return { surge: qsTr("Surge"), sway: qsTr("Sway"), twist: qsTr("Twist"), roll: qsTr("Roll"), pitch: qsTr("Pitch") }[axis] || axis
     }
+    function laneTitle(lane) {
+        return lane === "vibration" ? qsTr("Vibration") : lane === "suction" ? qsTr("Suction")
+             : lane === "stroke" ? qsTr("Stroke") : axisTitle(lane)
+    }
+    function laneColor(lane) {
+        return lane === "vibration" ? Theme.laneVibration : lane === "suction" ? Theme.laneSuction
+             : lane === "stroke" ? Theme.orange : axisColor(lane)
+    }
     function axisColor(axis) {
         return { surge: "#e5c07b", sway: "#98c379", twist: "#e06c9f", roll: "#61afef", pitch: "#d19a66" }[axis] || Theme.textDim
     }
@@ -712,11 +720,16 @@ Item {
                     },
                     // 0.7 Extended-O trigger (key E): shown while Extended-O is on,
                     // usable while playing and not already running.
-                    FlowButton {
+                    // An icon, so the transport keeps its room (a text button pushed
+                    // Stop under the volume at 1400 px).
+                    IconButton {
                         objectName: "extendedOButton"
+                        width: 36; height: 36
+                        anchors.verticalCenter: parent.verticalCenter
                         visible: ctrl.output.extendedOEnabled
                         enabled: ctrl.output.canTriggerExtendedO
-                        text: qsTr("Extended-O")
+                        opacity: enabled ? 1 : 0.4
+                        icon: "effects"; tip: qsTr("Extended-O (E)")
                         onClicked: ctrl.output.triggerExtendedO()
                     }
                 ]
@@ -751,14 +764,33 @@ Item {
                 visible: lanes.visible
                 x: 16; y: 46; width: 108
                 Item { width: 1; height: ruler.height; visible: ruler.visible }
-                LaneName { name: qsTr("Stroke"); dot: Theme.orange; height: curve.height; visible: ctrl.showStrokeLane }
-                LaneName { name: qsTr("Vibration"); dot: Theme.laneVibration; height: vibLane.height; visible: ctrl.showVibrationLane }
-                LaneName { name: qsTr("Suction"); dot: Theme.laneSuction; height: sucLane.height; visible: ctrl.showSuctionLane }
+                // 0.7 legend chips: a click picks the lane the main curve shows.
+                LaneName {
+                    objectName: "laneName_stroke"
+                    name: qsTr("Stroke"); dot: Theme.orange; height: curve.height; visible: ctrl.showStrokeLane
+                    selectable: ctrl.laneChoices.length > 1; active: selectable && ctrl.activeLane === "stroke"
+                    onPicked: ctrl.activeLane = "stroke"; onStepped: (d) => ctrl.stepActiveLane(d)
+                }
+                LaneName {
+                    objectName: "laneName_vibration"
+                    name: qsTr("Vibration"); dot: Theme.laneVibration; height: vibLane.height; visible: ctrl.showVibrationLane
+                    selectable: true; active: ctrl.activeLane === "vibration"
+                    onPicked: ctrl.activeLane = "vibration"; onStepped: (d) => ctrl.stepActiveLane(d)
+                }
+                LaneName {
+                    objectName: "laneName_suction"
+                    name: qsTr("Suction"); dot: Theme.laneSuction; height: sucLane.height; visible: ctrl.showSuctionLane
+                    selectable: true; active: ctrl.activeLane === "suction"
+                    onPicked: ctrl.activeLane = "suction"; onStepped: (d) => ctrl.stepActiveLane(d)
+                }
                 Repeater {
                     model: ctrl.axisLanes
                     delegate: LaneName {
                         required property string modelData
+                        objectName: "laneName_" + modelData
                         name: page.axisTitle(modelData); dot: page.axisColor(modelData); height: lanes.laneH
+                        selectable: true; active: ctrl.activeLane === modelData
+                        onPicked: ctrl.activeLane = modelData; onStepped: (d) => ctrl.stepActiveLane(d)
                     }
                 }
                 LaneName { name: qsTr("Audio Level"); dot: "#93aec4"; height: audioLane.height; visible: audioLane.visible }
@@ -792,7 +824,9 @@ Item {
                     width: parent.width
                     visible: ctrl.showStrokeLane || !ctrl.hasScript
                     height: Math.max(60, parent.height - lanes.extraLanes * lanes.laneH - (audioLane.visible ? lanes.audioH : 0) - lanes.fixedH)
-                    lane: "stroke"; lineColor: Theme.orange; showGrid: true
+                    // The main curve shows the picked lane (0.7 Curve select / legend).
+                    objectName: "mainCurve"
+                    lane: ctrl.activeLane; lineColor: page.laneColor(ctrl.activeLane); showGrid: true
                     // Sharp Play wave: soft bloom, not a muddy halo.
                     lineWidth: 1.55; glow: 4.5; fill: 0.12
                     markerStartMs: ctrl.markerStartMs; markerEndMs: ctrl.markerEndMs
@@ -817,15 +851,29 @@ Item {
                         visible: curve.empty
                         text: qsTr("No script loaded"); color: Theme.textMuted; font.family: Theme.fontSoft
                     }
+                    // Another lane picked: its name on the main curve (the chip beside
+                    // the curve still reads "Stroke" and brings the stroke back).
+                    Text {
+                        objectName: "mainCurveLane"
+                        textFormat: Text.PlainText
+                        x: 8; y: 6
+                        visible: ctrl.activeLane !== "stroke"
+                        text: page.laneTitle(ctrl.activeLane)
+                        color: page.laneColor(ctrl.activeLane); font.family: Theme.fontSoft; font.pixelSize: 12; font.bold: true
+                    }
                 }
                 CurveItem {
                     id: vibLane
                     width: parent.width; height: lanes.laneH
                     visible: ctrl.showVibrationLane  // D-132: the script's channels, or the device's
                     lane: "vibration"; lineColor: Theme.laneVibration
-                    lineWidth: 1.2; glow: 3; fill: 0.14
+                    // 0.7: the picked lane is brighter and thicker.
+                    lineWidth: ctrl.activeLane === "vibration" ? 1.6 : 1.2; glow: ctrl.activeLane === "vibration" ? 6 : 3; fill: 0.14
+                    Rectangle { anchors.fill: parent; z: -1; color: Qt.rgba(1, 1, 1, 0.045); visible: ctrl.activeLane === "vibration" }
                     viewStartMs: ctrl.viewStartMs; viewEndMs: ctrl.viewEndMs
                     Component.onCompleted: ctrl.attachCurve(vibLane)
+                    // 0.7: a click on a lane picks it for the main curve.
+                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: ctrl.activeLane = "vibration" }
                     WheelHandler {
                         acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
                         onWheel: (e) => ctrl.zoomAt(e.angleDelta.y > 0 ? 1.25 : 1 / 1.25, point.position.x / parent.width)
@@ -837,9 +885,12 @@ Item {
                     width: parent.width; height: lanes.laneH
                     visible: ctrl.showSuctionLane
                     lane: "suction"; lineColor: Theme.laneSuction
-                    lineWidth: 1.2; glow: 3; fill: 0.14
+                    lineWidth: ctrl.activeLane === "suction" ? 1.6 : 1.2; glow: ctrl.activeLane === "suction" ? 6 : 3; fill: 0.14
+                    Rectangle { anchors.fill: parent; z: -1; color: Qt.rgba(1, 1, 1, 0.045); visible: ctrl.activeLane === "suction" }
                     viewStartMs: ctrl.viewStartMs; viewEndMs: ctrl.viewEndMs
                     Component.onCompleted: ctrl.attachCurve(sucLane)
+                    // 0.7: a click on a lane picks it for the main curve.
+                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: ctrl.activeLane = "suction" }
                     WheelHandler {
                         acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
                         onWheel: (e) => ctrl.zoomAt(e.angleDelta.y > 0 ? 1.25 : 1 / 1.25, point.position.x / parent.width)
@@ -855,9 +906,11 @@ Item {
                         objectName: "axisLane_" + modelData
                         width: lanes.width; height: lanes.laneH
                         lane: modelData; lineColor: page.axisColor(modelData)
-                        lineWidth: 1.2; glow: 3; fill: 0.14
+                        lineWidth: ctrl.activeLane === modelData ? 1.6 : 1.2; glow: ctrl.activeLane === modelData ? 6 : 3; fill: 0.14
+                        Rectangle { anchors.fill: parent; z: -1; color: Qt.rgba(1, 1, 1, 0.045); visible: ctrl.activeLane === axisLane.modelData }
                         viewStartMs: ctrl.viewStartMs; viewEndMs: ctrl.viewEndMs
                         Component.onCompleted: ctrl.attachCurve(axisLane)
+                        MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: ctrl.activeLane = axisLane.modelData }
                         WheelHandler {
                             acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
                             onWheel: (e) => ctrl.zoomAt(e.angleDelta.y > 0 ? 1.25 : 1 / 1.25, point.position.x / axisLane.width)
