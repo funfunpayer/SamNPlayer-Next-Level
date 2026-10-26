@@ -33,9 +33,9 @@ echo "$sha1  $tmp/ffmpeg.tar.gz" | sha1sum -c -
 tar -xzf "$tmp/ffmpeg.tar.gz" -C "$tmp"
 cd "$tmp/FFmpeg-$version"
 
-# Windows-style paths in the .pc file, so cl.exe gets -IC:/... not /c/...
-export PKG_CONFIG_PATH
-PKG_CONFIG_PATH=$(cygpath -m "$deps/lib/pkgconfig")
+# POSIX form: pkg-config splits PKG_CONFIG_PATH at ':', so "D:/a/..." would
+# become "D" and "/a/..."; MSYS2 converts the -I/-L paths for cl.exe itself.
+export PKG_CONFIG_PATH="$deps/lib/pkgconfig"
 # shellcheck disable=SC2086
 ./configure --prefix="$out" $qt_options --enable-libdav1d --toolchain=msvc --enable-shared --disable-static
 make -j"$(nproc)"

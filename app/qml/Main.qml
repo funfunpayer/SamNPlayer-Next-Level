@@ -7,12 +7,19 @@ ApplicationWindow {
     id: win
     width: 1440; height: 900
     minimumWidth: 960; minimumHeight: 640
-    visible: true
+    // Shown by main.cpp once ready (the loading screen is up until then).
+    visible: false
     title: "SamNPlayer Next"
     color: Theme.bgBottom
     // Test hook: SAMN_MODE=1..4 opens that mode (the order of the tabs).
     property int mode: startMode
     readonly property var modeNames: top.modes.map(m => m.name)
+    readonly property var generator: generatorLoader.item
+    readonly property var training: trainingLoader.item
+    // Everything there: the pages and the background ribbons. Until then the
+    // loading screen shows, so the window never appears piece by piece.
+    readonly property bool ready: generatorLoader.status === Loader.Ready && trainingLoader.status === Loader.Ready
+                                  && silkTop.status !== Image.Loading && silkBottom.status !== Image.Loading
 
     // Background: near-black navy with blue / orange light ribbons in the
     // top-right and bottom-left corners (0.7 assets).
@@ -23,6 +30,9 @@ ApplicationWindow {
             GradientStop { position: 1; color: Theme.bgBottom }
         }
     }
+    // The ribbons are PNGs rendered once from bg-top.svg / bg-bottom.svg
+    // (QSvgRenderer, 2000 px wide): rasterizing the SVGs at every start took
+    // half a second and they popped in late (Owner 26 Oct).
     // The silk bands of the Flow look in their corners, large and slowly
     // drifting: blue from the top right, orange from the bottom left, behind
     // every mode (Owner, 19 Oct: as strong as on the Training stage).
@@ -32,7 +42,7 @@ ApplicationWindow {
         anchors.right: parent.right; anchors.top: parent.top
         anchors.rightMargin: -parent.width * 0.04 + driftX; anchors.topMargin: -parent.height * 0.03 + driftY
         width: parent.width * 0.66; fillMode: Image.PreserveAspectFit
-        source: "assets/bg-top.svg"; sourceSize.width: 2000
+        source: "assets/bg-top.png"; sourceSize.width: 2000
         asynchronous: true
         opacity: 0.92
         property real driftX: 0
@@ -58,7 +68,7 @@ ApplicationWindow {
         anchors.left: parent.left; anchors.bottom: parent.bottom
         anchors.leftMargin: -parent.width * 0.03 + driftX; anchors.bottomMargin: -parent.height * 0.02 + driftY
         width: parent.width * 0.58; fillMode: Image.PreserveAspectFit
-        source: "assets/bg-bottom.svg"; sourceSize.width: 2000
+        source: "assets/bg-bottom.png"; sourceSize.width: 2000
         asynchronous: true
         opacity: 0.88
         property real driftX: 0
@@ -111,14 +121,26 @@ ApplicationWindow {
             onEditRequested: (script, video, scenes) => { win.mode = 1; generator.editScript(script, video, scenes) }
         }
         // Generator and Editor are one mode: the Generator is the Editor (D-137).
-        GeneratorPage {
-            id: generator
-            overlayOpen: settingsPage.open
-            playerVideoUrl: player.controller.videoUrl
-            // The result opens in the Generator's Editor; "Play in the Player" hands it over (D-144).
-            onReviewRequested: (path) => { win.mode = 0; player.controller.openPath(path) }
+        // Generator and Training are built in the background (Owner 26 Oct:
+        // the start was slow); the window shows once they are there.
+        Loader {
+            id: generatorLoader
+            objectName: "generatorLoader"
+            asynchronous: true
+            sourceComponent: GeneratorPage {
+                overlayOpen: settingsPage.open
+                device: deviceCtl
+                playerVideoUrl: player.controller.videoUrl
+                // The result opens in the Generator's Editor; "Play in the Player" hands it over (D-144).
+                onReviewRequested: (path) => { win.mode = 0; player.controller.openPath(path) }
+            }
         }
-        TrainingPage { id: training; overlayOpen: settingsPage.open; device: deviceCtl; autostart: trainingStart }
+        Loader {
+            id: trainingLoader
+            objectName: "trainingLoader"
+            asynchronous: true
+            sourceComponent: TrainingPage { overlayOpen: settingsPage.open; device: deviceCtl; autostart: trainingStart }
+        }
         // Plugin modes (D-155): loaded only while switched on in Settings.
         Loader {
             id: aiTrain
@@ -308,10 +330,7 @@ ApplicationWindow {
                 opacity: 0
                 scale: 0.96
                 transformOrigin: Item.BottomRight
-                // Test hook (SAMN_SMOKE_PLAY, main.cpp): play the video opened at start.
-    function smokePlay() { win.mode = 0; player.playWhenReady() }
-
-    Component.onCompleted: { opacity = 1; scale = 1 }
+                Component.onCompleted: { opacity = 1; scale = 1 }
                 Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
                 Behavior on scale { NumberAnimation { duration: Theme.animSlow; easing.type: Easing.OutCubic } }
                 // Soft danger wash behind the card.

@@ -362,6 +362,73 @@ private slots:
         }
     }
 
+    // G3 (0.7 gen_feel.js): the feel follows the device; the Sam Neo 2 feel
+    // goes into the new script right after Create, the default changes nothing.
+    void theNeoFeelGoesIntoTheNewScript() {
+        GeneratorController g;
+        QCOMPARE(g.feelDevice(), QStringLiteral("auto"));
+        QCOMPARE(g.feelKind(), QStringLiteral("neo2"));  // nothing connected
+        g.setConnectedKind("vibrator");
+        QCOMPARE(g.feelKind(), QStringLiteral("vibrator"));
+        QVERIFY(!g.feelHint().isEmpty());
+        g.setFeelDevice("nonsense");
+        QCOMPARE(g.feelDevice(), QStringLiteral("auto"));
+        g.setConnectedKind("");
+        g.setFeelBalance(34);  // steps of 10
+        QCOMPARE(g.feelBalance(), 30);
+        g.setFeelBalance(500);
+        QCOMPARE(g.feelBalance(), 100);
+        g.setFeelBalance(0);
+        // Auto scene only from a marked contact area.
+        QCOMPARE(g.autoScene(), QString());
+
+        QTemporaryDir own;
+        const QString video = own.filePath("n.mp4");
+        clips::WriteMoving(std::filesystem::path(video.toStdU16String()), 2, 80.0, 1.0);
+        QVERIFY(g.openVideo(video));
+        g.setBox(QRect(100, 40, 120, 160));
+        QSignalSpy created(&g, &GeneratorController::created);
+        QVERIFY(g.create());
+        QTRY_COMPARE_WITH_TIMEOUT(created.count(), 1, 60000);
+        const auto samnPath = std::filesystem::path(own.filePath("n.samn").toStdU16String());
+        samn::Document d = samn::LoadDocument(samnPath);
+        QVERIFY(d.recipe.scene_feel.empty());
+        QVERIFY(!d.recipe.vibration_follows_suction);
+        QCOMPARE(d.recipe.feel_balance, 0.0);
+        QVERIFY(!g.log().join('\n').contains("Sam Neo 2 feel"));
+
+        g.setSceneFeel("oral");
+        g.setFeelBalance(30);
+        g.setVibFollow(true);
+        QVERIFY(g.feelSummary().contains("Oral"));
+        QVERIFY(g.create(true));
+        QTRY_COMPARE_WITH_TIMEOUT(created.count(), 2, 60000);
+        QCOMPARE(created.last().first().toString(), own.filePath("n.samn"));
+        d = samn::LoadDocument(samnPath);
+        QCOMPARE(QString::fromStdString(d.recipe.scene_feel), QStringLiteral("oral"));
+        QVERIFY(d.recipe.vibration_follows_suction);
+        QCOMPARE(d.recipe.feel_balance, 0.3);
+        QVERIFY(g.log().join('\n').contains("Sam Neo 2 feel"));
+        QVERIFY(QFileInfo(own.filePath("n.funscript")).size() > 0);
+
+        // Another device: the Neo feel is not written.
+        g.setFeelDevice("stroker");
+        QVERIFY(!g.applyFeel(own.filePath("n.samn")));
+        // Remembered.
+        {
+            GeneratorController again;
+            QCOMPARE(again.feelDevice(), QStringLiteral("stroker"));
+            QCOMPARE(again.sceneFeel(), QStringLiteral("oral"));
+            QCOMPARE(again.feelBalance(), 30);
+            QVERIFY(again.vibFollow());
+        }
+        // Back to the defaults for the other tests.
+        g.setFeelDevice("auto");
+        g.setSceneFeel("auto");
+        g.setFeelBalance(0);
+        g.setVibFollow(false);
+    }
+
     void findTipProposesTheBoxAndCandidates() {
         GeneratorController g;
         QVERIFY(!g.findTip());  // no video

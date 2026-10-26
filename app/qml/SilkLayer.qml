@@ -18,7 +18,7 @@ Item {
     // drift never shows an edge.
     Image {
         id: top
-        source: "assets/bg-top.svg"
+        source: "assets/bg-top.png"
         sourceSize.width: 1400
         fillMode: Image.PreserveAspectFit
         width: root.width * 1.04; height: root.height * 0.9
@@ -48,7 +48,7 @@ Item {
     }
     Image {
         id: bottom
-        source: "assets/bg-bottom.svg"
+        source: "assets/bg-bottom.png"
         sourceSize.width: 1200
         fillMode: Image.PreserveAspectFit
         width: root.width * 0.94; height: root.height * 0.85
