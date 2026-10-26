@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls.Basic as C
 import QtQuick.Dialogs
 import QtQuick.Layouts
 import QtMultimedia
@@ -103,6 +104,15 @@ Item {
         text: qsTr("Invert the whole %1 curve? (Undo can bring it back.)").arg(page.laneTitle(edit.activeLane))
         buttons: MessageDialog.Ok | MessageDialog.Cancel
         onAccepted: edit.invert()
+    }
+    // The range tools, by name (the icon row and the tests call this).
+    function rangeTool(name) {
+        if (name === "tool_delete") edit.deleteRange()
+        else if (name === "tool_cap") edit.capSpeed(0)
+        else if (name === "tool_softer") edit.scaleRange(0.8, toolsMenu.softEdges)
+        else if (name === "tool_stronger") edit.scaleRange(1.25, toolsMenu.softEdges)
+        else if (name === "tool_simplify") edit.simplifyRange(2)
+        else if (name === "tool_invert") { if (edit.hasMarker) edit.invert(); else invertAllDialog.open() }
     }
     function laneTitle(lane) {
         return lane === "vibration" ? qsTr("Vibration") : lane === "suction" ? qsTr("Suction") : qsTr("Stroke")
@@ -837,12 +847,6 @@ Item {
                             onClicked: edit.redo()
                         }
                         Item { Layout.fillWidth: true }
-                        Text {
-                            textFormat: Text.PlainText
-                            visible: edit.hasScript
-                            text: edit.markerText
-                            color: edit.hasMarker ? Theme.cyan : Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
-                        }
                         IconButton {
                             objectName: "zoomMarker"; icon: "search"; tip: qsTr("Zoom to the marked range")
                             visible: edit.hasMarker; onClicked: edit.zoomToMarker()
@@ -851,21 +855,129 @@ Item {
                             objectName: "showAll"; icon: "timeline"; tip: qsTr("Show everything")
                             visible: edit.zoomed; onClicked: edit.showAll()
                         }
-                        // Cock Hero / Fap Hero: one stroke per beat of the
-                        // video's beat bar; works without a script too.
-                        FlowButton {
-                            objectName: "tool_beatbar"
-                            visible: gen.hasVideo
-                            enabled: !edit.busy && !gen.running
-                            text: edit.busy && edit.progress > 0 ? qsTr("Beat bar %1 %").arg(edit.progress) : qsTr("Stroke from the beat bar")
-                            icon: "waveform"
-                            onClicked: edit.strokeFromBeatBar()
-                        }
                         FlowButton {
                             objectName: "cancelTool"
                             visible: edit.busy
-                            text: qsTr("Cancel")
+                            // The running tool's progress shows here while the menu is shut.
+                            text: edit.progress > 0 ? qsTr("Cancel · %1 %").arg(edit.progress) : qsTr("Cancel")
                             onClicked: edit.cancelTool()
+                        }
+                        // The less frequent tools (whole lanes, sound, beat bar, snap) sit
+                        // in one menu so the lanes keep their height (Owner, 26 Oct).
+                        FlowButton {
+                            id: toolsButton
+                            objectName: "toolsButton"
+                            text: qsTr("Tools…"); icon: "sliders"
+                            checked: toolsMenu.visible
+                            onClicked: toolsMenu.visible ? toolsMenu.close() : toolsMenu.open()
+                            C.Popup {
+                                id: toolsMenu
+                                objectName: "toolsMenu"
+                                y: toolsButton.height + 6
+                                x: toolsButton.width - width
+                                width: 400
+                                padding: 14
+                                margins: 8  // stays inside the window (moves up when low)
+                                closePolicy: C.Popup.CloseOnEscape | C.Popup.CloseOnPressOutsideParent
+                                property alias softEdges: softEdges.checked
+                                background: Rectangle { color: "#0a1a2e"; border.color: Theme.cardBorder; radius: 14 }
+                                contentItem: ColumnLayout {
+                                    spacing: 10
+                                    Text {
+                                        textFormat: Text.PlainText
+                                        text: qsTr("Whole lanes (one undo step each)")
+                                        color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                                    }
+                                    // 0.8 "Optimize for" (D-156): fill and heal the stroke for any
+                                    // device, or also write the Sam Neo 2 feel.
+                                    RowLayout {
+                                        spacing: 6
+                                        enabled: edit.hasScript && !edit.busy && !gen.running
+                                        FlowCombo {
+                                            id: optimizeTarget
+                                            objectName: "optimizeTarget"
+                                            Layout.preferredWidth: 140; Layout.preferredHeight: 36
+                                            readonly property var targets: ["general", "neo2"]
+                                            model: [qsTr("Any device"), qsTr("Sam Neo 2")]
+                                        }
+                                        FlowButton {
+                                            objectName: "tool_optimize"
+                                            text: qsTr("Optimize for"); icon: "sliders"
+                                            onClicked: { toolsMenu.close(); edit.optimizeFor(optimizeTarget.targets[optimizeTarget.currentIndex]) }
+                                        }
+                                    }
+                                    Flow {
+                                        Layout.fillWidth: true; spacing: 6
+                                        enabled: edit.hasScript && !edit.busy && !gen.running
+                                        FlowButton {
+                                            objectName: "tool_axes"
+                                            text: qsTr("Vibration & suction from the stroke"); icon: "effects"
+                                            onClicked: { toolsMenu.close(); edit.axesFromStroke() }
+                                        }
+                                        // 0.7: an empty feel lane starts with the stroke's times at 0.
+                                        FlowButton {
+                                            objectName: "tool_addVibration"
+                                            visible: edit.hasScript && edit.lanes.indexOf("vibration") < 0
+                                            text: qsTr("+ Vibration lane"); icon: "plus"
+                                            onClicked: { toolsMenu.close(); edit.addLane("vibration") }
+                                        }
+                                        FlowButton {
+                                            objectName: "tool_addSuction"
+                                            visible: edit.hasScript && edit.lanes.indexOf("suction") < 0
+                                            text: qsTr("+ Suction lane"); icon: "plus"
+                                            onClicked: { toolsMenu.close(); edit.addLane("suction") }
+                                        }
+                                    }
+                                    RowLayout {
+                                        spacing: 8
+                                        enabled: edit.hasScript && !edit.busy && !gen.running
+                                        FlowButton {
+                                            objectName: "tool_sound"
+                                            text: qsTr("Vibration from the sound"); icon: "audio"
+                                            enabled: gen.hasVideo
+                                            onClicked: { toolsMenu.close(); edit.vibrationFromSound(keepContact.checked) }
+                                        }
+                                        FlowToggle { id: keepContact; objectName: "keepContact"; checked: false }
+                                        Text { textFormat: Text.PlainText; text: qsTr("Keep contact vibration"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
+                                    }
+                                    // Cock Hero / Fap Hero: one stroke per beat of the video's
+                                    // beat bar; works without a script too.
+                                    FlowButton {
+                                        objectName: "tool_beatbar"
+                                        visible: gen.hasVideo
+                                        enabled: !edit.busy && !gen.running
+                                        text: qsTr("Stroke from the beat bar"); icon: "waveform"
+                                        onClicked: { toolsMenu.close(); edit.strokeFromBeatBar() }
+                                    }
+                                    Rectangle { Layout.fillWidth: true; height: 1; color: Theme.cardBorder }
+                                    Text {
+                                        textFormat: Text.PlainText
+                                        text: qsTr("Range tools and drawing")
+                                        color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                                    }
+                                    RowLayout {
+                                        spacing: 6
+                                        FlowToggle { id: softEdges; objectName: "softEdges"; checked: true }
+                                        Text { textFormat: Text.PlainText; text: qsTr("Soft edges (Softer / Stronger)"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
+                                    }
+                                    // FPS snap (0.7 FPS-Snap): new and dragged points land on frame boundaries.
+                                    RowLayout {
+                                        spacing: 6
+                                        Text { textFormat: Text.PlainText; text: qsTr("Snap"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
+                                        FlowSlider {
+                                            objectName: "fpsSnap"
+                                            from: 0; to: 60; Layout.fillWidth: true
+                                            value: edit.fpsSnap
+                                            onMoved: (v) => edit.fpsSnap = Math.round(v)
+                                        }
+                                        Text {
+                                            textFormat: Text.PlainText
+                                            text: edit.fpsSnap > 0 ? qsTr("%1 fps").arg(Math.round(edit.fpsSnap)) : qsTr("off")
+                                            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                                        }
+                                    }
+                                }
+                            }
                         }
                         FlowButton {
                             objectName: "openScript"
@@ -873,87 +985,39 @@ Item {
                             onClicked: scriptDialog.open()
                         }
                     }
-                    // Range tools on the lane last touched (0.7 Play edit tools).
-                    Flow {
-                        Layout.fillWidth: true; spacing: 6
+                    // Range tools on the lane last touched (0.7 Play edit tools), as
+                    // icons with tooltips; they work on the marked range.
+                    RowLayout {
+                        Layout.fillWidth: true; spacing: 4
                         visible: edit.hasScript
-                        FlowButton { objectName: "tool_delete"; text: qsTr("Delete"); icon: "trash"; enabled: edit.hasMarker; onClicked: edit.deleteRange() }
-                        FlowButton { objectName: "tool_cap"; text: qsTr("Cap speed"); icon: "limits"; enabled: edit.hasMarker; onClicked: edit.capSpeed(0) }
-                        FlowButton { objectName: "tool_softer"; text: qsTr("Softer"); icon: "minus"; enabled: edit.hasMarker; onClicked: edit.scaleRange(0.8, softEdges.checked) }
-                        FlowButton { objectName: "tool_stronger"; text: qsTr("Stronger"); icon: "plus"; enabled: edit.hasMarker; onClicked: edit.scaleRange(1.25, softEdges.checked) }
-                        FlowButton { objectName: "tool_simplify"; text: qsTr("Simplify"); icon: "curve"; enabled: edit.hasMarker; onClicked: edit.simplifyRange(2) }
-                        FlowButton { objectName: "tool_invert"; text: edit.hasMarker ? qsTr("Invert range") : qsTr("Invert all"); icon: "invert"; onClicked: edit.hasMarker ? edit.invert() : invertAllDialog.open() }
-                        RowLayout {
-                            spacing: 6
-                            FlowToggle { id: softEdges; objectName: "softEdges"; checked: true }
-                            Text { textFormat: Text.PlainText; text: qsTr("Soft edges"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
-                        }
-                        // FPS snap (0.7 FPS-Snap): new and dragged points land on frame boundaries.
-                        RowLayout {
-                            spacing: 6
-                            Text { textFormat: Text.PlainText; text: qsTr("Snap"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
-                            FlowSlider {
-                                objectName: "fpsSnap"
-                                from: 0; to: 60; Layout.preferredWidth: 110
-                                value: edit.fpsSnap
-                                onMoved: (v) => edit.fpsSnap = Math.round(v)
-                            }
-                            Text {
-                                textFormat: Text.PlainText
-                                text: edit.fpsSnap > 0 ? qsTr("%1 fps").arg(Math.round(edit.fpsSnap)) : qsTr("off")
-                                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                        Repeater {
+                            model: [
+                                { key: "tool_delete", icon: "trash", tip: qsTr("Delete the marked points"), needsMark: true },
+                                { key: "tool_cap", icon: "limits", tip: qsTr("Cap speed in the marked range"), needsMark: true },
+                                { key: "tool_softer", icon: "minus", tip: qsTr("Softer: smaller strokes in the marked range"), needsMark: true },
+                                { key: "tool_stronger", icon: "plus", tip: qsTr("Stronger: bigger strokes in the marked range"), needsMark: true },
+                                { key: "tool_simplify", icon: "curve", tip: qsTr("Simplify the marked range"), needsMark: true },
+                                { key: "tool_invert", icon: "invert", tip: "", needsMark: false }
+                            ]
+                            delegate: IconButton {
+                                required property var modelData
+                                objectName: modelData.key
+                                width: 36; height: 36
+                                icon: modelData.icon
+                                tip: modelData.key === "tool_invert"
+                                     ? (edit.hasMarker ? qsTr("Invert range") : qsTr("Invert all"))
+                                     : modelData.tip
+                                enabled: !modelData.needsMark || edit.hasMarker
+                                opacity: enabled ? 1 : 0.4
+                                onClicked: page.rangeTool(modelData.key)
                             }
                         }
-                    }
-                    // Create tools: whole lanes from the stroke or the sound
-                    // (0.7 bake and "Write as vibration curve"; one undo step each).
-                    Flow {
-                        Layout.fillWidth: true; spacing: 6
-                        visible: edit.hasScript
-                        enabled: !edit.busy && !gen.running
-                        // 0.8 "Optimize for" (D-156): fill and heal the stroke for any
-                        // device, or also write the Sam Neo 2 feel (contact vibration,
-                        // vibration and suction).
-                        FlowCombo {
-                            id: optimizeTarget
-                            objectName: "optimizeTarget"
-                            width: 130; height: 36
-                            readonly property var targets: ["general", "neo2"]
-                            model: [qsTr("Any device"), qsTr("Sam Neo 2")]
-                        }
-                        FlowButton {
-                            objectName: "tool_optimize"
-                            text: qsTr("Optimize for"); icon: "sliders"
-                            onClicked: edit.optimizeFor(optimizeTarget.targets[optimizeTarget.currentIndex])
-                        }
-                        FlowButton {
-                            objectName: "tool_axes"
-                            text: qsTr("Vibration & suction from the stroke"); icon: "effects"
-                            onClicked: edit.axesFromStroke()
-                        }
-                        // 0.7: an empty feel lane starts with the stroke's times at 0.
-                        FlowButton {
-                            objectName: "tool_addVibration"
-                            visible: edit.hasScript && edit.lanes.indexOf("vibration") < 0
-                            text: qsTr("+ Vibration lane"); icon: "plus"
-                            onClicked: edit.addLane("vibration")
-                        }
-                        FlowButton {
-                            objectName: "tool_addSuction"
-                            visible: edit.hasScript && edit.lanes.indexOf("suction") < 0
-                            text: qsTr("+ Suction lane"); icon: "plus"
-                            onClicked: edit.addLane("suction")
-                        }
-                        FlowButton {
-                            objectName: "tool_sound"
-                            text: edit.busy ? qsTr("Reading the sound…") : qsTr("Vibration from the sound"); icon: "audio"
-                            enabled: gen.hasVideo
-                            onClicked: edit.vibrationFromSound(keepContact.checked)
-                        }
-                        RowLayout {
-                            spacing: 6
-                            FlowToggle { id: keepContact; objectName: "keepContact"; checked: false }
-                            Text { textFormat: Text.PlainText; text: qsTr("Keep contact vibration"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
+                        Item { Layout.fillWidth: true }
+                        Text {
+                            objectName: "markerText"
+                            textFormat: Text.PlainText
+                            text: edit.markerText
+                            color: edit.hasMarker ? Theme.cyan : Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
                         }
                     }
                     // Drag on the ruler marks a range; a click clears it.
@@ -990,6 +1054,8 @@ Item {
                                 objectName: "lane_" + modelData
                                 Layout.fillWidth: true; Layout.fillHeight: true
                                 Layout.preferredHeight: modelData === "stroke" ? 3 : 1
+                                // 0.7: feel lanes 34 px, so their dots can be drawn.
+                                Layout.minimumHeight: modelData === "stroke" ? 60 : 34
                                 lane: modelData
                                 label: modelData === "stroke" ? "" : (modelData === "vibration" ? qsTr("Vibration") : qsTr("Suction"))
                                 lineColor: modelData === "stroke" ? Theme.orange : (modelData === "vibration" ? Theme.laneVibration : Theme.laneSuction)

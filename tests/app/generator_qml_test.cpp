@@ -401,13 +401,13 @@ private slots:
         QTest::mouseRelease(&window, Qt::LeftButton, {}, at(ruler, 0.6, 0.5));
         QTRY_VERIFY(edit->property("hasMarker").toBool());
         auto* invertRange = named(root.get(), "tool_invert");
-        QCOMPARE(invertRange->property("text").toString(), QStringLiteral("Invert range"));
+        QCOMPARE(invertRange->property("tip").toString(), QStringLiteral("Invert range"));
         QMetaObject::invokeMethod(invertRange, "clicked");
         QTRY_VERIFY(edit->property("canUndo").toBool());
         QCOMPARE(edit->property("undoText").toString(), QStringLiteral("Undo: Invert range"));
         // Without a marker the whole curve flips only after 0.7's question.
         QMetaObject::invokeMethod(edit, "clearMarker");
-        QTRY_COMPARE(invertRange->property("text").toString(), QStringLiteral("Invert all"));
+        QTRY_COMPARE(invertRange->property("tip").toString(), QStringLiteral("Invert all"));
         auto* ask = root->findChild<QObject*>("invertAllDialog");
         QVERIFY(ask);
         QMetaObject::invokeMethod(invertRange, "clicked");  // opens the question (no native dialog offscreen)
@@ -418,13 +418,26 @@ private slots:
 
         // A create tool writes new lanes, which appear under the stroke; the
         // "+ … lane" buttons are only there while a lane is missing.
+        // They live in the Tools… menu (Owner, 26 Oct: compact tools).
+        auto* menu = root->findChild<QObject*>("toolsMenu");
+        QVERIFY(menu);
+        QMetaObject::invokeMethod(named(root.get(), "toolsButton"), "clicked");
+        QTRY_VERIFY(menu->property("opened").toBool());
         QVERIFY(named(root.get(), "tool_addVibration")->isVisible());
         QVERIFY(named(root.get(), "tool_addSuction")->isVisible());
         QMetaObject::invokeMethod(named(root.get(), "tool_axes"), "clicked");
+        QTRY_VERIFY(!menu->property("visible").toBool());  // a tool closes the menu
         QTRY_VERIFY(named(root.get(), "lane_vibration"));
         QTRY_VERIFY(named(root.get(), "lane_suction"));
+        QMetaObject::invokeMethod(named(root.get(), "toolsButton"), "clicked");
+        QTRY_VERIFY(menu->property("opened").toBool());
         QTRY_VERIFY(!named(root.get(), "tool_addVibration")->isVisible());
         QVERIFY(!named(root.get(), "tool_addSuction")->isVisible());
+        QMetaObject::invokeMethod(menu, "close");
+        QTRY_VERIFY(!menu->property("visible").toBool());
+        // 0.7 lane height: each feel lane keeps at least 34 px at this window size.
+        QTRY_VERIFY(named(root.get(), "lane_vibration")->height() >= 34);
+        QVERIFY(named(root.get(), "lane_suction")->height() >= 34);
         // 0.7 stroke ghost: the feel lanes carry the stroke for timing.
         QCOMPARE(named(root.get(), "lane_stroke")->property("ghostPoints").toInt(), 0);
         QTRY_VERIFY(named(root.get(), "lane_vibration")->property("ghostPoints").toInt() >= 2);

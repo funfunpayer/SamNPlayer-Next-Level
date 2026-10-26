@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls.Basic as C
 import SamN
 
 // A round icon button (glyph text) in the Flow look.
@@ -9,6 +10,12 @@ Rectangle {
     property string icon
     property string tip
     signal clicked()
+    // The tip shows on hover (icon-only buttons need it) and names the button.
+    C.ToolTip.visible: area.containsMouse && tip !== ""
+    C.ToolTip.text: tip
+    C.ToolTip.delay: 500
+    Accessible.role: Accessible.Button
+    Accessible.name: tip
     width: 44; height: 44; radius: 22
     color: area.containsMouse ? Qt.rgba(1, 1, 1, 0.09) : "transparent"
     border.color: area.containsMouse ? Qt.rgba(63 / 255, 208 / 255, 1, 0.45) : Theme.cardBorder
