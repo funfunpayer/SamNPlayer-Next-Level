@@ -129,6 +129,7 @@ ApplicationWindow {
             asynchronous: true
             sourceComponent: GeneratorPage {
                 overlayOpen: settingsPage.open
+                device: deviceCtl
                 playerVideoUrl: player.controller.videoUrl
                 // The result opens in the Generator's Editor; "Play in the Player" hands it over (D-144).
                 onReviewRequested: (path) => { win.mode = 0; player.controller.openPath(path) }
