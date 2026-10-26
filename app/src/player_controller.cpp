@@ -23,6 +23,7 @@
 #include "heatmap_item.h"
 #include "samn/mapper.h"
 #include "samn/marks.h"
+#include "samn/playback.h"
 #include "samn/playback_mapping.h"
 #include "samn/contact_marks.h"
 #include "samn/samn_file.h"
@@ -105,6 +106,18 @@ bool PlayerController::showVibrationLane() const {
 bool PlayerController::showSuctionLane() const {
     if (stroke_.empty()) return false;
     return device_ && device_->connected() ? device_->capSuction() : suctionFromScript_;
+}
+
+QStringList PlayerController::axisLanes() const {
+    QStringList out;
+    if (stroke_.empty()) return out;
+    const bool connected = device_ && device_->connected();
+    const QStringList has = connected ? device_->axes() : QStringList{};
+    for (const char* axis : {"surge", "sway", "twist", "roll", "pitch"}) {
+        const QString name = QString::fromLatin1(axis);
+        if (axisActions_.count(axis) && (!connected || has.contains(name))) out << name;
+    }
+    return out;
 }
 
 samn::Settings& PlayerController::settings() {
@@ -529,6 +542,15 @@ bool PlayerController::openScript(const QString& pathIn, const QString& videoIn)
     // D-132: a lane the file carries shows without a device.
     vibrationFromScript_ = !doc.vibration.empty();
     suctionFromScript_ = !doc.suction.empty();
+    // 0.7 companion axis files (multi-axis devices); an unreadable one is left out.
+    axisActions_.clear();
+    for (const auto& [axis, file] : samn::companion_axis_files(u8(path))) {
+        try {
+            auto actions = samn::LoadFunscript(std::filesystem::u8path(file)).actions;
+            if (!actions.empty()) axisActions_[axis] = std::move(actions);
+        } catch (const std::exception&) {
+        }
+    }
     remap(true);
     // The heatmap uses the defaults, one bucket per 1/240 (0.7 GetHeatmap).
     auto opts = samn::DefaultMapOptions();
@@ -595,7 +617,7 @@ void PlayerController::remap(bool fresh) {
     vibration_ = laneFrom(frames, false);
     suction_ = laneFrom(frames, true);
     if (fresh)
-        output_.setScript(stroke_, vibration_, suction_);
+        output_.setScript(stroke_, vibration_, suction_, axisActions_);
     else
         output_.setLevels(vibration_, suction_);
     contactKnobsLive_ = plan.contact_on;
@@ -959,6 +981,7 @@ void PlayerController::clearScript() {
     stroke_.clear();
     vibration_.clear();
     suction_.clear();
+    axisActions_.clear();
     output_.setScript({}, {}, {}, {});
     emit lanesChanged();
     heat_.clear();
@@ -1283,7 +1306,10 @@ void PlayerController::pushToViews() {
     for (const auto& c : curves_) {
         if (!c) continue;
         const QString lane = c->lane();
-        c->setActions(lane == QLatin1String("vibration") ? vibration_ : lane == QLatin1String("suction") ? suction_ : stroke_);
+        if (const auto it = axisActions_.find(lane.toStdString()); it != axisActions_.end())
+            c->setActions(it->second);
+        else
+            c->setActions(lane == QLatin1String("vibration") ? vibration_ : lane == QLatin1String("suction") ? suction_ : stroke_);
         c->setPlayheadMs(playheadMs_);
     }
     if (heatmap_) {

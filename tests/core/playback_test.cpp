@@ -70,6 +70,24 @@ TEST_CASE("matching video") {
     CHECK(*got == v.string());
 }
 
+TEST_CASE("companion axis scripts beside a script, in 0.7's order") {
+    TempDir t;
+    fs::path s = t.path / "Clip.funscript";
+    std::ofstream(s) << "{}";
+    CHECK(companion_axis_files(s.string()).empty());
+    std::ofstream(t.path / "Clip.roll.funscript") << "{}";
+    std::ofstream(t.path / "Clip.surge.funscript") << "{}";
+    std::ofstream(t.path / "Other.sway.funscript") << "{}";  // another script's
+    std::ofstream(t.path / "Clip.lube.funscript") << "{}";   // not a companion axis
+    const auto got = companion_axis_files(s.string());
+    REQUIRE(got.size() == 2);
+    CHECK(got[0].first == "surge");
+    CHECK(got[0].second == (t.path / "Clip.surge.funscript").string());
+    CHECK(got[1].first == "roll");
+    // A .samn finds the same files.
+    CHECK(companion_axis_files((t.path / "Clip.samn").string()).size() == 2);
+}
+
 TEST_CASE("offset saved per script") {
     TempDir t;
     fs::path p = t.path / "settings.json";

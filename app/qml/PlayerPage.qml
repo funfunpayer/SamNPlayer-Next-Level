@@ -44,6 +44,13 @@ Item {
     property string lastScript: ""
     property url lastVideo
     property url autoCreatedFor  // once per video, scriptChanged comes more than once
+    // 0.7 companion axis names and colours (theme_flow.css axis tokens).
+    function axisTitle(axis) {
+        return { surge: qsTr("Surge"), sway: qsTr("Sway"), twist: qsTr("Twist"), roll: qsTr("Roll"), pitch: qsTr("Pitch") }[axis] || axis
+    }
+    function axisColor(axis) {
+        return { surge: "#e5c07b", sway: "#98c379", twist: "#e06c9f", roll: "#61afef", pitch: "#d19a66" }[axis] || Theme.textDim
+    }
     Connections {
         target: ctrl
         function onScriptChanged() {
@@ -747,6 +754,13 @@ Item {
                 LaneName { name: qsTr("Stroke"); dot: Theme.orange; height: curve.height; visible: ctrl.showStrokeLane }
                 LaneName { name: qsTr("Vibration"); dot: Theme.laneVibration; height: vibLane.height; visible: ctrl.showVibrationLane }
                 LaneName { name: qsTr("Suction"); dot: Theme.laneSuction; height: sucLane.height; visible: ctrl.showSuctionLane }
+                Repeater {
+                    model: ctrl.axisLanes
+                    delegate: LaneName {
+                        required property string modelData
+                        name: page.axisTitle(modelData); dot: page.axisColor(modelData); height: lanes.laneH
+                    }
+                }
                 LaneName { name: qsTr("Audio Level"); dot: "#93aec4"; height: audioLane.height; visible: audioLane.visible }
                 LaneName { name: qsTr("Chapters"); dot: "#2f80ed"; height: chapterStrip.height; visible: chapterStrip.visible }
                 Item { width: 1; height: 4; visible: heatBar.visible }
@@ -760,9 +774,9 @@ Item {
                 // D-132: lanes the device cannot use are hidden; without the stroke
                 // lane the device's lanes share its height.
                 readonly property int audioH: 34
+                readonly property int extraLanes: (vibLane.visible ? 1 : 0) + (sucLane.visible ? 1 : 0) + ctrl.axisLanes.length
                 readonly property int laneH: curve.visible ? 34
-                    : Math.max(34, Math.min(140, (height - fixedH - (audioLane.visible ? audioH : 0)) / Math.max(1, (vibLane.visible ? 1 : 0) + (sucLane.visible ? 1 : 0))))
-                readonly property int extraLanes: (vibLane.visible ? 1 : 0) + (sucLane.visible ? 1 : 0)
+                    : Math.max(34, Math.min(140, (height - fixedH - (audioLane.visible ? audioH : 0)) / Math.max(1, extraLanes)))
                 readonly property int fixedH: ruler.height + (heatBar.visible ? heatBar.height + 4 : 0) + markRow.height
                                               + (chapterStrip.visible ? chapterStrip.height : 0)
                 RulerItem {
@@ -831,6 +845,25 @@ Item {
                         onWheel: (e) => ctrl.zoomAt(e.angleDelta.y > 0 ? 1.25 : 1 / 1.25, point.position.x / parent.width)
                     }
                     Rectangle { width: parent.width; height: 1; color: Qt.rgba(1, 1, 1, 0.08) }
+                }
+                // 0.7 companion axes (surge … pitch) beside the script: read lanes.
+                Repeater {
+                    model: ctrl.axisLanes
+                    delegate: CurveItem {
+                        id: axisLane
+                        required property string modelData
+                        objectName: "axisLane_" + modelData
+                        width: lanes.width; height: lanes.laneH
+                        lane: modelData; lineColor: page.axisColor(modelData)
+                        lineWidth: 1.2; glow: 3; fill: 0.14
+                        viewStartMs: ctrl.viewStartMs; viewEndMs: ctrl.viewEndMs
+                        Component.onCompleted: ctrl.attachCurve(axisLane)
+                        WheelHandler {
+                            acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                            onWheel: (e) => ctrl.zoomAt(e.angleDelta.y > 0 ? 1.25 : 1 / 1.25, point.position.x / axisLane.width)
+                        }
+                        Rectangle { width: parent.width; height: 1; color: Qt.rgba(1, 1, 1, 0.08) }
+                    }
                 }
                 AudioLevelItem {
                     id: audioLane

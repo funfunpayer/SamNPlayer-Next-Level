@@ -620,6 +620,31 @@ private slots:
         QVERIFY(!p.showSuctionLane());
     }
 
+    // 0.7 companion axis files beside the script (<stem>.surge.funscript …):
+    // read lanes in 0.7's order, only the axes a connected device has, and
+    // the device gets them.
+    void companionAxisFilesBecomeLanesAndDriveTheAxes() {
+        const QString script = writeScript(files_.path(), "multi.funscript", zigzag(40, 250));
+        writeScript(files_.path(), "multi.roll.funscript", zigzag(40, 250));
+        writeScript(files_.path(), "multi.surge.funscript", zigzag(40, 250));
+        UdpLineSink sink;
+        DeviceController dev;
+        PlayerController p;
+        p.setDevice(&dev);
+        QVERIFY(p.openScript(script));
+        QCOMPARE(p.axisLanes(), (QStringList{"surge", "roll"}));
+        connectStroker(dev, sink);  // TCode: L0-L2, R0-R2
+        QCOMPARE(p.axisLanes(), (QStringList{"surge", "roll"}));
+        p.output()->setPlaying(true);
+        p.output()->update(0);
+        QTRY_VERIFY_WITH_TIMEOUT(!Lines(sink).filter("L1").isEmpty(), kWait);  // surge
+        QTRY_VERIFY_WITH_TIMEOUT(!Lines(sink).filter("R1").isEmpty(), kWait);  // roll
+        p.output()->setPlaying(false);
+        // Another script without companions: no axis lanes.
+        QVERIFY(p.openScript(writeScript(files_.path(), "single.funscript", zigzag(40, 250))));
+        QVERIFY(p.axisLanes().isEmpty());
+    }
+
     void noScriptNoLanes() {
         DeviceController dev;
         PlayerController p;
