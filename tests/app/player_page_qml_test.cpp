@@ -69,6 +69,14 @@ private slots:
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }
 
+    void noPictureSaysSoAndOffersACopy() {
+        g_messages.clear();
+        g_previous = qInstallMessageHandler(capture);
+        runNoPicture();
+        qInstallMessageHandler(g_previous);
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
+
 private:
     // Repeater delegates and Flow children: walk childItems() too.
     static QQuickItem* named(QQuickItem* root, const char* name) {
@@ -295,6 +303,70 @@ private:
         QVERIFY(ctrl->openPath(QStringLiteral(SAMN_TEST_DATA "/testpattern_4s.mp4")));
         QVERIFY(!page->property("scriptOnly").toBool());
         QCOMPARE(clock->property("duration").toLongLong(), qint64(0));
+    }
+
+    // Owner 26 Oct: a video whose picture never comes (AV1 on a GPU without
+    // an AV1 decoder) says so and offers an H.264 copy; a video that shows
+    // frames never does.
+    void runNoPicture() {
+        QQmlEngine engine;
+        engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
+        engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+        engine.addImageProvider(QStringLiteral("frames"), new samn::ui::FrameProvider);
+        QQmlComponent comp(&engine);
+        comp.setData(R"(
+            import QtQuick
+            import SamN
+            Item {
+                width: 1000; height: 700
+                property alias page: pp
+                DeviceController { id: dev }
+                PlayerPage { id: pp; anchors.fill: parent; device: dev }
+            })",
+                     QUrl("qrc:/test/Wrapper.qml"));
+        QVERIFY2(comp.status() == QQmlComponent::Ready, qPrintable(comp.errorString()));
+        QQuickWindow window;
+        window.resize(1000, 700);
+        std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
+        QVERIFY(root);
+        root->setParentItem(window.contentItem());
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto* page = root->property("page").value<QQuickItem*>();
+        auto* media = page->findChild<QMediaPlayer*>(QStringLiteral("media"));
+        auto* ctrl = page->property("controller").value<PlayerController*>();
+        QVERIFY(page && media && ctrl);
+        // The empty Play button grows with the stage, within 96..140 px.
+        auto* emptyPlay = page->findChild<QQuickItem*>(QStringLiteral("emptyPlay"));
+        QVERIFY(emptyPlay);
+        QVERIFY(emptyPlay->width() >= 96 && emptyPlay->width() <= 140);
+
+        QVERIFY(ctrl->openPath(QStringLiteral(SAMN_TEST_DATA "/testpattern_4s.mp4")));
+        QTRY_VERIFY_WITH_TIMEOUT(media->mediaStatus() != QMediaPlayer::LoadingMedia, 10000);
+        if (media->mediaStatus() == QMediaPlayer::InvalidMedia || media->mediaStatus() == QMediaPlayer::NoMedia)
+            QSKIP("no media backend can decode the test clip here");
+        auto* card = page->findChild<QQuickItem*>(QStringLiteral("noPictureCard"));
+        QVERIFY(card);
+        media->play();
+        QTRY_VERIFY_WITH_TIMEOUT(media->position() >= 2000, 10000);
+        if (!page->property("frameSeen").toBool()) QSKIP("no frames reach the video sink in this environment");
+        QVERIFY(!page->property("noPicture").toBool());  // frames came: no alarm
+        QVERIFY(!card->isVisible());
+        media->pause();
+
+        // No frame reaches the sink: after 1.5 s of playing the stage says so.
+        page->findChild<QObject*>(QStringLiteral("frameWatch"))->setProperty("enabled", false);
+        page->setProperty("frameSeen", false);
+        media->setPosition(0);
+        media->play();
+        QTRY_VERIFY_WITH_TIMEOUT(page->property("noPicture").toBool(), 10000);
+        QVERIFY(media->position() >= 1500);
+        QTRY_VERIFY(card->isVisible());
+        QVERIFY2(ctrl->lastError().startsWith("No picture"), qPrintable(ctrl->lastError()));
+        QVERIFY(ctrl->lastError().contains("Convert to H.264"));
+        auto* convert = page->findChild<QQuickItem*>(QStringLiteral("convertVideo"));
+        QVERIFY(convert && convert->isVisible());
+        media->stop();
     }
 
     void run() {

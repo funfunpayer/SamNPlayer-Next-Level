@@ -246,6 +246,29 @@ bool ClipPrepController::cut(const QString& source, const QString& start, const 
     return proc_ != nullptr;
 }
 
+QString ClipPrepController::convertedName(const QString& source) const {
+    const QFileInfo in(LocalPath(source));
+    return in.dir().filePath(in.completeBaseName() + QStringLiteral("-h264.mp4"));
+}
+
+bool ClipPrepController::convertForPlayback(const QString& source, double durationS) {
+    if (proc_) return false;
+    const QString input = LocalPath(source);
+    if (input.isEmpty() || !QFileInfo(input).isFile() || durationS <= 0) {
+        setStatus(tr("Open a video to convert first."));
+        return false;
+    }
+    Job job;
+    job.input = input;
+    job.output = convertedName(input);
+    job.name = QFileInfo(job.output).fileName();
+    job.end_s = durationS;
+    job.max_width = 7680;  // never scaled up: the size stays
+    job.whole = true;
+    startJobs({job});
+    return proc_ != nullptr;
+}
+
 bool ClipPrepController::cutMarks(const QString& marksFile) {
     if (proc_) return false;
     const QString path = LocalPath(marksFile);
@@ -288,7 +311,7 @@ void ClipPrepController::startJobs(QList<Job> jobs) {
         return;
     }
     for (const Job& j : jobs) {
-        samn::ClipPrepOptions o{j.input.toStdString(), j.output.toStdString(), j.start_s, j.end_s, j.max_width, no_audio_};
+        samn::ClipPrepOptions o{j.input.toStdString(), j.output.toStdString(), j.start_s, j.end_s, j.max_width, !j.whole && no_audio_};
         std::string why;
         if (QFileInfo(j.input).canonicalFilePath() == QFileInfo(j.output).canonicalFilePath() && QFileInfo::exists(j.output))
             why = "the cut cannot replace its own video";
@@ -312,13 +335,14 @@ void ClipPrepController::runNext() {
     if (jobs_.isEmpty()) {
         QString s = total_ == 1 ? tr("Done: %1").arg(QDir::toNativeSeparators(last_output_))
                                 : tr("Done: %n clip(s) beside the marks file.", "", total_);
-        if (!scripts_.isEmpty()) s += tr(" %n script(s) cut along.", "", int(scripts_.size()));
+        if (!scripts_.isEmpty())
+            s += job_.whole ? tr(" The script is copied along.") : tr(" %n script(s) cut along.", "", int(scripts_.size()));
         progress_ = 100;
         endRun(s);
         return;
     }
     job_ = jobs_.takeFirst();
-    samn::ClipPrepOptions o{job_.input.toStdString(), job_.output.toStdString(), job_.start_s, job_.end_s, job_.max_width, no_audio_};
+    samn::ClipPrepOptions o{job_.input.toStdString(), job_.output.toStdString(), job_.start_s, job_.end_s, job_.max_width, !job_.whole && no_audio_};  // a playback copy keeps its sound
     QStringList args = prefix_;
     const auto ffargs = samn::ClipPrepArgs(o);  // checked in startJobs
     for (const auto& a : *ffargs) args << QString::fromStdString(a);
@@ -343,7 +367,7 @@ void ClipPrepController::runNext() {
         jobs_.clear();
         endRun(tr("ffmpeg does not start: %1").arg(QDir::toNativeSeparators(ffmpegPath())));
     });
-    setStatus(total_ == 1 ? tr("Cutting %1 …").arg(job_.name) : tr("Cutting %1 (%2 of %3) …").arg(job_.name).arg(done_ + 1).arg(total_));
+    setStatus(job_.whole ? tr("Converting %1 …").arg(job_.name) : total_ == 1 ? tr("Cutting %1 …").arg(job_.name) : tr("Cutting %1 (%2 of %3) …").arg(job_.name).arg(done_ + 1).arg(total_));
     proc_->start(ffmpegPath(), args);
 }
 
@@ -380,10 +404,26 @@ void ClipPrepController::finishJob(int code, QProcess::ExitStatus status) {
         return;
     }
     last_output_ = job_.output;
-    const QString script = cutScript(job_);
+    const QString script = job_.whole ? copyScripts(job_) : cutScript(job_);
     if (!script.isEmpty()) scripts_ << script;
     ++done_;
+    const bool whole = job_.whole;
     runNext();
+    if (whole) emit converted(last_output_);
+}
+
+QString ClipPrepController::copyScripts(const Job& job) const {
+    // The whole length: the scripts are the same, only the name changes.
+    const QFileInfo in(job.input), out(job.output);
+    QString first;
+    for (const char* ext : {".funscript", ".samn"}) {
+        const QString from = in.dir().filePath(in.completeBaseName() + QLatin1String(ext));
+        const QString to = out.dir().filePath(out.completeBaseName() + QLatin1String(ext));
+        if (!QFileInfo(from).isFile()) continue;
+        QFile::remove(to);
+        if (QFile::copy(from, to) && first.isEmpty()) first = to;
+    }
+    return first;
 }
 
 QString ClipPrepController::cutScript(const Job& job) const {
