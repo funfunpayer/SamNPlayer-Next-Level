@@ -1268,6 +1268,14 @@ void PlayerController::reportMediaError(int error, const QString& detail) {
     mediaError_ = true;
 }
 
+void PlayerController::reportNoPicture(const QString& codec) {
+    QString msg = codec.isEmpty() ? tr("No picture: this PC cannot decode the video")
+                                  : tr("No picture: this PC cannot decode %1 video").arg(codec);
+    if (!videoName().isEmpty()) msg += QStringLiteral(": ") + videoName();
+    msg += tr(". Convert to H.264 makes a copy that plays everywhere.");
+    setFailure(msg);
+}
+
 void PlayerController::setPlaying(bool playing) {
     output_.setPlaying(playing);
     if (playing) autoEoFired_ = false;

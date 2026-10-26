@@ -10,6 +10,7 @@
 #include <QJsonObject>
 #include <QStandardPaths>
 #include <QTemporaryDir>
+#include <QSignalSpy>
 #include <QtTest>
 
 #include "clip_prep_controller.h"
@@ -159,6 +160,35 @@ private slots:
         QVERIFY(again.noAudio());
         again.setNoAudio(false);
         again.setPreset("720p");
+    }
+
+    // Owner 26 Oct: a video the player cannot show (AV1 without GPU support)
+    // becomes an H.264 copy beside it at its own size; the scripts come along.
+    void aWholeVideoConvertsForPlaybackWithItsScripts() {
+        QFile::remove(log_);
+        const QString samn = dir_.filePath("videos/long.samn");
+        Write(samn, "{\"version\":1}");
+        ClipPrepController c;
+        useFake(c);
+        const QString out = dir_.filePath("videos/long-h264.mp4");
+        QCOMPARE(c.convertedName(video_), out);
+        QSignalSpy converted(&c, &ClipPrepController::converted);
+        QVERIFY(!c.convertForPlayback(video_, 0));  // no length
+        QVERIFY(c.convertForPlayback(QUrl::fromLocalFile(video_).toString(), 4.0));
+        QVERIFY(c.status().startsWith("Converting"));
+        QTRY_COMPARE_WITH_TIMEOUT(converted.count(), 1, 30000);
+        QCOMPARE(converted.first().first().toString(), out);
+        QVERIFY2(c.status().contains("copied along"), qPrintable(c.status()));
+        const QStringList a = calls().value(0);
+        QCOMPARE(after(a, "-t"), QString("4"));
+        QCOMPARE(after(a, "-vf"), QString("scale='min(7680,iw)':-2:flags=lanczos"));
+        QVERIFY(!a.contains("-an"));
+        QCOMPARE(a.last(), out);
+        // The same scripts, byte for byte, under the new name.
+        auto bytes = [](const QString& p) { QFile f(p); return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray(); };
+        QCOMPARE(bytes(dir_.filePath("videos/long-h264.funscript")), bytes(dir_.filePath("videos/long.funscript")));
+        QCOMPARE(bytes(dir_.filePath("videos/long-h264.samn")), bytes(samn));
+        QFile::remove(samn);
     }
 
     void aBatchFromAMarksFile() {
