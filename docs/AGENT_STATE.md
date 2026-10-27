@@ -19,6 +19,7 @@
   - 0.7 used the horizontal axis on that clip (its tip x vs its script r up to -0.86, y about 0). We picked y because a few coasted / compensated frames threw the centre out of the picture; the axis is now chosen from the 2nd..98th percentile spread.
   - 0.7's scene-cut test fires on about one frame in eight of a 256x144 clip (2004 cuts). A spike-relative test removed them but made tracking worse: the false cuts re-anchor CSRT through the appearance memory, as in 0.7. Kept as 0.7 for now; a better re-anchor comes with the D-159 tip work.
   - `samn_compare` manifests take `start_ms`.
+- **Qt 6.4 crash (27 Oct, local only):** after main came in, `shell_qml_test` crashed (SIGSEGV in the qmlcachegen-compiled `Icon.qml` binding `"?" + color`) while the AI Train page loaded next to the three new Generator switches; it passed with `QML_DISABLE_DISK_CACHE=1`. `Icon.qml` now builds `#rrggbb` by hand.
 - **Owner rule for the curves (26 Oct):** stroke and suction curves must swing smoothly (smoothed, no corners or jumps); vibration is different (pulses and steps are allowed). Applies to the D-159 defaults and Auto.
 - **Next, in the Owner's order (D-159):**
   1. Make the spec values the Generator default, with an *Auto* switch (on at first start) that adapts them per 8 s section from video tempo, noise and audio tempo. Auto keeps the values where the measurement is unsure. Then fit the values to the target device (stroker minimum interval 100 ms).
