@@ -207,6 +207,9 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
         res.partner_xs.push_back(Centre(partner_last).x);
         res.partner_ys.push_back(Centre(partner_last).y);
     }
+    std::optional<AdaptiveSceneCut> adaptive_cut;
+    if (opts.scene_cuts && opts.adaptive_cuts)
+        adaptive_cut.emplace(std::max(10, static_cast<int>(std::lround(2.0 * (reader->fps() > 0 ? reader->fps() : 30.0)))));
     std::optional<CheckRecorder> recorder;
     if (opts.record_checks) {
         recorder.emplace(res.size);
@@ -243,7 +246,7 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
             return canceled;
         }
         if (needs_gray) cv::cvtColor(frame.bgr, gray, cv::COLOR_BGR2GRAY);
-        const bool cut = opts.scene_cuts && IsSceneCut(prev_gray, gray);
+        const bool cut = opts.scene_cuts && (adaptive_cut ? adaptive_cut->Test(prev_gray, gray) : IsSceneCut(prev_gray, gray));
 
         std::optional<cv::Rect> found;
         if (cut) {

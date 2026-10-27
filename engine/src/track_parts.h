@@ -17,6 +17,22 @@ double HistCorrelation(const cv::Mat& a, const cv::Mat& b);
 double SignatureDiff(const cv::Mat& a, const cv::Mat& b);
 bool IsSceneCut(const cv::Mat& prev_gray, const cv::Mat& gray);
 
+// Scene-cut test that adapts to the clip (self-check, design §3.3): the
+// signature difference must also be an outlier against the median of the
+// last `window` frames (factor), so fast motion on a small picture is not
+// a cut. On the Owner clip (256x144) IsSceneCut fired 1992 times in 570 s;
+// this test fires twice. The histogram rule of IsSceneCut is kept as is.
+class AdaptiveSceneCut {
+public:
+    explicit AdaptiveSceneCut(int window = 60, double factor = 3.0) : window_(window), factor_(factor) {}
+    bool Test(const cv::Mat& prev_gray, const cv::Mat& gray);
+
+private:
+    int window_;
+    double factor_;
+    std::vector<double> past_;  // the last `window` signature differences, newest last
+};
+
 // Vertical camera shift between two gray frames from background features
 // outside the excluded boxes (10 px padding). 0 means "no reliable
 // estimate", not "no motion". inlier_fraction (optional) receives the RANSAC

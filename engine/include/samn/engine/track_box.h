@@ -25,6 +25,10 @@ struct TrackOptions {
     int max_frames = 0;          // 0 = to the end
     bool camera_compensation = true;
     bool scene_cuts = true;
+    // Self-check: a cut must also be an outlier against the last 2 s of
+    // frame differences (AdaptiveSceneCut). Off = 0.7's fixed thresholds
+    // (parity); on after the golden-clip gate.
+    bool adaptive_cuts = false;
     bool appearance_memory = true;
     TrackAxis axis = TrackAxis::kAuto;
     // Soft masks / ignore regions (0.7 maskRois): punched out of the camera-

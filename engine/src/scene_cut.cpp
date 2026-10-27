@@ -1,5 +1,7 @@
 #include "track_parts.h"
 
+#include <algorithm>
+
 #include <opencv2/imgproc.hpp>
 
 namespace samn::engine {
@@ -29,6 +31,23 @@ double SignatureDiff(const cv::Mat& a, const cv::Mat& b) {
 
 bool IsSceneCut(const cv::Mat& prev_gray, const cv::Mat& gray) {
     return HistCorrelation(prev_gray, gray) < 0.5 || SignatureDiff(prev_gray, gray) > 12.0;
+}
+
+bool AdaptiveSceneCut::Test(const cv::Mat& prev_gray, const cv::Mat& gray) {
+    const double sig = SignatureDiff(prev_gray, gray);
+    double median = 0;
+    if (past_.size() >= 3) {
+        std::vector<double> v(past_);
+        const auto mid = v.begin() + static_cast<long>(v.size() / 2);
+        std::nth_element(v.begin(), mid, v.end());
+        median = *mid;
+    }
+    const bool cut = HistCorrelation(prev_gray, gray) < 0.5 || sig > std::max(12.0, factor_ * median);
+    // Every difference joins the history, a cut's too: the median shrugs off
+    // one spike, and clearing would leave a fast shot without a baseline.
+    past_.push_back(sig);
+    if (static_cast<int>(past_.size()) > window_) past_.erase(past_.begin());
+    return cut;
 }
 
 }  // namespace samn::engine

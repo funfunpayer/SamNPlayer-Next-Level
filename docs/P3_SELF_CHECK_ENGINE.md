@@ -186,6 +186,26 @@ on the rest "fail" and "pass" windows are about equally far from 0.7's box
 verifier is not yet useful, and the first thing to fix is the cut detector
 (fast lane, SC-4), measured on this clip, before any threshold is tuned.
 
+### 3.4 Adaptive cut test on the Owner clip, and what the clip cannot tell
+
+`TrackOptions::adaptive_cuts` (`AdaptiveSceneCut`: the frame difference must
+also be 3 x the median of the last 2 s) brings the Owner clip from 1992 cuts
+to **2**, and 99 % of the frames get a verdict. But the **tracking got worse**:
+median distance to 0.7's box 15 px → 144 px. The false cuts were working as
+a frequent re-anchor: every "cut" ran the appearance memory's reacquire,
+which pulled the box back to the start look. Without them CSRT drifts. So the
+option stays **off** (0.7 parity), and the re-anchoring role has to move to
+the verified repair (SC-5) before the cut test can change.
+
+On this clip the verdicts do **not** separate good from bad windows yet:
+against the 0.7 script (2 s windows, |r|) "fail" windows agree as well as or
+better than "pass" windows (old cuts: 0.61 vs 0.42; adaptive: 0.42 vs 0.37).
+The reference itself is a post-processed 0.7 script, and windows of 2 s on a
+script with fill points are noisy, so this clip cannot calibrate thresholds.
+The thresholds stay those measured on synthetic scenes and are not tuned on
+this clip; calibration needs the golden clips with a checked reference
+(D-135), as planned for SC-6.
+
 ## 4. The engine: three lanes
 
 ```
@@ -343,6 +363,51 @@ a decision our engine should make itself, and check:
 | Processes every frame when the motion is fast | Never skip frames in the writer lane; only the fast lane subsamples | (kept) |
 | Keeps the timing from tracking, fixes the stroke length by hand ("true to the video, but nobody can feel it") | Amplitude stays a profile decision (dynamic range, feel recipes); timing is what the self-check guarantees | P3.2 / feel |
 | Post-processing tabs: local min/max, second derivative, distance minimisation, evenly spaced intermediate points | Already covered by peaks + adaptive keyframes + RDP (P3.2); "evenly intermediate" points are a candidate profile option, measured before it is added | P3.2 |
+
+## 5c. Other generators and scripting guides (Owner links, 27 Oct)
+
+**FunAutoScripter** (MIT, Python, `pingasAtumas/FunAutoScripter`): fully
+unattended. Farneback flow on 192 px-wide gray frames, averaged per 12 px
+cell; the region is the most periodic and most moving box, re-chosen every
+3 s (switch only above 0.6 x the current score); the axis is a
+magnitude-weighted PCA per window; the stroke is the flow projected on the
+axis, integrated, then a zero-phase 0.15-5 Hz band-pass; rolling 10 s
+percentile normalisation (3/97); peaks with prominence 12 and 0.12 s spacing;
+speed cap 450. Scene cuts from flow-magnitude spikes (> 4 x the 2 s median);
+chapters per cut and axis change. No confidence, no rejection.
+What we take: the **cut test as a ratio to the recent median** (now
+`AdaptiveSceneCut`, §3.3), the **PCA axis** (§5b), **flow cached per clip** so
+re-tuning post-processing is instant, and **chapters on axis change**. What
+we do not take: the integrated flow as the writer (REJ-03: integration
+drifts), the region that "wins" on periodicity alone (its own author: the
+region jumps to a distractor when the action pauses; GD-15), no camera
+compensation.
+
+**Beat-bar generator** (MIT, `Rantark/beat-bar-video-creator-with-funscript`):
+spectral-flux onsets (STFT 2048, hop 10 ms, 60-8000 Hz, 250 ms baseline,
+threshold 0.35 - 0.30 x sensitivity, min gap 120 ms); per 10-30 s section the
+period from an inter-onset histogram (200-1500 ms) and a regular grid;
+one stroke per beat, amplitude from the interval; idle oscillation 30-70
+over gaps >= 2 s. Useful for the Editor's beat-bar tools
+(`P3_GENERATOR.md` "Editor create tools"): the inter-onset histogram per
+section is a cheap tempo estimate for the fast lane too. The grid
+regularisation flattens tempo drift and syncopation, so ours keeps the raw
+onsets where they disagree with the grid.
+
+**Multi-axis scripting guide** (OFS tutorial): axes L0-L2, R0-R2, V0/V1,
+A0-A2, neutral 50 (add-ons 0). Hand rules: roll/pitch as the stroke shifted by
+a quarter period (stroke = sin, roll = cos) for circular motion; surge
+mirrors pitch, sway mirrors roll; keep extra axes within 10-90; speed caps
+per device (Handy 400/500, OSR2/SR6 and Handy 2 600/700). For us: the extra
+axes are derived from the measured motion (the box's x/y path and the
+principal axis give sway and roll directly), with the quarter-period rule
+only as a fallback recipe, and the device caps go into `LimitSpeed` per axis.
+
+**Hand-scripting tutorial series** (Slibowitz, ep. 1): the rules are in the
+videos, not the text. From the thread: add points inside a stroke only at a
+real stop; when two moving parts are out of sync, follow the dominant one;
+speed in units per second, about 400-500 for a Handy. These match our
+peak/keyframe rules (P3.2) and `LimitSpeed`.
 
 ## 6. Rules this design keeps
 

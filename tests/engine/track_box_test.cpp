@@ -387,3 +387,34 @@ TEST_CASE("parts: scene cut on a new background, none on small motion") {
     CHECK(!IsSceneCut(ga, gb));
     CHECK(IsSceneCut(gb, gc));
 }
+
+TEST_CASE("parts: the adaptive cut test ignores steady fast motion, finds the real cut") {
+    // A small, high-contrast picture panning fast: every frame differs a lot,
+    // so 0.7's fixed threshold calls each one a cut (the Owner clip at
+    // 256x144: 1992 cuts in 570 s). The adaptive test compares against the
+    // last frames and only fires on the new background.
+    const cv::Mat world = clips::Texture(clips::kW * 3, clips::kH, 7, 900);
+    std::vector<cv::Mat> frames;
+    for (int i = 0; i < 40; ++i) {
+        cv::Mat g;
+        cv::cvtColor(world(cv::Rect(i * 9, 0, clips::kW, clips::kH)), g, cv::COLOR_BGR2GRAY);
+        frames.push_back(g);
+    }
+    cv::Mat other;
+    cv::cvtColor(clips::Texture(clips::kW, clips::kH, 99, 140), other, cv::COLOR_BGR2GRAY);
+    other.convertTo(other, -1, 0.4, 12);
+    frames.push_back(other);
+
+    int fixed = 0, adaptive = 0, adaptive_last = -1;
+    AdaptiveSceneCut cut(25);
+    for (size_t i = 1; i < frames.size(); ++i) {
+        fixed += IsSceneCut(frames[i - 1], frames[i]) ? 1 : 0;
+        if (cut.Test(frames[i - 1], frames[i])) {
+            ++adaptive;
+            adaptive_last = static_cast<int>(i);
+        }
+    }
+    CHECK(fixed > 20);  // the old test calls the pan a cut on most frames
+    CHECK(adaptive <= 4);  // the first frames (no baseline yet) plus the real cut
+    CHECK(adaptive_last == static_cast<int>(frames.size()) - 1);  // and the real cut
+}
