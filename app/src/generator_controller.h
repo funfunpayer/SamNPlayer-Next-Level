@@ -48,10 +48,10 @@ class GeneratorController : public QObject {
     Q_PROPERTY(bool sceneCuts READ sceneCuts WRITE setSceneCuts NOTIFY optionsChanged)
     Q_PROPERTY(bool autoOZone READ autoOZone WRITE setAutoOZone NOTIFY optionsChanged)
     // Bridge tracking gaps up to kGapBridgeMs and leave longer ones without
-    // actions (off); treat single-frame outliers as lost (on, D-159); keep raw
-    // tracks in config_dir()/cache/track so a new feel does not track again
-    // (off) (generator.gap_handling, generator.outlier_rejection,
-    // generator.track_cache).
+    // actions (on, from the tracker's own loss, D-161); treat single-frame
+    // outliers as lost (on, D-160); keep raw tracks in config_dir()/cache/track
+    // so a new feel does not track again (off) (generator.gap_handling,
+    // generator.outlier_rejection, generator.track_cache).
     Q_PROPERTY(bool gapHandling READ gapHandling WRITE setGapHandling NOTIFY optionsChanged)
     Q_PROPERTY(bool outlierRejection READ outlierRejection WRITE setOutlierRejection NOTIFY optionsChanged)
     Q_PROPERTY(bool trackCache READ trackCache WRITE setTrackCache NOTIFY optionsChanged)
@@ -323,7 +323,7 @@ private:
     double box_ms_ = 0;  // the video time the box was drawn or found at
     QString profile_ = QStringLiteral("recommended");
     bool invert_ = false, camera_ = true, scene_cuts_ = true, auto_ozone_ = true;
-    bool gap_handling_ = false, outlier_rejection_ = true, track_cache_ = false;
+    bool gap_handling_ = true, outlier_rejection_ = true, track_cache_ = false;
     bool contact_vibration_ = true;
     double contact_span_ = 0.75;
     QString contact_curve_ = QStringLiteral("soft");

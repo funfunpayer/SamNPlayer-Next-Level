@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 27 Oct 2026, Claude, branch `claude/samn2-generator-spec` (Generator behaviour spec, D-158/D-159; main merged in with #131 AV1/dav1d, #133 self-check engine and #134 claude-router; *Recommended* is the default recipe, D-160; work in progress, handed over below).
+**Last update:** 27 Oct 2026, Claude, branch `claude/samn2-generator-spec` (Generator behaviour spec, D-158/D-159; main merged in with #131 AV1/dav1d, #133 self-check engine and #134 claude-router; *Recommended* is the default recipe, D-160; tracking before Auto, D-161; work in progress, handed over below).
 
 ## Handover: `claude/samn2-generator-spec` (26 Oct, in progress, not yet a PR)
 
@@ -22,7 +22,7 @@
 - **Qt 6.4 crash (27 Oct, local only):** after main came in, `shell_qml_test` crashed (SIGSEGV in the qmlcachegen-compiled `Icon.qml` binding `"?" + color`) while the AI Train page loaded next to the three new Generator switches; it passed with `QML_DISABLE_DISK_CACHE=1`. `Icon.qml` now builds `#rrggbb` by hand.
 - **Owner rule for the curves (26 Oct):** stroke and suction curves must swing smoothly (smoothed, no corners or jumps); vibration is different (pulses and steps are allowed). Applies to the D-159 defaults and Auto.
 - **Next, in the Owner's order (D-159):**
-  1. **Defaults done (D-160, 27 Oct):** the profile *Recommended* (`ProfileRecommended`, first in the style list and the default) is Autotune plus outliers 5 × MAD, speed 500/s and 60 ms spacing (100 ms on a stroker); the spec's 120 ms smoothing, 4 s detrend and gap handling measured worse and are not in it. Measuring harness: a raw track CSV through `RunSignal` variants against 9 synthetic tracks with known strokes and the Owner's clip (scratch, not in the repo). **Still open:** the *Auto* switch (on at first start) that adapts the values per 8 s section from video tempo, noise and audio tempo, keeping them where the measurement is unsure; and separating the tracker's own loss from the look check so gap handling can come back.
+  1. **Defaults done (D-160, 27 Oct):** the profile *Recommended* (`ProfileRecommended`, first in the style list and the default) is Autotune plus outliers 5 × MAD, speed 500/s and 60 ms spacing (100 ms on a stroker); the spec's 120 ms smoothing, 4 s detrend and gap handling measured worse and are not in it. Measuring harness: a raw track CSV through `RunSignal` variants against 9 synthetic tracks with known strokes and the Owner's clip (scratch, not in the repo). **Auto postponed (D-161):** a tempo-adaptive prototype gained 0.676 → 0.696 on the clip and nothing on the synthetic tracks; the Owner chose tracking first. Gap handling is back and on by default, from the tracker's own loss only (`kLostTracker`; the look check `kLostUnlike` counts only with `gaps_from_look`).
   2. *Tip automatically*: the rhythm grid over the whole frame (GD-15) finds where the stroke is, the detector confirms it, CSRT follows. A box is drawn only to override.
   3. Extended camera stabilisation: all four similarity parameters, a RANSAC inlier gate, keyframe and two-pass smoothing after OpenCV videostab, and a phase-correlation fallback.
   4. AV1: the Player side is on `main` (#131). Still open: enable `ffmpeg[dav1d]` for the Generator's vcpkg FFmpeg, and DirectML for ONNX Runtime.

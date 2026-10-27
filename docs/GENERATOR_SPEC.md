@@ -282,7 +282,7 @@ The Generator already did most of this before the spec existed; what was missing
 | FR-6 end time | `GenerateRequest.end_ms`, `TrackOptions.end_ms` | `track_box.cpp` |
 | FR-7 analysis rate cap | `max_analysis_fps` | `track_box.cpp` |
 | FR-10 lost samples | `TrackResult::lost` (always filled) | `track_box.cpp` |
-| FR-12 gaps | *Bridge short tracking gaps* → `max_gap_ms` 500 | `PlanGaps` |
+| FR-12 gaps | *Bridge short tracking gaps* → `max_gap_ms` 500, on by default since D-161; from the tracker's own loss, the look check only with `gaps_from_look` | `PlanGaps` |
 | FR-13 outliers | *Ignore single-frame jumps* → `outlier_mad_factor` 5 | `FindOutliers` |
 | FR-11 cache | *Reuse the tracking* → `config_dir()/cache/track` | `track_cache.cpp` |
 | E8 aliasing | always on (a note only) | `AliasingWarning` |
@@ -291,7 +291,7 @@ End time and analysis rate have no control on the Generator page yet. The compar
 
 **Default recipe "Recommended" (D-160, 27 Oct)**
 
-The Generator's default is the profile `recommended`: Autotune's recipe with FR-13 outliers (5 × MAD), FR-17 speed limit 500 units/s and FR-16 minimum interval 60 ms (100 ms on a stroker). FR-14's 120 ms smoothing, the 4 s baseline and FR-12 gap handling measured worse on synthetic tracks with known strokes and on the Owner's clip, so they are not in it (numbers in D-160). Normal, Soft and Autotune are unchanged.
+The Generator's default is the profile `recommended`: Autotune's recipe with FR-13 outliers (5 × MAD), FR-17 speed limit 500 units/s and FR-16 minimum interval 60 ms (100 ms on a stroker). FR-14's 120 ms smoothing and the 4 s baseline measured worse (FR-12 gap handling too while it split on the look check; on the tracker's own loss it is on, D-161) on synthetic tracks with known strokes and on the Owner's clip, so they are not in it (numbers in D-160). Normal, Soft and Autotune are unchanged.
 
 **Kept from 0.7 on purpose (differs from this spec)**
 

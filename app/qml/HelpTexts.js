@@ -74,7 +74,7 @@ const texts = {
     "gen-extras-clear": "Clear extra contact areas and soft masks (keeps tip + first contact mark).",
     // src/gen_feel.js:85 (Mix)
     "gen-feel-balance": "Move the weight between vibration and suction. Centre = both full.",
-    "gen-gaps": "Opt-in: where the tracker lost the tip for up to 0.5 s the curve is bridged with a line; longer losses get no points instead of a held position. Off = as before.",
+    "gen-gaps": "On by default: where the tracker lost the tip for up to 0.5 s the curve is bridged with a line; longer losses get no points instead of a held position. Off = held positions, as in 0.7.",
     // src/generator.js:404 (Import candidates…)
     "gen-import-contact-candidates": "Writes teacher-consensus boxes into the companion .samn as unreviewed auto region marks. Needs an existing scene map.",
     // src/generator.js:567 (Audio check)

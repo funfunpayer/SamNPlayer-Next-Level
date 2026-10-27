@@ -315,14 +315,14 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
                 res.ys.push_back(res.ys.back());
                 tip_ok = false;
             }
-            res.lost.push_back(tip_ok ? 0 : 1);
+            res.lost.push_back(tip_ok ? 0 : kLostTracker);
         } else {
             // CSRT never reports a loss when it is wrong (GD-11): a box that
             // no longer resembles the first crop is marked lost (spec T6).
             // Only the flag changes, so a run without gap handling, which
             // ignores the flags, keeps every position as before.
             const auto likeness = memory ? memory->MatchesOriginal(gray, *found) : std::nullopt;
-            res.lost.push_back(likeness && *likeness < AppearanceMemory::kMinScore ? 1 : 0);
+            res.lost.push_back(likeness && *likeness < AppearanceMemory::kMinScore ? kLostUnlike : 0);
             coast.ObserveOk(*found);
             ++valid;
             res.xs.push_back(Centre(*found).x);

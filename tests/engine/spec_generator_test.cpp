@@ -254,6 +254,7 @@ TEST_CASE("spec T6: a long gap gets no actions when gap handling is on") {
     GenerateRequest req = Request(dir, "gap.mp4", "t6.funscript");
     req.scene_cuts = false;  // the vanishing disc is no cut; keep the case about the gap
     req.signal.max_gap_ms = 500;
+    req.signal.gaps_from_look = true;  // CSRT keeps a box on the empty frame (GD-11)
     Recorder rec;
     const auto a = Generated(req, &rec);
     CheckWellFormed(a);

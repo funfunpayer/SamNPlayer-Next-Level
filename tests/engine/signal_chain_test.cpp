@@ -145,3 +145,27 @@ TEST_CASE("signal: recommended is autotune with outliers, 60 ms and 500/s") {
         CHECK(std::abs(rec->actions[i].pos - rec->actions[i - 1].pos) <= kRecommendedMaxSpeed * dt / 1000 + 0.5);
     }
 }
+
+// D-161: gaps come from the tracker's own loss; the look check only when
+// asked for (it is near chance on some clips).
+TEST_CASE("signal: look-check losses make gaps only when asked") {
+    std::vector<double> t, y;
+    for (int i = 0; i < 600; ++i) {
+        t.push_back(i * 33.0);
+        y.push_back(200 + 40 * std::sin(i * 2 * kPi / 30));
+    }
+    std::vector<uint8_t> lost(t.size(), 0);
+    for (int i = 200; i < 260; ++i) lost[i] = kLostUnlike;  // 2 s the look check doubts
+    for (int i = 400; i < 460; ++i) lost[i] = kLostTracker;  // 2 s without a box
+    SignalOptions o;
+    o.profile = samn::ProfileRecommended;
+    o.max_gap_ms = 500;
+    std::string error;
+    auto tracker_only = RunSignal(t, y, lost, o, &error);
+    REQUIRE_MESSAGE(tracker_only, error);
+    CHECK(tracker_only->split_gaps == 1);
+    o.gaps_from_look = true;
+    auto both = RunSignal(t, y, lost, o, &error);
+    REQUIRE_MESSAGE(both, error);
+    CHECK(both->split_gaps == 2);
+}

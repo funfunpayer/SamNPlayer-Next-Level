@@ -146,7 +146,12 @@ std::optional<SignalResult> RunSignal(const std::vector<double>& t, const std::v
         go.max_gap_ms = o.max_gap_ms;
         go.outlier_mad_factor = mad_factor;
         // Without a gap limit a lost frame keeps its held value, as in 0.7.
-        const GapPlan plan = PlanGaps(t, y, o.max_gap_ms > 0 ? lost : std::vector<uint8_t>{}, go);
+        std::vector<uint8_t> bad;
+        if (o.max_gap_ms > 0) {
+            bad = lost;
+            for (auto& b : bad) b = b == kLostTracker || (b == kLostUnlike && o.gaps_from_look) ? 1 : 0;
+        }
+        const GapPlan plan = PlanGaps(t, y, bad, go);
         r.outliers = plan.outliers;
         r.bridged_gaps = plan.bridged;
         r.split_gaps = plan.split;

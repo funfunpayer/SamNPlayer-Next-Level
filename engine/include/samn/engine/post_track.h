@@ -53,6 +53,10 @@ std::vector<Action> ClampActionsPos(const std::vector<Action>& actions, int lo, 
 // everything off the track goes to PositionsToActions as in 0.7). A lost
 // tracker is not a measurement (LESSONS GD-19): short gaps are bridged with
 // a line, long ones split the track and get no actions.
+// TrackResult::lost codes: the tracker had no box, or a box that no longer
+// resembles the first crop (the look check, near chance on some clips).
+constexpr uint8_t kLostTracker = 1, kLostUnlike = 2;
+
 struct GapOptions {
     double max_gap_ms = 0;          // longer gaps split the track; 0 = never split
     double outlier_mad_factor = 0;  // 0 = no outlier rejection

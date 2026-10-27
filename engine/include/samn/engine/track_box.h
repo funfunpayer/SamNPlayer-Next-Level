@@ -14,6 +14,7 @@
 
 #include <opencv2/core.hpp>
 
+#include "samn/engine/post_track.h"
 #include "samn/engine/self_check.h"
 
 namespace samn::engine {
@@ -80,8 +81,10 @@ struct TrackStats {
 struct TrackResult {
     std::vector<int64_t> times_ms;  // video time per frame
     std::vector<double> positions;  // chosen axis, or tip↔partner distance (pixels)
-    // 1 where the frame had no tip box (not found and the coast spent): its
-    // position only repeats the last one. Same length as times_ms.
+    // Non-zero where the frame has no trustworthy tip position, same length
+    // as times_ms: kLostTracker = no tip box (not found and the coast spent;
+    // the position repeats the last one), kLostUnlike = a box that no longer
+    // resembles the first crop (LESSONS GD-11, spec T6).
     std::vector<uint8_t> lost;
     std::vector<double> xs, ys;     // box centre per frame (y camera-compensated)
     std::vector<double> frame_ys;   // box centre y in frame pixels, before compensation (tip path)

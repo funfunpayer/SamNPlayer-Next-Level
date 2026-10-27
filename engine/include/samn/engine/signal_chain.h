@@ -41,6 +41,10 @@ struct SignalOptions {
     // treated as lost (spec default 5).
     double max_gap_ms = 0;
     double outlier_mad_factor = 0;
+    // Gaps come from the tracker's own loss (kLostTracker). The look check
+    // (kLostUnlike) counts only when this is on: on the Owner's clip it
+    // marked 21 % of frames and gap handling then lost 0.695 -> 0.50 (D-161).
+    bool gaps_from_look = false;
 };
 
 // The stroke tempo from the stroke preview, when it was reliable.
