@@ -206,6 +206,34 @@ The thresholds stay those measured on synthetic scenes and are not tuned on
 this clip; calibration needs the golden clips with a checked reference
 (D-135), as planned for SC-6.
 
+### 3.5 Verified repair (SC-5) on the Owner clip
+
+First run: the full chain (0.7's cut rule), 67 failed 2 s windows. Repair as
+built (Find tip from the failed window, up to 3 proposals, each retry tracked
+with the original look as the memory's first template; a retry window is
+kept only if it passes outright and its look against the original is ≥ 0.75):
+
+- **0 of 67 repaired, 67 gaps** (24 % of the clip without a writer). Against
+  the 0.7 script (5 s windows) the median r went 0.20 → 0.18; of the 16
+  windows the gaps changed, 11 agree better and 5 worse.
+- **Why:** the retries pass the motion checks (c1 0.83-0.90 on the probed
+  windows), but their look against the start crop at 305 s is only
+  0.55-0.59. At 256×144 the crop is about 24×22 px after downscaling, and the
+  pose changes over ten minutes; on the synthetic clip a background patch
+  matched a foreign seed at 0.59 too. **The appearance check cannot tell the
+  right target from a wrong one on this clip**, so fail-closed means "no
+  repair".
+- Cost: the run took about 40 min for 570 s (Find tip on 5 s plus up to three
+  tracking runs per failed stretch). Needs caching of the flow (§5c) and
+  shorter retries before it is usable.
+
+What would verify identity better than the start crop (to be measured, not
+assumed): continuity with the last verified window (the retry starts within
+one box of where the good track was and has its stroke frequency), the
+rhythm-grid cell of GD-15, or a detector class (YOLO-family, §5a). Until one of
+these is measured, the repair stays strict: a gap is better than a wrong box
+(GD-19).
+
 ## 4. The engine: three lanes
 
 ```
