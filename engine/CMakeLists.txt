@@ -13,3 +13,7 @@ endif()
 # The comparison controller on the command line (P3.8).
 add_executable(samn_compare tools/samn_compare.cpp)
 target_link_libraries(samn_compare PRIVATE samn_engine)
+
+# The self-checking engine on the command line (docs/P3_SELF_CHECK_ENGINE.md).
+add_executable(samn_selfcheck tools/samn_selfcheck.cpp)
+target_link_libraries(samn_selfcheck PRIVATE samn_engine)
