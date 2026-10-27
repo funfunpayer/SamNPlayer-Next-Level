@@ -3,6 +3,7 @@
 #include <cmath>
 
 #include "samn/engine/signal_chain.h"
+#include "samn/samn_file.h"
 
 using namespace samn::engine;
 
@@ -94,4 +95,49 @@ TEST_CASE("signal: autotune caps the speed, distance profiles clamp 20-90") {
         CHECK(a.pos <= 90);
     }
     CHECK(r->post.dense_pos.size() == t.size());
+}
+
+// D-159: the Generator's default recipe is Autotune plus the measured spec
+// values; anything the caller sets still wins.
+TEST_CASE("signal: recommended is autotune with outliers, 60 ms and 500/s") {
+    SignalOptions o;
+    o.profile = samn::ProfileRecommended;
+    PostOptions p = BuildPostOptions(o, 0, 0, 0, 0);
+    CHECK(p.detrend_window_ms == 3000);
+    CHECK(p.bandpass_low_hz == 0.5);
+    CHECK(p.bandpass_high_hz == 4.0);
+    CHECK(p.peak_prominence == 0.2);
+    CHECK(p.min_interval_ms == kRecommendedIntervalMs);
+    o.min_action_interval_ms = 100;  // a stroker (device fit)
+    CHECK(BuildPostOptions(o, 0, 0, 0, 0).min_interval_ms == 100);
+
+    // A steady 1 Hz stroke with one wild frame: Recommended treats the
+    // frame as lost, Autotune (and Recommended with the switch off) follows it.
+    std::vector<double> t, y;
+    for (int i = 0; i < 600; ++i) {
+        t.push_back(i * 33.0);
+        y.push_back(200 + 40 * std::sin(i * 2 * M_PI / 30));
+    }
+    y[300] += 400;
+    std::string error;
+    o = SignalOptions{};
+    o.profile = samn::ProfileRecommended;
+    auto rec = RunSignal(t, y, o, &error);
+    REQUIRE_MESSAGE(rec, error);
+    CHECK(rec->outliers >= 1);
+    o.outlier_mad_factor = -1;
+    auto off = RunSignal(t, y, o, &error);
+    REQUIRE_MESSAGE(off, error);
+    CHECK(off->outliers == 0);
+    o = SignalOptions{};
+    o.profile = "autotune";
+    auto at = RunSignal(t, y, o, &error);
+    REQUIRE_MESSAGE(at, error);
+    CHECK(at->outliers == 0);
+
+    // The speed limit is 500 units/s.
+    for (size_t i = 1; i < rec->actions.size(); ++i) {
+        const double dt = double(rec->actions[i].at - rec->actions[i - 1].at);
+        CHECK(std::abs(rec->actions[i].pos - rec->actions[i - 1].pos) <= kRecommendedMaxSpeed * dt / 1000 + 0.5);
+    }
 }

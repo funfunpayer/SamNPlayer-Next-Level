@@ -111,7 +111,11 @@ void GeneratorController::loadSettings() {
 void GeneratorController::applySwitches(engine::SignalOptions& signal,
                                         std::filesystem::path& track_cache_dir) const {
     signal.max_gap_ms = gap_handling_ ? kGapBridgeMs : 0;
-    signal.outlier_mad_factor = outlier_rejection_ ? kOutlierMadFactor : 0;
+    // Off is -1: Recommended would otherwise turn it on by itself.
+    signal.outlier_mad_factor = outlier_rejection_ ? kOutlierMadFactor : -1;
+    // D-159 device fit: a stroker keeps 0.7's 100 ms between actions.
+    if (profile_ == QLatin1String(samn::ProfileRecommended) && feelKind() == QLatin1String("stroker"))
+        signal.min_action_interval_ms = 100;
     track_cache_dir = track_cache_ ? samn::config_dir() / "cache" / "track" : std::filesystem::path();
 }
 
@@ -427,7 +431,10 @@ QString GeneratorController::boxLabel() const {
 
 void GeneratorController::setProfile(const QString& p) {
     // Tf/Tj need a contact mark (P3.4); the Generator offers the stroke styles.
-    const QString v = p == QLatin1String("weich") || p == QLatin1String("autotune") ? p : QStringLiteral("standard");
+    const QString v = p == QLatin1String("weich") || p == QLatin1String("autotune") ||
+                              p == QLatin1String(samn::ProfileRecommended)
+                          ? p
+                          : QStringLiteral("standard");
     if (v == profile_) return;
     profile_ = v;
     saveSetting("generator.profile", v.toStdString());

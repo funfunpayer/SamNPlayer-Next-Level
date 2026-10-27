@@ -289,6 +289,10 @@ The Generator already did most of this before the spec existed; what was missing
 
 End time and analysis rate have no control on the Generator page yet. The comparison controller's manifest reaches them (`end_ms`, `max_analysis_fps`).
 
+**Default recipe "Recommended" (D-160, 27 Oct)**
+
+The Generator's default is the profile `recommended`: Autotune's recipe with FR-13 outliers (5 × MAD), FR-17 speed limit 500 units/s and FR-16 minimum interval 60 ms (100 ms on a stroker). FR-14's 120 ms smoothing, the 4 s baseline and FR-12 gap handling measured worse on synthetic tracks with known strokes and on the Owner's clip, so they are not in it (numbers in D-160). Normal, Soft and Autotune are unchanged.
+
 **Kept from 0.7 on purpose (differs from this spec)**
 
 | Spec | SamNPlayer | Why |

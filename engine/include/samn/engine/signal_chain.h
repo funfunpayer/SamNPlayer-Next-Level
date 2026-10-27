@@ -17,8 +17,12 @@ namespace samn::engine {
 // The user's choices. 0 means "the profile's or the default value"; a
 // negative norm_percentile, min_action_interval_ms or detrend_window_ms
 // means explicitly off.
+// Profile "recommended" (D-159, the Generator's default): Autotune's recipe
+// with these spec values; a value set in SignalOptions still wins.
+constexpr double kRecommendedMadFactor = 5, kRecommendedMaxSpeed = 500, kRecommendedIntervalMs = 60;
+
 struct SignalOptions {
-    std::string profile;  // "", standard, weich, autotune, tf, tj, ...
+    std::string profile;  // "", standard, weich, autotune, recommended, tf, tj, ...
     bool invert = false;
     int smooth_window = 0;
     int min_peak_distance_ms = 0;

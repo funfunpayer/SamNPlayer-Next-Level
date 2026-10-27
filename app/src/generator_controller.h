@@ -41,17 +41,17 @@ class GeneratorController : public QObject {
     Q_PROPERTY(QRect box READ box WRITE setBox NOTIFY boxChanged)
     Q_PROPERTY(bool hasBox READ hasBox NOTIFY boxChanged)
     Q_PROPERTY(QString boxLabel READ boxLabel NOTIFY boxChanged)
-    // Feel: "standard" (Normal) | "weich" (Soft) | "autotune".
+    // Feel: "recommended" (default, D-159) | "standard" (Normal) | "weich" (Soft) | "autotune".
     Q_PROPERTY(QString profile READ profile WRITE setProfile NOTIFY optionsChanged)
     Q_PROPERTY(bool invert READ invert WRITE setInvert NOTIFY optionsChanged)
     Q_PROPERTY(bool cameraCompensation READ cameraCompensation WRITE setCameraCompensation NOTIFY optionsChanged)
     Q_PROPERTY(bool sceneCuts READ sceneCuts WRITE setSceneCuts NOTIFY optionsChanged)
     Q_PROPERTY(bool autoOZone READ autoOZone WRITE setAutoOZone NOTIFY optionsChanged)
-    // Opt-in, off by default (0.7 behaviour when off): bridge tracking gaps up
-    // to kGapBridgeMs and leave longer ones without actions; treat single-
-    // frame outliers as lost; keep raw tracks in config_dir()/cache/track so
-    // a new feel does not track again (generator.gap_handling,
-    // generator.outlier_rejection, generator.track_cache).
+    // Bridge tracking gaps up to kGapBridgeMs and leave longer ones without
+    // actions (off); treat single-frame outliers as lost (on, D-159); keep raw
+    // tracks in config_dir()/cache/track so a new feel does not track again
+    // (off) (generator.gap_handling, generator.outlier_rejection,
+    // generator.track_cache).
     Q_PROPERTY(bool gapHandling READ gapHandling WRITE setGapHandling NOTIFY optionsChanged)
     Q_PROPERTY(bool outlierRejection READ outlierRejection WRITE setOutlierRejection NOTIFY optionsChanged)
     Q_PROPERTY(bool trackCache READ trackCache WRITE setTrackCache NOTIFY optionsChanged)
@@ -321,9 +321,9 @@ private:
     QImage frame_;
     QRect box_;
     double box_ms_ = 0;  // the video time the box was drawn or found at
-    QString profile_ = QStringLiteral("standard");
+    QString profile_ = QStringLiteral("recommended");
     bool invert_ = false, camera_ = true, scene_cuts_ = true, auto_ozone_ = true;
-    bool gap_handling_ = false, outlier_rejection_ = false, track_cache_ = false;
+    bool gap_handling_ = false, outlier_rejection_ = true, track_cache_ = false;
     bool contact_vibration_ = true;
     double contact_span_ = 0.75;
     QString contact_curve_ = QStringLiteral("soft");

@@ -69,7 +69,8 @@ PostOptions BuildPostOptions(const SignalOptions& o, int smooth, int peak_dist, 
         if (peak_dist == 0) p.min_peak_distance_ms = 200;
         if (p.dynamic_range_ms == 0) p.dynamic_range_ms = 3000;
     }
-    if (o.profile == "autotune") {
+    const bool recommended = o.profile == ProfileRecommended;
+    if (o.profile == "autotune" || recommended) {
         // Multi-filter recipe after FunGen's Ultimate Autotune and
         // Funscript-Flow; the classical track still writes the script.
         if (p.detrend_window_ms == 0) p.detrend_window_ms = 3000;
@@ -80,6 +81,11 @@ PostOptions BuildPostOptions(const SignalOptions& o, int smooth, int peak_dist, 
         if (p.dynamic_range_ms == 0) p.dynamic_range_ms = 3000;
         if (p.peak_prominence == 0) p.peak_prominence = 0.2;
     }
+    // D-159 measured on 9 synthetic tracks with known strokes and the
+    // Owner's clip (27 Oct): the spec's 60 ms spacing and 2nd/98th
+    // percentile are neutral there and kept; its 120 ms smoothing and 4 s
+    // detrend lost against Autotune's, so those stay as Autotune has them.
+    if (recommended && o.min_action_interval_ms == 0) p.min_interval_ms = kRecommendedIntervalMs;
     return p;
 }
 
@@ -122,9 +128,14 @@ std::optional<SignalResult> RunSignal(const std::vector<double>& t, const std::v
                                       const std::vector<uint8_t>& lost, const SignalOptions& o, std::string* error) {
     const PostOptions po =
         BuildPostOptions(o, o.smooth_window, o.min_peak_distance_ms, o.adaptive_error, o.norm_percentile);
+    // Recommended (D-159): single-frame jumps are lost samples (synthetic
+    // window r 0.957 -> 0.968; the Owner's clip unchanged).
+    const double mad_factor = o.outlier_mad_factor > 0                     ? o.outlier_mad_factor
+                              : o.outlier_mad_factor == 0 && o.profile == ProfileRecommended ? kRecommendedMadFactor
+                                                                                             : 0;
     SignalResult r;
     std::optional<PostResult> post;
-    if (o.max_gap_ms <= 0 && o.outlier_mad_factor <= 0) {
+    if (o.max_gap_ms <= 0 && mad_factor <= 0) {
         post = PositionsToActions(t, y, po, error);
     } else {
         if (t.size() != y.size() || y.empty()) {
@@ -133,7 +144,7 @@ std::optional<SignalResult> RunSignal(const std::vector<double>& t, const std::v
         }
         GapOptions go;
         go.max_gap_ms = o.max_gap_ms;
-        go.outlier_mad_factor = o.outlier_mad_factor;
+        go.outlier_mad_factor = mad_factor;
         // Without a gap limit a lost frame keeps its held value, as in 0.7.
         const GapPlan plan = PlanGaps(t, y, o.max_gap_ms > 0 ? lost : std::vector<uint8_t>{}, go);
         r.outliers = plan.outliers;
@@ -143,7 +154,12 @@ std::optional<SignalResult> RunSignal(const std::vector<double>& t, const std::v
     }
     if (!post) return std::nullopt;
     r.actions = post->actions;
-    const double max_speed = o.max_speed > 0 ? o.max_speed : o.profile == "autotune" ? 400 : 0;
+    // Recommended: 500 units/s (spec FR-17) beat Autotune's 400 against the
+    // known strokes (window r 0.968 -> 0.982).
+    const double max_speed = o.max_speed > 0                   ? o.max_speed
+                             : o.profile == "autotune"         ? 400
+                             : o.profile == ProfileRecommended ? kRecommendedMaxSpeed
+                                                               : 0;
     if (max_speed > 0) r.actions = LimitSpeed(r.actions, max_speed, nullptr);
     if (IsDistanceProfile(o.profile)) r.actions = ClampActionsPos(r.actions, 20, 90);
     r.post = std::move(*post);

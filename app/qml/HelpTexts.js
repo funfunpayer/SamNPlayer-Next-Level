@@ -97,7 +97,7 @@ const texts = {
     "gen-mask-add": "Ignore region (black): exclude a wrong latch (knees, background). Same as Scene map → Ignore. Does not drive the stroke; use when auto tip/heatmap fails onto the wrong part.",
     // src/generator.js:24 (User handbook)
     "gen-open-handbook": "Opens the in-app handbook: Create steps, gaps, AI export, Play map.",
-    "gen-outliers": "Opt-in: a single frame that jumps far from its neighbours (5 × their median deviation) is treated as a tracking loss, not as a stroke. Off = as before.",
+    "gen-outliers": "On by default: a single frame that jumps far from its neighbours (5 × their median deviation) is treated as a tracking loss, not as a stroke. Off = every frame counts, as in 0.7.",
     // src/generator.js:515 (Optimize for)
     "gen-optimize-target": "After Create, optimize the new script: for any device (fill gaps only) or for Sam Neo 2 (adds contact vibration and baked vibration / suction).",
     // src/generator.js:468 (Re-find region after each cut (Python-only; soft-ignored on )
@@ -194,7 +194,7 @@ const texts = {
     // src/generator.js:548 (Start (s))
     "generator.start-s": "Cut black intro / late credits. 0 = keep from start.",
     // src/generator.js:234 (Style)
-    "generator.style": "Normal = everyday feel. Soft = gentler. Autotune = extra cleanup for noisy clips.",
+    "generator.style": "Recommended = Autotune's cleanup plus ignored single-frame jumps and a 500/s speed limit (default). Normal = 0.7's everyday feel. Soft = gentler. Autotune = 0.7's extra cleanup for noisy clips.",
     // src/generator.js:146 (Time (s))
     "generator.time-s": "Seek past a black intro before marking the region.",
     // src/generator.js:178 (Tip (glans/penis))

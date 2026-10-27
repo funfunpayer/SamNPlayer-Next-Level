@@ -1433,7 +1433,8 @@ Item {
                             Layout.fillWidth: true
                             enabled: !gen.running
                             textRole: "label"; valueRole: "value"
-                            model: [{ label: qsTr("Normal"), value: "standard" },
+                            model: [{ label: qsTr("Recommended"), value: "recommended" },
+                                    { label: qsTr("Normal"), value: "standard" },
                                     { label: qsTr("Soft"), value: "weich" },
                                     { label: qsTr("Autotune"), value: "autotune" }]
                             currentIndex: Math.max(0, indexOfValue(gen.profile))

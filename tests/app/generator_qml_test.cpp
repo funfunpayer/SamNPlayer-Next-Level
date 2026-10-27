@@ -199,10 +199,13 @@ private slots:
         QVERIFY(!named(root.get(), "createLede")->isVisible());
 
         // Feel: the style combo and a toggle reach the controller.
+        // Recommended is the default and first (D-160); Autotune is fourth.
         auto* combo = named(root.get(), "styleCombo");
-        QMetaObject::invokeMethod(combo, "activated", Q_ARG(int, 2));
-        combo->setProperty("currentIndex", 2);
-        QMetaObject::invokeMethod(combo, "activated", Q_ARG(int, 2));
+        QCOMPARE(gen->profile(), QStringLiteral("recommended"));
+        QCOMPARE(combo->property("currentIndex").toInt(), 0);
+        QMetaObject::invokeMethod(combo, "activated", Q_ARG(int, 3));
+        combo->setProperty("currentIndex", 3);
+        QMetaObject::invokeMethod(combo, "activated", Q_ARG(int, 3));
         QTRY_COMPARE(gen->profile(), QStringLiteral("autotune"));
         auto* invert = named(root.get(), "toggle_invert");
         QVERIFY(invert);

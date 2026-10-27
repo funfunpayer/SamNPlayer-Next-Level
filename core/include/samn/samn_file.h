@@ -49,6 +49,9 @@ inline const char* const SamnExt = ".samn";
 
 inline const char* const ProfileStandard = "standard";
 inline const char* const ProfileWeich = "weich";
+// D-159: the Generator's default stroke recipe (Autotune plus the measured
+// spec values: outliers, spacing, speed limit).
+inline const char* const ProfileRecommended = "recommended";
 inline const char* const ProfileTf = "tf";
 inline const char* const ProfileTj = "tj";
 
