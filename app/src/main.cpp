@@ -128,6 +128,9 @@ int main(int argc, char** argv) {
     });
     readyPoll->start();
     QTimer::singleShot(10000, window, show);
+    // Test hook: SAMN_SMOKE_PLAY=1 plays the video opened at start (the
+    // package smoke test checks that its first picture comes).
+    if (qEnvironmentVariableIsSet("SAMN_SMOKE_PLAY")) QMetaObject::invokeMethod(window, "smokePlay");
     // Test hook: SAMN_SCREENSHOT=file.png [SAMN_SCREENSHOT_DELAY_MS] saves the
     // window and quits (used for visual checks with test-pattern media only).
     if (const QString shot = qEnvironmentVariable("SAMN_SCREENSHOT"); !shot.isEmpty()) {

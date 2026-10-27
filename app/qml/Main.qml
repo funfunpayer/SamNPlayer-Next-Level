@@ -384,6 +384,9 @@ ApplicationWindow {
         }
     }
 
+    // Test hook (SAMN_SMOKE_PLAY, main.cpp): play the video opened at start.
+    function smokePlay() { win.mode = 0; player.playWhenReady() }
+
     Component.onCompleted: {
         if (win.mode >= top.modes.length) win.mode = 0  // a plugin mode that is off
         if (startupPaths.length > 0) player.controller.openPaths(startupPaths)
