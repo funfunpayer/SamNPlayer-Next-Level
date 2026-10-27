@@ -7,6 +7,10 @@
 
 using namespace samn::engine;
 
+namespace {
+constexpr double kPi = 3.14159265358979323846;  // M_PI is not standard C++ (MSVC)
+}  // namespace
+
 // Ported from 0.7 generator/detrend_default_test.go.
 TEST_CASE("signal: detrend window is two stroke periods, clamped") {
     auto ms = [](std::optional<StrokeHint> h) { return AdaptiveDetrendMs(h, nullptr); };
@@ -116,7 +120,7 @@ TEST_CASE("signal: recommended is autotune with outliers, 60 ms and 500/s") {
     std::vector<double> t, y;
     for (int i = 0; i < 600; ++i) {
         t.push_back(i * 33.0);
-        y.push_back(200 + 40 * std::sin(i * 2 * M_PI / 30));
+        y.push_back(200 + 40 * std::sin(i * 2 * kPi / 30));
     }
     y[300] += 400;
     std::string error;
