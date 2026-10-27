@@ -27,7 +27,11 @@ struct GenerateRequest {
     std::filesystem::path video;
     cv::Rect box;
     int64_t start_ms = 0;
+    int64_t end_ms = 0;            // 0 = to the end
     int max_frames = 0;
+    double max_analysis_fps = 0;   // 0 = every frame
+    // Raw tracks are cached here (spec FR-11); empty = no cache.
+    std::filesystem::path track_cache_dir;
     bool camera_compensation = true;
     bool scene_cuts = true;
     TrackAxis axis = TrackAxis::kAuto;

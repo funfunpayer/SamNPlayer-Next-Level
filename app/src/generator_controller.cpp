@@ -24,6 +24,7 @@
 #include "samn/polarity.h"
 #include "samn/samn_file.h"
 #include "samn/script_quality.h"
+#include "samn/settings.h"
 #include "samn/vision/frame_reader.h"
 
 namespace samn::ui {
@@ -39,6 +40,10 @@ QString Clock(double ms) {
     const int s = int(ms / 1000);
     return QStringLiteral("%1:%2").arg(s / 60).arg(s % 60, 2, 10, QLatin1Char('0'));
 }
+
+// The values behind the opt-in switches (spec FR-12, FR-13 defaults).
+constexpr double kGapBridgeMs = 500;
+constexpr double kOutlierMadFactor = 5;
 
 }  // namespace
 
@@ -77,6 +82,9 @@ void GeneratorController::loadSettings() {
         camera_ = flag("generator.camera_compensation", camera_);
         scene_cuts_ = flag("generator.scene_cuts", scene_cuts_);
         auto_ozone_ = flag("generator.auto_ozone", auto_ozone_);
+        gap_handling_ = flag("generator.gap_handling", gap_handling_);
+        outlier_rejection_ = flag("generator.outlier_rejection", outlier_rejection_);
+        track_cache_ = flag("generator.track_cache", track_cache_);
         contact_vibration_ = flag("generator.contact_vibration", contact_vibration_);
         setTipClass(str("generator.tip_class", tip_class_));
         setContactClass(str("generator.contact_class", contact_class_));
@@ -98,6 +106,17 @@ void GeneratorController::loadSettings() {
     } catch (const std::exception&) {
         // Unreadable settings: the defaults stay.
     }
+}
+
+void GeneratorController::applySwitches(engine::SignalOptions& signal,
+                                        std::filesystem::path& track_cache_dir) const {
+    signal.max_gap_ms = gap_handling_ ? kGapBridgeMs : 0;
+    // Off is -1: Recommended would otherwise turn it on by itself.
+    signal.outlier_mad_factor = outlier_rejection_ ? kOutlierMadFactor : -1;
+    // D-159 device fit: a stroker keeps 0.7's 100 ms between actions.
+    if (profile_ == QLatin1String(samn::ProfileRecommended) && feelKind() == QLatin1String("stroker"))
+        signal.min_action_interval_ms = 100;
+    track_cache_dir = track_cache_ ? samn::config_dir() / "cache" / "track" : std::filesystem::path();
 }
 
 void GeneratorController::saveSetting(const char* key, const nlohmann::json& value) {
@@ -126,9 +145,10 @@ bool GeneratorController::findTip() {
     emit findingChanged();
     setStatus(tr("Looking for the rhythmic motion…"));
     QPointer<GeneratorController> self(this);
-    finder_ = std::thread([self, cancel = find_cancel_, forVideo = video_path_,
+    finder_ = std::thread([self, cancel = find_cancel_, forVideo = video_path_, startMs = int64_t(std::llround(preview_ms_)),
                            video = std::filesystem::path(video_path_.toStdU16String())] {
         samn::engine::TipFindOptions o;
+        o.start_ms = startMs;  // 0.7: from the shown frame
         o.cancel = [cancel] { return cancel->load(); };
         std::string error;
         std::optional<samn::engine::TipFindResult> r;
@@ -137,7 +157,7 @@ bool GeneratorController::findTip() {
         } catch (const std::exception& e) {
             error = e.what();
         }
-        QMetaObject::invokeMethod(qApp, [self, r = std::move(r), error, forVideo] {
+        QMetaObject::invokeMethod(qApp, [self, r = std::move(r), error, forVideo, startMs] {
             if (!self) return;
             self->finding_ = false;
             emit self->findingChanged();
@@ -159,6 +179,7 @@ bool GeneratorController::findTip() {
             self->tip_candidates_ = list;
             emit self->tipCandidatesChanged();
             self->setBox(QRect(r->box.x, r->box.y, r->box.width, r->box.height));
+            self->box_ms_ = double(startMs);  // found from there, whatever is shown now
             // Below this the "rhythm" is compression noise (a still clip
             // scores about 0.002, a clear stroke above 1).
             const bool weak = r->candidates.empty() || r->candidates.front().score < 0.05;
@@ -248,6 +269,7 @@ bool GeneratorController::runQueue(bool overwrite) {
     settings.scene_cuts = scene_cuts_;
     settings.auto_ozone = auto_ozone_;
     settings.overwrite = overwrite;
+    applySwitches(settings.signal, settings.track_cache_dir);
     settings.contact_vibration = contact_vibration_;
     settings.contact_vibration_span = contact_span_;
     settings.contact_vibration_curve = contact_curve_.toStdString();
@@ -387,8 +409,11 @@ void GeneratorController::setBox(const QRect& box) {
     // Inside the frame; 0.7 treats boxes under 8 px as a click, not a box.
     const QRect r = box.normalized().intersected(QRect(QPoint(0, 0), video_size_));
     const QRect next = r.width() >= 8 && r.height() >= 8 ? r : QRect();
-    if (next == box_) return;
+    // The box belongs to the frame it was drawn on: tracking starts there
+    // (0.7 startTimeSec), not at 0 where the tip is somewhere else.
+    if (next == box_ && box_ms_ == preview_ms_) return;
     box_ = next;
+    box_ms_ = preview_ms_;
     emit boxChanged();
     emit stepChanged();
 }
@@ -406,7 +431,10 @@ QString GeneratorController::boxLabel() const {
 
 void GeneratorController::setProfile(const QString& p) {
     // Tf/Tj need a contact mark (P3.4); the Generator offers the stroke styles.
-    const QString v = p == QLatin1String("weich") || p == QLatin1String("autotune") ? p : QStringLiteral("standard");
+    const QString v = p == QLatin1String("weich") || p == QLatin1String("autotune") ||
+                              p == QLatin1String(samn::ProfileRecommended)
+                          ? p
+                          : QStringLiteral("standard");
     if (v == profile_) return;
     profile_ = v;
     saveSetting("generator.profile", v.toStdString());
@@ -424,6 +452,9 @@ SAMN_SETTER(setInvert, invert_, nullptr)
 SAMN_SETTER(setCameraCompensation, camera_, "generator.camera_compensation")
 SAMN_SETTER(setSceneCuts, scene_cuts_, "generator.scene_cuts")
 SAMN_SETTER(setAutoOZone, auto_ozone_, "generator.auto_ozone")
+SAMN_SETTER(setGapHandling, gap_handling_, "generator.gap_handling")
+SAMN_SETTER(setOutlierRejection, outlier_rejection_, "generator.outlier_rejection")
+SAMN_SETTER(setTrackCache, track_cache_, "generator.track_cache")
 SAMN_SETTER(setContactVibration, contact_vibration_, "generator.contact_vibration")
 #undef SAMN_SETTER
 
@@ -849,12 +880,14 @@ bool GeneratorController::create(bool overwrite) {
     engine::GenerateRequest req;
     req.video = std::filesystem::path(video_path_.toStdU16String());
     req.box = cv::Rect(box_.x(), box_.y(), box_.width(), box_.height());
+    req.start_ms = int64_t(std::llround(box_ms_));
     req.camera_compensation = camera_;
     req.scene_cuts = scene_cuts_;
     req.signal.profile = profile_.toStdString();
     req.signal.invert = invert_;
     req.output = funscriptPath();
     req.overwrite = overwrite;
+    applySwitches(req.signal, req.track_cache_dir);
     req.auto_ozone = auto_ozone_;
     req.contact_vibration = contact_vibration_;
     req.contact_vibration_span = contact_span_;

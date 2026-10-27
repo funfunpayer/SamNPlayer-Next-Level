@@ -290,14 +290,53 @@ std::vector<int> FindPeaks(const std::vector<double>& y, int distance, double pr
     return out;
 }
 
-std::optional<PostResult> PositionsToActions(const std::vector<double>& t, const std::vector<double>& raw,
+namespace {
+
+// Frames that are missing (dropped, variable frame rate, an analysis-rate
+// cap) leave uneven steps; the smoothing and the peak distance count samples,
+// so uneven steps move the turning points (spec T4: up to 66 ms). Such input
+// is resampled onto the median step by linear interpolation; even input is
+// returned as it is, so every regular track stays byte-identical.
+bool ResampleIfUneven(std::vector<double>& t, std::vector<double>& y) {
+    const size_t n = t.size();
+    if (n < 4) return false;
+    const double step = MedianDiff(t);
+    if (step <= 0) return false;
+    bool uneven = false;
+    for (size_t i = 1; i < n && !uneven; ++i) uneven = t[i] - t[i - 1] > 1.5 * step;
+    if (!uneven) return false;
+    std::vector<double> rt, ry;
+    const size_t m = static_cast<size_t>(std::floor((t.back() - t.front()) / step)) + 1;
+    rt.reserve(m);
+    ry.reserve(m);
+    size_t j = 0;
+    for (size_t k = 0; k < m; ++k) {
+        const double at = t.front() + double(k) * step;
+        while (j + 1 < n && t[j + 1] < at) ++j;
+        const size_t a = j, b = std::min(j + 1, n - 1);
+        const double span = t[b] - t[a];
+        const double f = span > 0 ? std::clamp((at - t[a]) / span, 0.0, 1.0) : 0.0;
+        rt.push_back(std::round(at));
+        ry.push_back(y[a] + (y[b] - y[a]) * f);
+    }
+    t = std::move(rt);
+    y = std::move(ry);
+    return true;
+}
+
+}  // namespace
+
+std::optional<PostResult> PositionsToActions(const std::vector<double>& t_in, const std::vector<double>& raw_in,
                                              const PostOptions& o, std::string* error) {
     auto fail = [&](const char* why) {
         if (error) *error = why;
         return std::optional<PostResult>();
     };
+    if (raw_in.empty() || t_in.size() != raw_in.size()) return fail("timestamps and positions differ in length");
+    std::vector<double> t = t_in, raw = raw_in;
+    // Scene ranges are sample indices of the input: those runs keep its steps.
+    if (o.scene_ranges.empty()) ResampleIfUneven(t, raw);
     const int n = static_cast<int>(raw.size());
-    if (n == 0 || t.size() != raw.size()) return fail("timestamps and positions differ in length");
 
     int window = o.smooth_window > 0 ? o.smooth_window : 11;
     if (n < window) window = n % 2 == 0 ? n - 1 : n;
@@ -367,6 +406,89 @@ std::optional<PostResult> PositionsToActions(const std::vector<double>& t, const
     r.dense_at = t;
     r.dense_pos = pos;
     return r;
+}
+
+std::vector<uint8_t> FindOutliers(const std::vector<double>& y, const std::vector<uint8_t>& bad, int neighbours,
+                                  double factor) {
+    const int n = static_cast<int>(y.size());
+    std::vector<uint8_t> out(n, 0);
+    if (factor <= 0 || neighbours < 1) return out;
+    std::vector<double> win, dev;
+    win.reserve(2 * neighbours);
+    dev.reserve(2 * neighbours);
+    for (int i = 0; i < n; ++i) {
+        if (!bad.empty() && bad[i]) continue;
+        win.clear();
+        for (int j = std::max(0, i - neighbours); j <= std::min(n - 1, i + neighbours); ++j)
+            if (j != i && (bad.empty() || !bad[j])) win.push_back(y[j]);
+        if (win.size() < 2) continue;
+        const double med = Percentile(win, 50);
+        dev.clear();
+        for (double v : win) dev.push_back(std::abs(v - med));
+        const double mad = std::max(Percentile(dev, 50), kOutlierMadFloor);
+        if (std::abs(y[i] - med) > factor * mad) out[i] = 1;
+    }
+    return out;
+}
+
+GapPlan PlanGaps(const std::vector<double>& t, const std::vector<double>& y, std::vector<uint8_t> bad,
+                 const GapOptions& o) {
+    const int n = static_cast<int>(y.size());
+    GapPlan plan;
+    plan.values = y;
+    if (n == 0 || t.size() != y.size()) return plan;
+    if (bad.size() != y.size()) bad.assign(n, 0);
+    if (o.outlier_mad_factor > 0) {
+        const std::vector<uint8_t> out = FindOutliers(y, bad, o.outlier_neighbours, o.outlier_mad_factor);
+        for (int i = 0; i < n; ++i)
+            if (out[i]) {
+                bad[i] = 1;
+                ++plan.outliers;
+            }
+    }
+    const auto too_long = [&](double span_ms) { return o.max_gap_ms > 0 && span_ms > o.max_gap_ms; };
+    int seg_start = -1, prev_good = -1;
+    for (int i = 0; i <= n; ++i) {
+        if (i < n && bad[i]) continue;
+        // i is good (or the end); bad samples lie between prev_good and i.
+        const bool gap = i - prev_good > 1;
+        if (prev_good < 0) {
+            if (i == n) break;  // nothing usable
+            if (gap && !too_long(t[i] - t[0])) {
+                for (int k = 0; k < i; ++k) plan.values[k] = y[i];  // short lead-in: hold
+                seg_start = 0;
+                ++plan.bridged;
+            } else {
+                if (gap) ++plan.split;
+                seg_start = i;
+            }
+        } else if (i == n) {
+            if (gap && !too_long(t[n - 1] - t[prev_good])) {
+                for (int k = prev_good + 1; k < n; ++k) plan.values[k] = y[prev_good];  // short tail: hold
+                plan.segments.push_back({seg_start, n});
+                ++plan.bridged;
+            } else {
+                if (gap) ++plan.split;
+                plan.segments.push_back({seg_start, prev_good + 1});
+            }
+            break;
+        } else if (gap) {
+            const double span = t[i] - t[prev_good];
+            if (too_long(span)) {
+                plan.segments.push_back({seg_start, prev_good + 1});
+                seg_start = i;
+                ++plan.split;
+            } else {
+                for (int k = prev_good + 1; k < i; ++k) {
+                    const double w = span > 0 ? (t[k] - t[prev_good]) / span : 0;
+                    plan.values[k] = y[prev_good] + (y[i] - y[prev_good]) * w;
+                }
+                ++plan.bridged;
+            }
+        }
+        prev_good = i;
+    }
+    return plan;
 }
 
 std::vector<Action> LimitSpeed(const std::vector<Action>& actions, double max_ups, int* changed) {
