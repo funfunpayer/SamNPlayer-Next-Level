@@ -89,6 +89,29 @@ jobs:
       - name: Build
         run: cmake --build build --config Release --parallel
 
+      # The package's FFmpeg: Qt's version and options plus dav1d, so AV1
+      # plays without a GPU AV1 decoder (ci/windows/build_ffmpeg_dav1d.sh).
+      # Built once, then kept in the cache.
+      - name: FFmpeg with dav1d cache (Windows)
+        if: runner.os == 'Windows'
+        id: ffmpeg
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.ffmpeg-dav1d
+          key: ffmpeg-dav1d-${{ runner.os }}-${{ hashFiles('ci/windows/build_ffmpeg_dav1d.sh', 'ci/vcpkg/vcpkg.json') }}
+
+      - name: Build FFmpeg with dav1d (Windows)
+        if: runner.os == 'Windows' && steps.ffmpeg.outputs.cache-hit != 'true'
+        shell: cmd
+        env:
+          MSYS2_PATH_TYPE: inherit
+          MSYSTEM: MSYS
+          CHERE_INVOKING: "1"
+        run: |
+          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath`) do set VSDIR=%%i
+          call "%VSDIR%\VC\Auxiliary\Build\vcvars64.bat" || exit /b 1
+          C:\msys64\usr\bin\bash.exe -lc "./ci/windows/build_ffmpeg_dav1d.sh" || exit /b 1
+
       - name: Core tests (C++)
         run: ctest --test-dir build -C Release --output-on-failure
 
@@ -143,6 +166,15 @@ jobs:
           cp build/app/Release/*.dll "$dist/"
           qt=$(cygpath -u "$QT_ROOT_DIR")
           "$qt/bin/windeployqt.exe" --release --qmldir app/qml --compiler-runtime --no-translations "$dist/SamNPlayer2.exe"
+          # Qt's FFmpeg DLLs replaced by the same version with dav1d (AV1
+          # without a GPU decoder); the names must match Qt's.
+          for dll in avcodec-61 avformat-61 avutil-59 swresample-5 swscale-8; do
+            test -f "$dist/$dll.dll" || { echo "::error::Qt's $dll.dll is not in the package: the FFmpeg version changed"; exit 1; }
+            cp ".ffmpeg-dav1d/bin/$dll.dll" "$dist/"
+          done
+          cp .ffmpeg-dav1d/bin/dav1d.dll "$dist/"
+          cp .ffmpeg-dav1d/LICENSE.md "$dist/FFMPEG_LICENSE.md"
+          cp .ffmpeg-dav1d/COPYING.LGPLv2.1 "$dist/FFMPEG_COPYING.LGPLv2.1"
           cp LICENSE THIRD_PARTY.md ci/windows/README.txt "$dist/"
           # The student's training script runs in the Python the app sets up (D-155 step 5).
           mkdir -p "$dist/ai" && cp ai/train_student.py "$dist/ai/"
@@ -173,9 +205,26 @@ jobs:
           log="$cfg/logs/samnplayer2.log"
           [ -f "$log" ] && cat "$log" || echo "(no log written)"
           if [ "$rc" -ne 0 ]; then echo "::error::The package exited with $rc (124 = hung)."; exit 1; fi
+          # How long the start takes on a real Windows install (Owner 26 Oct).
+          grep -h "Startup:" "$log" | sed 's/^.*Startup:/::notice title=Startup::/' || true
           test -s "$GITHUB_WORKSPACE/package.png"
           if grep -Eiq "no QtMultimedia backends|could not be loaded|cannot load library|failed to load plugin|module .* is not installed" "$log"; then
             echo "::error::The package is missing a library or plugin (see the log above)."
+            exit 1
+          fi
+          # AV1 on a machine without a GPU AV1 decoder (this runner): the
+          # picture must come, from dav1d (Owner 26 Oct; 0.7 played it).
+          cfg=$(mktemp -d)
+          rc=0
+          env -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH -u QT_ROOT_DIR -u QT_QPA_PLATFORM \
+            PATH="/c/Windows/system32:/c/Windows:/usr/bin" SAMN_CONFIG_DIR="$cfg" SAMN_SMOKE_PLAY=1 \
+            SAMN_SCREENSHOT="$GITHUB_WORKSPACE/package-av1.png" SAMN_SCREENSHOT_DELAY_MS=6000 \
+            /usr/bin/timeout 90 ./SamNPlayer2.exe "$GITHUB_WORKSPACE/tests/app/data/testpattern_av1_4s.mp4" || rc=$?
+          log="$cfg/logs/samnplayer2.log"
+          [ -f "$log" ] && cat "$log" || echo "(no log written)"
+          if [ "$rc" -ne 0 ]; then echo "::error::The package exited with $rc on the AV1 clip."; exit 1; fi
+          if ! grep -q "Video: first picture (AV1)" "$log"; then
+            echo "::error::The AV1 test clip showed no picture (see the log above)."
             exit 1
           fi
 
