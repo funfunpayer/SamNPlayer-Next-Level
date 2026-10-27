@@ -158,7 +158,9 @@ TEST_CASE("device/go_json: floats and objects as Go's encoding/json writes them"
     CHECK(GoFloat(0.1 + 0.2) == "0.30000000000000004");
 
     nlohmann::json j = {{"b", 1.0}, {"a", "x<y&\"z\n"}, {"c", nlohmann::json::array({1, 2.5, true, nullptr})}};
-    CHECK(GoJsonDump(j) == R"({"a":"x\u003cy\u0026\"z\n","b":1,"c":[1,2.5,true,null]})");
+    // Outside the macro: MSVC 17.14's preprocessor breaks on this raw string inside CHECK().
+    const std::string want = R"({"a":"x\u003cy\u0026\"z\n","b":1,"c":[1,2.5,true,null]})";
+    CHECK(GoJsonDump(j) == want);
 
     nlohmann::ordered_json o = nlohmann::ordered_json::object();
     o["z"] = 1;

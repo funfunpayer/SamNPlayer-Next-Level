@@ -20,6 +20,18 @@ namespace {
 
 constexpr int kRememberEveryNFrames = 25;
 
+// Spread between the 2nd and 98th percentile.
+double RobustRange(std::vector<double> v) {
+    if (v.size() < 2) return 0;
+    auto at = [&](double p) {
+        const size_t k = static_cast<size_t>(p * double(v.size() - 1));
+        std::nth_element(v.begin(), v.begin() + k, v.end());
+        return v[k];
+    };
+    const double hi = at(0.98), lo = at(0.02);
+    return hi - lo;
+}
+
 double Ptp(const std::vector<double>& v) {
     if (v.empty()) return 0;
     const auto [lo, hi] = std::minmax_element(v.begin(), v.end());
@@ -203,6 +215,7 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
     res.size = reader->size();
     res.distance_stroke = distance_stroke;
     res.times_ms.push_back(frame.pts_us / 1000);
+    res.lost.push_back(0);
     res.xs.push_back(Centre(box).x);
     res.ys.push_back(Centre(box).y);
     if (want_partner) {
@@ -230,7 +243,18 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
     coast.ObserveOk(box);
     DispGuard guard;
 
-    Progress progress(opts.on_progress, ProgressTotal(reader->frameCount(), frame.index, opts.max_frames));
+    const int64_t first_index = frame.index;
+    int total = ProgressTotal(reader->frameCount(), first_index, opts.max_frames);
+    if (opts.end_ms > 0 && reader->fps() > 0) {
+        const int64_t first_ms = frame.pts_us / 1000;
+        const int span = static_cast<int>(std::max<int64_t>(0, opts.end_ms - first_ms) * reader->fps() / 1000) + 1;
+        total = total > 0 ? std::min(total, span) : span;
+    }
+    // A skipped frame counts as done, so progress follows the video, not the samples.
+    const bool rate_cap = opts.max_analysis_fps > 0;
+    // 1 ms of slack: millisecond times of a 60 fps clip are 16/17 ms apart.
+    const double min_step_ms = rate_cap ? 1000.0 / opts.max_analysis_fps - 1.0 : 0;
+    Progress progress(opts.on_progress, total);
     progress.Report(0);
 
     // A fresh CSRT on the found box, as 0.7 did after every reacquire.
@@ -246,6 +270,12 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
             TrackResult canceled;
             canceled.canceled = true;
             return canceled;
+        }
+        const int64_t frame_ms = frame.pts_us / 1000;
+        if (opts.end_ms > 0 && frame_ms > opts.end_ms) break;
+        if (rate_cap && frame_ms - res.times_ms.back() < min_step_ms) {
+            progress.Report(static_cast<int>(frame.index - first_index));
+            continue;
         }
         if (needs_gray) cv::cvtColor(frame.bgr, gray, cv::COLOR_BGR2GRAY);
         const bool cut = opts.scene_cuts && (adaptive_cut ? adaptive_cut->Test(prev_gray, gray) : IsSceneCut(prev_gray, gray));
@@ -285,7 +315,14 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
                 res.ys.push_back(res.ys.back());
                 tip_ok = false;
             }
+            res.lost.push_back(tip_ok ? 0 : kLostTracker);
         } else {
+            // CSRT never reports a loss when it is wrong (GD-11): a box that
+            // no longer resembles the first crop is marked lost (spec T6).
+            // Only the flag changes, so a run without gap handling, which
+            // ignores the flags, keeps every position as before.
+            const auto likeness = memory ? memory->MatchesOriginal(gray, *found) : std::nullopt;
+            res.lost.push_back(likeness && *likeness < AppearanceMemory::kMinScore ? kLostUnlike : 0);
             coast.ObserveOk(*found);
             ++valid;
             res.xs.push_back(Centre(*found).x);
@@ -294,10 +331,8 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
             tip_ok = true;
             // Only crops that still resemble the start feed the memory, so
             // slow drift never poisons a later reacquire.
-            if (memory && idx % kRememberEveryNFrames == 0) {
-                const auto score = memory->MatchesOriginal(gray, *found);
-                if (!score || *score >= AppearanceMemory::kMinScore) memory->Remember(gray, *found);
-            }
+            if (memory && idx % kRememberEveryNFrames == 0)
+                if (!likeness || *likeness >= AppearanceMemory::kMinScore) memory->Remember(gray, *found);
         }
 
         bool partner_ok = want_partner;
@@ -349,8 +384,8 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
         }
 
         if (needs_gray) std::swap(prev_gray, gray);
-        res.times_ms.push_back(frame.pts_us / 1000);
-        progress.Report(idx);
+        res.times_ms.push_back(frame_ms);
+        progress.Report(rate_cap ? static_cast<int>(frame.index - first_index) : idx);
         ++idx;
         if (opts.max_frames > 0 && idx >= opts.max_frames) break;
     }
@@ -365,8 +400,13 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
         res.horizontal = false;
         res.positions = std::move(distances);
     } else {
-        const bool auto_x =
-            res.stats.horizontal_range > res.stats.vertical_range * 1.5 && res.stats.horizontal_range > 5;
+        // 0.7 compares the full ranges; a few frames where coast or camera
+        // compensation throw the centre out of the picture decided the axis
+        // (Owner's clip: y -42..222 in a 144 px frame picked Y where 0.7's
+        // own run picked X). The 2nd..98th percentile spread decides instead;
+        // a clean track gives the same choice as before.
+        const double h = RobustRange(res.xs), v = RobustRange(res.ys);
+        const bool auto_x = h > v * 1.5 && h > 5;
         res.horizontal = opts.axis == TrackAxis::kX || (opts.axis == TrackAxis::kAuto && auto_x);
         res.positions = res.horizontal ? res.xs : res.ys;
     }

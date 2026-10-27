@@ -2,7 +2,32 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 27 Oct 2026, Claude, branch `claude/next-selfcheck-handoff` (self-check handoff: `docs/HANDOFF_2026-10-27_SELF_CHECK.md`, tool `samn_selfcheck`).
+**Last update:** 27 Oct 2026, Claude, branch `claude/samn2-generator-spec` (Generator behaviour spec, D-158/D-159; main merged in with #131 AV1/dav1d, #133 self-check engine and #134 claude-router; *Recommended* is the default recipe, D-160; tracking before Auto, D-161; work in progress, handed over below). Also 27 Oct, Claude, branch `claude/next-selfcheck-handoff`: the self-check handoff `docs/HANDOFF_2026-10-27_SELF_CHECK.md` and the tool `samn_selfcheck`.
+
+## Handover: `claude/samn2-generator-spec` (26 Oct, in progress, not yet a PR)
+
+- **Done on the branch:** `docs/GENERATOR_SPEC.md`; opt-in gap handling, MAD outliers, end time, analysis-rate cap, raw-track cache, aliasing note (D-158); Generator toggles *Bridge short tracking gaps*, *Ignore single-frame jumps*, *Reuse the tracking*; `tests/engine/spec_generator_test.cpp` (one case per spec test id); MSVC 17.14 fix in `tests/core/device_protocol_test.cpp` (raw string moved out of `CHECK`).
+- **Local Windows run (MSVC 17.14, Qt 6.7.3, vcpkg OpenCV 4.14):** build green; core, vision, identifiers and every app test up to `label_controller_test` green. Red:
+  - `train_controller_test` (not touched here; check whether it fails on `main` too).
+  - New spec cases with real findings:
+    - **T4:** with 30 % of a 60 fps track dropped, some extrema are 50–66 ms off; the tolerance is 40.
+    - **T5:** a still disc gives a script instead of the "no discernible motion" error; CSRT wobble is read as motion.
+    - **T6:** CSRT does not report the vanished disc as lost (LESSONS GD-11), so the gap gets actions; gap handling needs a loss signal beyond the CSRT result (appearance-memory score).
+  - Two test bugs fixed after the run (T10 overwrite guard, FR-7 progress bound); not re-run yet.
+- **Owner's clip (26 Oct, private, never in the repo), findings and fixes on this branch:**
+  - The Generator tracked from 0 with a box drawn at the shown frame; Find tip also searched from 0. Now both start at the frame the box belongs to (`box_ms_`, 0.7 startTimeSec).
+  - 0.7 used the horizontal axis on that clip (its tip x vs its script r up to -0.86, y about 0). We picked y because a few coasted / compensated frames threw the centre out of the picture; the axis is now chosen from the 2nd..98th percentile spread.
+  - 0.7's scene-cut test fires on about one frame in eight of a 256x144 clip (2004 cuts). A spike-relative test removed them but made tracking worse: the false cuts re-anchor CSRT through the appearance memory, as in 0.7. Kept as 0.7 for now; a better re-anchor comes with the D-159 tip work.
+  - `samn_compare` manifests take `start_ms`.
+- **Qt 6.4 crash (27 Oct, local only):** after main came in, `shell_qml_test` crashed (SIGSEGV in the qmlcachegen-compiled `Icon.qml` binding `"?" + color`) while the AI Train page loaded next to the three new Generator switches; it passed with `QML_DISABLE_DISK_CACHE=1`. `Icon.qml` now builds `#rrggbb` by hand.
+- **The "gaps" on the Owner's clip are mostly right (27 Oct):** of the 23 stretches over 3 s where *Recommended* writes nothing, 20 hold only filler in the 0.7 script (a point every ~100 ms, mean amplitude 0–5 of 100, from 0.7's Fill). Real strokes there are only at 335–353 s (amplitude 33–65), 415–419 s and 829–837 s. Window r against that script over flat windows says nothing; compare on stroke windows, or against a checked reference (D-135). On the 11 ten-second windows where the 0.7 script strokes (mean amplitude ≥ 20), every one has strokes from us; median |r| 0.666 (Autotune) and 0.631 (*Recommended*, its 500/s limit differs from 0.7's 400).
+- **Owner rule for the curves (26 Oct):** stroke and suction curves must swing smoothly (smoothed, no corners or jumps); vibration is different (pulses and steps are allowed). Applies to the D-159 defaults and Auto.
+- **Next, in the Owner's order (D-159):**
+  1. **Defaults done (D-160, 27 Oct):** the profile *Recommended* (`ProfileRecommended`, first in the style list and the default) is Autotune plus outliers 5 × MAD, speed 500/s and 60 ms spacing (100 ms on a stroker); the spec's 120 ms smoothing, 4 s detrend and gap handling measured worse and are not in it. Measuring harness: a raw track CSV through `RunSignal` variants against 9 synthetic tracks with known strokes and the Owner's clip (scratch, not in the repo). **Auto postponed (D-161):** a tempo-adaptive prototype gained 0.676 → 0.696 on the clip and nothing on the synthetic tracks; the Owner chose tracking first. Gap handling is back and on by default, from the tracker's own loss only (`kLostTracker`; the look check `kLostUnlike` counts only with `gaps_from_look`).
+  2. *Tip automatically*: the rhythm grid over the whole frame (GD-15) finds where the stroke is, the detector confirms it, CSRT follows. A box is drawn only to override.
+  3. Extended camera stabilisation: all four similarity parameters, a RANSAC inlier gate, keyframe and two-pass smoothing after OpenCV videostab, and a phase-correlation fallback.
+  4. AV1: the Player side is on `main` (#131). Still open: enable `ffmpeg[dav1d]` for the Generator's vcpkg FFmpeg, and DirectML for ONNX Runtime.
+  5. Black-box comparison with the other generator on synthetic probe clips and the Owner's clips through `samn_compare`.
 
 ## Rules
 
