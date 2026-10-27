@@ -172,6 +172,7 @@ private:
         QQmlEngine engine;
         engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
         engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+        engine.addImageProvider(QStringLiteral("frames"), new samn::ui::FrameProvider);
         QQmlComponent comp(&engine);
         comp.setData(R"(
             import QtQuick
@@ -373,6 +374,7 @@ private:
         QQmlEngine engine;
         engine.addImportPath(QStringLiteral("qrc:/qt/qml"));  // Qt 6.4 does not add it
         engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+        engine.addImageProvider(QStringLiteral("frames"), new samn::ui::FrameProvider);
         QQmlComponent comp(&engine);
         comp.setData(R"(
             import QtQuick

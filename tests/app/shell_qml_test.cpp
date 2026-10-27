@@ -138,6 +138,10 @@ void loadShell(Shell& s, int startMode = 0) {
     QVERIFY2(s.object, qPrintable(comp.errorString()));
     s.window = qobject_cast<QQuickWindow*>(s.object.get());
     QVERIFY(s.window);
+    // Hidden until ready (main.cpp shows it): Generator and Training are
+    // built in the background, the ribbons are loaded.
+    QVERIFY(!s.window->isVisible());
+    QTRY_VERIFY_WITH_TIMEOUT(s.window->property("ready").toBool(), 15000);
     s.window->show();
     QVERIFY(QTest::qWaitForWindowExposed(s.window));
     s.window->requestActivate();

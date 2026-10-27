@@ -50,6 +50,7 @@ qt_add_qml_module(samn_app
     src/device_io/ble_transport.h src/device_io/ble_transport.cpp
   QML_FILES
     qml/Main.qml
+    qml/Splash.qml
     qml/GlassCard.qml
     qml/TopBar.qml
     qml/PlayButton.qml
@@ -89,6 +90,8 @@ qt_add_qml_module(samn_app
     ${SAMN_ICONS}
     qml/assets/bg-top.svg
     qml/assets/bg-bottom.svg
+    qml/assets/bg-top.png
+    qml/assets/bg-bottom.png
     qml/assets/empty-video.svg
     qml/assets/empty-script.svg
     qml/assets/stage-ribbons.svg
