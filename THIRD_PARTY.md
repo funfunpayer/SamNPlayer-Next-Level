@@ -7,6 +7,7 @@ Every piece of code copied or adapted from another project is listed here with i
 | Our file | Source (project, file, version / commit) | Licence |
 |---|---|---|
 | `third_party/doctest/doctest.h` | doctest 2.4.11 | MIT |
+| `.claude/` (claude-router skill, lanes and validator; `CLAUDE-ROUTING.md`) | claude-router, Vimox Shah, github.com/vimoxshah/claude-router | MIT |
 
 ## Linked libraries
 

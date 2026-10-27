@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 26 Oct 2026, Claude, branch `claude/samn2-player-editor-p4` (Player/Editor §3, slice P4: lane picking).
+**Last update:** 26 Oct 2026, Claude, branch `claude/next-claude-router` (claude-router skill and lanes in `.claude/`).
 
 ## Rules
 
@@ -13,6 +13,7 @@
   - Merge only on green CI.
   - Never force-push.
   - **Routing / handoff:** one theme per agent; push often so another agent can take over (Manifest §6, D-122).
+- **Model routing:** agents may route work across model tiers with the claude-router skill (`.claude/skills/claude-router`, policy `CLAUDE-ROUTING.md`); a lane's result is verified by the orchestrator before it is accepted.
 - **Before every push:** run `git diff --stat` and check it. Never write a file from a shell substitution that may be empty, and never regenerate a workflow from scratch (see `ROADMAP.md` § Lessons).
 - **Decisions:** look in `DECISIONS.md` first. Never restart a decided question; record new decisions there.
 - **Never:**
