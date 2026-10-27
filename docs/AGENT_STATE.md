@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 26 Oct 2026, Claude, branch `claude/next-claude-router` (claude-router skill and lanes in `.claude/`).
+**Last update:** 27 Oct 2026, Claude, branch `claude/next-self-check-engine` (self-checking engine: SC-1/2/3/5, `docs/P3_SELF_CHECK_ENGINE.md`; the claude-router skill came with #134).
 
 ## Rules
 
@@ -132,7 +132,14 @@
 2. **Owner GUI leftovers:** handbook (§12), idle ribbon (§11), donation pages (Manifest §2). Owner 26 Oct: the glow behind the empty Play button looks odd (dark oval), the GUI still looks makeshift in places: a polish pass after the Generator. Reduced motion ✅ (#120).
 3. **AI Train D-155:** script compare with labels, then golden-clip run (Owner clips).
 4. **Windows CI flakiness** under ctest; diagnostics already run functions alone.
-5. **P3.6** Quality Doctor; Player finish / Svakom / Scene Map view; bug hunt; release.
+5. **Self-checking engine** (`docs/P3_SELF_CHECK_ENGINE.md`, Owner 26 Oct, PR #133 on `claude/next-self-check-engine`): SC-1 sample gate, SC-2 checker signals recorded by `TrackBox` (`record_checks`) and SC-3 window verifier are built (`self_check.h`, `track_checks_test.cpp`; 83 engine tests). Measured in design §3.3: synthetic 13/13 bad windows fail, 0 false alarms; on the Owner clip the scene-cut test fires 1992 times and blocks the verifier. `AdaptiveSceneCut` (`adaptive_cuts`, off) takes the Owner clip from 1992 cuts to 2 but tracking gets worse (the false cuts were re-anchoring), design §3.4; on that clip the verdicts do not yet separate good from bad windows, so thresholds wait for the golden clips. SC-5 verified repair is built (`repair.h`, `repair_test.cpp`); on the Owner clip it repairs nothing at the strict setting because the look against the start crop cannot tell right from wrong there (design §3.5). Next in order: an identity check that works on real clips (continuity with the last good window, rhythm cell, detector) → speed (cached flow) → robust axis choice (principal axis) → wire `GateSamples` in front of the P3.2 chain behind a switch → SC-4 fast lane → SC-5 verified repair with YOLO-family re-anchoring → SC-6 golden gate. AI blocks the Owner asked for (YOLO, MediaPipe, OpenCV DL, Whisper, CLIP): roles and licences in §5a of the design.
+6. **P3.6** Quality Doctor; Player finish / Svakom / Scene Map view; bug hunt; release.
+
+### Handoff: self-checking engine (26 Oct, for the session that merges it all)
+- **PR #133** (`claude/next-self-check-engine`): design + SC-1 + SC-3 + c9. CI was green on Linux, ASan/UBSan and TSan at the first push; check Windows and the push with c9.
+- **Evidence:** synthetic scenes and bench scripts in the private test media, `synthetic/motion-bench-2026-10/` (branch `claude/next-project-prep-o1ckxh` there, not yet in its main). Owner clip `clips/owner-av1-256x144/` (main of the test media). AV1 does not decode in OpenCV's FFmpeg on Linux here; transcode to H.264 with `ffmpeg -c:v libdav1d` first.
+- **Open questions for the Owner:** the claude-router skill (vimoxshah/claude-router) as `.claude/` files in this repo; installing it in `~/.claude` was blocked in the cloud session.
+- **Old branch** `claude/next-project-prep-o1ckxh` here holds the closed PR #2 (old import); leave it, do not force-push.
 
 ### Handoff note (for the next agent)
 - **Routing:** one theme per agent. Generator Tf/Tj distance on this tip; Look #117 parallel (do not steal Look files for feature work).

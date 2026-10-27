@@ -14,6 +14,8 @@
 
 #include <opencv2/core.hpp>
 
+#include "samn/engine/self_check.h"
+
 namespace samn::engine {
 
 enum class TrackAxis { kAuto, kX, kY };
@@ -23,6 +25,10 @@ struct TrackOptions {
     int max_frames = 0;          // 0 = to the end
     bool camera_compensation = true;
     bool scene_cuts = true;
+    // Self-check: a cut must also be an outlier against the last 2 s of
+    // frame differences (AdaptiveSceneCut). Off = 0.7's fixed thresholds
+    // (parity); on after the golden-clip gate.
+    bool adaptive_cuts = false;
     bool appearance_memory = true;
     TrackAxis axis = TrackAxis::kAuto;
     // Soft masks / ignore regions (0.7 maskRois): punched out of the camera-
@@ -38,6 +44,18 @@ struct TrackOptions {
     // When true with partner_box: positions = TipPartnerDistance each frame
     // (GD-08). Tip/partner centres and trajectory still recorded as usual.
     bool distance_stroke = false;
+    // Self-check SC-2: record the per-frame checker signals in
+    // TrackResult::checks (flow in the box against the camera, foreground,
+    // tracker ok, camera trust, appearance, box outside the picture, scene
+    // motion). Costs a half-size flow and background model per frame;
+    // positions are identical with it on or off.
+    bool record_checks = false;
+    // The original, user-confirmed look (gray frame + box) for the
+    // appearance memory: when set, it becomes the memory's first template, so
+    // reacquire and the c7 check compare against it instead of this run's
+    // own start box. The verified repair (SC-5) seeds every retry with it.
+    cv::Mat seed_gray;
+    cv::Rect seed_box;
     // Checked every frame; true stops the run (Result::canceled).
     std::function<bool()> cancel;
     // About every 1 % of frames: (done, total); total 0 when unknown.
@@ -66,6 +84,10 @@ struct TrackResult {
     bool distance_stroke = false;   // positions are TipPartnerDistance
     cv::Size size;
     std::vector<int> scene_cuts;    // frame numbers counted from the first tracked frame
+    // With TrackOptions::record_checks: one value per frame for each signal
+    // (box_flow follows the chosen axis; empty for distance strokes), ready
+    // for VerifyWindows(positions, checks, ...) with cuts = scene_cuts.
+    FrameChecks checks;
     TrackStats stats;
     bool canceled = false;
 };

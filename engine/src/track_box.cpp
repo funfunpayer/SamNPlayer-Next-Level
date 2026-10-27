@@ -3,7 +3,11 @@
 #include <algorithm>
 #include <cmath>
 
+#include <limits>
+
 #include <opencv2/imgproc.hpp>
+#include <opencv2/video/background_segm.hpp>
+#include <opencv2/video/tracking.hpp>
 
 #include "samn/engine/tip_distance.h"
 #include "samn/vision/frame_reader.h"
@@ -39,6 +43,106 @@ private:
     const std::function<void(int, int)>& fn_;
     int total_;
     int next_ = 0;
+};
+
+constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
+
+double MedianOf(std::vector<float>& v) {
+    if (v.empty()) return 0.0;
+    const auto mid = v.begin() + static_cast<long>(v.size() / 2);
+    std::nth_element(v.begin(), mid, v.end());
+    return *mid;
+}
+
+// SC-2: the checker signals of the self-check (docs/P3_SELF_CHECK_ENGINE.md
+// §5) on a half-size copy of each frame. Only observes; never changes the
+// box, so positions stay identical with recording on or off.
+class CheckRecorder {
+public:
+    explicit CheckRecorder(cv::Size size) : size_(size), bg_(cv::createBackgroundSubtractorMOG2(500, 16, false)) {}
+
+    // box: the box written for this frame; ok: the tracker (or a verified
+    // reacquire) returned it; inliers / appearance: NaN when unknown.
+    void Frame(const cv::Mat& bgr, const cv::Rect& box, bool ok, double inliers, double appearance) {
+        cv::Mat small, gray, fg;
+        cv::resize(bgr, small, cv::Size(), kScale, kScale, cv::INTER_AREA);
+        cv::cvtColor(small, gray, cv::COLOR_BGR2GRAY);
+        bg_->apply(small, fg);
+
+        const cv::Rect frame_rect(0, 0, gray.cols, gray.rows);
+        const cv::Rect sb = cv::Rect(int(box.x * kScale), int(box.y * kScale), std::max(1, int(box.width * kScale)),
+                                     std::max(1, int(box.height * kScale))) &
+                            frame_rect;
+        const bool box_in_picture = sb.area() > 0;
+
+        // Flow on the half-size frame: inside the box against the rest
+        // (camera removed) for c1, and the share of pixels that move against
+        // the frame's median for the scene motion. MOG2 is not used for the
+        // scene: it learns a regular stroke into its background model within
+        // a few cycles, so a steady scene would read as "nothing moves".
+        double fx = 0, fy = 0, scene = kNaN;
+        if (!prev_.empty()) {
+            cv::Mat flow;
+            cv::calcOpticalFlowFarneback(prev_, gray, flow, 0.5, 3, 15, 3, 5, 1.2, 0);
+            std::vector<float> all_x, all_y, in_x, in_y, out_x, out_y;
+            all_x.reserve(flow.total());
+            all_y.reserve(flow.total());
+            for (int r = 0; r < flow.rows; ++r) {
+                const auto* row = flow.ptr<cv::Point2f>(r);
+                for (int col = 0; col < flow.cols; ++col) {
+                    all_x.push_back(row[col].x);
+                    all_y.push_back(row[col].y);
+                    if (!box_in_picture) continue;
+                    const bool inside = sb.contains(cv::Point(col, r));
+                    (inside ? in_x : out_x).push_back(row[col].x);
+                    (inside ? in_y : out_y).push_back(row[col].y);
+                }
+            }
+            if (box_in_picture && !out_x.empty()) {
+                fx = (MedianOf(in_x) - MedianOf(out_x)) / kScale;
+                fy = (MedianOf(in_y) - MedianOf(out_y)) / kScale;
+            }
+            std::vector<float> cx = all_x, cy = all_y;
+            const double mx = MedianOf(cx), my = MedianOf(cy);
+            size_t moving = 0;
+            for (size_t k = 0; k < all_x.size(); ++k) {
+                const double dx = all_x[k] - mx, dy = all_y[k] - my;
+                moving += dx * dx + dy * dy > kMovingPx * kMovingPx ? 1 : 0;
+            }
+            scene = static_cast<double>(moving) / static_cast<double>(all_x.size());
+        }
+        prev_ = gray;
+
+        checks_.box_flow.push_back(fy);
+        flow_x_.push_back(fx);
+        checks_.foreground.push_back(box_in_picture ? cv::countNonZero(fg(sb)) / double(sb.area()) : 0.0);
+        checks_.scene_motion.push_back(scene);
+        checks_.tracker_ok.push_back(ok ? 1 : 0);
+        checks_.camera_inliers.push_back(inliers);
+        checks_.appearance.push_back(appearance);
+        checks_.box_outside.push_back(BoxOutsideShare(box.x, box.y, box.width, box.height, size_.width, size_.height));
+    }
+
+    FrameChecks Finish(bool horizontal, bool distance_stroke, bool camera_compensation, bool appearance_memory) {
+        if (horizontal) checks_.box_flow.swap(flow_x_);
+        checks_.box_flow_cross = std::move(flow_x_);  // after a swap this holds the vertical flow
+        if (distance_stroke) {  // a distance has no single axis to compare
+            checks_.box_flow.clear();
+            checks_.box_flow_cross.clear();
+        }
+        if (!camera_compensation) checks_.camera_inliers.clear();
+        if (!appearance_memory) checks_.appearance.clear();
+        return std::move(checks_);
+    }
+
+private:
+    static constexpr double kScale = 0.5;
+    static constexpr double kMovingPx = 0.5;  // half-size pixels per frame (1 px at full size)
+    cv::Size size_;
+    cv::Ptr<cv::BackgroundSubtractorMOG2> bg_;
+    cv::Mat prev_;
+    FrameChecks checks_;
+    std::vector<double> flow_x_;
 };
 
 }  // namespace
@@ -90,6 +194,8 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
     std::optional<AppearanceMemory> memory;
     if (opts.appearance_memory) {
         memory.emplace();
+        if (!opts.seed_gray.empty() && opts.seed_box.area() > 0 && opts.seed_gray.size() == prev_gray.size())
+            memory->Remember(opts.seed_gray, opts.seed_box);  // the original look stays template 0
         memory->Remember(prev_gray, box);  // the user-confirmed start region
     }
 
@@ -102,6 +208,14 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
     if (want_partner) {
         res.partner_xs.push_back(Centre(partner_last).x);
         res.partner_ys.push_back(Centre(partner_last).y);
+    }
+    std::optional<AdaptiveSceneCut> adaptive_cut;
+    if (opts.scene_cuts && opts.adaptive_cuts)
+        adaptive_cut.emplace(std::max(10, static_cast<int>(std::lround(2.0 * (reader->fps() > 0 ? reader->fps() : 30.0)))));
+    std::optional<CheckRecorder> recorder;
+    if (opts.record_checks) {
+        recorder.emplace(res.size);
+        recorder->Frame(frame.bgr, box, true, kNaN, kNaN);
     }
     std::vector<double> distances;
     double last_good_distance = 0;
@@ -134,7 +248,7 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
             return canceled;
         }
         if (needs_gray) cv::cvtColor(frame.bgr, gray, cv::COLOR_BGR2GRAY);
-        const bool cut = opts.scene_cuts && IsSceneCut(prev_gray, gray);
+        const bool cut = opts.scene_cuts && (adaptive_cut ? adaptive_cut->Test(prev_gray, gray) : IsSceneCut(prev_gray, gray));
 
         std::optional<cv::Rect> found;
         if (cut) {
@@ -210,6 +324,7 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
             }
         }
 
+        double inliers = kNaN;
         if (opts.camera_compensation) {
             double dy = 0;
             if (!cut) {
@@ -218,12 +333,19 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
                 std::vector<cv::Rect> excludes = opts.mask_rois;
                 excludes.push_back(last);
                 if (want_partner) excludes.push_back(partner_last);
-                dy = CameraMotionY(prev_gray, gray, excludes);
+                dy = CameraMotionY(prev_gray, gray, excludes, recorder ? &inliers : nullptr);
                 if (dy == 0.0) ++res.stats.camera_frames_lost;
             }
             camera_dy.push_back(cut ? 0.0 : camera_dy.back() + dy);
         } else {
             camera_dy.push_back(0.0);
+        }
+
+        if (recorder) {
+            double appearance = kNaN;
+            if (memory)
+                if (const auto score = memory->MatchesOriginal(gray, last)) appearance = *score;
+            recorder->Frame(frame.bgr, last, found.has_value(), inliers, appearance);
         }
 
         if (needs_gray) std::swap(prev_gray, gray);
@@ -248,6 +370,9 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
         res.horizontal = opts.axis == TrackAxis::kX || (opts.axis == TrackAxis::kAuto && auto_x);
         res.positions = res.horizontal ? res.xs : res.ys;
     }
+
+    if (recorder)
+        res.checks = recorder->Finish(res.horizontal, distance_stroke, opts.camera_compensation, opts.appearance_memory);
 
     res.stats.total_frames = idx;
     res.stats.valid_frames = valid;
