@@ -227,6 +227,15 @@ kept only if it passes outright and its look against the original is ≥ 0.75):
   tracking runs per failed stretch). Needs caching of the flow (§5c) and
   shorter retries before it is usable.
 
+**Lenient check (look ≥ 0.55), measured:** 30 of 67 windows repaired, gaps
+down to 13 %, but the repaired windows agree **less** with the 0.7 script:
+median |r| 0.72 → 0.53 (6 better, 10 worse). The first run already agreed
+with 0.7 in those "failed" windows (|r| 0.72), so on this clip many fails are
+false alarms against that reference, and replacing them does harm. Two
+consequences: the repair stays strict (0.75), and the verifier's thresholds
+must be calibrated on clips with a checked reference before the repair is
+allowed to replace anything on real material.
+
 What would verify identity better than the start crop (to be measured, not
 assumed): continuity with the last verified window (the retry starts within
 one box of where the good track was and has its stroke frequency), the
