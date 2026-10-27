@@ -50,6 +50,12 @@ struct TrackOptions {
     // motion). Costs a half-size flow and background model per frame;
     // positions are identical with it on or off.
     bool record_checks = false;
+    // The original, user-confirmed look (gray frame + box) for the
+    // appearance memory: when set, it becomes the memory's first template, so
+    // reacquire and the c7 check compare against it instead of this run's
+    // own start box. The verified repair (SC-5) seeds every retry with it.
+    cv::Mat seed_gray;
+    cv::Rect seed_box;
     // Checked every frame; true stops the run (Result::canceled).
     std::function<bool()> cancel;
     // About every 1 % of frames: (done, total); total 0 when unknown.

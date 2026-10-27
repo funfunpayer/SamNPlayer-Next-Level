@@ -431,7 +431,7 @@ peak/keyframe rules (P3.2) and `LimitSpeed`.
 | SC-2 ✅ | `TrackOptions::record_checks` → `TrackResult::checks` (flow in the box on both axes, foreground, scene motion, tracker ok, camera inliers, appearance, box outside) | Positions bit-identical on/off; moving, panning and wrong-box clips tested (`tests/engine/track_checks_test.cpp`) |
 | SC-3 ✅ (verifier) | `VerifyWindows()` → `WindowVerdict` list (pass / suspect / fail / still + reasons), per shot; into the quality report with SC-2 | The s9 / s10 style patterns are flagged, s1–s8 style patterns are not |
 | SC-4 | `FastLane()` → `FastLaneReport` (shots, tempo, camera trust, foreground refs, regions) on a worker thread, progress from frame 1 (GD-21) | Runtime under ¼ of the full run on the same clip; the shot and tempo tests pass |
-| SC-5 | Repair: re-acquire per failed window, verify, keep or gap | The occlusion and cut patterns repair; nothing that passed changes |
+| SC-5 ✅ (first version) | `RepairTrack` (`engine/include/samn/engine/repair.h`): per failed stretch Find tip from that window, up to 3 proposals tracked with the original look as the memory's first template (`TrackOptions::seed_gray/seed_box`), on the first run's axis; a retry window is kept only when it passes outright and c7 ≥ 0.75; otherwise a gap (NaN); spliced runs are listed for per-segment normalisation | `tests/engine/repair_test.cpp`: a target lost behind a panel is found again and verified; with a foreign original look nothing is spliced in |
 | SC-6 | `samn_compare` gate: engine with self-check vs without vs 0.7 on the goldens | Report in `docs/benchmarks/`; default on only after the gate |
 
 The experiment scripts and the synthetic scenes live with the private test

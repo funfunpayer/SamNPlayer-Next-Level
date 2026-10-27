@@ -194,6 +194,8 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
     std::optional<AppearanceMemory> memory;
     if (opts.appearance_memory) {
         memory.emplace();
+        if (!opts.seed_gray.empty() && opts.seed_box.area() > 0 && opts.seed_gray.size() == prev_gray.size())
+            memory->Remember(opts.seed_gray, opts.seed_box);  // the original look stays template 0
         memory->Remember(prev_gray, box);  // the user-confirmed start region
     }
 
