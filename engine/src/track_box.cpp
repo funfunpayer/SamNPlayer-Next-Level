@@ -93,7 +93,7 @@ public:
                     all_x.push_back(row[col].x);
                     all_y.push_back(row[col].y);
                     if (!box_in_picture) continue;
-                    const bool inside = sb.contains({col, r});
+                    const bool inside = sb.contains(cv::Point(col, r));
                     (inside ? in_x : out_x).push_back(row[col].x);
                     (inside ? in_y : out_y).push_back(row[col].y);
                 }
