@@ -2,9 +2,15 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 28 Oct 2026, Claude, branch `claude/samn2-auto-tip`: the Generator reads AV1 on Windows (vcpkg `ffmpeg[dav1d]`, test `frame reader: an AV1 video gives pictures`) and finds the tip by itself when a video opens (D-159 item 2 below); #135 (self-check handoff) merged. Before: 27 Oct, #132 (Generator spec, *Recommended*, D-160/D-161).
+**Last update:** 28 Oct 2026, Claude, branch `claude/samn2-auto-tip`: the Generator reads AV1 on Windows (vcpkg `ffmpeg[dav1d]`, test `frame reader: an AV1 video gives pictures`) and finds the tip by itself when a video opens (D-159 item 2 below); main merged in with #137 (System health check, D-162). Before: 28 Oct, #137 `claude/samn2-health`; #135 (self-check handoff); 27 Oct, #132 (Generator spec, *Recommended*, D-160/D-161).
 
-## Handover: `claude/samn2-generator-spec` (26 Oct, in progress, not yet a PR)
+## Handover: `claude/samn2-health` (28 Oct, D-162)
+
+- **Done:** `app/src/system_check.{h,cpp}` (adapter list through DXGI / `/sys/class/drm`, `ClassifyGpus`, `PickTrainingGpu`, eight checks in `RunChecks`, `Report`, `SystemCheckController`); Settings tab *System* (between Device and Log, so Log is tab 3 and About 4); `Main.qml::startSystemCheck()` called once by `main.cpp` after the window is shown; `TrainController` names the NVIDIA card in its *Ready* message; `tests/app/system_check_test.cpp` and a System-tab step in `shell_qml_test`.
+- **Verified so far:** Windows CI builds the DXGI path with MSVC and runs the tests (#137 green); it has not run on a PC with two adapters yet (the Owner's). On Linux only AMD reports its memory (sysfs); NVIDIA and Intel show 0 MB there, so the NVIDIA pick on Linux is by vendor, and an Intel Arc is shown as integrated.
+- **Env state:** "failed" means a `train-env` folder without `samn-ready.json` (no failure marker is stored); the check has no other source for it.
+
+## Handover: `claude/samn2-generator-spec` (26–27 Oct, merged as #132; open points below)
 
 - **Done on the branch:** `docs/GENERATOR_SPEC.md`; opt-in gap handling, MAD outliers, end time, analysis-rate cap, raw-track cache, aliasing note (D-158); Generator toggles *Bridge short tracking gaps*, *Ignore single-frame jumps*, *Reuse the tracking*; `tests/engine/spec_generator_test.cpp` (one case per spec test id); MSVC 17.14 fix in `tests/core/device_protocol_test.cpp` (raw string moved out of `CHECK`).
 - **Local Windows run (MSVC 17.14, Qt 6.7.3, vcpkg OpenCV 4.14):** build green; core, vision, identifiers and every app test up to `label_controller_test` green. Red:

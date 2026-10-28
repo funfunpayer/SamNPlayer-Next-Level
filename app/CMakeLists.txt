@@ -18,6 +18,7 @@ qt_add_qml_module(samn_app
     src/label_controller.h src/label_controller.cpp
     src/model_download.h src/model_download.cpp
     src/train_controller.h src/train_controller.cpp
+    src/system_check.h src/system_check.cpp
     src/clip_prep_controller.h src/clip_prep_controller.cpp
     src/notices.h src/notices.cpp
     src/curve_item.h src/curve_item.cpp
@@ -108,6 +109,10 @@ qt_add_resources(samn_app "legal" PREFIX /legal BASE ${PROJECT_SOURCE_DIR}
 target_include_directories(samn_app PUBLIC src src/device_io)
 target_link_libraries(samn_app PUBLIC samn_core samn_engine Qt6::Gui Qt6::Quick Qt6::Qml Qt6::Multimedia Qt6::Svg
   Qt6::Network Qt6::WebSockets Qt6::SerialPort Qt6::Bluetooth)
+# DXGI lists the graphics adapters (System check).
+if(WIN32)
+  target_link_libraries(samn_app PRIVATE dxgi)
+endif()
 # zlib unpacks the models fetched with one click (they come in zip archives);
 # OpenCV already brings it on every platform.
 find_package(ZLIB REQUIRED)

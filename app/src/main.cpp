@@ -125,6 +125,8 @@ int main(int argc, char** argv) {
         if (!window->property("ready").toBool()) return;
         readyPoll->stop();
         show();
+        // After the window is up, so the start is not slowed (D-162).
+        QTimer::singleShot(0, window, [window] { QMetaObject::invokeMethod(window, "startSystemCheck"); });
     });
     readyPoll->start();
     QTimer::singleShot(10000, window, show);

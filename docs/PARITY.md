@@ -86,7 +86,7 @@ Source of truth: `cmd/gui-wails/main.go`, `frontend/index.html`, `frontend/src/m
 
 ### 2.1 Tools -> Home (`tools_home.js`)
 
-- [ ] Status card with "Check again" button (disabled while running); summary line "Checking…" -> "N problem(s) found — see the red rows." / "No problems found in the checks below." (tools_home.js:41-46,82-85,112) _(dropped: D-148, no Tools Home status page)_
+- [ ] Status card with "Check again" button (disabled while running); summary line "Checking…" -> "N problem(s) found — see the red rows." / "No problems found in the checks below." (tools_home.js:41-46,82-85,112) _(dropped: D-148, no Tools Home status page; Settings → System, D-162, has a "Check again" button and a summary line, but its checks are SamN2's own — settings folder, disk, graphics adapters, video codecs, ONNX Runtime, AI environment, NudeNet — not 0.7's ffmpeg/Python rows, so this item stays unticked)_
 - [ ] Status rows (dot + label + value, states ok/warn/bad/off) — Device ("Connected · <name>[ (simulated)]" / "Not connected" / "Not checked"); updated live on `device:status` (tools_home.js:30-37,131-135) _(dropped: D-148, no Tools Home status page)_
 - [ ] Status rows — one per runtime dependency from `GetRuntimeHealth`: ffmpeg (required, red if missing), ffprobe (optional), Python 3 / "python" on Windows (optional); "Found · <path>" / "Missing" / "Not installed (optional)" (tools_home.js:55-61, app_runtime.go:150-190) _(dropped: D-148, no Tools Home status page)_
 - [ ] Status row "App folders" — "Ready" or "N folder(s) could not be created" (bad) (tools_home.js:62-65) _(dropped: D-148, no Tools Home status page)_
