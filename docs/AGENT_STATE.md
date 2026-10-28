@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 27 Oct 2026, Claude, branch `claude/samn2-generator-spec` (Generator behaviour spec, D-158/D-159; main merged in with #131 AV1/dav1d, #133 self-check engine and #134 claude-router; *Recommended* is the default recipe, D-160; tracking before Auto, D-161; work in progress, handed over below). Also 27 Oct, Claude, branch `claude/next-selfcheck-handoff`: the self-check handoff `docs/HANDOFF_2026-10-27_SELF_CHECK.md` and the tool `samn_selfcheck`.
+**Last update:** 28 Oct 2026, Claude, branch `claude/samn2-auto-tip`: the Generator reads AV1 on Windows (vcpkg `ffmpeg[dav1d]`, test `frame reader: an AV1 video gives pictures`); #135 (self-check handoff) merged. Before: 27 Oct, #132 (Generator spec, *Recommended*, D-160/D-161).
 
 ## Handover: `claude/samn2-generator-spec` (26 Oct, in progress, not yet a PR)
 
@@ -26,7 +26,7 @@
   1. **Defaults done (D-160, 27 Oct):** the profile *Recommended* (`ProfileRecommended`, first in the style list and the default) is Autotune plus outliers 5 × MAD, speed 500/s and 60 ms spacing (100 ms on a stroker); the spec's 120 ms smoothing, 4 s detrend and gap handling measured worse and are not in it. Measuring harness: a raw track CSV through `RunSignal` variants against 9 synthetic tracks with known strokes and the Owner's clip (scratch, not in the repo). **Auto postponed (D-161):** a tempo-adaptive prototype gained 0.676 → 0.696 on the clip and nothing on the synthetic tracks; the Owner chose tracking first. Gap handling is back and on by default, from the tracker's own loss only (`kLostTracker`; the look check `kLostUnlike` counts only with `gaps_from_look`).
   2. *Tip automatically*: the rhythm grid over the whole frame (GD-15) finds where the stroke is, the detector confirms it, CSRT follows. A box is drawn only to override.
   3. Extended camera stabilisation: all four similarity parameters, a RANSAC inlier gate, keyframe and two-pass smoothing after OpenCV videostab, and a phase-correlation fallback.
-  4. AV1: the Player side is on `main` (#131). Still open: enable `ffmpeg[dav1d]` for the Generator's vcpkg FFmpeg, and DirectML for ONNX Runtime.
+  4. AV1: the Player side is on `main` (#131); the Generator's vcpkg FFmpeg has `dav1d` since 28 Oct (`ci/vcpkg/vcpkg.json`). Still open: DirectML for ONNX Runtime.
   5. Black-box comparison with the other generator on synthetic probe clips and the Owner's clips through `samn_compare`.
 
 ## Rules

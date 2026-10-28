@@ -1,5 +1,6 @@
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -112,4 +113,24 @@ TEST_CASE("frame reader: the codec as the file says, unknown stays unknown (issu
     CHECK_FALSE(FrameReader::Open(junk, &error));
     CHECK_FALSE(error.empty());
     fs::remove(junk);
+}
+
+// AV1 has no software decoder in FFmpeg itself, only dav1d; the Generator
+// reads through OpenCV's FFmpeg, so that one needs dav1d too (Owner 27 Oct;
+// the Player's FFmpeg got it with #131). The clip is the Player's synthetic
+// AV1 test pattern.
+TEST_CASE("frame reader: an AV1 video gives pictures") {
+    std::string error;
+    auto r = FrameReader::Open(fs::u8path(SAMN_AV1_TESTCLIP), &error);
+    REQUIRE_MESSAGE(r, error);
+    CHECK(samn::CodecName(r->fourcc()) == "AV1");
+    VideoFrame f;
+    int n = 0;
+    double brightest = 0;
+    while (r->Read(f)) {
+        ++n;
+        brightest = std::max(brightest, cv::mean(f.bgr)[0]);
+    }
+    CHECK(n >= 90);          // 4 s
+    CHECK(brightest > 20);  // a picture, not black frames
 }

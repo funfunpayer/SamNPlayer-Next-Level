@@ -18,7 +18,8 @@ if(SAMN_BUILD_VISION)
   file(GLOB VISION_TESTS CONFIGURE_DEPENDS vision/*_test.cpp)
   add_executable(vision_tests core/main.cpp ${VISION_TESTS})
   target_link_libraries(vision_tests PRIVATE samn_vision samn_core doctest)
-  target_compile_definitions(vision_tests PRIVATE SAMN_VISION_TESTDATA="${CMAKE_CURRENT_SOURCE_DIR}/vision/data")
+  target_compile_definitions(vision_tests PRIVATE SAMN_VISION_TESTDATA="${CMAKE_CURRENT_SOURCE_DIR}/vision/data"
+                             SAMN_AV1_TESTCLIP="${CMAKE_CURRENT_SOURCE_DIR}/app/data/testpattern_av1_4s.mp4")
   samn_copy_runtime_dlls(vision_tests)
   add_test(NAME vision_tests COMMAND vision_tests)
 

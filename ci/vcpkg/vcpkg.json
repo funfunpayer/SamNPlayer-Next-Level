@@ -1,7 +1,7 @@
 {
   "name": "samnplayer-vision",
   "version-string": "0",
-  "description": "Windows CI dependencies: samn_vision (D-133; Linux uses the system packages) and dav1d for the FFmpeg the package plays video with (AV1 without a GPU decoder, Owner 26 Oct).",
+  "description": "Windows CI dependencies: samn_vision (D-133; Linux uses the system packages) with FFmpeg's dav1d, so the Generator reads AV1 without a GPU decoder (Owner 27 Oct), and dav1d for the FFmpeg the package plays video with (Owner 26 Oct).",
   "dependencies": [
     {
       "name": "opencv4",
@@ -12,6 +12,13 @@
         "ffmpeg",
         "jpeg",
         "png"
+      ]
+    },
+    {
+      "name": "ffmpeg",
+      "default-features": false,
+      "features": [
+        "dav1d"
       ]
     },
     "dav1d"
