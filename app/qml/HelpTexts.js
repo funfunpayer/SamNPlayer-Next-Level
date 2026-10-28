@@ -35,6 +35,7 @@ const texts = {
     // src/generator.js:424 (Keep draft)
     "gen-ai-script-keep": "Writes the reviewed AI draft beside the video as .samn (+ .funscript). Explicit only — never auto.",
     // src/generator.js:438 (Suggest O-markers automatically)
+    "gen-auto-tip": "On by default: when a video opens, Find tip looks for the rhythmic motion by itself. A clear find becomes the tip box; an unsure one only shows dashed candidates to click. A box you draw meanwhile is never replaced.",
     "gen-auto-ozone": "Suggests O-markers in the last eighth (highest mean position) only when the ending is clearly high. Classic from signal, no AI model.",
     // src/generator.js:91 (Find tip area)
     "gen-autoroi": "Auto tip box for Everyday CSRT (not a motion path). Paint/drag only if Find missed. Optional AI when checked.",

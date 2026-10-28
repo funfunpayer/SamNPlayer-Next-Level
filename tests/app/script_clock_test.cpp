@@ -79,8 +79,8 @@ private slots:
         c.setDuration(60000);
         QSignalSpy pos(&c, &ScriptClock::positionChanged);
         c.play();
-        QTRY_VERIFY_WITH_TIMEOUT(c.position() >= 100, 2000);
-        QVERIFY(pos.count() >= 2);
+        // Both together: on a loaded machine one late tick can jump past 100 ms.
+        QTRY_VERIFY_WITH_TIMEOUT(c.position() >= 100 && pos.count() >= 2, 5000);
         c.pause();
     }
 };

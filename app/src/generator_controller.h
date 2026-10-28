@@ -47,6 +47,10 @@ class GeneratorController : public QObject {
     Q_PROPERTY(bool cameraCompensation READ cameraCompensation WRITE setCameraCompensation NOTIFY optionsChanged)
     Q_PROPERTY(bool sceneCuts READ sceneCuts WRITE setSceneCuts NOTIFY optionsChanged)
     Q_PROPERTY(bool autoOZone READ autoOZone WRITE setAutoOZone NOTIFY optionsChanged)
+    // Find the tip by itself when a video opens (D-159, on): a sure find
+    // becomes the box, an unsure one only shows its candidates, and a box the
+    // user draws meanwhile is never replaced (generator.auto_tip).
+    Q_PROPERTY(bool autoTip READ autoTip WRITE setAutoTip NOTIFY optionsChanged)
     // Bridge tracking gaps up to kGapBridgeMs and leave longer ones without
     // actions (on, from the tracker's own loss, D-161); treat single-frame
     // outliers as lost (on, D-160); keep raw tracks in config_dir()/cache/track
@@ -127,6 +131,10 @@ class GeneratorController : public QObject {
     // Find tip (0.7 auto_roi): running, and the other proposals to pick from
     // ({x, y, w, h, score} in video pixels, strongest first).
     Q_PROPERTY(bool finding READ finding NOTIFY findingChanged)
+    // The search running (or waiting to start) was started by opening the
+    // video and is nobody's yet: Find tip takes it over, Create and the
+    // queue may end it.
+    Q_PROPERTY(bool autoFinding READ autoFinding NOTIFY findingChanged)
     Q_PROPERTY(QVariantList tipCandidates READ tipCandidates NOTIFY tipCandidatesChanged)
     // The queue (0.7 "Create queue"): {path, name, status, message}; status is
     // queued | running | done | skipped | failed | canceled.
@@ -161,6 +169,8 @@ public:
     void setSceneCuts(bool v);
     bool autoOZone() const { return auto_ozone_; }
     void setAutoOZone(bool v);
+    bool autoTip() const { return auto_tip_; }
+    void setAutoTip(bool v);
     bool gapHandling() const { return gap_handling_; }
     void setGapHandling(bool v);
     bool outlierRejection() const { return outlier_rejection_; }
@@ -231,13 +241,15 @@ public:
     bool scriptExists() const;
     int step() const;
     bool finding() const { return finding_; }
+    bool autoFinding() const;
     QVariantList tipCandidates() const { return tip_candidates_; }
     QVariantList queue() const { return queue_; }
     bool queueRunning() const { return queue_running_; }
     QString queueSummary() const;
 
-    // A video path or file URL. false with the status set when it cannot be read.
-    Q_INVOKABLE bool openVideo(const QString& pathOrUrl);
+    // A video path or file URL. false with the status set when it cannot be
+    // read. lookForTip false: no automatic tip search (a script opened for editing).
+    Q_INVOKABLE bool openVideo(const QString& pathOrUrl, bool lookForTip = true);
     // Loads the marking frame at ms (clamped to the clip).
     Q_INVOKABLE void seekPreview(double ms);
     Q_INVOKABLE void clearBox();
@@ -269,8 +281,11 @@ public:
     Q_INVOKABLE bool create(bool overwrite = false);
     Q_INVOKABLE void cancel();
     // Proposes the tip box from the video's rhythmic motion, on its own
-    // thread; the box is set and the other candidates are offered. false
-    // when there is no video or a search or run is going.
+    // thread; the box is set and the other candidates are offered. While the
+    // automatic search runs it takes that one over (or restarts it from the
+    // shown frame); while a search for another video or a canceled one ends,
+    // the new one starts after it. false when there is no video, a run is
+    // going or the user's own search runs.
     Q_INVOKABLE bool findTip();
     Q_INVOKABLE void cancelFind();
     // Takes candidate i as the tip box.
@@ -324,6 +339,13 @@ private:
     QString profile_ = QStringLiteral("recommended");
     bool invert_ = false, camera_ = true, scene_cuts_ = true, auto_ozone_ = true;
     bool gap_handling_ = true, outlier_rejection_ = true, track_cache_ = false;
+    bool auto_tip_ = true;
+    bool find_auto_ = false;     // the running search was started by openVideo
+    bool refind_ = false;        // a new search starts when the running one has ended
+    bool pending_auto_ = false;  // that new search is the automatic one (a video opened meanwhile)
+    QString find_video_;         // the video the running search looks at
+    int64_t find_start_ms_ = 0;  // where the running search looks from
+    quint64 box_edits_ = 0;      // counts box changes; a search compares it
     bool contact_vibration_ = true;
     double contact_span_ = 0.75;
     QString contact_curve_ = QStringLiteral("soft");
