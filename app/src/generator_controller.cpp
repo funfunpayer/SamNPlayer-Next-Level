@@ -82,6 +82,7 @@ void GeneratorController::loadSettings() {
         camera_ = flag("generator.camera_compensation", camera_);
         scene_cuts_ = flag("generator.scene_cuts", scene_cuts_);
         auto_ozone_ = flag("generator.auto_ozone", auto_ozone_);
+        auto_tip_ = flag("generator.auto_tip", auto_tip_);
         gap_handling_ = flag("generator.gap_handling", gap_handling_);
         outlier_rejection_ = flag("generator.outlier_rejection", outlier_rejection_);
         track_cache_ = flag("generator.track_cache", track_cache_);
@@ -138,14 +139,27 @@ GeneratorController::~GeneratorController() {
 }
 
 bool GeneratorController::findTip() {
+    // A click while the automatic search runs takes it over when it looks
+    // from the shown frame; else it ends and a new one starts from there.
+    if (finding_ && find_auto_) {
+        find_auto_ = false;
+        if (find_start_ms_ != int64_t(std::llround(preview_ms_))) {
+            refind_ = true;
+            if (find_cancel_) *find_cancel_ = true;
+        }
+        return true;
+    }
     if (video_path_.isEmpty() || running_ || finding_ || queue_running_) return false;
     if (finder_.joinable()) finder_.join();
     find_cancel_ = std::make_shared<std::atomic<bool>>(false);
     finding_ = true;
+    find_auto_ = false;  // openVideo sets it after this returns
     emit findingChanged();
     setStatus(tr("Looking for the rhythmic motion…"));
+    const quint64 edits = box_edits_;
+    find_start_ms_ = int64_t(std::llround(preview_ms_));
     QPointer<GeneratorController> self(this);
-    finder_ = std::thread([self, cancel = find_cancel_, forVideo = video_path_, startMs = int64_t(std::llround(preview_ms_)),
+    finder_ = std::thread([self, edits, cancel = find_cancel_, forVideo = video_path_, startMs = int64_t(std::llround(preview_ms_)),
                            video = std::filesystem::path(video_path_.toStdU16String())] {
         samn::engine::TipFindOptions o;
         o.start_ms = startMs;  // 0.7: from the shown frame
@@ -157,13 +171,24 @@ bool GeneratorController::findTip() {
         } catch (const std::exception& e) {
             error = e.what();
         }
-        QMetaObject::invokeMethod(qApp, [self, r = std::move(r), error, forVideo, startMs] {
+        QMetaObject::invokeMethod(qApp, [self, r = std::move(r), error, forVideo, startMs, edits] {
             if (!self) return;
             self->finding_ = false;
             emit self->findingChanged();
             const bool thenCreate = std::exchange(self->create_after_find_, false);
+            const bool automatic = std::exchange(self->find_auto_, false) && !thenCreate;
+            if (std::exchange(self->refind_, false) && forVideo == self->video_path_) {
+                self->create_after_find_ = thenCreate;
+                self->findTip();
+                return;
+            }
             if (forVideo != self->video_path_) return;  // another video was opened meanwhile
             if (!r) {
+                if (automatic) {
+                    // Nothing found by itself: the usual first step stays.
+                    self->setStatus(tr("Drag a box around the moving tip on the frame."));
+                    return;
+                }
                 if (thenCreate && error != "canceled") {
                     self->setStatus(tr("Find tip failed: %1.").arg(QString::fromStdString(error)));
                     AppLog::instance().reportError(self->status_);  // 0.7 uiError
@@ -178,11 +203,18 @@ bool GeneratorController::findTip() {
                 list.append(QVariantMap{{"x", c.box.x}, {"y", c.box.y}, {"w", c.box.width}, {"h", c.box.height}, {"score", c.score}});
             self->tip_candidates_ = list;
             emit self->tipCandidatesChanged();
-            self->setBox(QRect(r->box.x, r->box.y, r->box.width, r->box.height));
-            self->box_ms_ = double(startMs);  // found from there, whatever is shown now
             // Below this the "rhythm" is compression noise (a still clip
             // scores about 0.002, a clear stroke above 1).
             const bool weak = r->candidates.empty() || r->candidates.front().score < 0.05;
+            if (automatic && (weak || self->box_edits_ != edits)) {
+                // Unsure, or the user drew a box meanwhile: candidates only (D-159).
+                self->setStatus(self->box_edits_ != edits
+                                    ? tr("Your box stays. The dashed boxes are what Find tip saw; click one to use it.")
+                                    : tr("Not sure where the tip is: click a dashed box, or drag one by hand."));
+                return;
+            }
+            self->setBox(QRect(r->box.x, r->box.y, r->box.width, r->box.height));
+            self->box_ms_ = double(startMs);  // found from there, whatever is shown now
             if (thenCreate) {
                 // Create goes on only with a real find; a weak one waits for the user.
                 if (weak) {
@@ -333,6 +365,7 @@ void GeneratorController::finishQueue() {
 
 void GeneratorController::cancelFind() {
     create_after_find_ = false;
+    refind_ = false;
     if (find_cancel_) *find_cancel_ = true;
 }
 
@@ -390,6 +423,7 @@ bool GeneratorController::openVideo(const QString& pathOrUrl) {
     // 0.7's poster: 10 % into the clip, at most 30 s in.
     seekPreview(std::min(duration_ms_ * 0.1, 30000.0));
     setStatus(tr("Drag a box around the moving tip on the frame."));
+    if (auto_tip_ && findTip()) find_auto_ = true;
     return true;
 }
 
@@ -414,6 +448,7 @@ void GeneratorController::setBox(const QRect& box) {
     if (next == box_ && box_ms_ == preview_ms_) return;
     box_ = next;
     box_ms_ = preview_ms_;
+    ++box_edits_;
     emit boxChanged();
     emit stepChanged();
 }
@@ -452,6 +487,7 @@ SAMN_SETTER(setInvert, invert_, nullptr)
 SAMN_SETTER(setCameraCompensation, camera_, "generator.camera_compensation")
 SAMN_SETTER(setSceneCuts, scene_cuts_, "generator.scene_cuts")
 SAMN_SETTER(setAutoOZone, auto_ozone_, "generator.auto_ozone")
+SAMN_SETTER(setAutoTip, auto_tip_, "generator.auto_tip")
 SAMN_SETTER(setGapHandling, gap_handling_, "generator.gap_handling")
 SAMN_SETTER(setOutlierRejection, outlier_rejection_, "generator.outlier_rejection")
 SAMN_SETTER(setTrackCache, track_cache_, "generator.track_cache")
@@ -877,6 +913,8 @@ bool GeneratorController::create(bool overwrite) {
         setStatus(tr("Finding tip, then creating…"));
         return true;
     }
+    // The user's box is there: an automatic search would only compete.
+    if (finding_ && find_auto_) cancelFind();
     engine::GenerateRequest req;
     req.video = std::filesystem::path(video_path_.toStdU16String());
     req.box = cv::Rect(box_.x(), box_.y(), box_.width(), box_.height());

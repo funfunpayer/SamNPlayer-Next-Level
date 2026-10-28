@@ -120,10 +120,13 @@ private slots:
         QTRY_VERIFY(gen->previewMs() < 50);
 
         // Find tip sets a box and shows the other candidates as numbered chips.
+        // The search that started with the video (D-159) ends first: while
+        // it runs, the button stops it.
+        QTRY_VERIFY_WITH_TIMEOUT(!gen->finding(), 30000);
         QMetaObject::invokeMethod(named(root.get(), "findTip"), "clicked");
         QTRY_VERIFY(gen->finding());
         QTRY_VERIFY_WITH_TIMEOUT(!gen->finding(), 30000);
-        QVERIFY(gen->hasBox());
+        QVERIFY2(gen->hasBox(), qPrintable(gen->status()));
         QTRY_VERIFY(named(root.get(), "candidate_1"));
         QVERIFY(named(root.get(), "candidate_1")->isVisible());
         // A queued clip can be taken out again with its ×.
@@ -561,8 +564,10 @@ private slots:
         QVERIFY(QMetaObject::invokeMethod(page, "createFor", Q_RETURN_ARG(QVariant, ok),
                                           Q_ARG(QVariant, QUrl::fromLocalFile(video)), Q_ARG(QVariant, false)));
         QVERIFY(gen->review().isEmpty());  // a new video, no result yet
+        // It looks for the tip by itself (D-159) but does not create.
+        QTRY_VERIFY_WITH_TIMEOUT(!gen->finding(), 30000);
         QTest::qWait(200);
-        QVERIFY(!gen->running() && !gen->finding());
+        QVERIFY(!gen->running());
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
     }
 };

@@ -457,6 +457,40 @@ private slots:
         QVERIFY(g.status().contains("canceled") || g.status().startsWith("Tip found"));
     }
 
+    // D-159: opening a video looks for the tip by itself; a clear find is the
+    // box, a box drawn meanwhile stays, and the switch turns it off.
+    void openingAVideoFindsTheTipByItself() {
+        GeneratorController g;
+        QVERIFY(g.autoTip());
+        QVERIFY(g.openVideo(clip("auto1.mp4", 8)));
+        QVERIFY(g.finding());
+        QTRY_VERIFY_WITH_TIMEOUT(!g.finding(), 30000);
+        QVERIFY2(g.hasBox(), qPrintable(g.status()));
+        QVERIFY(g.status().startsWith("Tip found"));
+        QCOMPARE(g.tipCandidates().size(), 6);
+
+        // The user's box drawn during the search is kept.
+        QVERIFY(g.openVideo(clip("auto2.mp4", 8)));
+        QVERIFY(g.finding());
+        const QRect mine(10, 10, 40, 40);
+        g.setBox(mine);
+        QTRY_VERIFY_WITH_TIMEOUT(!g.finding(), 30000);
+        QCOMPARE(g.box(), mine);
+        QVERIFY(g.status().startsWith("Your box stays"));
+        QCOMPARE(g.tipCandidates().size(), 6);
+
+        // Off: opening only opens, and the choice is kept.
+        g.setAutoTip(false);
+        QVERIFY(g.openVideo(clip("auto3.mp4", 8)));
+        QVERIFY(!g.finding());
+        QVERIFY(!g.hasBox());
+        {
+            GeneratorController again;
+            QVERIFY(!again.autoTip());
+        }
+        g.setAutoTip(true);
+    }
+
     void destroyingDuringAFindIsSafe() {
         {
             GeneratorController g;

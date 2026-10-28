@@ -1567,6 +1567,7 @@ Item {
                         model: [{ text: qsTr("Invert motion direction"), key: "invert", help: "gen-invert" },
                                 { text: qsTr("Camera motion compensation"), key: "cameraCompensation", help: "gen-camcomp" },
                                 { text: qsTr("Scene-cut detection"), key: "sceneCuts", help: "gen-scenecut" },
+                                { text: qsTr("Find the tip by itself"), key: "autoTip", help: "gen-auto-tip" },
                                 { text: qsTr("Suggest O-zone automatically"), key: "autoOZone", help: "gen-auto-ozone" },
                                 { text: qsTr("Bridge short tracking gaps"), key: "gapHandling", help: "gen-gaps" },
                                 { text: qsTr("Ignore single-frame jumps"), key: "outlierRejection", help: "gen-outliers" },

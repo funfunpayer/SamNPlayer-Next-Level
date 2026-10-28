@@ -47,6 +47,10 @@ class GeneratorController : public QObject {
     Q_PROPERTY(bool cameraCompensation READ cameraCompensation WRITE setCameraCompensation NOTIFY optionsChanged)
     Q_PROPERTY(bool sceneCuts READ sceneCuts WRITE setSceneCuts NOTIFY optionsChanged)
     Q_PROPERTY(bool autoOZone READ autoOZone WRITE setAutoOZone NOTIFY optionsChanged)
+    // Find the tip by itself when a video opens (D-159, on): a sure find
+    // becomes the box, an unsure one only shows its candidates, and a box the
+    // user draws meanwhile is never replaced (generator.auto_tip).
+    Q_PROPERTY(bool autoTip READ autoTip WRITE setAutoTip NOTIFY optionsChanged)
     // Bridge tracking gaps up to kGapBridgeMs and leave longer ones without
     // actions (on, from the tracker's own loss, D-161); treat single-frame
     // outliers as lost (on, D-160); keep raw tracks in config_dir()/cache/track
@@ -161,6 +165,8 @@ public:
     void setSceneCuts(bool v);
     bool autoOZone() const { return auto_ozone_; }
     void setAutoOZone(bool v);
+    bool autoTip() const { return auto_tip_; }
+    void setAutoTip(bool v);
     bool gapHandling() const { return gap_handling_; }
     void setGapHandling(bool v);
     bool outlierRejection() const { return outlier_rejection_; }
@@ -324,6 +330,11 @@ private:
     QString profile_ = QStringLiteral("recommended");
     bool invert_ = false, camera_ = true, scene_cuts_ = true, auto_ozone_ = true;
     bool gap_handling_ = true, outlier_rejection_ = true, track_cache_ = false;
+    bool auto_tip_ = true;
+    bool find_auto_ = false;     // the running search was started by openVideo
+    bool refind_ = false;        // a click asked for a search from another frame
+    int64_t find_start_ms_ = 0;  // where the running search looks from
+    quint64 box_edits_ = 0;      // counts box changes; a search compares it
     bool contact_vibration_ = true;
     double contact_span_ = 0.75;
     QString contact_curve_ = QStringLiteral("soft");

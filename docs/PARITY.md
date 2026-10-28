@@ -367,7 +367,7 @@ Note: the Generator panel (`#tab-generator`) is also the "Create" workspace; the
 
 ### 4.2 Step 2 — Tip and contact (ROI marking canvas)
 
-- [ ] "Find tip area" (primary; `AutoDetectROI(video,'auto')` classic motion-based tip find) and automatic tip find after loading a video; hint "Auto tip after load — drag the box anytime to refine." (generator.js:89-91,143,1462-1508) _(partly: "Find tip" (0.7 auto_roi, bit-exact on 3 clips, #61); missing: the automatic run after loading a video)_
+- [x] "Find tip area" (primary; `AutoDetectROI(video,'auto')` classic motion-based tip find) and automatic tip find after loading a video; hint "Auto tip after load — drag the box anytime to refine." (generator.js:89-91,143,1462-1508) → SamN2: "Find tip" (0.7 auto_roi, bit-exact on 3 clips, #61); the automatic run after loading (`openVideo`, switch *Find the tip by itself*, D-159), which keeps a box drawn meanwhile and adopts only a clear find; tests `openingAVideoFindsTheTipByItself`, `dragCreateAndReview`
 - [ ] "Find tip failed: <reason>." status with a "Find tip" retry button; aborts the running queue when tip-find fails while queued (generator.js:1429-1460) _(partly: the failure reason in the status, Find tip stays available; a weak find fails the queue item (`kWeakTipScore`))_
 - [x] "Candidates" button — ranked tip candidates (`SuggestROICandidates`, event `generate:roi-candidates`); click = Tip, Shift-click = optional contact; shown dashed until picked (generator.js:92-93) _(SN2: the other proposals as numbered dashed boxes, a click picks one (`pickCandidate`), Shift-click makes it the contact area; test `dragCreateAndReview`)_
 - [ ] "Suggest Tip+2nd" (hidden unless seeds available) — proposes Tip + partner; Apply required (generator.js:94-96)
