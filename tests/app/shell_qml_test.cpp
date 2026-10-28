@@ -519,7 +519,7 @@ private slots:
             QTest::mouseClick(s.window, Qt::LeftButton, {}, open->mapToScene(QPointF(open->width() / 2, open->height() / 2)).toPoint());
             QQuickItem* page = s.one("SettingsPage");
             QTRY_VERIFY_WITH_TIMEOUT(page->isVisible(), kWait);
-            QCOMPARE(page->property("tab").toInt(), 2);
+            QCOMPARE(page->property("tab").toInt(), 3);  // Log
             QTRY_VERIFY_WITH_TIMEOUT(!byName("toast"), kWait);
         }
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
@@ -547,8 +547,14 @@ private slots:
             page->setProperty("tab", 1);
             QTRY_VERIFY_WITH_TIMEOUT(byName("deviceTab")->isVisible(), kWait);
             page->setProperty("tab", 2);
-            QTRY_VERIFY_WITH_TIMEOUT(byName("logTab")->isVisible(), kWait);
+            QTRY_VERIFY_WITH_TIMEOUT(byName("systemTab")->isVisible(), kWait);
+            QVERIFY(byName("systemCheckAgain") && byName("systemCopyReport"));
+            QMetaObject::invokeMethod(page->property("system").value<QObject*>(), "refresh");
+            QTRY_VERIFY_WITH_TIMEOUT(byName("systemItem_settings"), kWait);
+            QVERIFY(byName("systemItem_gpu") && byName("systemItem_ai-gpu"));
             page->setProperty("tab", 3);
+            QTRY_VERIFY_WITH_TIMEOUT(byName("logTab")->isVisible(), kWait);
+            page->setProperty("tab", 4);
             QTRY_VERIFY_WITH_TIMEOUT(byName("aboutTab")->isVisible(), kWait);
             QVERIFY(byName("legalText")->property("text").toString().contains("GNU GENERAL PUBLIC LICENSE"));
             if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT_SETTINGS"); !shot.isEmpty()) {

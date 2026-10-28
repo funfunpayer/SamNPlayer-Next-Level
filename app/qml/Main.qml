@@ -16,6 +16,8 @@ ApplicationWindow {
     readonly property var modeNames: top.modes.map(m => m.name)
     readonly property var generator: generatorLoader.item
     readonly property var training: trainingLoader.item
+    // Called once by main.cpp after the window is shown: the system check, with a notice only for an important failure.
+    function startSystemCheck() { settingsPage.system.startupCheck() }
     // Everything there: the pages and the background ribbons. Until then the
     // loading screen shows, so the window never appears piece by piece.
     readonly property bool ready: generatorLoader.status === Loader.Ready && trainingLoader.status === Loader.Ready
@@ -353,9 +355,11 @@ ApplicationWindow {
                     }
                     FlowButton {
                         objectName: "toastOpenLog"
-                        text: qsTr("Open Log")
+                        // The start notice of the system check opens its tab (D-162), the rest the Log.
+                        readonly property bool system: toast.modelData.text.startsWith(qsTr("System check:"))
+                        text: system ? qsTr("Open System") : qsTr("Open Log")
                         onClicked: {
-                            settingsPage.tab = 2
+                            settingsPage.tab = system ? 2 : 3  // System : Log
                             settingsPage.open = true
                             Notices.dismiss(toast.modelData.id)
                         }

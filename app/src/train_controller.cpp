@@ -17,6 +17,7 @@
 #include <QSaveFile>
 
 #include "samn/settings.h"
+#include "system_check.h"
 
 namespace samn::ui {
 
@@ -254,8 +255,11 @@ void TrainController::runSteps(QList<Step> steps, std::function<void()> done) {
             f.commit();
         }
         const QJsonObject o = QJsonDocument::fromJson(env_status_.toUtf8()).object();
-        finishSetup(true, o.value("cuda").toBool() ? tr("Ready: PyTorch %1 with the NVIDIA card (CUDA).").arg(o.value("torch").toString())
-                                                   : tr("Ready: PyTorch %1 on the processor.").arg(o.value("torch").toString()));
+        // The card is named from the adapter list: with an Intel iGPU beside it, it is the NVIDIA one that CUDA uses.
+        const auto gpu = o.value("cuda").toBool() ? PickTrainingGpu(ListGpus()) : std::nullopt;
+        finishSetup(true, !o.value("cuda").toBool() ? tr("Ready: PyTorch %1 on the processor.").arg(o.value("torch").toString())
+                          : gpu                     ? tr("Ready: PyTorch %1 with %2 (CUDA).").arg(o.value("torch").toString(), gpu->name)
+                                                    : tr("Ready: PyTorch %1 with the NVIDIA card (CUDA).").arg(o.value("torch").toString()));
         done();
         return;
     }

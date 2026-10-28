@@ -17,11 +17,14 @@ Item {
     property UpdateChecker updates: null
     property int tab: 0
     readonly property alias settings: ctl
+    // The health check (D-162); Main.qml starts it once after the window is shown.
+    readonly property alias system: sysCtl
     visible: opacity > 0
     opacity: open ? 1 : 0
     Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
 
     SettingsController { id: ctl }
+    SystemCheckController { id: sysCtl }
     FolderDialog {
         id: folderDialog
         title: qsTr("Add a script folder")
@@ -59,7 +62,7 @@ Item {
                 Item { width: 12 }
                 FlowTabs {
                     objectName: "settingsTabs"
-                    model: [qsTr("General"), qsTr("Device"), qsTr("Log"), qsTr("About")]
+                    model: [qsTr("General"), qsTr("Device"), qsTr("System"), qsTr("Log"), qsTr("About")]
                     current: root.tab
                     onPicked: (i) => root.tab = i
                 }
@@ -608,10 +611,88 @@ Item {
                 }
             }
 
+            // ---- System (D-162: the health check) ----
+            ColumnLayout {
+                objectName: "systemTab"
+                visible: root.tab === 2
+                Layout.fillWidth: true; Layout.fillHeight: true
+                spacing: 10
+                RowLayout {
+                    Layout.fillWidth: true; spacing: 8
+                    Text {
+                        objectName: "systemSummary"
+                        textFormat: Text.PlainText
+                        Layout.fillWidth: true; elide: Text.ElideRight
+                        text: sysCtl.running ? qsTr("Checking …") : sysCtl.items.length === 0 ? qsTr("Not checked yet.") : sysCtl.summary
+                        color: Theme.text; font.family: Theme.font; font.pixelSize: 15
+                    }
+                    FlowButton {
+                        objectName: "systemCheckAgain"
+                        text: qsTr("Check again")
+                        enabled: !sysCtl.running
+                        onClicked: sysCtl.refresh()
+                    }
+                    FlowButton {
+                        objectName: "systemCopyReport"
+                        text: qsTr("Copy report")
+                        enabled: sysCtl.items.length > 0
+                        onClicked: sysCtl.copyReport()
+                    }
+                }
+                Flickable {
+                    Layout.fillWidth: true; Layout.fillHeight: true
+                    clip: true
+                    contentHeight: sysItems.implicitHeight
+                    ColumnLayout {
+                        id: sysItems
+                        width: parent.width; spacing: 8
+                        Repeater {
+                            model: sysCtl.items
+                            delegate: GlassCard {
+                                id: sysRow
+                                required property var modelData
+                                objectName: "systemItem_" + modelData.id
+                                Layout.fillWidth: true
+                                implicitHeight: rowCol.implicitHeight + 24
+                                readonly property color tone: modelData.state === "ok" ? Theme.good : modelData.state === "warn" ? Theme.orange : Theme.danger
+                                RowLayout {
+                                    id: rowCol
+                                    anchors.fill: parent; anchors.margins: 12; spacing: 12
+                                    Rectangle {
+                                        objectName: "systemDot_" + sysRow.modelData.id
+                                        Layout.alignment: Qt.AlignTop; Layout.topMargin: 4
+                                        width: 10; height: 10; radius: 5; color: sysRow.tone
+                                    }
+                                    ColumnLayout {
+                                        Layout.fillWidth: true; spacing: 3
+                                        Text {
+                                            textFormat: Text.PlainText
+                                            Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                            text: sysRow.modelData.title; color: Theme.text; font.family: Theme.font; font.pixelSize: 14
+                                        }
+                                        Text {
+                                            textFormat: Text.PlainText
+                                            Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                            text: sysRow.modelData.detail; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                                        }
+                                        Text {
+                                            visible: sysRow.modelData.fix !== ""
+                                            textFormat: Text.PlainText
+                                            Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                            text: sysRow.modelData.fix; color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // ---- Log (0.7 log.js) ----
             ColumnLayout {
                 objectName: "logTab"
-                visible: root.tab === 2
+                visible: root.tab === 3
                 Layout.fillWidth: true; Layout.fillHeight: true
                 spacing: 10
                 RowLayout {
@@ -669,7 +750,7 @@ Item {
             // ---- About ----
             ColumnLayout {
                 objectName: "aboutTab"
-                visible: root.tab === 3
+                visible: root.tab === 4
                 Layout.fillWidth: true; Layout.fillHeight: true
                 spacing: 12
                 RowLayout {
