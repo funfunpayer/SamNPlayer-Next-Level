@@ -138,22 +138,34 @@ GeneratorController::~GeneratorController() {
     runner_.reset();
 }
 
+bool GeneratorController::autoFinding() const {
+    if (!finding_) return false;
+    if (refind_) return pending_auto_;
+    // A search for a video opened before is nobody's: it only ends.
+    return find_auto_ || find_video_ != video_path_;
+}
+
 bool GeneratorController::findTip() {
-    // A click while the automatic search runs takes it over when it looks
-    // from the shown frame; else it ends and a new one starts from there.
-    if (finding_ && find_auto_) {
-        find_auto_ = false;
-        if (find_start_ms_ != int64_t(std::llround(preview_ms_))) {
+    if (video_path_.isEmpty() || running_ || queue_running_) return false;
+    if (finding_) {
+        const bool usable = find_video_ == video_path_ && !(find_cancel_ && *find_cancel_);
+        if (usable && !find_auto_) return false;  // the user's own search: one at a time
+        // A click while the automatic search runs takes it over when it looks
+        // from the shown frame; any other search ends, and a new one starts
+        // from the shown frame once it has.
+        find_auto_ = pending_auto_ = false;
+        if (!usable || find_start_ms_ != int64_t(std::llround(preview_ms_))) {
             refind_ = true;
             if (find_cancel_) *find_cancel_ = true;
         }
+        emit findingChanged();
         return true;
     }
-    if (video_path_.isEmpty() || running_ || finding_ || queue_running_) return false;
     if (finder_.joinable()) finder_.join();
     find_cancel_ = std::make_shared<std::atomic<bool>>(false);
     finding_ = true;
     find_auto_ = false;  // openVideo sets it after this returns
+    find_video_ = video_path_;
     emit findingChanged();
     setStatus(tr("Looking for the rhythmic motion…"));
     const quint64 edits = box_edits_;
@@ -171,18 +183,30 @@ bool GeneratorController::findTip() {
         } catch (const std::exception& e) {
             error = e.what();
         }
-        QMetaObject::invokeMethod(qApp, [self, r = std::move(r), error, forVideo, startMs, edits] {
+        QMetaObject::invokeMethod(qApp, [self, r = std::move(r), error, cancel, forVideo, startMs, edits] {
             if (!self) return;
             self->finding_ = false;
-            emit self->findingChanged();
             const bool thenCreate = std::exchange(self->create_after_find_, false);
             const bool automatic = std::exchange(self->find_auto_, false) && !thenCreate;
-            if (std::exchange(self->refind_, false) && forVideo == self->video_path_) {
+            const bool again = std::exchange(self->refind_, false);
+            const bool againAutomatic = std::exchange(self->pending_auto_, false) && !thenCreate;
+            emit self->findingChanged();
+            // A run or the queue started meanwhile: the box belongs to it.
+            if (self->running_ || self->queue_running_) return;
+            if (again) {
+                // From another frame, or for a video opened meanwhile.
                 self->create_after_find_ = thenCreate;
-                self->findTip();
+                if (!self->findTip()) self->create_after_find_ = false;
+                else if (thenCreate) self->setStatus(tr("Finding tip, then creating…"));
+                else if (againAutomatic) {
+                    self->find_auto_ = true;
+                    emit self->findingChanged();
+                }
                 return;
             }
             if (forVideo != self->video_path_) return;  // another video was opened meanwhile
+            // Ended by Cancel, Create or the queue: nothing to set, nothing to say.
+            if (automatic && cancel->load()) return;
             if (!r) {
                 if (automatic) {
                     // Nothing found by itself: the usual first step stays.
@@ -285,7 +309,7 @@ void GeneratorController::setQueueItem(int index, const QString& status, const Q
 }
 
 bool GeneratorController::runQueue(bool overwrite) {
-    if (queue_running_ || running_ || finding_) return false;
+    if (queue_running_ || running_) return false;
     std::vector<std::pair<int, std::filesystem::path>> items;
     for (int i = 0; i < queue_.size(); ++i) {
         const QVariantMap m = queue_.at(i).toMap();
@@ -293,6 +317,14 @@ bool GeneratorController::runQueue(bool overwrite) {
             items.emplace_back(i, std::filesystem::path(m.value("path").toString().toStdU16String()));
     }
     if (items.empty()) return false;
+    if (finding_) {
+        // The automatic search only competes; the user's own ends first.
+        if (!autoFinding()) {
+            setStatus(tr("Find tip is still running — stop it or let it finish, then create the queue."));
+            return false;
+        }
+        cancelFind();
+    }
     if (queue_worker_.joinable()) queue_worker_.join();
     engine::QueueSettings settings;
     settings.signal.profile = profile_.toStdString();
@@ -364,9 +396,11 @@ void GeneratorController::finishQueue() {
 }
 
 void GeneratorController::cancelFind() {
+    const bool wasAutomatic = autoFinding();
     create_after_find_ = false;
-    refind_ = false;
+    refind_ = pending_auto_ = false;
     if (find_cancel_) *find_cancel_ = true;
+    if (autoFinding() != wasAutomatic) emit findingChanged();
 }
 
 void GeneratorController::pickCandidate(int index) {
@@ -377,7 +411,7 @@ void GeneratorController::pickCandidate(int index) {
 
 QString GeneratorController::videoName() const { return QFileInfo(video_path_).fileName(); }
 
-bool GeneratorController::openVideo(const QString& pathOrUrl) {
+bool GeneratorController::openVideo(const QString& pathOrUrl, bool lookForTip) {
     if (running_) {
         setStatus(tr("A script is being created — cancel it first."));
         return false;
@@ -423,7 +457,11 @@ bool GeneratorController::openVideo(const QString& pathOrUrl) {
     // 0.7's poster: 10 % into the clip, at most 30 s in.
     seekPreview(std::min(duration_ms_ * 0.1, 30000.0));
     setStatus(tr("Drag a box around the moving tip on the frame."));
-    if (auto_tip_ && findTip()) find_auto_ = true;
+    if (auto_tip_ && lookForTip && findTip()) {
+        if (refind_) pending_auto_ = true;  // starts once the old video's search has ended
+        else find_auto_ = true;
+    }
+    emit findingChanged();
     return true;
 }
 
@@ -906,15 +944,20 @@ bool GeneratorController::create(bool overwrite) {
         return false;
     }
     if (!hasBox()) {
-        // 0.7: with no tip, Create finds the tip first, then creates.
-        if (!finding_ && !findTip()) return false;
+        // 0.7: with no tip, Create finds the tip first, then creates; a
+        // search already looking at this video is waited for, and is the
+        // user's from now on.
+        const bool waits = finding_ && (refind_ || (find_video_ == video_path_ && !*find_cancel_));
+        if (!waits && !findTip()) return false;
+        find_auto_ = pending_auto_ = false;
+        emit findingChanged();
         create_after_find_ = true;
         create_overwrite_ = overwrite;
         setStatus(tr("Finding tip, then creating…"));
         return true;
     }
     // The user's box is there: an automatic search would only compete.
-    if (finding_ && find_auto_) cancelFind();
+    if (autoFinding()) cancelFind();
     engine::GenerateRequest req;
     req.video = std::filesystem::path(video_path_.toStdU16String());
     req.box = cv::Rect(box_.x(), box_.y(), box_.width(), box_.height());

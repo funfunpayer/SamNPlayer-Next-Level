@@ -1,6 +1,7 @@
 // GeneratorController (P3.3): the Generator's five steps on a real, generated
 // test clip (moving disc, no media in the repo). The engine runs on its own
 // thread; events come back queued, so the tests wait with QTRY.
+#include <QScopeGuard>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QtTest>
@@ -431,6 +432,9 @@ private slots:
 
     void findTipProposesTheBoxAndCandidates() {
         GeneratorController g;
+        // The explicit Find tip only: no automatic search on open.
+        g.setAutoTip(false);
+        const auto restore = qScopeGuard([&] { g.setAutoTip(true); });
         QVERIFY(!g.findTip());  // no video
         QVERIFY(g.openVideo(clip("tip.mp4", 8)));
         QVERIFY(g.findTip());
@@ -461,6 +465,7 @@ private slots:
     // box, a box drawn meanwhile stays, and the switch turns it off.
     void openingAVideoFindsTheTipByItself() {
         GeneratorController g;
+        const auto restore = qScopeGuard([&] { g.setAutoTip(true); });
         QVERIFY(g.autoTip());
         QVERIFY(g.openVideo(clip("auto1.mp4", 8)));
         QVERIFY(g.finding());
@@ -488,7 +493,142 @@ private slots:
             GeneratorController again;
             QVERIFY(!again.autoTip());
         }
-        g.setAutoTip(true);
+    }
+
+    // A video opened while the search for the one before still runs gets
+    // its own search once that one has ended (none when opened for editing).
+    void aVideoOpenedDuringASearchGetsItsOwn() {
+        GeneratorController g;
+        QVERIFY(g.openVideo(clip("first.mp4", 8)));
+        QVERIFY(g.autoFinding());
+        QVERIFY(g.openVideo(clip("second.mp4", 6)));
+        QVERIFY(g.finding());
+        QVERIFY(g.autoFinding());
+        QTRY_VERIFY_WITH_TIMEOUT(!g.finding(), 30000);
+        QVERIFY2(g.hasBox(), qPrintable(g.status()));
+        QVERIFY2(g.status().startsWith("Tip found"), qPrintable(g.status()));
+        QCOMPARE(g.tipCandidates().size(), 6);
+
+        // The same length: the old search looked from the same frame.
+        QVERIFY(g.openVideo(clip("third.mp4", 8)));
+        QVERIFY(g.openVideo(clip("fourth.mp4", 8)));
+        QVERIFY(!g.hasBox());
+        QTRY_VERIFY_WITH_TIMEOUT(!g.finding(), 30000);
+        QVERIFY2(g.hasBox(), qPrintable(g.status()));
+        QVERIFY2(g.status().startsWith("Tip found"), qPrintable(g.status()));
+
+        // Opened for editing: the old search ends and none follows.
+        QVERIFY(g.openVideo(clip("fifth.mp4", 8)));
+        QVERIFY(g.openVideo(clip("sixth.mp4", 6), false));
+        QVERIFY(g.finding());  // the old video's search still ends
+        QTRY_VERIFY_WITH_TIMEOUT(!g.finding(), 30000);
+        QTest::qWait(200);
+        QVERIFY(!g.finding());
+        QVERIFY(!g.hasBox());
+        QVERIFY(g.tipCandidates().isEmpty());
+        QCOMPARE(g.status(), QStringLiteral("Drag a box around the moving tip on the frame."));
+    }
+
+    // The Player's "Create script" for a video while the search for the one
+    // before still runs: the tip is found on the new video, then the run.
+    void createForAVideoOpenedDuringASearchRuns() {
+        GeneratorController g;
+        QSignalSpy created(&g, &GeneratorController::created);
+        QVERIFY(g.openVideo(clip("before.mp4", 8)));
+        QVERIFY(g.openVideo(clip("after.mp4", 6)));
+        QVERIFY(g.create(false));
+        QCOMPARE(g.status(), QStringLiteral("Finding tip, then creating…"));
+        QVERIFY(!g.autoFinding());  // the user's now
+        QTRY_VERIFY_WITH_TIMEOUT(g.running() || created.count() > 0, 30000);
+        QVERIFY(g.hasBox());
+        QTRY_COMPARE_WITH_TIMEOUT(created.count(), 1, 60000);
+        QCOMPARE(created.first().first().toString(), dir_.filePath("after.samn"));
+        QVERIFY(QFileInfo::exists(dir_.filePath("after.funscript")));
+        QVERIFY(!QFileInfo::exists(dir_.filePath("before.funscript")));
+    }
+
+    // Create with the user's box ends the automatic search; its late answer
+    // neither touches the box nor the run's status.
+    void createWithABoxEndsTheAutomaticSearch() {
+        GeneratorController g;
+        QSignalSpy created(&g, &GeneratorController::created);
+        QVERIFY(g.openVideo(clip("boxed.mp4", 8)));
+        QVERIFY(g.autoFinding());
+        const QRect mine(100, 40, 120, 160);
+        g.setBox(mine);
+        QVERIFY(g.create(true));
+        QVERIFY(g.running());
+        QCOMPARE(g.status(), QStringLiteral("Creating the script…"));
+        QTRY_VERIFY_WITH_TIMEOUT(!g.finding(), 30000);
+        QTest::qWait(100);
+        QCOMPARE(g.box(), mine);
+        QVERIFY2(g.status() == QStringLiteral("Creating the script…") || g.status().startsWith("Done"),
+                 qPrintable(g.status()));
+        QTRY_COMPARE_WITH_TIMEOUT(created.count(), 1, 60000);
+        QVERIFY2(g.status().startsWith("Done"), qPrintable(g.status()));
+        QCOMPARE(g.box(), mine);
+    }
+
+    // Find tip during the automatic search: from the same frame it takes
+    // that search over (its answer counts as the user's: even a weak find
+    // becomes the box); from another frame a new search starts there.
+    void findTipTakesTheAutomaticSearchOver() {
+        GeneratorController g;
+        QStringList seen;
+        connect(&g, &GeneratorController::statusChanged, this, [&] { seen << g.status(); });
+        const QString looking = QStringLiteral("Looking for the rhythmic motion…");
+
+        const QString still = dir_.filePath("still_take.mp4");
+        clips::WriteMoving(std::filesystem::path(still.toStdU16String()), 6, 0.0, 1.0);
+        QVERIFY(g.openVideo(still));
+        QVERIFY(g.autoFinding());
+        QVERIFY(g.findTip());
+        QVERIFY(g.finding());
+        QVERIFY(!g.autoFinding());
+        QVERIFY(!g.findTip());  // the user's own: one at a time
+        g.showStatus("taken over");
+        seen.clear();
+        QTRY_VERIFY_WITH_TIMEOUT(!g.finding(), 30000);
+        QVERIFY(!seen.contains(looking));  // the same search, not a new one
+        QVERIFY2(g.hasBox(), qPrintable(g.status()));
+        QVERIFY2(g.status().startsWith("Only weak motion found"), qPrintable(g.status()));
+
+        QVERIFY(g.openVideo(clip("restart.mp4", 8)));
+        QVERIFY(g.autoFinding());
+        g.seekPreview(5000);
+        QVERIFY(g.findTip());
+        QVERIFY(g.finding());
+        QVERIFY(!g.autoFinding());
+        g.showStatus("restarted");
+        seen.clear();
+        QTRY_VERIFY_WITH_TIMEOUT(!g.finding(), 30000);
+        QVERIFY(seen.contains(looking));  // a new search from 5 s
+        QVERIFY2(g.hasBox(), qPrintable(g.status()));
+        QVERIFY2(g.status().startsWith("Tip found"), qPrintable(g.status()));
+        QCOMPARE(g.tipCandidates().size(), 6);
+    }
+
+    // Create queue ends the automatic search; the user's own search must end first.
+    void theQueueEndsTheAutomaticSearch() {
+        GeneratorController g;
+        QSignalSpy finished(&g, &GeneratorController::queueFinished);
+        QCOMPARE(g.addToQueue({clip("queued.mp4", 6)}), 1);
+        QVERIFY(g.openVideo(clip("shown.mp4", 8)));
+        QVERIFY(g.findTip());  // taken over: the user's
+        QVERIFY(!g.runQueue(true));
+        QVERIFY2(g.status().startsWith("Find tip is still running"), qPrintable(g.status()));
+        QTRY_VERIFY_WITH_TIMEOUT(!g.finding(), 30000);
+
+        QVERIFY(g.openVideo(clip("shown2.mp4", 8)));
+        QVERIFY(g.autoFinding());
+        QVERIFY(g.runQueue(true));
+        QVERIFY(g.queueRunning());
+        QTRY_VERIFY_WITH_TIMEOUT(!g.finding(), 30000);
+        QVERIFY(!g.hasBox());
+        QTRY_COMPARE_WITH_TIMEOUT(finished.count(), 1, 60000);
+        QCOMPARE(g.queue().at(0).toMap().value("status").toString(), QStringLiteral("done"));
+        QVERIFY(QFileInfo::exists(dir_.filePath("queued.funscript")));
+        QVERIFY2(g.status().startsWith("Queue finished: 1 created"), qPrintable(g.status()));
     }
 
     void destroyingDuringAFindIsSafe() {

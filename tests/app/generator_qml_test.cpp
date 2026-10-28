@@ -92,6 +92,11 @@ private slots:
         QTRY_VERIFY(named(root.get(), "usePlayerVideo")->isVisible());
         QMetaObject::invokeMethod(named(root.get(), "usePlayerVideo"), "clicked");
         QTRY_VERIFY(gen->hasVideo());
+        // While the automatic search runs (D-159), Find tip takes it over
+        // rather than stopping it, and Create can start (it waits for it).
+        QVERIFY(gen->autoFinding());
+        QCOMPARE(named(root.get(), "findTip")->property("text").toString(), QStringLiteral("Find tip"));
+        QVERIFY(named(root.get(), "createButton")->isEnabled());
         QCOMPARE(named(root.get(), "videoLabel")->property("text").toString(), QStringLiteral("clip.mp4"));
 
         // D-154: the left column names the video and lists it under Recent videos;
@@ -120,11 +125,14 @@ private slots:
         QTRY_VERIFY(gen->previewMs() < 50);
 
         // Find tip sets a box and shows the other candidates as numbered chips.
-        // The search that started with the video (D-159) ends first: while
-        // it runs, the button stops it.
+        // The search that started with the video (D-159) ends first; the
+        // user's own search shows Stop finding.
         QTRY_VERIFY_WITH_TIMEOUT(!gen->finding(), 30000);
         QMetaObject::invokeMethod(named(root.get(), "findTip"), "clicked");
         QTRY_VERIFY(gen->finding());
+        QVERIFY(!gen->autoFinding());
+        QCOMPARE(named(root.get(), "findTip")->property("text").toString(), QStringLiteral("Stop finding"));
+        QVERIFY(!named(root.get(), "createButton")->isEnabled());
         QTRY_VERIFY_WITH_TIMEOUT(!gen->finding(), 30000);
         QVERIFY2(gen->hasBox(), qPrintable(gen->status()));
         QTRY_VERIFY(named(root.get(), "candidate_1"));

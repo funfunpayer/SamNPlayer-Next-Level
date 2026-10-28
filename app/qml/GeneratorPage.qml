@@ -181,7 +181,7 @@ Item {
     // Scenes tab when asked).
     function editScript(path, video, scenes) {
         if (video.toString() !== "" && video.toString() !== gen.videoUrl.toString() && !gen.running && !gen.queueRunning)
-            gen.openVideo(video.toString())
+            gen.openVideo(video.toString(), false)  // the script has its tip; no search
         if (!edit.open(path)) return false
         page.sidePanel = scenes ? 1 : 0
         return true
@@ -754,9 +754,10 @@ Item {
                         }
                         FlowButton {
                             objectName: "findTip"
-                            text: gen.finding ? qsTr("Stop finding") : qsTr("Find tip"); icon: "search"
+                            // The automatic search (D-159) is taken over, only the user's own stops.
+                            text: gen.finding && !gen.autoFinding ? qsTr("Stop finding") : qsTr("Find tip"); icon: "search"
                             enabled: !gen.running
-                            onClicked: gen.finding ? gen.cancelFind() : gen.findTip()
+                            onClicked: gen.finding && !gen.autoFinding ? gen.cancelFind() : gen.findTip()
                         }
                         HelpChip { key: "gen-autoroi"; Layout.alignment: Qt.AlignVCenter }
                     }
@@ -1849,8 +1850,8 @@ Item {
                         FlowButton {
                             objectName: "createButton"
                             text: qsTr("Create Emotion Script"); primary: true
-                            // No tip yet: Create finds it first (0.7).
-                            enabled: gen.hasVideo && !gen.running && !gen.finding
+                            // No tip yet: Create finds it first (0.7), or waits for the automatic search.
+                            enabled: gen.hasVideo && !gen.running && (!gen.finding || gen.autoFinding)
                             onClicked: page.startCreate()
                         }
                         FlowButton {
