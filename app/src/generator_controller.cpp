@@ -205,8 +205,12 @@ bool GeneratorController::findTip() {
                 return;
             }
             if (forVideo != self->video_path_) return;  // another video was opened meanwhile
-            // Ended by Cancel, Create or the queue: nothing to set, nothing to say.
-            if (automatic && cancel->load()) return;
+            // Ended by Cancel, Create or the queue: nothing to set; a stopped
+            // search of the user's says so, even if it had just finished.
+            if (cancel->load()) {
+                if (!automatic) self->setStatus(tr("Find tip: canceled."));
+                return;
+            }
             if (!r) {
                 if (automatic) {
                     // Nothing found by itself: the usual first step stays.
@@ -319,7 +323,7 @@ bool GeneratorController::runQueue(bool overwrite) {
     if (items.empty()) return false;
     if (finding_) {
         // The automatic search only competes; the user's own ends first.
-        if (!autoFinding()) {
+        if (!autoFinding() && !*find_cancel_) {
             setStatus(tr("Find tip is still running — stop it or let it finish, then create the queue."));
             return false;
         }
@@ -956,8 +960,6 @@ bool GeneratorController::create(bool overwrite) {
         setStatus(tr("Finding tip, then creating…"));
         return true;
     }
-    // The user's box is there: an automatic search would only compete.
-    if (autoFinding()) cancelFind();
     engine::GenerateRequest req;
     req.video = std::filesystem::path(video_path_.toStdU16String());
     req.box = cv::Rect(box_.x(), box_.y(), box_.width(), box_.height());
@@ -981,6 +983,8 @@ bool GeneratorController::create(bool overwrite) {
     for (const QRect& r : mask_rois_) req.mask_rois.emplace_back(r.x(), r.y(), r.width(), r.height());
     const uint64_t id = runner_->Start(std::move(req));
     if (id == 0) return false;
+    // The user's box is used: an automatic search would only compete.
+    if (autoFinding()) cancelFind();
     run_id_ = id;
     running_ = true;
     percent_ = 0;
