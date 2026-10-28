@@ -472,4 +472,6 @@ peak/keyframe rules (P3.2) and `LimitSpeed`.
 | SC-6 | `samn_compare` gate: engine with self-check vs without vs 0.7 on the goldens | Report in `docs/benchmarks/`; default on only after the gate |
 
 The experiment scripts and the synthetic scenes live with the private test
-media (not in this repo); this file keeps only the numbers.
+media (not in this repo); this file keeps only the numbers. The command-line
+tool `samn_selfcheck` reproduces the C++ runs; where everything is and how to go
+on: [`HANDOFF_2026-10-27_SELF_CHECK.md`](HANDOFF_2026-10-27_SELF_CHECK.md).
