@@ -2,7 +2,13 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 27 Oct 2026, Claude, branch `claude/samn2-generator-spec` (Generator behaviour spec, D-158/D-159; main merged in with #131 AV1/dav1d, #133 self-check engine and #134 claude-router; *Recommended* is the default recipe, D-160; tracking before Auto, D-161; work in progress, handed over below). Also 27 Oct, Claude, branch `claude/next-selfcheck-handoff`: the self-check handoff `docs/HANDOFF_2026-10-27_SELF_CHECK.md` and the tool `samn_selfcheck`.
+**Last update:** 28 Oct 2026, Claude, branch `claude/samn2-health`: System health check (D-162; Settings → System tab, start notice only for important problems, GPU detection for iGPU + NVIDIA PCs; handover below). Before that: 27 Oct 2026, Claude, branch `claude/samn2-generator-spec` (Generator behaviour spec, D-158/D-159; main merged in with #131 AV1/dav1d, #133 self-check engine and #134 claude-router; *Recommended* is the default recipe, D-160; tracking before Auto, D-161; work in progress, handed over below). Also 27 Oct, Claude, branch `claude/next-selfcheck-handoff`: the self-check handoff `docs/HANDOFF_2026-10-27_SELF_CHECK.md` and the tool `samn_selfcheck`.
+
+## Handover: `claude/samn2-health` (28 Oct, D-162)
+
+- **Done:** `app/src/system_check.{h,cpp}` (adapter list through DXGI / `/sys/class/drm`, `ClassifyGpus`, `PickTrainingGpu`, eight checks in `RunChecks`, `Report`, `SystemCheckController`); Settings tab *System* (between Device and Log, so Log is tab 3 and About 4); `Main.qml::startSystemCheck()` called once by `main.cpp` after the window is shown; `TrainController` names the NVIDIA card in its *Ready* message; `tests/app/system_check_test.cpp` and a System-tab step in `shell_qml_test`.
+- **Not verified:** the Windows (DXGI) path was written but not compiled or run here (Linux only); MSVC and Qt 6.7.3 are for CI. On Linux only AMD reports its memory (sysfs); NVIDIA and Intel show 0 MB there, so the NVIDIA pick on Linux is by vendor, and an Intel Arc is shown as integrated.
+- **Env state:** "failed" means a `train-env` folder without `samn-ready.json` (no failure marker is stored); the check has no other source for it.
 
 ## Handover: `claude/samn2-generator-spec` (26 Oct, in progress, not yet a PR)
 
