@@ -17,7 +17,7 @@ Every piece of code copied or adapted from another project is listed here with i
 | OpenCV 4 (core, imgproc, videoio, video, tracking, dnn) | `vision/` | Apache-2.0 |
 | FFmpeg (through Qt Multimedia and OpenCV videoio) | decoding | LGPL-2.1+ (GPL builds where noted) |
 | FFmpeg n7.0.2 built for the Windows package (Qt's configure options plus `--enable-libdav1d`, `ci/windows/build_ffmpeg_dav1d.sh`; replaces Qt's FFmpeg DLLs, licence beside it as `FFMPEG_LICENSE.md`) | video playback, AV1 without a GPU decoder | LGPL-2.1+ |
-| dav1d (vcpkg) | AV1 decoding inside that FFmpeg | BSD-2-Clause |
+| dav1d (vcpkg) | AV1 decoding inside that FFmpeg and inside the FFmpeg OpenCV reads with (the Generator) | BSD-2-Clause |
 | nlohmann/json 3.11.3 | core | MIT |
 | ONNX Runtime 1.22.0 (official NuGet build, `Microsoft.ML.OnnxRuntime`; licence and notices ship beside it in the package) | `vision/` detectors (D-155 step 4) | MIT |
 | zlib (the one OpenCV brings) | unpacking the models fetched with one click | Zlib |
