@@ -75,16 +75,18 @@ Status SamNeo2Device::Stop() {
     return StopNow();
 }
 
+// Both writes are tried even when the first fails (a failed vibration-off
+// must not leave the suction running), and both off packets are remembered
+// either way: the keepalive then repeats "off", which also retries a failed
+// write, and never the "on" packets of before. The first error is returned.
 Status SamNeo2Device::StopNow() {
     const Bytes vibration_off = protocol_->EncodeVibration(0);
     const Bytes suction_off = protocol_->EncodeSuction(0);
-    Status s = WriteNow(vibration_off);
-    if (!s) return s;
+    const Status vibration = WriteNow(vibration_off);
+    const Status suction = WriteNow(suction_off);
     last_vibration_ = vibration_off;
-    s = WriteNow(suction_off);
-    if (!s) return s;
     last_suction_ = suction_off;
-    return Status::Ok();
+    return vibration ? suction : vibration;
 }
 
 Status SamNeo2Device::WriteChannel(const Bytes& packet, bool vibration) {

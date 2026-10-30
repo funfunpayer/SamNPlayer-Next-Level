@@ -15,10 +15,12 @@
 #include "player_controller.h"
 #include "samn/device/tcode.h"
 #include "samn/stroke_filter.h"
+#include "training_controller.h"
 
 using samn::ui::DeviceController;
 using samn::ui::PlaybackOutput;
 using samn::ui::PlayerController;
+using samn::ui::TrainingController;
 using namespace samn_test;
 
 namespace {
@@ -313,6 +315,61 @@ private slots:
         QCOMPARE(Lines(sink).first().left(2), QString("L0"));
         QVERIFY(Lines(sink).first().contains(Move("L0", expected, 500).left(6)));
         p.setPlaying(false);
+    }
+
+    // The speed limit holds for what the device is told, not only for the
+    // script: a move starts at a position report and must not squeeze the
+    // way from the last sent position into the time until the next action
+    // (late reports, dense actions, play speed above 1).
+    void speedLimitHoldsForLateReports_data() {
+        QTest::addColumn<double>("speed");
+        QTest::newRow("1x") << 1.0;
+        QTest::newRow("2x") << 2.0;
+    }
+    void speedLimitHoldsForLateReports() {
+        QFETCH(double, speed);
+        // Up and down in 10-unit steps every 100 ms: exactly 100 units/s.
+        QList<QPair<int, int>> ramp;
+        for (int i = 0; i <= 60; ++i) {
+            const int phase = i % 20;
+            ramp.append({i * 100, (phase <= 10 ? phase : 20 - phase) * 10});
+        }
+        const QString script = writeScript(files_.path(), "ramp.funscript", ramp);
+        UdpLineSink sink;
+        DeviceController dev;
+        PlayerController p;
+        p.setDevice(&dev);
+        QVERIFY(p.openScript(script));
+        connectStroker(dev, sink);
+        constexpr int kLimit = 100;
+        p.output()->setMaxSpeed(kLimit);
+        p.output()->setSpeed(speed);
+        p.setPlaying(true);
+        // A report every 250 ms; every report has a new target, so each
+        // sends one move (waited for: the worker sends only the newest).
+        int sent = 0;
+        for (int t = 0; t <= 5500; t += 250) {
+            p.setVideoPositionMs(t);
+            ++sent;
+            QTRY_COMPARE_WITH_TIMEOUT(Lines(sink).filter(QRegularExpression("^L0")).size(), sent, kWait);
+        }
+        p.setPlaying(false);
+        const QRegularExpression move("^L0(\\d{4})I(\\d+)$");
+        double last = -1;
+        int checked = 0;
+        for (const QString& line : Lines(sink).filter(QRegularExpression("^L0"))) {
+            const auto m = move.match(line);
+            QVERIFY2(m.hasMatch(), qPrintable(line));
+            const double pos = m.captured(1).toInt() / 100.0;  // units 0-100
+            const int ms = m.captured(2).toInt();
+            if (last >= 0) {
+                const double unitsPerS = std::abs(pos - last) * 1000.0 / ms;
+                QVERIFY2(unitsPerS <= kLimit + 1, qPrintable(QString("%1: %2 units/s").arg(line).arg(unitsPerS)));
+                ++checked;
+            }
+            last = pos;
+        }
+        QCOMPARE(checked, sent - 1);
     }
 
     void extraAxesFollowTheScript() {
@@ -643,6 +700,74 @@ private slots:
         // Another script without companions: no axis lanes.
         QVERIFY(p.openScript(writeScript(files_.path(), "single.funscript", zigzag(40, 250))));
         QVERIFY(p.axisLanes().isEmpty());
+    }
+
+    // A start or a seek eases the extra axes in like the stroke: twist, roll
+    // and pitch must not jump their full range in the time until the next
+    // point (soft seek, per axis from where it was sent last).
+    void extraAxesEaseInAfterAStartAndASeek() {
+        const QString script = writeScript(files_.path(), "soft.funscript", zigzag(40, 250));
+        writeScript(files_.path(), "soft.roll.funscript", zigzag(40, 250));
+        UdpLineSink sink;
+        DeviceController dev;
+        PlayerController p;
+        p.setDevice(&dev);
+        QVERIFY(p.openScript(script));
+        connectStroker(dev, sink);
+        p.setPlaying(true);
+        // The start: the next point is 250 ms away, the position unknown -> the whole range in 500 ms.
+        p.setVideoPositionMs(0);
+        QTRY_VERIFY_WITH_TIMEOUT(Lines(sink).contains(Move("R1", 1.0, 500)), kWait);
+        QVERIFY(Lines(sink).contains(Move("L0", 1.0, 500)));
+        // Following the script: the real time until due.
+        p.setVideoPositionMs(250);
+        QTRY_VERIFY_WITH_TIMEOUT(Lines(sink).contains(Move("R1", 0.0, 250)), kWait);
+        // A seek far ahead: 150 ms to a point a full stroke away -> eased to 500 ms.
+        p.setVideoPositionMs(5100);
+        QTRY_VERIFY_WITH_TIMEOUT(Lines(sink).filter("R1").last() == Move("R1", 1.0, 500), kWait);
+        QTRY_VERIFY_WITH_TIMEOUT(Lines(sink).filter("L0").last() == Move("L0", 1.0, 500), kWait);
+        // Back to normal right after.
+        p.setVideoPositionMs(5250);
+        QTRY_VERIFY_WITH_TIMEOUT(Lines(sink).filter("R1").last() == Move("R1", 0.0, 250), kWait);
+        p.setPlaying(false);
+    }
+
+    // Playback and Training both use the device: one of them ending must not
+    // unlock connect / disconnect / the device tests while the other still drives it.
+    void sessionStaysActiveWhileAnyUserDrivesTheDevice() {
+        const QString script = writeScript(files_.path(), "both.funscript", zigzag(40, 250));
+        DeviceController dev;
+        connectMock(dev);
+        PlayerController p;
+        p.setDevice(&dev);
+        QVERIFY(p.openScript(script));
+        TrainingController tc;
+        tc.setDevice(&dev);
+        tc.setCycles(1);
+        tc.setRampUpMs(100);
+        tc.setHoldMs(100);
+        tc.setRestMs(100);
+        p.setPlaying(true);
+        QVERIFY(dev.sessionActive());
+        QVERIFY(tc.start());  // reuses the connection
+        QCOMPARE(tc.state(), QString("running"));
+        tc.stop();
+        QCOMPARE(tc.state(), QString("idle"));
+        QVERIFY(dev.sessionActive());  // the player still plays
+        dev.disconnectDevice();
+        QVERIFY(dev.lastError().contains("is using this connection"));
+        dev.runDiagnostics();
+        QVERIFY(dev.lastError().contains("not available during playback"));
+        QTest::qWait(100);
+        QVERIFY(dev.connected());
+        // The other way round: playback ends first, training goes on.
+        QVERIFY(tc.start());
+        p.setPlaying(false);
+        QVERIFY(dev.sessionActive());
+        tc.stop();
+        QVERIFY(!dev.sessionActive());
+        dev.disconnectDevice();
+        QTRY_VERIFY_WITH_TIMEOUT(!dev.connected(), kWait);
     }
 
     // 0.7 lane / legend selection: the main curve shows the picked lane;

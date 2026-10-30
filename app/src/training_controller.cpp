@@ -696,7 +696,7 @@ void TrainingController::beginSession() {
     sample_ms_ = std::clamp(plan_.total_ms / 1000, 100, 2000);
     next_sample_ms_ = 0;
     vib_ = suc_ = 0;
-    device_->setSessionActive(true);
+    device_->setSessionActiveFor(this, true);
     setState(State::Running);
     log("Training starting...");
     clock_.start();
@@ -800,7 +800,7 @@ void TrainingController::finishSession(const QString& message) {
         session_.reset();
     }
     log_file_.close();
-    if (device_) device_->setSessionActive(false);
+    if (device_) device_->setSessionActiveFor(this, false);
     if (we_connected_ && device_) device_->disconnectDevice();  // a connection that was already there stays
     we_connected_ = false;
     vib_ = suc_ = 0;

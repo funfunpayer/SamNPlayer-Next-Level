@@ -8,7 +8,9 @@
 #include <QVariantMap>
 #include <QtQml/qqmlregistration.h>
 #include <atomic>
+#include <functional>
 #include <memory>
+#include <set>
 
 #include "samn/device/capabilities.h"
 #include "samn/device/diagnostics.h"
@@ -16,6 +18,7 @@
 namespace samn::ui {
 
 class DeviceWorker;
+class QtTransport;
 
 // The connection to the toy / stroker, ready for QML (0.7 app_device*.go).
 //
@@ -63,7 +66,9 @@ class DeviceController : public QObject {
     Q_PROPERTY(QStringList serialPorts READ serialPorts NOTIFY serialPortsChanged)
     Q_PROPERTY(bool diagnosticsRunning READ diagnosticsRunning NOTIFY diagnosticsRunningChanged)
     // true while playback / training uses the device: connecting, disconnecting
-    // and the test commands are then refused with a message (0.7).
+    // and the test commands are then refused with a message (0.7). Each user
+    // holds the session on its own (setSessionActiveFor); it stays active
+    // while any of them holds it.
     Q_PROPERTY(bool sessionActive READ sessionActive WRITE setSessionActive NOTIFY sessionActiveChanged)
 public:
     explicit DeviceController(QObject* parent = nullptr);
@@ -120,6 +125,9 @@ public:
     void setBleScanTimeoutMs(int ms);
     // Intervals and counts of the diagnostics run (sleep / cancel / on_entry are the controller's).
     void setDiagnosticsOptions(const samn::device::DiagnosticsOptions& options);
+    // Builds the link of the "ble" kind instead of the Bluetooth one (a
+    // stand-in Sam Neo 2). Called on the device thread; empty = Bluetooth.
+    void setBleTransportFactory(std::function<std::unique_ptr<QtTransport>()> factory);
 
     // --- state (GUI thread) ---
     QString state() const;
@@ -144,8 +152,11 @@ public:
     QString hint() const { return hint_; }
     QStringList serialPorts() const { return serial_ports_; }
     bool diagnosticsRunning() const { return diagnostics_running_; }
-    bool sessionActive() const { return session_active_; }
-    void setSessionActive(bool active);
+    bool sessionActive() const { return !session_holders_.empty(); }
+    // The property's writer: a hold of its own, apart from every owner's.
+    void setSessionActive(bool active) { setSessionActiveFor(this, active); }
+    // `owner` (the playback output, the training) starts or ends its use.
+    void setSessionActiveFor(const QObject* owner, bool active);
 
     // What the GUI thread knows of the connection; filled by the worker.
     struct Snapshot {
@@ -192,7 +203,7 @@ private:
     QString hint_;
     QStringList serial_ports_;
     bool diagnostics_running_ = false;
-    bool session_active_ = false;
+    std::set<const QObject*> session_holders_;  // only compared, never dereferenced
     QVariantMap motor_levels_;
     // Set from the GUI thread, read by transports / diagnostics on the worker.
     std::atomic<bool> abort_{false};
