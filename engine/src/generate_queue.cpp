@@ -17,7 +17,8 @@ std::filesystem::path ScriptPathForVideo(const std::filesystem::path& video) {
 
 namespace {
 // Windows and macOS file names ignore case by default: X.mp4 and x.mkv write
-// the same x.funscript (also É and é: folded by the C library's towlower).
+// the same x.funscript. Only what the C library's towlower folds is caught
+// (surely A-Z; É/é and NFC/NFD forms depend on the locale).
 std::wstring ScriptKey(const std::filesystem::path& video) {
     std::wstring key = ScriptPathForVideo(video).lexically_normal().make_preferred().wstring();
 #if defined(_WIN32) || defined(__APPLE__)

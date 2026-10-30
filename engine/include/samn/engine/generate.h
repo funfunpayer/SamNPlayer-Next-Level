@@ -72,7 +72,10 @@ void Generate(const GenerateRequest& request, uint64_t run_id, const std::functi
               const GenerateCallback& on_event);
 
 // Runs one generation at a time on its own thread. Events arrive on that
-// thread; the caller hands them to its UI thread.
+// thread; the caller hands them to its UI thread. The callback must be
+// thread-safe: a run started right after the last one's end can send while
+// the old thread is still in its terminal event, and that terminal event must
+// not wait on the thread that calls Start.
 class GenerateRunner {
 public:
     explicit GenerateRunner(GenerateCallback on_event);
