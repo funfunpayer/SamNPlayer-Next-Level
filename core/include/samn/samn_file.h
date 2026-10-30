@@ -331,6 +331,24 @@ void SaveScriptChapters(const std::filesystem::path& path, const std::vector<Cha
 void SaveScriptOMarkers(const std::filesystem::path& path, const std::vector<OMarker>& markers);
 
 // ---------------------------------------------------------------------------
+// Moving a script in time ("Bake offset"; with ShiftActions, ShiftBookmarks
+// and ShiftChapters). Every time moves by delta_ms. A span (O-marker,
+// tracking gap, scene or phase range) moves like ShiftChapters moves a
+// chapter: one that ends at or before 0 ms is dropped and counted, one that
+// only starts before it is cut at 0. Tip path points before 0 ms are dropped.
+// ---------------------------------------------------------------------------
+std::pair<std::vector<OMarker>, int> ShiftOMarkers(const std::vector<OMarker>& markers, int64_t delta_ms);
+// Everything of a document but its curves: chapters, bookmarks, O-markers,
+// tracking gaps, the recipe's scene and phase ranges and the tip path.
+// Returns how many chapters, bookmarks and O-markers were dropped.
+int ShiftDocumentMarks(Document& d, int64_t delta_ms);
+// The metadata a .funscript carries for the app beside its actions and marks
+// (tracking_gaps, device_recipe's scene and phase ranges, samn_axes,
+// trajectory), moved: {key, JSON text} for PatchMetadataKey, one for each key
+// with something to move. Writes nothing.
+std::vector<std::pair<std::string, std::string>> ShiftedFunscriptMetadata(const FunscriptView& s, int64_t delta_ms);
+
+// ---------------------------------------------------------------------------
 // Recipes and conversion
 // ---------------------------------------------------------------------------
 MapOptions RecipeFor(const std::string& name);

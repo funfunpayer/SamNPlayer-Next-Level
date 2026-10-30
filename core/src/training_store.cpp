@@ -8,6 +8,7 @@
 #include <iomanip>
 #include <sstream>
 
+#include "samn/fileio.h"
 #include "samn/settings.h"
 
 namespace samn::training {
@@ -75,10 +76,13 @@ std::string save_custom_script(Script script, const fs::path& dir) {
         return "script name \"" + script.name + "\" reduces to the same file name (\"" + *slug +
                "\") as the already-saved script \"" + existing->name +
                "\" - pick a name that differs in letters or digits, not just spelling, punctuation or case";
-    std::ofstream out(path, std::ios::binary | std::ios::trunc);
-    if (!out) return "could not write " + path.string();
-    out << json(script).dump(2);
-    return out ? std::string() : "could not write " + path.string();
+    // Atomic: a crash or a full disk keeps the script as it was.
+    try {
+        WriteFileAtomic(path, json(script).dump(2));
+    } catch (const std::exception&) {
+        return "could not write " + path.u8string();
+    }
+    return {};
 }
 
 std::vector<Script> list_custom_scripts(const fs::path& dir) {
@@ -241,7 +245,7 @@ std::vector<SessionSummary> training_history(const fs::path& dir, size_t max) {
     for (const auto& e : fs::directory_iterator(dir, ec)) {
         if (!e.is_regular_file() || e.path().extension() != ".jsonl") continue;
         if (auto s = summarize_session_log(e.path())) {
-            s->file_name = e.path().filename().string();
+            s->file_name = e.path().filename().u8string();
             out.push_back(std::move(*s));
         }
     }

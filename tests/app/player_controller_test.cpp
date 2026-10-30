@@ -285,6 +285,132 @@ private slots:
         QCOMPARE(back.vibration.back().at, int64_t(2500));
         QCOMPARE(samn::LoadFunscript(std::filesystem::u8path(path.toStdString())).actions.front().at, int64_t(1200));
         QVERIFY(s.toolNote().contains("500 ms"));
+
+        // Every other script time moves too: O-markers, the loop marker, the
+        // companion axis files, tracking gaps, scene and phase ranges, the tip
+        // path, in the .funscript's metadata and in the .samn. A span that
+        // ends before the start is dropped, one that only starts there is cut.
+        const auto fs = [](const QString& p) { return std::filesystem::u8path(p.toStdString()); };
+        const QString all = d.filePath("All.funscript");
+        writeFile(all, R"({"actions":[{"at":0,"pos":0},{"at":1000,"pos":100},{"at":2000,"pos":0}],"inverted":true,)"
+                       R"("metadata":{"creator":"keep me","bookmarks":[{"name":"b","time":1500}],)"
+                       R"("oMarkers":[{"startMs":100,"endMs":250,"kind":"primary","intensity":0.5},)"
+                       R"({"startMs":200,"endMs":600,"kind":"secondary","intensity":0.4},)"
+                       R"({"startMs":1000,"endMs":1600,"kind":"primary","intensity":1}],)"
+                       R"("tracking_gaps":[{"start_ms":100,"end_ms":200},{"start_ms":1100,"end_ms":1300}],)"
+                       R"("device_recipe":{"sync":"independent","scene_ranges":[{"start_ms":0,"end_ms":1000,"feel":"oral"}],)"
+                       R"("phase_ranges":[{"start_ms":1000,"end_ms":2000,"phase":"climax"}]},)"
+                       R"("trajectory":{"width":640,"height":360,"tip":[{"atMs":100,"x":1,"y":2},{"atMs":1100,"x":3,"y":4}]},)"
+                       R"("samn_axes":{"vibration":[{"at":0,"pos":10},{"at":2000,"pos":20}]}}})");
+        writeFile(d.filePath("All.surge.funscript"), R"({"actions":[{"at":0,"pos":50},{"at":1000,"pos":20},{"at":2000,"pos":80}]})");
+        const QString allSamn = d.filePath("All.samn");
+        {
+            samn::Document a;
+            a.version = samn::SamnCurrentVersion;
+            a.kind = samn::SamnKind;
+            a.general = {{0, 0}, {1000, 100}, {2000, 0}};
+            a.vibration = {{0, 50}, {2000, 50}};
+            a.bookmarks = {{"b", 1500}};
+            a.chapters = {{"c", 0, 1500}};
+            a.o_markers = {{1000, 1600, "primary", 1.0}, {100, 250, "secondary", 0.5}};
+            a.tracking_gaps = {{1100, 1300}};
+            a.recipe.scene_ranges = {{0, 1000, "oral"}};
+            a.recipe.phase_ranges = {{1000, 2000, "climax"}};
+            a.trajectory = samn::TrajectoryData{640, 360, {{100, 1, 2}, {1100, 3, 4}}, {}};
+            samn::SaveDocument(fs(allSamn), a);
+        }
+        samn::SaveMarker(fs(allSamn), {1000, 2000});
+        PlayerController m;
+        QVERIFY(m.openScript(all));
+        QCOMPARE(m.scriptPath(), allSamn);
+        m.setOffsetMs(-300);
+        QVERIFY(m.bakeOffset());
+        const samn::Document moved = samn::LoadDocument(fs(allSamn));
+        QCOMPARE(moved.general.front().at, int64_t(700));
+        QCOMPARE(moved.o_markers.size(), size_t(1));  // [100, 250] lies before the start
+        QCOMPARE(moved.o_markers[0].start_ms, int64_t(700));
+        QCOMPARE(moved.o_markers[0].end_ms, int64_t(1300));
+        QCOMPARE(moved.tracking_gaps.size(), size_t(1));
+        QCOMPARE(moved.tracking_gaps[0].start_ms, int64_t(800));
+        QCOMPARE(moved.tracking_gaps[0].end_ms, int64_t(1000));
+        QCOMPARE(moved.recipe.scene_ranges[0].start_ms, int64_t(0));  // cut at 0
+        QCOMPARE(moved.recipe.scene_ranges[0].end_ms, int64_t(700));
+        QCOMPARE(moved.recipe.phase_ranges[0].start_ms, int64_t(700));
+        QCOMPARE(moved.recipe.phase_ranges[0].end_ms, int64_t(1700));
+        QVERIFY(moved.trajectory);
+        QCOMPARE(moved.trajectory->tip.size(), size_t(1));
+        QCOMPARE(moved.trajectory->tip[0].at_ms, int64_t(800));
+        QCOMPARE(moved.bookmarks[0].time_ms, int64_t(1200));
+        QCOMPARE(moved.chapters[0].end_ms, int64_t(1200));
+        // The loop marker and the axis file.
+        const auto loop = samn::LoadMarker(fs(allSamn));
+        QVERIFY(loop);
+        QCOMPARE(loop->start_ms, int64_t(700));
+        QCOMPARE(loop->end_ms, int64_t(1700));
+        QVERIFY(m.hasMarker());
+        const auto surge = samn::LoadFunscript(fs(d.filePath("All.surge.funscript"))).actions;
+        QCOMPARE(surge.size(), size_t(2));
+        QCOMPARE(surge[0].at, int64_t(700));
+        QCOMPARE(surge[0].pos, 20);
+        // The .funscript beside it: its own marks and metadata, its flag kept.
+        const samn::FunscriptView view = samn::LoadFunscript(fs(all));
+        QVERIFY(view.inverted);
+        QCOMPARE(view.actions.front().at, int64_t(700));
+        QCOMPARE(view.metadata.creator, std::string("keep me"));
+        const auto oms = samn::LoadOMarkers(fs(all));
+        QCOMPARE(oms.size(), size_t(2));
+        QCOMPARE(oms[0].start_ms, int64_t(0));  // [200, 600] cut at 0
+        QCOMPARE(oms[0].end_ms, int64_t(300));
+        QCOMPARE(oms[1].start_ms, int64_t(700));
+        QCOMPARE(view.metadata.tracking_gaps.size(), size_t(1));
+        QCOMPARE(view.metadata.tracking_gaps[0].start_ms, int64_t(800));
+        QVERIFY(view.metadata.device_recipe);
+        QCOMPARE(view.metadata.device_recipe->scene_ranges[0].end_ms, int64_t(700));
+        QCOMPARE(view.metadata.device_recipe->phase_ranges[0].start_ms, int64_t(700));
+        QCOMPARE(QString::fromStdString(view.metadata.device_recipe->sync), QStringLiteral("independent"));
+        QVERIFY(view.metadata.trajectory);
+        QCOMPARE(view.metadata.trajectory->tip.size(), size_t(1));
+        QCOMPARE(view.metadata.trajectory->tip[0].at_ms, int64_t(800));
+        QVERIFY(view.metadata.samn_axes);
+        QCOMPARE(view.metadata.samn_axes->vibration.size(), size_t(1));
+        QCOMPARE(view.metadata.samn_axes->vibration[0].at, int64_t(1700));
+        QCOMPARE(samn::LoadBookmarks(fs(all))[0].time_ms, int64_t(1200));
+
+    }
+
+    // Everything is read and moved before anything is written: a broken
+    // .samn leaves every file as it was and the offset set.
+    void aFailedBakeChangesNoFile() {
+        QTemporaryDir d;
+        const auto fs = [](const QString& p) { return std::filesystem::u8path(p.toStdString()); };
+        const QString path = d.filePath("Fail.funscript"), samnPath = d.filePath("Fail.samn"),
+                      surgePath = d.filePath("Fail.surge.funscript");
+        writeFile(path, R"({"actions":[{"at":0,"pos":0},{"at":1000,"pos":100},{"at":2000,"pos":0}],)"
+                        R"("metadata":{"bookmarks":[{"name":"b","time":1500}]}})");
+        writeFile(surgePath, R"({"actions":[{"at":0,"pos":50},{"at":2000,"pos":80}]})");
+        samn::Document doc;
+        doc.version = samn::SamnCurrentVersion;
+        doc.kind = samn::SamnKind;
+        doc.general = {{0, 0}, {1000, 100}, {2000, 0}};
+        samn::SaveDocument(fs(samnPath), doc);
+        samn::SaveMarker(fs(samnPath), {1000, 2000});
+        PlayerController c;
+        QVERIFY(c.openScript(path));
+        QCOMPARE(c.scriptPath(), samnPath);
+        c.setOffsetMs(250);
+        const auto bytes = [](const QString& p) {
+            QFile file(p);
+            return file.open(QIODevice::ReadOnly) ? file.readAll() : QByteArray();
+        };
+        const QByteArray funscriptBefore = bytes(path), surgeBefore = bytes(surgePath),
+                         markerBefore = bytes(samnPath + ".marker.json");
+        writeFile(samnPath, "{broken");
+        QVERIFY(!c.bakeOffset());
+        QCOMPARE(c.offsetMs(), 250);
+        QCOMPARE(bytes(path), funscriptBefore);
+        QCOMPARE(bytes(surgePath), surgeBefore);
+        QCOMPARE(bytes(samnPath + ".marker.json"), markerBefore);
+        QCOMPARE(bytes(samnPath), QByteArray("{broken"));
     }
 
     void loopOverMarkedRange() {

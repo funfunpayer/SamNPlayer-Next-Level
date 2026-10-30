@@ -1098,7 +1098,7 @@ void WriteAtomic(const fs::path& target, const std::string& data) {
     try {
         WriteFileAtomic(target, data);
     } catch (const std::exception&) {
-        throw SamnError("samn: write: " + target.string());
+        throw SamnError("samn: write: " + target.u8string());
     }
 }
 
@@ -1274,7 +1274,7 @@ std::string PreferSamnCompanion(const std::string& path) {
     if (path.empty() || IsSamnPath(path)) return path;
     const std::string companion = CompanionSamnPath(path);
     std::error_code ec;
-    if (fs::is_regular_file(fs::path(companion), ec)) return companion;
+    if (fs::is_regular_file(fs::u8path(companion), ec)) return companion;
     return path;
 }
 
@@ -1363,7 +1363,7 @@ Document ParseDocument(const std::string& data) {
 
 Document LoadDocument(const fs::path& path) {
     std::string data;
-    if (!ReadAll(path, data)) throw SamnError("samn: read: cannot read " + path.string());
+    if (!ReadAll(path, data)) throw SamnError("samn: read: cannot read " + path.u8string());
     return ParseDocument(data);
 }
 
@@ -1413,13 +1413,13 @@ FunscriptView ParseFunscript(const std::string& data) {
 FunscriptView LoadFunscript(const fs::path& path) {
     std::string data;
     if (!ReadAll(path, data))
-        throw SamnError("funscript: cannot read the file: " + path.string());
+        throw SamnError("funscript: cannot read the file: " + path.u8string());
     return ParseFunscript(data);
 }
 
 ScriptMarks LoadScriptMarks(const fs::path& path) {
     ScriptMarks m;
-    if (IsSamnPath(path.string())) {
+    if (IsSamnPath(path.u8string())) {
         Document d = LoadDocument(path);
         m.bookmarks = std::move(d.bookmarks);
         m.chapters = std::move(d.chapters);
@@ -1433,21 +1433,21 @@ ScriptMarks LoadScriptMarks(const fs::path& path) {
 }
 
 void SaveScriptBookmarks(const fs::path& path, const std::vector<Bookmark>& bookmarks) {
-    if (!IsSamnPath(path.string())) return SaveBookmarks(path, bookmarks);
+    if (!IsSamnPath(path.u8string())) return SaveBookmarks(path, bookmarks);
     Document d = LoadDocument(path);
     d.bookmarks = bookmarks;
     SaveDocument(path, d);
 }
 
 void SaveScriptChapters(const fs::path& path, const std::vector<Chapter>& chapters) {
-    if (!IsSamnPath(path.string())) return SaveChapters(path, chapters);
+    if (!IsSamnPath(path.u8string())) return SaveChapters(path, chapters);
     Document d = LoadDocument(path);
     d.chapters = chapters;
     SaveDocument(path, d);
 }
 
 void SaveScriptOMarkers(const fs::path& path, const std::vector<OMarker>& markers) {
-    if (!IsSamnPath(path.string())) return SaveOMarkers(path, markers);
+    if (!IsSamnPath(path.u8string())) return SaveOMarkers(path, markers);
     for (size_t i = 0; i < markers.size(); ++i) {
         try {
             markers[i].Validate();
@@ -1490,7 +1490,7 @@ void SaveOMarkers(const fs::path& path, const std::vector<OMarker>& markers) {
 std::vector<OMarker> LoadOMarkers(const fs::path& path) {
     std::string data;
     if (!ReadAll(path, data))
-        throw SamnError("funscript: cannot read the file: " + path.string());
+        throw SamnError("funscript: cannot read the file: " + path.u8string());
     JV root;
     std::string err;
     if (!ParseJson(data, root, err)) throw SamnError("funscript: invalid JSON: " + err);
@@ -1518,6 +1518,94 @@ std::vector<OMarker> LoadOMarkers(const fs::path& path) {
     } catch (const SamnError& e) {
         throw SamnError(std::string("funscript: invalid JSON: ") + e.what());
     }
+}
+
+// ---------------------------------------------------------------------------
+// Moving a script in time
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// ShiftChapters' rule for a span with a fixed end.
+template <class T>
+std::vector<T> ShiftSpans(const std::vector<T>& spans, int64_t delta_ms, int* dropped) {
+    std::vector<T> out;
+    out.reserve(spans.size());
+    for (T s : spans) {
+        s.start_ms += delta_ms;
+        s.end_ms += delta_ms;
+        if (s.end_ms <= 0) {
+            if (dropped) ++*dropped;
+            continue;
+        }
+        s.start_ms = std::max<int64_t>(0, s.start_ms);
+        out.push_back(std::move(s));
+    }
+    return out;
+}
+
+void ShiftTrajectory(TrajectoryData& t, int64_t delta_ms) {
+    for (std::vector<TrajectoryPoint>* points : {&t.tip, &t.partner}) {
+        std::vector<TrajectoryPoint> kept;
+        kept.reserve(points->size());
+        for (TrajectoryPoint p : *points) {
+            p.at_ms += delta_ms;
+            if (p.at_ms >= 0) kept.push_back(p);
+        }
+        *points = std::move(kept);
+    }
+}
+
+void ShiftRanges(DeviceRecipe& r, int64_t delta_ms) {
+    r.scene_ranges = ShiftSpans(r.scene_ranges, delta_ms, nullptr);
+    r.phase_ranges = ShiftSpans(r.phase_ranges, delta_ms, nullptr);
+}
+
+}  // namespace
+
+std::pair<std::vector<OMarker>, int> ShiftOMarkers(const std::vector<OMarker>& markers, int64_t delta_ms) {
+    int dropped = 0;
+    auto out = ShiftSpans(markers, delta_ms, &dropped);
+    return {std::move(out), dropped};
+}
+
+int ShiftDocumentMarks(Document& d, int64_t delta_ms) {
+    auto [bookmarks, dropped_bookmarks] = ShiftBookmarks(d.bookmarks, delta_ms);
+    auto [chapters, dropped_chapters] = ShiftChapters(d.chapters, delta_ms);
+    auto [markers, dropped_markers] = ShiftOMarkers(d.o_markers, delta_ms);
+    d.bookmarks = std::move(bookmarks);
+    d.chapters = std::move(chapters);
+    d.o_markers = std::move(markers);
+    d.tracking_gaps = ShiftSpans(d.tracking_gaps, delta_ms, nullptr);
+    ShiftRanges(d.recipe, delta_ms);
+    if (d.trajectory) ShiftTrajectory(*d.trajectory, delta_ms);
+    return dropped_bookmarks + dropped_chapters + dropped_markers;
+}
+
+std::vector<std::pair<std::string, std::string>> ShiftedFunscriptMetadata(const FunscriptView& s, int64_t delta_ms) {
+    const ScriptMetadata& m = s.metadata;
+    std::vector<std::pair<std::string, std::string>> out;
+    if (!m.tracking_gaps.empty())
+        out.emplace_back("tracking_gaps", DumpToString(EncList(ShiftSpans(m.tracking_gaps, delta_ms, nullptr))));
+    if (m.device_recipe && (!m.device_recipe->scene_ranges.empty() || !m.device_recipe->phase_ranges.empty())) {
+        DeviceRecipe r = *m.device_recipe;
+        ShiftRanges(r, delta_ms);
+        out.emplace_back("device_recipe", DumpToString(Enc(r)));
+    }
+    if (m.samn_axes && (!m.samn_axes->vibration.empty() || !m.samn_axes->suction.empty())) {
+        JV axes = JObj();
+        if (!m.samn_axes->vibration.empty())
+            Put(axes, "vibration", EncActions(ShiftActions(m.samn_axes->vibration, delta_ms).first));
+        if (!m.samn_axes->suction.empty())
+            Put(axes, "suction", EncActions(ShiftActions(m.samn_axes->suction, delta_ms).first));
+        out.emplace_back("samn_axes", DumpToString(axes));
+    }
+    if (m.trajectory && (!m.trajectory->tip.empty() || !m.trajectory->partner.empty())) {
+        TrajectoryData t = *m.trajectory;
+        ShiftTrajectory(t, delta_ms);
+        out.emplace_back("trajectory", DumpToString(Enc(t)));
+    }
+    return out;
 }
 
 // ---------------------------------------------------------------------------

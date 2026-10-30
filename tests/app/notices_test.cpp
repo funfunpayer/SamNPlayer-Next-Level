@@ -59,6 +59,19 @@ private slots:
         QCOMPARE(last, QString(Notices::kMaxChars - 3, 'x') + QStringLiteral("…"));  // 0.7: slice(0, 217) + '…'
     }
 
+    // A long message is shortened for the toast; the same message again is
+    // still the same toast.
+    void aLongRepeatIsOne() {
+        Notices n;
+        n.error(QString(300, 'y'));
+        n.error(QString(300, 'y'));
+        QTest::qWait(50);
+        QCOMPARE(n.toasts().size(), 1);
+        n.error(QString(300, 'w'));
+        QTest::qWait(50);
+        QCOMPARE(n.toasts().size(), 2);
+    }
+
     void aClickOrTheTimeDismisses() {
         Notices n;
         n.setShowMs(300);

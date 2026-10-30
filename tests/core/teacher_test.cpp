@@ -28,6 +28,18 @@ TEST_CASE("teacher: answers, errors and the model list") {
     CHECK(samn::ParseModelList("nonsense").empty());
 }
 
+// A server error whose message is not text is still an error, never a throw.
+TEST_CASE("teacher: an error message that is not text") {
+    std::string error;
+    std::optional<std::string> got;
+    CHECK_NOTHROW(got = samn::ChatContent(R"({"error":{"message":null}})", &error));
+    CHECK_FALSE(got);
+    CHECK(error == "server error");
+    CHECK_NOTHROW(got = samn::ChatContent(R"({"error":{"message":{"text":"x"},"code":7}})", &error));
+    CHECK_FALSE(got);
+    CHECK(error == "server error");
+}
+
 TEST_CASE("teacher: boxes as fractions, pixels or 0..1000, in prose or a code fence") {
     const std::vector<std::string> classes{"hand", "mouth"};
     // Fractions, in a code fence after some prose; "hand 2" is a hand; a face is not asked.

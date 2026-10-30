@@ -161,7 +161,7 @@ private slots:
         QCOMPARE(QString::fromUtf8(classes.readAll()), QString("glans\nmouth\n"));
         // Into the student's training set: replaced, not added to.
         QVERIFY(c.addToTrainingSet(500) == n);
-        const QString set = dir_.filePath("config/ai/datasets/clip");
+        const QString set = dir_.filePath("config/ai/datasets/") + LabelController::trainingSetName(clip);
         QCOMPARE(QDir(set + "/images").entryList(QDir::Files).size(), n);
         QFile::copy(set + "/images/" + QDir(set + "/images").entryList(QDir::Files).value(0), set + "/images/stale.jpg");
         QVERIFY(c.addToTrainingSet(1000) > 0);
@@ -171,6 +171,73 @@ private slots:
         QVERIFY(first.open(QIODevice::ReadOnly));
         const QString lines = QString::fromUtf8(first.readAll());
         QVERIFY2(lines.contains(QRegularExpression("^0 [0-9.]+ [0-9.]+ [0-9.]+ [0-9.]+\n1 ")), qPrintable(lines));
+    }
+
+    // A labels file that cannot be read is kept aside, never saved over;
+    // a second broken one does not replace the first backup.
+    void aBrokenLabelsFileIsKeptAside() {
+        QVERIFY(QDir(dir_.path()).mkpath("broken"));
+        const QString clip = dir_.filePath("broken/clip.mp4");
+        QVERIFY(QFile::copy(clip_, clip));
+        const QByteArray broken =
+            R"({"kind":"samnplayer.labels","version":1,"tracks":[{"label":"glans","class":"glans",)"
+            R"("keys":[{"ms":0,"confirmed":true,"source":"user","box":[null,1,2,3]}]}]})";
+        const auto write = [](const QString& p, const QByteArray& data) {
+            QFile f(p);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(data);
+        };
+        const auto read = [](const QString& p) {
+            QFile f(p);
+            return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray();
+        };
+        write(dir_.filePath("broken/clip.labels.json"), broken);
+        {
+            LabelController c;
+            QVERIFY(c.openVideo(clip));
+            QVERIFY2(c.status().contains("clip.labels.broken.json"), qPrintable(c.status()));
+            QVERIFY(c.addLabel("mouth"));
+        }
+        QCOMPARE(read(dir_.filePath("broken/clip.labels.broken.json")), broken);
+        QVERIFY(read(dir_.filePath("broken/clip.labels.json")).contains("mouth"));
+
+        write(dir_.filePath("broken/clip.labels.json"), broken + " ");
+        {
+            LabelController c;
+            QVERIFY(c.openVideo(clip));
+            QVERIFY2(c.status().contains("clip.labels.broken.2.json"), qPrintable(c.status()));
+            QVERIFY(c.addLabel("hand"));
+        }
+        QCOMPARE(read(dir_.filePath("broken/clip.labels.broken.json")), broken);
+        QCOMPARE(read(dir_.filePath("broken/clip.labels.broken.2.json")), broken + " ");
+    }
+
+    // Two clips of one name in different folders each get their own training set.
+    void sameNamedClipsKeepTheirOwnTrainingSets() {
+        const QString datasets = dir_.filePath("config/ai/datasets");
+        QStringList made;
+        for (const char* folder : {"one", "two"}) {
+            QVERIFY(QDir(dir_.path()).mkpath(QString::fromLatin1(folder)));
+            const QString clip = dir_.filePath(QStringLiteral("%1/x.mp4").arg(QString::fromLatin1(folder)));
+            QVERIFY(QFile::copy(clip_, clip));
+            LabelController c;
+            QVERIFY(c.openVideo(clip));
+            QVERIFY(c.addLabel("glans"));
+            QVERIFY(c.setBox(QRectF(10, 20, 40, 40)));
+            QVERIFY(c.addToTrainingSet(1000) > 0);
+            const QString name = LabelController::trainingSetName(clip);
+            QVERIFY2(name.startsWith("x-"), qPrintable(name));
+            made << name;
+        }
+        QVERIFY(made[0] != made[1]);
+        for (const QString& name : made) QVERIFY(QFileInfo::exists(datasets + "/" + name + "/classes.txt"));
+        // A clip without a name never empties the datasets folder.
+        QCOMPARE(LabelController::trainingSetName(dir_.filePath("one/.mp4")), QString());
+        QVERIFY(QFile::copy(clip_, dir_.filePath("one/.mp4")));
+        LabelController nameless;
+        QVERIFY(nameless.openVideo(dir_.filePath("one/.mp4")));
+        QCOMPARE(nameless.addToTrainingSet(1000), -1);
+        for (const QString& name : made) QVERIFY(QFileInfo::exists(datasets + "/" + name + "/classes.txt"));
     }
 
     // A class has several objects: two hands, two breasts; the model learns the class.

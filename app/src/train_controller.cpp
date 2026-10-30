@@ -367,6 +367,15 @@ bool TrainController::train() {
         }
         emit trainChanged();
     });
+    // A Python that cannot start never sends finished: the run ends here.
+    connect(train_, &QProcess::errorOccurred, this, [this](QProcess::ProcessError e) {
+        if (e != QProcess::FailedToStart || !train_) return;
+        QProcess* p = train_;
+        train_ = nullptr;
+        p->deleteLater();
+        setTrainStatus(tr("Error: cannot start %1").arg(QDir::toNativeSeparators(envPython())));
+        emit trainChanged();
+    });
     QStringList args{"-u", script_, "--out", run_dir_, "--epochs", QString::number(epochs_), "--device", device_, "--data"};
     args << data;
     setTrainStatus(tr("Starting the training on %n sample(s) …", "", samples));

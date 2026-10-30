@@ -78,8 +78,9 @@ int main(int argc, char** argv) {
     engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
     engine.addImageProvider(QStringLiteral("frames"), new samn::ui::FrameProvider);
     // Files on the command line open like a drop: several scripts become the play list.
-    QStringList startupPaths;
-    for (int i = 1; i < argc; ++i) startupPaths << QString::fromLocal8Bit(argv[i]);
+    // From the app object, not argv: on Windows argv is the ANSI code page
+    // and loses the characters of other scripts in a file name.
+    const QStringList startupPaths = QCoreApplication::arguments().mid(1);
     engine.rootContext()->setContextProperty("startupPaths", startupPaths);
     // Test hooks (synthetic data only): SAMN_MODE=1..4 starts in that mode, SAMN_TRAINING_START=<program
     // name | custom> starts a Training on the Mock device at once.

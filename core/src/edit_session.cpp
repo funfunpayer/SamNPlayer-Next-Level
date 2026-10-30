@@ -100,8 +100,15 @@ bool EditSession::MovePoint(const std::string& axis, size_t index, int64_t at, i
                                                       : std::numeric_limits<int64_t>::max();
     at = std::max<int64_t>(at, 0);
     if (duration_ms > 0) at = std::min(at, duration_ms);
-    // Neighbours 1 ms apart leave no room (0.7: then the time is not clamped).
-    if (lower <= upper) at = std::clamp(at, lower, upper);
+    if (lower <= upper) {
+        at = std::clamp(at, lower, upper);
+    } else {
+        // Neighbours under 2 ms apart leave no free time: the point stays
+        // between them, on one of their times, so the axis stays sorted.
+        const int64_t prev = index > 0 ? actions[index - 1].at : 0;
+        const int64_t next = index + 1 < actions.size() ? actions[index + 1].at : upper;
+        at = std::clamp(at, prev, std::max(prev, next));
+    }
     actions[index] = Action{at, ClampPos(pos)};
     if (own) Commit();
     return true;

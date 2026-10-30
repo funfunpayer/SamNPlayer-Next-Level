@@ -273,10 +273,10 @@ Doc ReadDoc(const std::filesystem::path& path) {
     if (!f || std::filesystem::is_directory(path, ec)) {
         int e = errno;
         throw MarksError("funscript: cannot read the file: " +
-                         (e ? std::generic_category().message(e) : std::string("access denied")) + ": " + path.string());
+                         (e ? std::generic_category().message(e) : std::string("access denied")) + ": " + path.u8string());
     }
     std::string data((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
-    if (f.bad()) throw MarksError("funscript: cannot read the file: " + path.string());
+    if (f.bad()) throw MarksError("funscript: cannot read the file: " + path.u8string());
     std::string text = SanitizeUtf8(data);
     json parsed;
     try {
@@ -620,7 +620,7 @@ void SaveMarker(const std::filesystem::path& script, RangeMarker marker) {
     if (!marker.Valid()) {
         std::error_code ec;
         std::filesystem::remove(path, ec);
-        if (ec) throw std::runtime_error("cannot remove " + path.string() + ": " + ec.message());
+        if (ec) throw std::runtime_error("cannot remove " + path.u8string() + ": " + ec.message());
         return;
     }
     // Same bytes as Go's json.Marshal(Marker{...}).

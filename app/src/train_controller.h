@@ -3,7 +3,7 @@
 // app's own (uv, fetched like NudeNet with pinned hashes; Python 3.12,
 // PyTorch and rfdetr in config_dir()/ai, nothing of the system touched); a
 // second trains RF-DETR on the clips added to the training set
-// (config_dir()/ai/datasets/<clip>) with ai/train_student.py, with progress
+// (config_dir()/ai/datasets/<clip>-<path hash>) with ai/train_student.py, with progress
 // and Stop. The result is config_dir()/models/student/ (student.onnx and
 // classes.json), which the label editor can use as a teacher.
 

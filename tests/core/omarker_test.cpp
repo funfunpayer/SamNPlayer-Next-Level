@@ -126,3 +126,30 @@ TEST_CASE("script marks: .funscript metadata and .samn document") {
     REQUIRE(m.chapters.size() == 1);  // kept
     CHECK_THROWS(samn::SaveScriptOMarkers(sp, {M(5, 1, "primary", 1)}));
 }
+
+// Paths with characters outside the Windows ANSI code page: the marks still
+// find the .samn by its extension (path::string() would throw there).
+TEST_CASE("script marks: a .samn under a non-ASCII path") {
+    Dir d;
+    const fs::path folder = d.path / fs::u8path(u8"テスト");
+    fs::create_directories(folder);
+    const fs::path sp = folder / fs::u8path(u8"clip ✓.samn");
+    samn::Document doc;
+    doc.version = samn::SamnCurrentVersion;
+    doc.kind = samn::SamnKind;
+    doc.general = {{0, 0}, {1000, 100}};
+    samn::SaveDocument(sp, doc);
+    samn::SaveScriptBookmarks(sp, {{"b", 500}});
+    samn::SaveScriptChapters(sp, {{"Intro", 0, 800}});
+    samn::SaveScriptOMarkers(sp, {M(100, 900, "primary", 1)});
+    const auto m = samn::LoadScriptMarks(sp);
+    REQUIRE(m.bookmarks.size() == 1);
+    CHECK(m.bookmarks[0].time_ms == 500);
+    REQUIRE(m.chapters.size() == 1);
+    REQUIRE(m.o_markers.size() == 1);
+    // Written into the document, not as a funscript's metadata.
+    CHECK(samn::LoadDocument(sp).bookmarks.size() == 1);
+    // The Player finds the .samn beside its .funscript (UTF-8 paths).
+    const std::string funscript = (folder / fs::u8path(u8"clip ✓.funscript")).u8string();
+    CHECK(samn::PreferSamnCompanion(funscript) == sp.u8string());
+}

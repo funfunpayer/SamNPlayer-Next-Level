@@ -126,7 +126,15 @@ std::optional<std::string> ChatContent(const std::string& response_json, std::st
     }
     if (j.is_object() && j.contains("error")) {
         const auto& e = j["error"];
-        if (error) *error = e.is_object() ? e.value("message", std::string("server error")) : e.dump();
+        // A message that is not text (null, an object) is still an error, never a throw.
+        if (error) {
+            if (!e.is_object())
+                *error = e.dump();
+            else if (e.contains("message") && e.at("message").is_string())
+                *error = e.at("message").get<std::string>();
+            else
+                *error = "server error";
+        }
         return std::nullopt;
     }
     try {

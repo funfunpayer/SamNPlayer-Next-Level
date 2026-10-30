@@ -110,6 +110,33 @@ TEST_CASE("edit: 0.7 point rules") {
     CHECK(!s.MovePoint("stroke", 7, 0, 0, 0));
 }
 
+TEST_CASE("edit: a point between neighbours on one time keeps the curve sorted") {
+    const auto sorted = [](const std::vector<Action>& a) {
+        for (size_t i = 1; i < a.size(); ++i)
+            if (a[i].at < a[i - 1].at) return false;
+        return true;
+    };
+    EditSession dup({{"stroke", {{0, 0}, {1000, 50}, {1000, 60}, {2000, 0}}}});
+    dup.MovePoint("stroke", 1, 5000, 50, 0);
+    CHECK(sorted(dup.Axis("stroke")));
+    // Neighbours under 2 ms apart leave no free time: the point stays between them.
+    EditSession s({{"stroke", {{0, 0}, {1000, 50}, {1000, 60}, {1001, 70}, {2000, 0}}}});
+    s.MovePoint("stroke", 2, 5000, 40, 0);
+    CHECK(sorted(s.Axis("stroke")));
+    CHECK(s.Axis("stroke")[2].at == 1001);
+    CHECK(s.Axis("stroke")[2].pos == 40);
+    s.MovePoint("stroke", 2, -5, 40, 0);
+    CHECK(sorted(s.Axis("stroke")));
+    CHECK(s.Axis("stroke")[2].at == 1000);
+    EditSession first({{"stroke", {{0, 0}, {0, 50}, {2000, 0}}}});
+    first.MovePoint("stroke", 0, 700, 10, 0);
+    CHECK(sorted(first.Axis("stroke")));
+    // The last point never goes before its neighbour, even past the video's end.
+    EditSession last({{"stroke", {{0, 0}, {1500, 50}, {1600, 0}}}});
+    last.MovePoint("stroke", 2, 3000, 10, 1000);
+    CHECK(sorted(last.Axis("stroke")));
+}
+
 TEST_CASE("edit: a drag is one step; a drag back to the start is none") {
     EditSession s({{"stroke", Saw(10)}});
     s.Begin("move point");

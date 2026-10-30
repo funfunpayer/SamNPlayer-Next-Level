@@ -214,9 +214,12 @@ public:
     bool suggesting() const { return suggesting_; }
     int suggestProgress() const { return suggest_progress_; }
     Q_INVOKABLE int exportDataset(const QString& dirOrUrl, double everyMs);
-    // The same into the student's training set (config_dir()/ai/datasets/<clip>),
-    // replacing what this clip had there (D-155 step 5).
+    // The same into the student's training set (config_dir()/ai/datasets/
+    // <trainingSetName>), replacing what this clip had there (D-155 step 5).
     Q_INVOKABLE int addToTrainingSet(double everyMs);
+    // "<clip stem>-<8 hex of the full path's SHA-256>"; empty for a clip
+    // without a name (then nothing goes into the training set).
+    static QString trainingSetName(const QString& videoPath);
 
     QVariantList phases() const;
     QStringList phaseNames() const;

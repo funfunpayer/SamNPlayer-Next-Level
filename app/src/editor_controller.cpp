@@ -41,6 +41,9 @@ QString LaneTitle(const std::string& lane) {
 EditorController::EditorController(QObject* parent) : QObject(parent), sound_(new AudioLevelDecoder(this)) {
     connect(sound_, &AudioLevelDecoder::finished, this, &EditorController::onSoundEnvelope);
     connect(sound_, &AudioLevelDecoder::failed, this, [this](const QString& error) {
+        // A run for an earlier script: cancelTool() already ended its busy,
+        // and a newer run may be going.
+        if (sound_script_ != script_gen_) return;
         setBusy(false);
         setStatus(tr("Vibration from the sound: %1").arg(error));
     });
@@ -157,12 +160,15 @@ bool EditorController::open(const QString& pathIn) {
     std::vector<samn::SceneFeelRange> scene_ranges;
     std::vector<samn::PhaseRange> phase_ranges;
     std::optional<samn::ContactMarks> contact_marks;
+    bool inverted = false;
     try {
         std::ifstream in(FsPath(funscript), std::ios::binary);
         if (!in) throw std::runtime_error("cannot read the file");
         std::stringstream ss;
         ss << in.rdbuf();
-        axes["stroke"] = samn::Parse(ss.str()).actions;
+        const samn::Script parsed = samn::Parse(ss.str());
+        axes["stroke"] = parsed.actions;
+        inverted = parsed.inverted;
         try {
             // Scene feels and the contact mark, for the scenes' suggestions.
             const samn::FunscriptView view = samn::ParseFunscript(ss.str());
@@ -187,8 +193,9 @@ bool EditorController::open(const QString& pathIn) {
             const samn::Document doc = samn::LoadDocument(FsPath(samn_path));
             if (!doc.vibration.empty()) axes["vibration"] = doc.vibration;
             if (!doc.suction.empty()) axes["suction"] = doc.suction;
-            // The Player plays the .samn, so its scenes count.
-            if (!doc.chapters.empty()) chapters = doc.chapters;
+            // The Player plays the .samn, so its scenes count, also none
+            // (removed there; the .funscript's may be an older copy).
+            chapters = doc.chapters;
             scene_ranges = doc.recipe.scene_ranges;
             phase_ranges = doc.recipe.phase_ranges;
             if (doc.contact_marks) contact_marks = doc.contact_marks;
@@ -201,9 +208,14 @@ bool EditorController::open(const QString& pathIn) {
     } else {
         samn_path.clear();
     }
+    // A tool still running was started for the script before (or none).
+    cancelTool();
+    ++script_gen_;
     session_ = samn::EditSession(std::move(axes));
     path_ = funscript;
     samn_path_ = samn_path;
+    inverted_ = inverted;
+    clear_tracking_gaps_ = false;
     std::stable_sort(chapters.begin(), chapters.end(),
                      [](const samn::Chapter& a, const samn::Chapter& b) { return a.start_ms < b.start_ms; });
     chapters_ = std::move(chapters);
@@ -229,9 +241,13 @@ bool EditorController::open(const QString& pathIn) {
 
 void EditorController::close() {
     if (drag_index_ >= 0) release();
+    cancelTool();
+    ++script_gen_;
     session_ = samn::EditSession();
     path_.clear();
     samn_path_.clear();
+    inverted_ = false;
+    clear_tracking_gaps_ = false;
     marker_start_ = marker_end_ = 0;
     chapters_.clear();
     scene_ranges_.clear();
@@ -428,7 +444,7 @@ bool EditorController::axesFromStroke() {
     }
     try {
         samn::Document doc = companion();
-        doc.general = session_.Axis("stroke");
+        doc.general = playedStroke();
         doc.BakeNeoAxes();
         if (samn_path_.isEmpty()) {
             samn_path_ = QString::fromStdString(samn::CompanionSamnPath(path_.toStdString()));
@@ -514,7 +530,8 @@ QString EditorController::optimizeFor(const QString& target) {
         else if (!neo2) parts << tr("no gaps to fill");
         if (neo2) {
             samn::Document doc = companion();
-            doc.general = strokeChanged ? res.actions : session_.Axis("stroke");
+            doc.general = samn::PlaybackActions(strokeChanged ? res.actions : session_.Axis("stroke"), inverted_);
+            if (res.clear_tracking_gaps) doc.tracking_gaps.clear();  // healed: no longer a gap
             doc.ApplyContactRecipe(true, samn::DefaultContactVibrationSpan, "soft");
             doc.BakeNeoAxes();
             if (samn_path_.isEmpty()) {
@@ -529,6 +546,9 @@ QString EditorController::optimizeFor(const QString& target) {
             setStatus(parts.join(QStringLiteral(" · ")));
             return parts.join(QStringLiteral(" · "));
         }
+        // The healed windows leave the metadata with this save: a later
+        // optimize must not heal (replace) what was edited there since.
+        if (res.clear_tracking_gaps) clear_tracking_gaps_ = true;
     } catch (const std::exception& e) {
         session_.Rollback();
         setStatus(tr("%1: %2").arg(label, QString::fromUtf8(e.what())));
@@ -551,6 +571,7 @@ bool EditorController::vibrationFromSound(bool withContact) {
         return false;
     }
     sound_with_contact_ = withContact;
+    sound_script_ = script_gen_;
     setBusy(true);
     setStatus(tr("Reading the sound…"));
     sound_->start(video_path_, int(samn::kSoundVibStepMs));
@@ -558,14 +579,15 @@ bool EditorController::vibrationFromSound(bool withContact) {
 }
 
 void EditorController::onSoundEnvelope(const std::vector<double>& envelope) {
+    if (sound_script_ != script_gen_) return;  // another script by now (its busy ended there)
     setBusy(false);
     if (!hasScript()) return;
     if (drag_index_ >= 0) release();
     try {
         samn::Document doc = companion();
-        doc.general = session_.Axis("stroke");
+        doc.general = playedStroke();
         doc.Normalize();
-        const auto mapped = samn::ToIntensityCurve(session_.Axis("stroke"), doc.BakeOptions());
+        const auto mapped = samn::ToIntensityCurve(doc.general, doc.BakeOptions());
         if (!mapped || envelope.empty()) {
             setStatus(tr("Vibration from the sound: the video has no sound to follow."));
             return;
@@ -606,7 +628,7 @@ bool EditorController::strokeFromBeatBar() {
     setProgress(0);
     setStatus(tr("Looking for a beat bar…"));
     QPointer<EditorController> self(this);
-    tool_ = std::thread([self, cancel = tool_cancel_, video = FsPath(video_path_)] {
+    tool_ = std::thread([self, cancel = tool_cancel_, video = FsPath(video_path_), script = script_gen_] {
         samn::engine::BeatBarOptions o;
         o.cancel = [cancel] { return cancel->load(); };
         o.progress = [self](int p) {
@@ -623,15 +645,20 @@ bool EditorController::strokeFromBeatBar() {
         std::vector<double> beats = r ? r->beats_ms : std::vector<double>{};
         const double bpm = r ? r->bpm : 0;
         const QString err = r ? QString() : QString::fromStdString(error);
-        QMetaObject::invokeMethod(qApp, [self, found, beats = std::move(beats), bpm, err] {
-            if (self) self->onBeats(found, beats, bpm, err);
+        QMetaObject::invokeMethod(qApp, [self, found, beats = std::move(beats), bpm, err, script] {
+            if (self) self->onBeats(found, beats, bpm, err, script);
         }, Qt::QueuedConnection);
     });
     return true;
 }
 
-void EditorController::onBeats(bool found, const std::vector<double>& beats, double bpm, const QString& error) {
+void EditorController::onBeats(bool found, const std::vector<double>& beats, double bpm, const QString& error,
+                               quint64 script) {
     setBusy(false);
+    if (script != script_gen_) {  // another script (or none) by now: the result is dropped
+        setProgress(0);
+        return;
+    }
     setProgress(found ? 100 : 0);
     if (!error.isEmpty()) {
         setStatus(error == QLatin1String("canceled") ? tr("Beat bar: canceled.") : tr("Beat bar: %1").arg(error));
@@ -708,16 +735,22 @@ samn::Document EditorController::companion() const {
     doc.version = samn::SamnCurrentVersion;
     doc.kind = samn::SamnKind;
     doc.creator = "SamNPlayer";
-    doc.general = session_.Axis("stroke");
+    doc.general = playedStroke();
     return doc;
+}
+
+std::vector<samn::Action> EditorController::playedStroke() const {
+    return samn::PlaybackActions(session_.Axis("stroke"), inverted_);
 }
 
 bool EditorController::save() {
     try {
+        if (clear_tracking_gaps_) samn::PatchMetadataKey(FsPath(path_), "tracking_gaps", "null");
         samn::PatchActions(FsPath(path_), session_.Axis("stroke"));
         if (!samn_path_.isEmpty()) {
             samn::Document doc = companion();
-            doc.general = session_.Axis("stroke");  // the .samn carries the stroke too
+            if (clear_tracking_gaps_) doc.tracking_gaps.clear();
+            doc.general = playedStroke();  // the .samn carries the stroke too, as it plays
             doc.vibration = session_.Axis("vibration");
             doc.suction = session_.Axis("suction");
             // Written lanes play as they are (0.7: axes mode after a bake).
@@ -732,6 +765,7 @@ bool EditorController::save() {
         return false;
     }
     session_.MarkSaved();
+    clear_tracking_gaps_ = false;
     return true;
 }
 
@@ -806,7 +840,7 @@ bool EditorController::clearPlaybackPhases() {
 bool EditorController::savePlaybackPhases(std::vector<samn::PhaseRange> ranges) {
     try {
         samn::Document doc = companion();
-        doc.general = session_.Axis("stroke");
+        doc.general = playedStroke();
         doc.chapters = chapters_;
         doc.recipe.scene_ranges = scene_ranges_;
         doc.recipe.phase_ranges = ranges;
@@ -887,7 +921,7 @@ bool EditorController::saveScenes(std::vector<samn::Chapter> chapters, std::vect
         const bool needs_samn = !kept.empty() || !scene_ranges_.empty();
         if (!samn_path_.isEmpty() || needs_samn) {
             samn::Document doc = companion();
-            doc.general = session_.Axis("stroke");
+            doc.general = playedStroke();
             doc.chapters = chapters;
             doc.recipe.scene_ranges = kept;
             if (samn_path_.isEmpty()) {

@@ -2,7 +2,31 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 30 Oct 2026, Claude, branch `claude/samn2-stop-safety`: device stop and playback safety fixes from the bug hunt (handover below). Before: 28 Oct, `claude/samn2-auto-tip` (Generator reads AV1 on Windows, finds the tip by itself); #137 `claude/samn2-health`; #135 (self-check handoff); 27 Oct, #132 (Generator spec, *Recommended*, D-160/D-161).
+**Last update:** 30 Oct 2026, Claude, branch `claude/samn2-data-safety`: data and file fixes from the bug hunt (handover below); main merged in with #138 (device and playback safety, its handover below). Before: 28 Oct, `claude/samn2-auto-tip` (Generator reads AV1 on Windows, finds the tip by itself); #137 `claude/samn2-health`; #135 (self-check handoff); 27 Oct, #132 (Generator spec, *Recommended*, D-160/D-161).
+
+## Handover: `claude/samn2-data-safety` (30 Oct)
+
+Data and file fixes from a read-only bug hunt. Each fix has a test that failed before it, with three exceptions: the Windows path tests (they can only fail on Windows), `main.cpp` and the atomic custom-script write (no test).
+
+- **Editor (`editor_controller`):**
+  - The .samn's `general` (and the input of `BakeNeoAxes` and the sound tool) is the stroke as played: an OFS `"inverted": true` funscript's flag is baked in (`playedStroke()`); the .funscript keeps its raw actions and its flag. Test `anInvertedFunscriptPlaysTheSameFromTheSamn`.
+  - `open()` and `close()` cancel a running tool, and a result for an earlier script is dropped (`script_gen_`). Test `aLateToolResultNeverLandsInTheNextScript`.
+  - *Optimize* drops the healed tracking gaps from the funscript metadata and the .samn with the same save. Undo brings the stroke back, not the gaps. Test `optimizeClearsTheHealedTrackingGaps`.
+  - A .samn that loads gives the scenes, also when it has none. Test `theSamnScenesCountEvenWhenEmpty`.
+- **Player *Bake offset*:** moves O-markers, the loop marker, the companion axis files, tracking gaps, scene and phase ranges, `samn_axes` and the tip path, in the .funscript's metadata and in the .samn. New core API: `ShiftOMarkers`, `ShiftDocumentMarks`, `ShiftedFunscriptMetadata`. Everything is read and moved first and written last, and a failed write puts back the files written before it. `sceneMap` is not moved: the app never reads it. Tests: `bakeOffsetWritesItIntoTheScript` (extended), `aFailedBakeChangesNoFile`.
+- **Paths on Windows:** `ProjectPathFor`, `LoadScriptMarks` / `SaveScript*` and `PreferSamnCompanion` use UTF-8 (`u8string`, `u8path`); error messages no longer call `path::string()`. Tests `ProjectPathFor keeps a non-ASCII path` and `script marks: a .samn under a non-ASCII path`. `main.cpp` takes the start paths from `QCoreApplication::arguments()`.
+- **Edit session:** a point between neighbours under 2 ms apart stays between them, so the axis stays sorted. Test `edit: a point between neighbours on one time keeps the curve sorted`.
+- **Label editor:**
+  - An unreadable `<clip>.labels.json` is moved to `<clip>.labels.broken.json` (`.broken.2.json` … when that name is taken) before anything is saved; the status names it. Test `aBrokenLabelsFileIsKeptAside`.
+  - Training sets are `<stem>-<8 hex of the path's SHA-256>` (`LabelController::trainingSetName`). A clip without a name is refused. Test `sameNamedClipsKeepTheirOwnTrainingSets`.
+  - Sets added before this change keep their plain names; re-adding such a clip makes a second set (remove the old one with × on the AI Train page).
+- **Smaller fixes:**
+  - `ChatContent` handles an error message that is not text (test `teacher: an error message that is not text`).
+  - `TrainController::train()` ends a run whose Python cannot start (test `aPythonThatCannotStartEndsTheRun`).
+  - `save_custom_script` writes atomically.
+  - Notices compare the shortened text, so a long repeat is one toast (test `aLongRepeatIsOne`).
+- **Open (not fixed here):** `samn::config_dir()` reads `APPDATA` / `USERPROFILE` through the narrow `_dupenv_s`, so a Windows user name outside the ANSI code page gives a wrong config folder; that needs `_wdupenv_s`.
+
 
 ## Handover: `claude/samn2-stop-safety` (30 Oct, device and playback safety)
 

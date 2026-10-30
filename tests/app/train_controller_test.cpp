@@ -168,6 +168,25 @@ private slots:
         QVERIFY(!missing.train());
         QVERIFY(missing.trainStatus().contains("script is missing"));
     }
+
+    // A Python that cannot start ends the run with a reason; a new one can start.
+    void aPythonThatCannotStartEndsTheRun() {
+        TrainController c;
+        c.setTrainScript(kData + "/fake_train.py");
+        QVERIFY(c.envReady());
+        const QString python = c.envPython(), aside = python + ".aside";
+        QVERIFY(QFile::rename(python, aside));
+        // A folder in its place: no platform can start it, and unlike a broken
+        // .exe it brings up no Windows "unsupported application" dialog.
+        QVERIFY(QDir().mkdir(python));
+        c.train();
+        QTRY_VERIFY_WITH_TIMEOUT(!c.training(), 10000);
+        QVERIFY2(c.trainStatus().contains("cannot start"), qPrintable(c.trainStatus()));
+        QVERIFY(QDir().rmdir(python));
+        QVERIFY(QFile::rename(aside, python));
+        QVERIFY(c.train());  // not stuck
+        QTRY_VERIFY_WITH_TIMEOUT(!c.training(), 60000);
+    }
 };
 
 QTEST_GUILESS_MAIN(TrainControllerTest)
