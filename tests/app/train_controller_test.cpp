@@ -176,16 +176,13 @@ private slots:
         QVERIFY(c.envReady());
         const QString python = c.envPython(), aside = python + ".aside";
         QVERIFY(QFile::rename(python, aside));
-        {
-            QFile stub(python);
-            QVERIFY(stub.open(QIODevice::WriteOnly));
-            stub.write("not a program\n");
-        }
-        QVERIFY(QFile::setPermissions(python, QFile::ReadOwner | QFile::WriteOwner));
+        // A folder in its place: no platform can start it, and unlike a broken
+        // .exe it brings up no Windows "unsupported application" dialog.
+        QVERIFY(QDir().mkdir(python));
         c.train();
         QTRY_VERIFY_WITH_TIMEOUT(!c.training(), 10000);
         QVERIFY2(c.trainStatus().contains("cannot start"), qPrintable(c.trainStatus()));
-        QVERIFY(QFile::remove(python));
+        QVERIFY(QDir().rmdir(python));
         QVERIFY(QFile::rename(aside, python));
         QVERIFY(c.train());  // not stuck
         QTRY_VERIFY_WITH_TIMEOUT(!c.training(), 60000);
