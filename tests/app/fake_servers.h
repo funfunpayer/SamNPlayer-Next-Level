@@ -59,6 +59,9 @@ public:
 
     std::vector<json> received;  // one {"Name": body} per received message
     int connections() const { return connections_; }
+    // How BatteryLevelCmd is answered: a reading (73 %), never, or an Error.
+    enum class Battery { kReading, kMute, kError };
+    Battery battery = Battery::kReading;
 
     int Count(const std::string& name) const {
         int n = 0;
@@ -95,9 +98,13 @@ private:
                                        {"DeviceMessages", device_messages_}});
                     Reply(client, "DeviceList", {{"Id", id}, {"Devices", devices}});
                 } else if (name == "BatteryLevelCmd") {
-                    Reply(client, "BatteryLevelReading",
-                          {{"Id", id}, {"DeviceIndex", item.value().value("DeviceIndex", json())},
-                           {"BatteryLevel", 0.73}});
+                    if (battery == Battery::kReading)
+                        Reply(client, "BatteryLevelReading",
+                              {{"Id", id}, {"DeviceIndex", item.value().value("DeviceIndex", json())},
+                               {"BatteryLevel", 0.73}});
+                    else if (battery == Battery::kError)
+                        Reply(client, "Error", {{"Id", id}, {"ErrorCode", 4},
+                                                {"ErrorMessage", "battery not readable"}});
                 } else if (name == "StartScanning" || name == "StopScanning" || name == "Ping" ||
                            name == "ScalarCmd" || name == "LinearCmd" || name == "RotateCmd" ||
                            name == "StopDeviceCmd") {

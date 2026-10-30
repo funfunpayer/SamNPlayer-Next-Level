@@ -253,6 +253,50 @@ TEST_CASE("device/intiface: battery cache expires, no battery listed, no reading
     CHECK_FALSE(d2.BatteryLevel().ok);
 }
 
+// A server that never answers the battery read (or refuses it) is asked
+// again only after the cache time, like a successful read: the wait must not
+// hold up the device thread at every status tick.
+TEST_CASE("device/intiface: a failed battery read is cached too") {  // new
+    auto now = std::chrono::steady_clock::time_point{};
+    FakeButtplug mute(FakeButtplug::MessagesWithBattery());
+    IntifaceDevice dev(mute.transport, "ws://x", [&now] { return now; });
+    REQUIRE(dev.Connect());
+    mute.transport.on_send = nullptr;  // from now on no replies (and nothing recorded by the fake)
+    const auto asked = [&mute] {
+        int n = 0;
+        for (std::size_t i = 0; i < mute.transport.sent.size(); ++i)
+            if (Contains(mute.transport.SentText(i), "BatteryLevelCmd")) ++n;
+        return n;
+    };
+    CHECK_FALSE(dev.BatteryLevel().ok);
+    CHECK(asked() == 1);
+    now += 10s;
+    CHECK_FALSE(dev.BatteryLevel().ok);
+    CHECK(asked() == 1);  // not asked again
+    now += 21s;
+    CHECK_FALSE(dev.BatteryLevel().ok);
+    CHECK(asked() == 2);  // the cache expired
+
+    // The server answers the request with an Error: the wait ends there, a
+    // later reading is not taken for it, and the failure is cached.
+    FakeButtplug refusing(FakeButtplug::MessagesWithBattery());
+    IntifaceDevice d2(refusing.transport, "ws://x", [&now] { return now; });
+    REQUIRE(d2.Connect());
+    refusing.transport.on_send = [&refusing](const Bytes& data) {
+        const json batch = json::parse(ToText(data));
+        const json id = batch.at(0).begin().value().at("Id");
+        refusing.transport.PushText(
+            json::array({json{{"Error", {{"Id", id}, {"ErrorCode", 4}, {"ErrorMessage", "no battery"}}}}}).dump());
+        refusing.transport.PushText(R"([{"BatteryLevelReading":{"Id":0,"DeviceIndex":7,"BatteryLevel":0.5}}])");
+    };
+    CHECK_FALSE(d2.BatteryLevel().ok);
+    CHECK_FALSE(d2.Info().battery_ok);
+    CHECK(refusing.transport.Receive(0ms).kind == ReceiveResult::Kind::kMessage);  // the reading is still queued
+    const std::size_t sent = refusing.transport.sent.size();
+    CHECK_FALSE(d2.BatteryLevel().ok);
+    CHECK(refusing.transport.sent.size() == sent);  // cached
+}
+
 // Go: TestIntifaceDrainsServerReplies tests that a goroutine keeps reading so
 // the socket buffer never fills. Adapted: PumpIncoming drains any number of
 // unsolicited replies and the device keeps working.

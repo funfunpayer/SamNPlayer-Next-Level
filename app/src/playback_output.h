@@ -35,7 +35,11 @@ class DeviceController;
 //  - the same for the extra TCode axes the script carries.
 // A start, a pause and a jump of the playhead (a step back of more than
 // 250 ms or a step forward of more than 1.5 s) ease the first stroke move in:
-// a full stroke takes at least 500 ms (soft seek).
+// a full stroke takes at least 500 ms (soft seek). Each extra axis eases its
+// own first move in the same way, from where it was sent last.
+// With a speed limit, no move is shorter than the way from the last sent
+// position takes at that speed (after the play-speed division); the home
+// move counts the whole range.
 // A pause, a stop and a missing position (1.5 s) stop the device and, when
 // "Move home on pause" is on, send the stroker to the bottom of its range in
 // 1.2 s. The emergency stop drops queued levels, stops at once and keeps the
@@ -113,6 +117,7 @@ public:
     // settings: where the choices are kept (the 0.7 keys playback.stroke_*);
     // may be null. Not owned.
     explicit PlaybackOutput(samn::Settings* settings = nullptr, QObject* parent = nullptr);
+    ~PlaybackOutput() override;
 
     void setDevice(DeviceController* device);
     DeviceController* device() const { return device_; }
@@ -201,6 +206,10 @@ private:
     void save(const char* key, const nlohmann::json& value);
     void load();
     int moveMs(qint64 dueAt, qint64 now) const;
+    // The shortest move (real ms) over `way` the speed limit allows; 0
+    // without a limit. `way` is device travel (0-1) after the stroke range
+    // mapping, so a narrowed range moves the device no faster than the limit.
+    int speedLimitMs(double way) const;
     qint64 now() const { return clock_ ? clock_() : mono_.elapsed(); }
     void rampTick();
     void updateRampTimer();
@@ -213,6 +222,8 @@ private:
     struct Axis {
         std::vector<samn::Action> actions;
         int next = -1;
+        bool soft = true;     // the next move eases in (soft seek)
+        double lastPos = -1;  // 0-1, -1 = not sent yet
     };
     std::map<std::string, Axis> axes_;
     samn::StrokeFilter filter_;

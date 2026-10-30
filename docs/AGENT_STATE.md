@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 30 Oct 2026, Claude, branch `claude/samn2-data-safety`: data and file fixes from the bug hunt (handover below). Before: 28 Oct, `claude/samn2-auto-tip` (Generator reads AV1 on Windows, finds the tip by itself); #137 `claude/samn2-health`; #135 (self-check handoff); 27 Oct, #132 (Generator spec, *Recommended*, D-160/D-161).
+**Last update:** 30 Oct 2026, Claude, branch `claude/samn2-data-safety`: data and file fixes from the bug hunt (handover below); main merged in with #138 (device and playback safety, its handover below). Before: 28 Oct, `claude/samn2-auto-tip` (Generator reads AV1 on Windows, finds the tip by itself); #137 `claude/samn2-health`; #135 (self-check handoff); 27 Oct, #132 (Generator spec, *Recommended*, D-160/D-161).
 
 ## Handover: `claude/samn2-data-safety` (30 Oct)
 
@@ -26,6 +26,18 @@ Data and file fixes from a read-only bug hunt. Each fix has a test that failed b
   - `save_custom_script` writes atomically.
   - Notices compare the shortened text, so a long repeat is one toast (test `aLongRepeatIsOne`).
 - **Open (not fixed here):** `samn::config_dir()` reads `APPDATA` / `USERPROFILE` through the narrow `_dupenv_s`, so a Windows user name outside the ANSI code page gives a wrong config folder; that needs `_wdupenv_s`.
+
+
+## Handover: `claude/samn2-stop-safety` (30 Oct, device and playback safety)
+
+- **Stop before close (Sam Neo 2):** a disconnect, a quit and Training's end set `abort_` before the worker's stop ran, and the BLE "with response" write gave up at once, so the device stayed on. `DeviceWorker::Stop` and `DestroySession` now switch the transport to a cancel of their own (`BeginStopWindow`, bounded by `kStopBudgetMs` = 4 s); `abort_` still ends connects and reads. TCode (serial / TCP / UDP) and Intiface sends never waited on the cancel. Tests: `device_controller_test` `samNeo2*` on a stand-in link (`setBleTransportFactory`).
+- **`SamNeo2Device::StopNow`** tries both off writes, remembers both off packets either way (the keepalive repeats "off", never the old "on") and returns the first error; `Disconnect()` uses it. Tests: `device/samneo2: a failed off write ...`, `... disconnect tries both off writes ...`.
+- **Stroke speed limit:** with a limit, a move takes at least the way from the last sent position at that speed (real ms, after the play-speed division); the home move counts the whole range. Test: `playback_output_test::speedLimitHoldsForLateReports` (1x, 2x).
+- **Intiface battery:** a failed read (no reading, or the server's `Error` for the request, which now ends the wait) is cached `kBatteryCacheTtl` like a reading; before, every 2 s tick blocked the worker 3 s and a Stop queued behind it. Tests: `device/intiface: a failed battery read is cached too`, `device_controller_test::intifaceMuteBatteryDoesNotBlockTheStop`, `intifaceBatteryErrorEndsTheWait`.
+- **Player:** leaving a playing script-only session (opening a video) calls `ctrl.setPlaying(false)` (`PlayerPage.qml::onScriptOnlyChanged`). Test: `player_page_qml_test::leavingAPlayingScriptOnlySessionStopsTheOutput`.
+- **Session per owner:** `DeviceController::setSessionActiveFor(owner, on)`; playback and training each hold their own, `sessionActive` stays true while any holds it (the QML property's writer is a hold of its own). Tests: `device_controller_test::sessionHoldsArePerOwner`, `playback_output_test::sessionStaysActiveWhileAnyUserDrivesTheDevice`.
+- **Extra axes** (twist / roll / pitch ...) ease their first move after a start or a seek in like the stroke, per axis from its last sent position. Test: `playback_output_test::extraAxesEaseInAfterAStartAndASeek`.
+- **Not verified:** on a real Sam Neo 2 (no hardware here); the stop budget is a guess from the write timeout. The speed limit counts from the last *sent* position: a stroker still on its way to that position can move further than that.
 
 ## Handover: `claude/samn2-health` (28 Oct, D-162)
 

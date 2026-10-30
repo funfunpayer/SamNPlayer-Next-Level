@@ -34,6 +34,19 @@ std::string DisplayValue(const json& v) {
     return GoJsonDump(v);
 }
 
+// The server's Error reply to the request `id` in a received batch.
+bool IsErrorFor(const json& batch, int id) {
+    if (!batch.is_array()) return false;
+    for (const auto& message : batch) {
+        if (!message.is_object()) continue;
+        const auto it = message.find("Error");
+        if (it == message.end() || !it->is_object()) continue;
+        const auto id_it = it->find("Id");
+        if (id_it != it->end() && id_it->is_number_integer() && id_it->get<int>() == id) return true;
+    }
+    return false;
+}
+
 }  // namespace
 
 std::string NormalizeIntifaceUrl(const std::string& input) {
@@ -204,6 +217,7 @@ Status IntifaceDevice::Connect() {
     battery_ok_ = false;
     battery_pct_ = 0;
     battery_at_ = {};
+    battery_failed_at_.reset();
     pending_battery_.reset();
     connected_ = false;
 
@@ -483,9 +497,14 @@ ConnectionInfo IntifaceDevice::Info() const {
 BatteryReading IntifaceDevice::BatteryLevel() {
     if (!connected_ || !transport_.IsConnected() || !has_battery_) return {};
     if (battery_ok_ && Now() - battery_at_ < kBatteryCacheTtl) return {battery_pct_, true};
+    // A failed read is cached as long: a server that never answers would
+    // otherwise hold the device thread (and a Stop queued behind it) for
+    // kIntifaceBatteryWait at every status tick.
+    if (battery_failed_at_ && Now() - *battery_failed_at_ < kBatteryCacheTtl) return {};
 
     pending_battery_.reset();  // a stale answer of an expired request
-    if (!Send("BatteryLevelCmd", {{"DeviceIndex", device_idx_}})) return {};
+    int id = 0;
+    if (!Send("BatteryLevelCmd", {{"DeviceIndex", device_idx_}}, &id)) return {};
 
     const auto deadline = Now() + kIntifaceBatteryWait;
     while (!pending_battery_) {
@@ -494,6 +513,7 @@ BatteryReading IntifaceDevice::BatteryLevel() {
         ReceiveResult r = transport_.Receive(left.count() > 0 ? left : std::chrono::milliseconds(0));
         if (r.kind == ReceiveResult::Kind::kTimeout) {
             Log(LogLevel::kDebug, "intiface: battery not readable (no reading within 3s)");
+            battery_failed_at_ = Now();
             return {};
         }
         if (r.kind == ReceiveResult::Kind::kClosed) {
@@ -508,11 +528,17 @@ BatteryReading IntifaceDevice::BatteryLevel() {
             return {};
         }
         if (got) pending_battery_ = reading;
+        if (!pending_battery_ && IsErrorFor(batch, id)) {
+            // The server refused the read (HandleBatch logged why): no point waiting.
+            battery_failed_at_ = Now();
+            return {};
+        }
     }
     battery_pct_ = BatteryFromButtplug(*pending_battery_);
     pending_battery_.reset();
     battery_ok_ = true;
     battery_at_ = Now();
+    battery_failed_at_.reset();
     Log(LogLevel::kInfo, "intiface: battery read " + std::to_string(battery_pct_));
     return {battery_pct_, true};
 }

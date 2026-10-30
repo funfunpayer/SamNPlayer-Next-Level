@@ -12,6 +12,7 @@
 #include <QtQml/QQmlExtensionPlugin>
 #include <QtTest>
 
+#include "device_controller.h"
 #include "frame_provider.h"
 #include "icon_provider.h"
 #include "player_controller.h"
@@ -19,6 +20,7 @@
 
 Q_IMPORT_QML_PLUGIN(SamNPlugin)
 
+using samn::ui::DeviceController;
 using samn::ui::PlayerController;
 
 namespace {
@@ -59,6 +61,59 @@ private slots:
         runScriptOnly();
         qInstallMessageHandler(g_previous);
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
+
+    // Opening a video while a script plays on its own clock ends that
+    // playback: the output stops and the device is free again (the clock's
+    // own handler no longer reports once the page is not script-only).
+    void leavingAPlayingScriptOnlySessionStopsTheOutput() {
+        QQmlEngine engine;
+        engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
+        engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+        engine.addImageProvider(QStringLiteral("frames"), new samn::ui::FrameProvider);
+        QQmlComponent comp(&engine);
+        comp.setData(R"(
+            import QtQuick
+            import SamN
+            Item {
+                width: 1000; height: 700
+                property alias page: pp
+                property alias device: dev
+                DeviceController { id: dev }
+                PlayerPage { id: pp; anchors.fill: parent; device: dev }
+            })",
+                     QUrl("qrc:/test/Wrapper.qml"));
+        QVERIFY2(comp.status() == QQmlComponent::Ready, qPrintable(comp.errorString()));
+        QQuickWindow window;  // declared first: it must outlive the root item
+        window.resize(1000, 700);
+        std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
+        QVERIFY(root);
+        root->setParentItem(window.contentItem());
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto* page = root->property("page").value<QQuickItem*>();
+        auto* dev = root->property("device").value<DeviceController*>();
+        QVERIFY(page && dev);
+        auto* ctrl = page->property("controller").value<PlayerController*>();
+        QVERIFY(ctrl);
+
+        QTemporaryDir dir;
+        const QString script = dir.filePath(QStringLiteral("alone.funscript"));
+        QFile f(script);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(R"({"actions":[{"at":0,"pos":0},{"at":2000,"pos":100},{"at":4000,"pos":0},{"at":6000,"pos":100}]})");
+        f.close();
+        QVERIFY(ctrl->openPath(script));
+        QVERIFY(page->property("scriptOnly").toBool());
+        QMetaObject::invokeMethod(page, "togglePlay");
+        QTRY_VERIFY(page->property("playing").toBool());
+        QVERIFY(ctrl->output()->playing());
+        QVERIFY(dev->sessionActive());
+
+        QVERIFY(ctrl->openPath(QStringLiteral(SAMN_TEST_DATA "/testpattern_4s.mp4")));
+        QVERIFY(!page->property("scriptOnly").toBool());
+        QTRY_VERIFY(!ctrl->output()->playing());
+        QVERIFY(!dev->sessionActive());
     }
 
     void noScriptCardCreatesAndGoesBack() {

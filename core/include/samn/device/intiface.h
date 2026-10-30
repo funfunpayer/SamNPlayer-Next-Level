@@ -75,7 +75,8 @@ public:
     Status SetPosition(double pos, std::chrono::milliseconds duration) override;
     void SetMotorLevel(const std::string& channel, double level) override;
     // Asks BatteryLevelCmd (cached kBatteryCacheTtl) and waits up to
-    // kIntifaceBatteryWait for the reading.
+    // kIntifaceBatteryWait for the reading; the server's Error reply ends the
+    // wait. A failed read is cached as long as a reading.
     BatteryReading BatteryLevel() override;
     Capabilities DeviceCapabilities() const override;
     ConnectionInfo Info() const;
@@ -138,6 +139,8 @@ private:
     int battery_pct_ = 0;
     bool battery_ok_ = false;
     std::chrono::steady_clock::time_point battery_at_{};
+    // When the last read failed (no reading, or the server refused it).
+    std::optional<std::chrono::steady_clock::time_point> battery_failed_at_;
     bool reconnect_used_ = false;
     std::optional<double> pending_battery_;  // reading received, not yet taken
 };
