@@ -281,12 +281,16 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
         const bool cut = opts.scene_cuts && (adaptive_cut ? adaptive_cut->Test(prev_gray, gray) : IsSceneCut(prev_gray, gray));
 
         std::optional<cv::Rect> found;
+        bool reanchored = false;
         if (cut) {
             res.scene_cuts.push_back(idx);
             // No re-init on the old box after a hard cut: a tip invented on
             // the old pixel latches onto the background.
             if (memory)
-                if (auto r = memory->Reacquire(gray); r && reanchor(*r)) found = r;
+                if (auto r = memory->Reacquire(gray); r && reanchor(*r)) {
+                    found = r;
+                    reanchored = true;
+                }
         } else {
             found = tracker->Update(frame.bgr);
             if (found) {
@@ -299,7 +303,10 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
                     guard.Accept(dist);
             }
             if (!found && memory)
-                if (auto r = memory->Reacquire(gray); r && reanchor(*r)) found = r;
+                if (auto r = memory->Reacquire(gray); r && reanchor(*r)) {
+                    found = r;
+                    reanchored = true;
+                }
         }
         if (!tracker) return fail(why);
 
@@ -323,7 +330,10 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
             // ignores the flags, keeps every position as before.
             const auto likeness = memory ? memory->MatchesOriginal(gray, *found) : std::nullopt;
             res.lost.push_back(likeness && *likeness < AppearanceMemory::kMinScore ? kLostUnlike : 0);
-            coast.ObserveOk(*found);
+            if (reanchored)
+                coast.Reanchor(*found);
+            else
+                coast.ObserveOk(*found);
             ++valid;
             res.xs.push_back(Centre(*found).x);
             res.ys.push_back(Centre(*found).y);

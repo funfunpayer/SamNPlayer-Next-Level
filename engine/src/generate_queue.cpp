@@ -1,6 +1,7 @@
 #include "samn/engine/generate_queue.h"
 
 #include <algorithm>
+#include <cwctype>
 #include <system_error>
 
 #include "samn/engine/tip_find.h"
@@ -12,6 +13,26 @@ std::filesystem::path ScriptPathForVideo(const std::filesystem::path& video) {
     std::filesystem::path out = video;
     out.replace_extension(".funscript");
     return out;
+}
+
+namespace {
+// Windows and macOS file names ignore case by default: X.mp4 and x.mkv write
+// the same x.funscript. Only what the C library's towlower folds is caught
+// (surely A-Z; É/é and NFC/NFD forms depend on the locale).
+std::wstring ScriptKey(const std::filesystem::path& video) {
+    std::wstring key = ScriptPathForVideo(video).lexically_normal().make_preferred().wstring();
+#if defined(_WIN32) || defined(__APPLE__)
+    for (wchar_t& c : key) c = static_cast<wchar_t>(std::towlower(static_cast<std::wint_t>(c)));
+#endif
+    return key;
+}
+}  // namespace
+
+std::string ScriptNameCollision(const std::vector<std::filesystem::path>& earlier, const std::filesystem::path& video) {
+    const std::wstring script = ScriptKey(video);
+    for (const auto& e : earlier)
+        if (ScriptKey(e) == script) return "same script name as " + e.filename().u8string();
+    return {};
 }
 
 QueueItemOutcome GenerateQueueItem(const std::filesystem::path& video, const QueueSettings& settings,

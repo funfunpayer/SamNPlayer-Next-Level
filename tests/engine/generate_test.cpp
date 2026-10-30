@@ -1,5 +1,7 @@
 #include <doctest/doctest.h>
 
+#include <future>
+
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -194,6 +196,64 @@ TEST_CASE("generate: the runner does one run at a time, cancels and waits on shu
     CHECK(ev.back().kind == GenerateEventKind::kCanceled);
     CHECK(std::chrono::steady_clock::now() - t0 < std::chrono::seconds(1));
     CHECK(!fs::exists(dir / "standard.funscript"));
+    fs::remove_all(dir);
+}
+
+TEST_CASE("generate: the terminal event's handler may start the next run") {
+    const fs::path dir = TempDir("samn_generate_restart");
+    REQUIRE(clips::WriteMoving(dir / "moving.mp4", 2, 80.0, 1.0));
+    std::atomic<uint64_t> next_id{99};
+    std::atomic<int> dones{0};
+    {
+        GenerateRunner* self = nullptr;
+        std::atomic<bool> ready{false};
+        GenerateRunner runner([&](const GenerateEvent& e) {
+            if (e.kind != GenerateEventKind::kDone) return;
+            if (++dones == 1) {
+                while (!ready) std::this_thread::yield();
+                next_id = self->Start(Request(dir, "moving.mp4", "weich"));
+            }
+        });
+        self = &runner;
+        ready = true;
+        REQUIRE(runner.Start(Request(dir, "moving.mp4", "standard")) == 1);
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(60);
+        while (dones < 2 && std::chrono::steady_clock::now() < deadline) std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        runner.Wait();
+    }
+    CHECK(next_id == 2);
+    CHECK(dones == 2);
+    CHECK(fs::exists(dir / "weich.funscript"));
+    fs::remove_all(dir);
+}
+
+// Review of #140: the next run started from another thread (the UI) while
+// the old worker is still in its last step after the terminal event.
+TEST_CASE("generate: a run started from another thread right after the end does not hang") {
+    const fs::path dir = TempDir("samn_generate_restart_ui");
+    REQUIRE(clips::WriteMoving(dir / "moving.mp4", 2, 80.0, 1.0));
+    std::atomic<int> dones{0};
+    {
+        GenerateRunner runner([&](const GenerateEvent& e) {
+            if (e.kind != GenerateEventKind::kDone) return;
+            ++dones;
+            // The worker lingers in its handler while the UI starts the next run.
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        });
+        REQUIRE(runner.Start(Request(dir, "moving.mp4", "standard")) == 1);
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(60);
+        while (dones < 1 && std::chrono::steady_clock::now() < deadline)
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        REQUIRE(dones == 1);
+        auto next = std::async(std::launch::async, [&] { return runner.Start(Request(dir, "moving.mp4", "weich")); });
+        REQUIRE_MESSAGE(next.wait_for(std::chrono::seconds(20)) == std::future_status::ready, "Start hung");
+        CHECK(next.get() == 2);
+        while (dones < 2 && std::chrono::steady_clock::now() < deadline)
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        runner.Wait();
+    }
+    CHECK(dones == 2);
+    CHECK(fs::exists(dir / "weich.funscript"));
     fs::remove_all(dir);
 }
 

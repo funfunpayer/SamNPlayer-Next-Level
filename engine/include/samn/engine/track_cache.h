@@ -18,11 +18,12 @@ namespace samn::engine {
 
 // Bump with every change to TrackBox or its parts that can change a result.
 // 2: TrackResult::lost tells the tracker's loss (1) from the look check (2).
-constexpr int kTrackCacheVersion = 2;
+// 3: the key also covers adaptive_cuts and the seed; record_checks never caches.
+constexpr int kTrackCacheVersion = 3;
 
 // Hex key from the video (size, modification time and the first and last
 // MiB of content), the box and every option that changes the track; empty
-// when the video cannot be read.
+// when the video cannot be read or record_checks is on (checks are not stored).
 std::string TrackCacheKey(const std::filesystem::path& video, const cv::Rect& box, const TrackOptions& options);
 
 // nullopt on a miss or an unreadable entry (a broken file is a miss).
