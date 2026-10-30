@@ -1594,8 +1594,10 @@ std::vector<std::pair<std::string, std::string>> ShiftedFunscriptMetadata(const 
     }
     if (m.samn_axes && (!m.samn_axes->vibration.empty() || !m.samn_axes->suction.empty())) {
         JV axes = JObj();
-        Put(axes, "vibration", EncActions(ShiftActions(m.samn_axes->vibration, delta_ms).first));
-        Put(axes, "suction", EncActions(ShiftActions(m.samn_axes->suction, delta_ms).first));
+        if (!m.samn_axes->vibration.empty())
+            Put(axes, "vibration", EncActions(ShiftActions(m.samn_axes->vibration, delta_ms).first));
+        if (!m.samn_axes->suction.empty())
+            Put(axes, "suction", EncActions(ShiftActions(m.samn_axes->suction, delta_ms).first));
         out.emplace_back("samn_axes", DumpToString(axes));
     }
     if (m.trajectory && (!m.trajectory->tip.empty() || !m.trajectory->partner.empty())) {

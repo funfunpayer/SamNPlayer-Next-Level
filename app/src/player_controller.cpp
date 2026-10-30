@@ -536,13 +536,19 @@ bool PlayerController::bakeOffset() {
         }
         try {
             for (const auto& write : writes) write();
-        } catch (const std::exception&) {
-            for (const auto& [file, bytes] : originals) {
+        } catch (const std::exception& failed) {
+            std::string unrestored;
+            for (const auto& entry : originals) {
                 try {
-                    samn::WriteFileAtomic(file, bytes);
+                    samn::WriteFileAtomic(entry.first, entry.second);
                 } catch (const std::exception&) {
+                    unrestored += (unrestored.empty() ? "" : ", ") + entry.first.filename().u8string();
                 }
             }
+            // A file left shifted must never be shifted again by a second bake.
+            if (!unrestored.empty())
+                throw std::runtime_error(std::string(failed.what()) + "; these files are already shifted and could "
+                                         "not be put back: " + unrestored + " (check them before baking again)");
             throw;
         }
     } catch (const std::exception& e) {

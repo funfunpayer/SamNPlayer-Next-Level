@@ -681,6 +681,14 @@ bool LabelController::openVideo(const QString& pathOrUrl) {
     const auto file = samn::LabelProjectPath(Fs(path));
     std::error_code ec;
     if (std::filesystem::exists(file, ec)) {
+        // A file that cannot be opened (no permission, a cloud placeholder,
+        // another program holding it) is not broken: it stays where it is.
+        if (!std::ifstream(file, std::ios::binary)) {
+            setStatus(tr("The labels file cannot be opened right now (%1); it is left as it is. Close other programs "
+                         "using it and open the clip again.")
+                          .arg(QString::fromStdU16String(file.filename().u16string())));
+            return false;
+        }
         try {
             loaded = samn::LoadLabelProject(file);
         } catch (const std::exception& e) {

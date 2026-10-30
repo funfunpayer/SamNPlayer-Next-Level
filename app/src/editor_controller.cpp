@@ -41,8 +41,11 @@ QString LaneTitle(const std::string& lane) {
 EditorController::EditorController(QObject* parent) : QObject(parent), sound_(new AudioLevelDecoder(this)) {
     connect(sound_, &AudioLevelDecoder::finished, this, &EditorController::onSoundEnvelope);
     connect(sound_, &AudioLevelDecoder::failed, this, [this](const QString& error) {
+        // A run for an earlier script: cancelTool() already ended its busy,
+        // and a newer run may be going.
+        if (sound_script_ != script_gen_) return;
         setBusy(false);
-        if (sound_script_ == script_gen_) setStatus(tr("Vibration from the sound: %1").arg(error));
+        setStatus(tr("Vibration from the sound: %1").arg(error));
     });
 }
 
@@ -576,8 +579,9 @@ bool EditorController::vibrationFromSound(bool withContact) {
 }
 
 void EditorController::onSoundEnvelope(const std::vector<double>& envelope) {
+    if (sound_script_ != script_gen_) return;  // another script by now (its busy ended there)
     setBusy(false);
-    if (!hasScript() || sound_script_ != script_gen_) return;  // another script by now
+    if (!hasScript()) return;
     if (drag_index_ >= 0) release();
     try {
         samn::Document doc = companion();
