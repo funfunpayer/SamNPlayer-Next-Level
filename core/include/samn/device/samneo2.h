@@ -10,7 +10,8 @@
 //   - a packet equal to the last one of its channel is not sent (the device has
 //     whole steps only, and every write costs a round trip), and does not
 //     reset the idle timer;
-//   - Stop() always writes both channels off and remembers them;
+//   - Stop() always writes both channels off and remembers them, also when
+//     a write fails (the first error is returned);
 //   - raw writes always go out and are remembered like Stop();
 //   - after kKeepaliveInterval without a new write, both channels' last
 //     packets are repeated. The app calls TickKeepalive() every

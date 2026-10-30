@@ -82,7 +82,12 @@ Item {
     // film"); `player` is whichever drives the playhead.
     readonly property bool scriptOnly: ctrl.hasScript && ctrl.videoName === ""
     readonly property QtObject player: scriptOnly ? clock : media
-    onScriptOnlyChanged: clock.stop()  // also back to 0
+    onScriptOnlyChanged: {
+        // A clock that was driving the output ends that playback here: its
+        // own handler below no longer reports once the page is not script-only.
+        if (clock.playbackState !== ScriptClock.StoppedState) ctrl.setPlaying(false)
+        clock.stop()  // also back to 0
+    }
     function playheadMoved(pos) {
         ctrl.setVideoPositionMs(pos)
         const jump = ctrl.loopJumpFor(pos)
