@@ -233,10 +233,14 @@ private:
                     bool needsMarker);
     bool stepDone();
     samn::Document companion() const;  // the .samn as saved, or a new one
+    // The stroke as the Player plays it: an OFS "inverted" funscript's flag
+    // baked in. The .samn carries this; the .funscript keeps its raw actions.
+    std::vector<samn::Action> playedStroke() const;
     void onSoundEnvelope(const std::vector<double>& envelope);
     void setBusy(bool busy);
     void setProgress(int percent);
-    void onBeats(bool found, const std::vector<double>& beats, double bpm, const QString& error);  // saves; false when the save failed
+    // script: script_gen_ when the run started.
+    void onBeats(bool found, const std::vector<double>& beats, double bpm, const QString& error, quint64 script);  // saves; false when the save failed
     bool save();
     void pushCurves();
     void setView(samn::ViewWindow v);
@@ -248,6 +252,8 @@ private:
     samn::EditSession session_;
     QString path_;          // the .funscript
     QString samn_path_;     // its companion .samn, empty when there is none
+    bool inverted_ = false; // the .funscript's "inverted" flag
+    bool clear_tracking_gaps_ = false;  // the next save drops the healed tracking gaps
     double duration_ms_ = 0;
     QString active_lane_ = QStringLiteral("stroke");
     samn::ViewWindow view_{};
@@ -266,6 +272,9 @@ private:
     std::optional<samn::ContactMarks> contact_marks_;
     bool busy_ = false;
     bool sound_with_contact_ = false;
+    // Bumped by open() and close(): a tool's result for the script before is dropped.
+    quint64 script_gen_ = 0;
+    quint64 sound_script_ = 0;  // script_gen_ when the sound tool started
     AudioLevelDecoder* sound_ = nullptr;
     int progress_ = 0;
     std::shared_ptr<std::atomic<bool>> tool_cancel_;

@@ -13,10 +13,14 @@
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
+#include <fstream>
+#include <functional>
+#include <iterator>
 
 #include "app_log.h"
 #include "curve_item.h"
 #include "device_controller.h"
+#include "samn/fileio.h"
 #include "samn/heatmap_image.h"
 #include "samn/project.h"
 #include "samn/script_quality.h"
@@ -458,38 +462,88 @@ bool PlayerController::bakeOffset() {
         dropped += gone;
         actions = std::move(moved);
     };
-    const auto shiftMarks = [&](std::vector<samn::Bookmark>& b, std::vector<samn::Chapter>& c) {
-        auto [nb, db] = samn::ShiftBookmarks(b, delta);
-        auto [nc, dc] = samn::ShiftChapters(c, delta);
-        dropped += db + dc;
-        b = std::move(nb);
-        c = std::move(nc);
-    };
-    const std::filesystem::path path = std::filesystem::u8path(u8(scriptPath_));
+    namespace fs = std::filesystem;
+    const fs::path path = fs::u8path(u8(scriptPath_));
+    const bool samnScript = samn::IsSamnPath(u8(scriptPath_));
+    // Everything is read and moved first, the files are written last: one
+    // that cannot be read (a broken .samn) leaves every file as it was. A
+    // write that fails puts back the files written before it.
+    std::vector<fs::path> files;
+    std::vector<std::function<void()>> writes;
     try {
         // The .funscript (the .samn's companion, or the script itself).
-        std::filesystem::path funscript = path;
-        if (samn::IsSamnPath(u8(scriptPath_))) funscript.replace_extension(".funscript");
+        fs::path funscript = path;
+        if (samnScript) funscript.replace_extension(".funscript");
         std::error_code ec;
-        if (std::filesystem::exists(funscript, ec)) {
-            auto actions = samn::LoadFunscript(funscript).actions;
-            auto bookmarks = samn::LoadBookmarks(funscript);
-            auto chapters = samn::LoadChapters(funscript);
+        if (fs::exists(funscript, ec)) {
+            const samn::FunscriptView view = samn::LoadFunscript(funscript);
+            auto actions = view.actions;
             const int before = dropped;
             shift(actions);
-            shiftMarks(bookmarks, chapters);
-            if (samn::IsSamnPath(u8(scriptPath_))) dropped = before;  // counted once, from the .samn
-            samn::PatchActions(funscript, actions);
-            samn::SaveBookmarks(funscript, bookmarks);
-            samn::SaveChapters(funscript, chapters);
+            const auto bookmarks = samn::ShiftBookmarks(samn::LoadBookmarks(funscript), delta);
+            const auto chapters = samn::ShiftChapters(samn::LoadChapters(funscript), delta);
+            const std::vector<samn::OMarker> oldMarkers = samn::LoadOMarkers(funscript);
+            const auto markers = samn::ShiftOMarkers(oldMarkers, delta);
+            const auto metadata = samn::ShiftedFunscriptMetadata(view, delta);
+            dropped += bookmarks.second + chapters.second + markers.second;
+            if (samnScript) dropped = before;  // counted once, from the .samn
+            files.push_back(funscript);
+            writes.push_back([funscript, actions, bookmarks, chapters, markers, hadMarkers = !oldMarkers.empty(), metadata] {
+                samn::PatchActions(funscript, actions);
+                samn::SaveBookmarks(funscript, bookmarks.first);
+                samn::SaveChapters(funscript, chapters.first);
+                for (const auto& [key, encoded] : metadata) samn::PatchMetadataKey(funscript, key, encoded);
+                if (hadMarkers) samn::SaveOMarkers(funscript, markers.first);
+            });
         }
-        if (samn::IsSamnPath(u8(scriptPath_))) {
+        // 0.7 companion axis files (<stem>.surge.funscript …).
+        for (const auto& axisFile : samn::companion_axis_files(u8(scriptPath_))) {
+            const fs::path file = fs::u8path(axisFile.second);
+            std::vector<samn::Action> actions;
+            try {
+                actions = samn::LoadFunscript(file).actions;
+                shift(actions);
+            } catch (const std::exception& e) {
+                throw std::runtime_error(file.filename().u8string() + ": " + e.what());
+            }
+            files.push_back(file);
+            writes.push_back([file, actions] { samn::PatchActions(file, actions); });
+        }
+        // The loop marker beside the script; one that ends before the start goes.
+        if (const auto marker = samn::LoadMarker(path)) {
+            samn::RangeMarker moved{std::max<int64_t>(0, marker->start_ms + delta), marker->end_ms + delta};
+            if (marker->end_ms + delta <= 0) {
+                moved = {};
+                ++dropped;
+            }
+            files.push_back(samn::MarkerPath(path));
+            writes.push_back([path, moved] { samn::SaveMarker(path, moved); });
+        }
+        if (samnScript) {
             samn::Document d = samn::LoadDocument(path);
             shift(d.general);
             shift(d.vibration);
             shift(d.suction);
-            shiftMarks(d.bookmarks, d.chapters);
-            samn::SaveDocument(path, d);
+            dropped += samn::ShiftDocumentMarks(d, delta);
+            files.push_back(path);
+            writes.push_back([path, d]() mutable { samn::SaveDocument(path, d); });
+        }
+        std::vector<std::pair<fs::path, std::string>> originals;
+        for (const fs::path& file : files) {
+            std::ifstream in(file, std::ios::binary);
+            if (!in) throw std::runtime_error("cannot read " + file.filename().u8string());
+            originals.emplace_back(file, std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()));
+        }
+        try {
+            for (const auto& write : writes) write();
+        } catch (const std::exception&) {
+            for (const auto& [file, bytes] : originals) {
+                try {
+                    samn::WriteFileAtomic(file, bytes);
+                } catch (const std::exception&) {
+                }
+            }
+            throw;
         }
     } catch (const std::exception& e) {
         setFailure(tr("Offset not baked: %1").arg(q(e.what())));

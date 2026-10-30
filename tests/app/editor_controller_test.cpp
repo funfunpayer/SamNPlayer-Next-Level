@@ -9,6 +9,7 @@
 
 #include "curve_item.h"
 #include "editor_controller.h"
+#include "player_controller.h"
 #include "samn/label_track.h"
 #include "samn/funscript.h"
 #include "samn/marks.h"
@@ -61,6 +62,13 @@ int LaneAt(const std::vector<Action>& lane, int64_t ms) {
     for (const Action& p : lane)
         if (p.at <= ms) best = p;
     return best.pos;
+}
+
+// "0:90 1000:20", for comparing curves with a readable failure.
+QString Pts(const std::vector<Action>& lane) {
+    QStringList out;
+    for (const Action& a : lane) out << QStringLiteral("%1:%2").arg(a.at).arg(a.pos);
+    return out.join(' ');
 }
 
 }  // namespace
@@ -587,6 +595,149 @@ private slots:
         QCOMPARE(again.scenes().at(0).toMap().value("name").toString(), QStringLiteral("Intro"));
         again.close();
         QVERIFY(again.scenes().isEmpty());
+    }
+
+    // An OFS "inverted" funscript: the .samn the Editor writes plays as the
+    // funscript played (the Player bakes the flag), the .funscript keeps its
+    // raw actions and its flag for other players.
+    void anInvertedFunscriptPlaysTheSameFromTheSamn() {
+        QTemporaryDir cfg;
+        qputenv("SAMN_CONFIG_DIR", cfg.path().toUtf8());
+        const QString path = dir_.filePath("inv.funscript");
+        std::ofstream(Fs(path)) << R"({"version":"1.0","inverted":true,"range":100,)"
+                                   R"("actions":[{"at":0,"pos":10},{"at":1000,"pos":80}]})";
+        QString played;
+        {
+            samn::ui::PlayerController p;
+            QVERIFY(p.openScript(path));
+            played = Pts(p.actions());
+        }
+        QCOMPARE(played, QStringLiteral("0:90 1000:20"));
+        EditorController e;
+        QVERIFY(e.open(path));
+        QVERIFY(e.addLane("vibration"));
+        QCOMPARE(Pts(samn::LoadDocument(Fs(dir_.filePath("inv.samn"))).general), played);
+        const samn::FunscriptView raw = samn::LoadFunscript(Fs(path));
+        QVERIFY(raw.inverted);
+        QCOMPARE(Pts(raw.actions), QStringLiteral("0:10 1000:80"));
+        {
+            samn::ui::PlayerController p;
+            QVERIFY(p.openScript(path));  // now the .samn
+            QVERIFY(p.scriptPath().endsWith(".samn"));
+            QCOMPARE(Pts(p.actions()), played);
+        }
+        // The feel lanes are baked from the stroke as it plays.
+        QVERIFY(e.axesFromStroke());
+        const samn::Document baked = samn::LoadDocument(Fs(dir_.filePath("inv.samn")));
+        QCOMPARE(Pts(baked.general), played);
+        samn::Document expected = baked;
+        expected.BakeNeoAxes();
+        QCOMPARE(Pts(baked.vibration), Pts(expected.vibration));
+        QCOMPARE(Pts(baked.suction), Pts(expected.suction));
+        qunsetenv("SAMN_CONFIG_DIR");
+    }
+
+    // A tool that finishes after another script was opened leaves that one alone.
+    void aLateToolResultNeverLandsInTheNextScript() {
+        const QString a = script("toolA.funscript");
+        const QString b = script("toolB.funscript");
+        const std::string bBefore = ReadText(b);
+        EditorController e;
+        e.setVideoPath(WriteToneThenSilence(dir_.filePath("tool.wav")));
+        QVERIFY(e.open(a));
+        QVERIFY(e.vibrationFromSound(false));
+        QVERIFY(e.busy());
+        QVERIFY(e.open(b));
+        QTRY_VERIFY_WITH_TIMEOUT(!e.busy(), 20000);
+        QTest::qWait(300);  // a queued result has arrived by now
+        QCOMPARE(ReadText(b), bBefore);
+        QVERIFY(!QFileInfo::exists(dir_.filePath("toolB.samn")));
+        QCOMPARE(e.lanes(), QStringList{"stroke"});
+        QVERIFY(!e.canUndo());
+
+        // The beat bar too.
+        const QString video = dir_.filePath("tool_hero.mp4");
+        QVERIFY(!clips::WriteBeatBar(Fs(video), 12, false).empty());
+        e.setVideoPath(video);
+        QVERIFY(e.open(a));
+        QVERIFY(e.strokeFromBeatBar());
+        QVERIFY(e.open(b));
+        QTRY_VERIFY_WITH_TIMEOUT(!e.busy(), 30000);
+        QTest::qWait(300);
+        QCOMPARE(ReadText(b), bBefore);
+        QVERIFY(!e.canUndo());
+        // close() cancels as well.
+        QVERIFY(e.open(a));
+        const std::string aBefore = ReadText(a);
+        QVERIFY(e.strokeFromBeatBar());
+        e.close();
+        QTRY_VERIFY_WITH_TIMEOUT(!e.busy(), 30000);
+        QTest::qWait(300);
+        QVERIFY(!e.hasScript());
+        QCOMPARE(ReadText(a), aBefore);
+    }
+
+    // Healed tracker-loss windows leave the metadata: a later optimize keeps
+    // what was edited there by hand.
+    void optimizeClearsTheHealedTrackingGaps() {
+        const QString path = dir_.filePath("gaps.funscript");
+        const QString samnPath = dir_.filePath("gaps.samn");
+        std::ofstream(Fs(path)) << R"({"version":"1.0","actions":[{"at":0,"pos":10},{"at":1000,"pos":90},)"
+                                   R"({"at":2000,"pos":10},{"at":3000,"pos":90},{"at":4000,"pos":10}],)"
+                                   R"("metadata":{"creator":"x","tracking_gaps":[{"start_ms":1000,"end_ms":3000}]}})";
+        {
+            samn::Document d;
+            d.version = samn::SamnCurrentVersion;
+            d.kind = samn::SamnKind;
+            d.general = Actions(path);
+            d.tracking_gaps = {{1000, 3000}};
+            samn::SaveDocument(Fs(samnPath), d);
+        }
+        EditorController e;
+        QVERIFY(e.open(path));
+        const QString msg = e.optimizeFor("general");
+        QVERIFY2(msg.contains("healed 1 tracking gap"), qPrintable(msg));
+        QVERIFY(samn::LoadFunscript(Fs(path)).metadata.tracking_gaps.empty());
+        QVERIFY(samn::LoadDocument(Fs(samnPath)).tracking_gaps.empty());
+        QVERIFY(ReadText(path).find("\"creator\": \"x\"") != std::string::npos);  // the rest is kept
+        // A hand edit inside the old window, then optimize again: it stays.
+        e.setMarker(1900, 2100);
+        QVERIFY(e.invert());
+        const int edited = LaneAt(e.session().Axis("stroke"), 2000);
+        QVERIFY(edited <= 20);
+        e.clearMarker();
+        e.optimizeFor("general");
+        QCOMPARE(LaneAt(e.session().Axis("stroke"), 2000), edited);
+        QCOMPARE(LaneAt(Actions(path), 2000), edited);
+    }
+
+    // A chapter removed in the Player (from the .samn) stays removed in the
+    // Editor, even though the .funscript beside it still lists it.
+    void theSamnScenesCountEvenWhenEmpty() {
+        QTemporaryDir cfg;
+        qputenv("SAMN_CONFIG_DIR", cfg.path().toUtf8());
+        const QString path = script("chap.funscript");
+        const QString samnPath = dir_.filePath("chap.samn");
+        samn::SaveChapters(Fs(path), {{"C", 1000, 2000}});
+        {
+            samn::Document d;
+            d.version = samn::SamnCurrentVersion;
+            d.kind = samn::SamnKind;
+            d.general = Actions(path);
+            d.chapters = {{"C", 1000, 2000}};
+            samn::SaveDocument(Fs(samnPath), d);
+        }
+        {
+            samn::ui::PlayerController p;
+            QVERIFY(p.openScript(path));
+            QVERIFY(p.removeChapter(0));
+        }
+        QVERIFY(samn::LoadDocument(Fs(samnPath)).chapters.empty());
+        QCOMPARE(samn::LoadChapters(Fs(path)).size(), size_t(1));  // the stale copy
+        EditorController e;
+        QVERIFY(e.open(path));
+        QVERIFY(e.scenes().isEmpty());
+        qunsetenv("SAMN_CONFIG_DIR");
     }
 };
 

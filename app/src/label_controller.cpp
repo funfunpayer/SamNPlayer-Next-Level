@@ -11,6 +11,7 @@
 #include <QJsonArray>
 #include <QFileInfo>
 #include <QBuffer>
+#include <QCryptographicHash>
 #include <QImageReader>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -37,6 +38,18 @@
 namespace samn::ui {
 
 namespace {
+// <clip>.labels.broken.json, or .broken.2.json … when that is taken: an
+// older backup is never replaced.
+std::filesystem::path BrokenLabelsPath(const std::filesystem::path& labels) {
+    const std::string stem = labels.stem().u8string();  // "<clip>.labels"
+    std::error_code ec;
+    for (int n = 1;; ++n) {
+        const std::filesystem::path p = labels.parent_path() / std::filesystem::u8path(
+                                            stem + ".broken" + (n == 1 ? std::string() : "." + std::to_string(n)) + ".json");
+        if (!std::filesystem::exists(p, ec)) return p;
+    }
+}
+
 QString LocalPath(const QString& pathOrUrl) {
     const QUrl url(pathOrUrl);
     return url.isLocalFile() ? url.toLocalFile() : pathOrUrl;
@@ -663,19 +676,31 @@ bool LabelController::openVideo(const QString& pathOrUrl) {
         frame_ms_ = 1000.0 / fps;
         duration_ms_ = reader->frameCount() > 0 ? (reader->frameCount() - 1) * frame_ms_ : 0;
     }
-    video_path_ = path;
-    project_ = {};
-    undo_.clear();
-    redo_.clear();
+    samn::LabelProject loaded;
+    QString warning;
     const auto file = samn::LabelProjectPath(Fs(path));
     std::error_code ec;
     if (std::filesystem::exists(file, ec)) {
         try {
-            project_ = samn::LoadLabelProject(file);
+            loaded = samn::LoadLabelProject(file);
         } catch (const std::exception& e) {
-            setStatus(tr("The labels file could not be read (%1); starting empty.").arg(QString::fromUtf8(e.what())));
+            // The first save would write the empty project over it: the
+            // broken file is kept aside first, as Settings does.
+            const std::filesystem::path aside = BrokenLabelsPath(file);
+            std::filesystem::rename(file, aside, ec);
+            if (ec) {
+                setStatus(tr("The labels file could not be read (%1) nor kept aside (%2); fix or move it first.")
+                              .arg(QString::fromUtf8(e.what()), QString::fromStdString(ec.message())));
+                return false;
+            }
+            warning = tr("The labels file could not be read (%1); it is kept as %2, starting empty.")
+                          .arg(QString::fromUtf8(e.what()), QString::fromStdU16String(aside.filename().u16string()));
         }
     }
+    video_path_ = path;
+    project_ = std::move(loaded);
+    undo_.clear();
+    redo_.clear();
     project_.video = QFileInfo(path).fileName().toStdString();
     project_.duration_ms = int64_t(duration_ms_);
     current_ = project_.tracks.empty() ? QString() : QString::fromStdString(project_.tracks.front().label());
@@ -684,7 +709,9 @@ bool LabelController::openVideo(const QString& pathOrUrl) {
     emit currentLabelChanged();
     preview_ms_ = -1;
     seek(0);
-    if (status_.isEmpty() || !status_.startsWith(tr("The labels file")))
+    if (!warning.isEmpty())
+        setStatus(warning);
+    else
         setStatus(project_.tracks.empty() ? tr("Add a label, then drag its box on the frame.") : tr("Labels loaded."));
     return true;
 }
@@ -1207,10 +1234,28 @@ QVariantList LabelController::lanes() const {
     return out;
 }
 
+QString LabelController::trainingSetName(const QString& videoPath) {
+    const QFileInfo info(videoPath);
+    QString stem = info.completeBaseName();
+    while (stem.startsWith('.')) stem.remove(0, 1);  // a hidden folder would not be listed
+    if (stem.isEmpty()) return {};
+    // The name to read, and a short hash of the full path: clips of one
+    // name in different folders keep their own sets.
+    const QByteArray hash = QCryptographicHash::hash(QDir::cleanPath(info.absoluteFilePath()).toUtf8(),
+                                                     QCryptographicHash::Sha256)
+                                .toHex()
+                                .left(8);
+    return stem + QLatin1Char('-') + QString::fromLatin1(hash);
+}
+
 int LabelController::addToTrainingSet(double everyMs) {
     if (!hasVideo()) return -1;
-    const QString dir = QString::fromStdU16String((samn::config_dir() / "ai" / "datasets").u16string()) + "/" +
-                        QFileInfo(video_path_).completeBaseName();
+    const QString name = trainingSetName(video_path_);
+    if (name.isEmpty()) {
+        setStatus(tr("A clip without a name cannot go into the training set; rename it first."));
+        return -1;
+    }
+    const QString dir = QString::fromStdU16String((samn::config_dir() / "ai" / "datasets").u16string()) + "/" + name;
     QDir(dir).removeRecursively();
     const int n = exportDataset(dir, everyMs);
     if (n >= 0) setStatus(tr("%n sample(s) of %1 in the training set.", "", n).arg(QFileInfo(video_path_).fileName()));

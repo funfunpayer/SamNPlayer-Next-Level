@@ -21,9 +21,10 @@ void Notices::error(const QString& text) { AppLog::instance().reportError(text);
 void Notices::show(const QString& raw) {
     const QString text = raw.trimmed();
     if (text.isEmpty()) return;
-    // The same failure twice in a row is one toast (a retry, two sources).
-    if (!toasts_.isEmpty() && toasts_.last().text == text) return;
     const QString shown = text.size() > kMaxChars ? text.left(kMaxChars - 3) + QStringLiteral("…") : text;
+    // The same failure twice in a row is one toast (a retry, two sources);
+    // the toast keeps the shortened text, so that is what is compared.
+    if (!toasts_.isEmpty() && toasts_.last().text == shown) return;
     const int id = next_id_++;
     toasts_.append({id, shown});
     while (toasts_.size() > kMax) toasts_.removeFirst();

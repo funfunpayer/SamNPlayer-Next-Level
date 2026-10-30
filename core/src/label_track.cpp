@@ -352,7 +352,7 @@ void SaveLabelProject(const std::filesystem::path& path, const LabelProject& p) 
 
 LabelProject LoadLabelProject(const std::filesystem::path& path) {
     std::ifstream in(path, std::ios::binary);
-    if (!in) throw std::runtime_error("labels: cannot read " + path.string());
+    if (!in) throw std::runtime_error("labels: cannot read " + path.u8string());
     std::ostringstream data;
     data << in.rdbuf();
     return ParseLabelProject(data.str());

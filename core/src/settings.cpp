@@ -143,7 +143,7 @@ void Settings::set_many(const std::map<std::string, nlohmann::json>& values) {
     try {
         WriteFileAtomic(path_, data_.dump(2, ' ', true));
     } catch (const std::exception&) {
-        throw std::runtime_error("cannot write settings file: " + path_.string());
+        throw std::runtime_error("cannot write settings file: " + path_.u8string());
     }
     stamp_ = fs::last_write_time(path_, ec);
     size_ = fs::file_size(path_, ec);

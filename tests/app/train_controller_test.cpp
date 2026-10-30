@@ -168,6 +168,28 @@ private slots:
         QVERIFY(!missing.train());
         QVERIFY(missing.trainStatus().contains("script is missing"));
     }
+
+    // A Python that cannot start ends the run with a reason; a new one can start.
+    void aPythonThatCannotStartEndsTheRun() {
+        TrainController c;
+        c.setTrainScript(kData + "/fake_train.py");
+        QVERIFY(c.envReady());
+        const QString python = c.envPython(), aside = python + ".aside";
+        QVERIFY(QFile::rename(python, aside));
+        {
+            QFile stub(python);
+            QVERIFY(stub.open(QIODevice::WriteOnly));
+            stub.write("not a program\n");
+        }
+        QVERIFY(QFile::setPermissions(python, QFile::ReadOwner | QFile::WriteOwner));
+        c.train();
+        QTRY_VERIFY_WITH_TIMEOUT(!c.training(), 10000);
+        QVERIFY2(c.trainStatus().contains("cannot start"), qPrintable(c.trainStatus()));
+        QVERIFY(QFile::remove(python));
+        QVERIFY(QFile::rename(aside, python));
+        QVERIFY(c.train());  // not stuck
+        QTRY_VERIFY_WITH_TIMEOUT(!c.training(), 60000);
+    }
 };
 
 QTEST_GUILESS_MAIN(TrainControllerTest)

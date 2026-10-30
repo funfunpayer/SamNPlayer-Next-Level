@@ -29,7 +29,7 @@ void WriteFileAtomic(const fs::path& target, const std::string& data) {
         dir / (L"." + target.filename().wstring() + L".tmp-" + std::to_wstring(GetCurrentProcessId()) +
                L"-" + std::to_wstring(counter++));
     HANDLE h = CreateFileW(tmp.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (h == INVALID_HANDLE_VALUE) throw std::runtime_error("cannot create a temp file next to " + target.string());
+    if (h == INVALID_HANDLE_VALUE) throw std::runtime_error("cannot create a temp file next to " + target.u8string());
     bool ok = true;
     size_t off = 0;
     while (ok && off < data.size()) {
@@ -42,14 +42,14 @@ void WriteFileAtomic(const fs::path& target, const std::string& data) {
     CloseHandle(h);
     if (!ok || !MoveFileExW(tmp.c_str(), target.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
         DeleteFileW(tmp.c_str());
-        throw std::runtime_error("cannot write " + target.string());
+        throw std::runtime_error("cannot write " + target.u8string());
     }
 #else
     std::string tpl = (dir / ("." + target.filename().string() + ".tmp-XXXXXX")).string();
     std::vector<char> buf(tpl.begin(), tpl.end());
     buf.push_back('\0');
     const int fd = mkstemp(buf.data());
-    if (fd < 0) throw std::runtime_error("cannot create a temp file next to " + target.string());
+    if (fd < 0) throw std::runtime_error("cannot create a temp file next to " + target.u8string());
     const std::string tmp(buf.data());
     bool ok = true;
     size_t off = 0;
@@ -71,7 +71,7 @@ void WriteFileAtomic(const fs::path& target, const std::string& data) {
     ::close(fd);
     if (!ok || ::rename(tmp.c_str(), target.c_str()) != 0) {
         ::unlink(tmp.c_str());
-        throw std::runtime_error("cannot write " + target.string());
+        throw std::runtime_error("cannot write " + target.u8string());
     }
 #endif
 }

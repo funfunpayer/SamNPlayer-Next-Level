@@ -65,7 +65,9 @@ std::string Num(int64_t v) { return std::to_string(v); }
 }  // namespace
 
 std::filesystem::path ProjectPathFor(const std::filesystem::path& media_path) {
-    const std::string s = media_path.string();
+    // UTF-8 on every system (string() is the ANSI code page on Windows and
+    // throws for a name outside it).
+    const std::string s = media_path.u8string();
     size_t dot = std::string::npos;
     for (size_t i = s.size(); i-- > 0;) {
         if (s[i] == '/' || s[i] == std::filesystem::path::preferred_separator) break;
@@ -74,7 +76,7 @@ std::filesystem::path ProjectPathFor(const std::filesystem::path& media_path) {
             break;
         }
     }
-    return std::filesystem::path((dot == std::string::npos ? s : s.substr(0, dot)) + ".snp.json");
+    return std::filesystem::u8path((dot == std::string::npos ? s : s.substr(0, dot)) + ".snp.json");
 }
 
 std::string ProjectToJson(const Project& p) {
@@ -117,7 +119,7 @@ void SaveProject(const std::filesystem::path& path, const Project& p) {
 
 Project LoadProject(const std::filesystem::path& path) {
     std::ifstream in(path, std::ios::binary);
-    if (!in) throw ProjectError("open " + path.string() + ": cannot read file");
+    if (!in) throw ProjectError("open " + path.u8string() + ": cannot read file");
     std::stringstream ss;
     ss << in.rdbuf();
 

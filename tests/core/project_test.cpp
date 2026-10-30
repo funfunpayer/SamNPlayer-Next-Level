@@ -72,6 +72,22 @@ TEST_CASE("ProjectPathFor follows Go filepath.Ext") {
     CHECK(ProjectPathFor(".hidden") == fs::path(".snp.json"));
 }
 
+// A media path outside the Windows ANSI code page round-trips.
+TEST_CASE("ProjectPathFor keeps a non-ASCII path") {
+    TmpDir tmp;
+    const fs::path folder = tmp.dir / fs::u8path(u8"テスト");
+    fs::create_directories(folder);
+    const fs::path path = ProjectPathFor(folder / fs::u8path(u8"clip ✓.samn"));
+    CHECK(path == folder / fs::u8path(u8"clip ✓.snp.json"));
+    CHECK(path.filename().u8string() == u8"clip ✓.snp.json");
+    Project p;
+    p.video_path = u8"clip ✓.mp4";
+    p.offset_ms = 12;
+    SaveProject(path, p);
+    CHECK(LoadProject(path).offset_ms == 12);
+    CHECK(LoadProject(path).video_path == u8"clip ✓.mp4");
+}
+
 // Expected bytes come from Go: json.MarshalIndent(p, "", "  ") of the same Project
 // (SaveProject on /home/user/SamNPlayer funscript, go1.24).
 TEST_CASE("SaveProject writes the bytes of Go MarshalIndent") {
