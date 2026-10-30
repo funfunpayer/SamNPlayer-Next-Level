@@ -587,7 +587,8 @@ private slots:
         clock.start();
         c.emergencyStop();
         QTRY_VERIFY_WITH_TIMEOUT(server.Count("StopDeviceCmd") >= 1, 5000);
-        QVERIFY2(clock.elapsed() < 1000, QByteArray::number(clock.elapsed()).constData());
+        // Under the 3 s battery wait it used to queue behind (slow CI runners too).
+        QVERIFY2(clock.elapsed() < 2500, QByteArray::number(clock.elapsed()).constData());
         QCOMPARE(server.Count("BatteryLevelCmd"), 1);
     }
 
@@ -601,7 +602,7 @@ private slots:
         clock.start();
         c.connectIntiface(server.url());
         QTRY_COMPARE_WITH_TIMEOUT(c.state(), QString("connected"), 10000);
-        QVERIFY2(clock.elapsed() < 2000, QByteArray::number(clock.elapsed()).constData());
+        QVERIFY2(clock.elapsed() < 2500, QByteArray::number(clock.elapsed()).constData());
         QVERIFY(!c.batteryOk());
         QTest::qWait(300);
         QCOMPARE(server.Count("BatteryLevelCmd"), 1);

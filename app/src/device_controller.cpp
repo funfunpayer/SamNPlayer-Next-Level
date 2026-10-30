@@ -45,10 +45,14 @@ constexpr const char* kPrefConnectTest = "device.connect_test";
 constexpr int kConnectTimeoutMs = 20000;
 constexpr int kIntifaceConnectTimeoutMs = 30000;
 
-// How long a stop, with the close after it, may wait for a link that stopped
-// answering. A healthy Sam Neo 2 acknowledges each off packet in well under
-// 100 ms; the bound only keeps a quit from hanging.
-constexpr int kStopBudgetMs = 4000;
+// How long stops that follow each other (a stop, the close after it, the
+// quit) may wait together for a link that stopped answering: two off packets
+// at BleTransport's 3 s write timeout. A healthy Sam Neo 2 acknowledges each
+// in well under 100 ms; the bound only keeps a quit from hanging.
+constexpr int kStopBudgetMs = 6500;
+// A stop that starts within this long after the budget ran out does not wait
+// again: the link is gone (review of #138: stop + disconnect cost 2 budgets).
+constexpr int kStopGraceMs = 1000;
 
 constexpr const char* kNoDevice = "no device connected \xE2\x80\x94 connect in Settings \xE2\x86\x92 Device first";
 
@@ -193,6 +197,7 @@ private:
     // off packets short (a Sam Neo 2 write waits for its acknowledgement).
     void BeginStopWindow();
     void EndStopWindow();
+    QElapsedTimer stop_clock_;  // the shared stop deadline (BeginStopWindow)
     dev::LogSink LogSink();
     samn::Settings& Settings();
 
@@ -389,8 +394,9 @@ std::function<bool()> DeviceWorker::SessionCancel() const {
 
 void DeviceWorker::BeginStopWindow() {
     if (!session_ || !session_->transport) return;
-    QElapsedTimer clock;
-    clock.start();
+    // One deadline for stops that follow each other.
+    if (!stop_clock_.isValid() || stop_clock_.hasExpired(kStopBudgetMs + kStopGraceMs)) stop_clock_.start();
+    const QElapsedTimer clock = stop_clock_;
     session_->transport->SetCancel([clock] { return clock.hasExpired(kStopBudgetMs); });
 }
 
@@ -592,7 +598,9 @@ void DeviceWorker::Connect(QString kind, QString target) {
         waiter_->Sleep(150);
         (void)session_->device->SetSuction(0.3);
         waiter_->Sleep(150);
+        BeginStopWindow();
         const dev::Status s = session_->device->Stop();
+        EndStopWindow();
         if (!s) EmitLog(dev::LogLevel::kWarn, "device: post-connect stop failed: " + s.message);
     }
 

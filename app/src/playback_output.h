@@ -206,8 +206,9 @@ private:
     void save(const char* key, const nlohmann::json& value);
     void load();
     int moveMs(qint64 dueAt, qint64 now) const;
-    // The shortest move (real ms) over `way` (0-1 of the range) the speed
-    // limit allows; 0 without a limit.
+    // The shortest move (real ms) over `way` the speed limit allows; 0
+    // without a limit. `way` is device travel (0-1) after the stroke range
+    // mapping, so a narrowed range moves the device no faster than the limit.
     int speedLimitMs(double way) const;
     qint64 now() const { return clock_ ? clock_() : mono_.elapsed(); }
     void rampTick();

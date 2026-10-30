@@ -120,16 +120,25 @@ void PlaybackOutput::save(const char* key, const nlohmann::json& value) {
 }
 
 PlaybackOutput::~PlaybackOutput() {
-    // The session hold is this output's own: it ends with it.
-    if (playing_ && device_) device_->setSessionActiveFor(this, false);
+    // The session hold is this output's own: it ends with it, and so does
+    // what it was sending.
+    if (playing_ && device_) {
+        if (!halted_) device_->stop();
+        device_->setSessionActiveFor(this, false);
+    }
 }
 
 void PlaybackOutput::setDevice(DeviceController* device) {
     if (device_ == device) return;
     if (playing_ && device_) device_->setSessionActiveFor(this, false);
     device_ = device;
-    if (playing_ && device_) device_->setSessionActiveFor(this, true);
+    // An emergency stop gave the hold up; output stays halted until a new play.
+    if (playing_ && !halted_ && device_) device_->setSessionActiveFor(this, true);
     resetTargets();
+    // Where the new device is, is not known: moves from there are measured
+    // over the whole range (speed limit, soft seek).
+    lastPos_ = -1;
+    for (auto& entry : axes_) entry.second.lastPos = -1;
     quiet_ = true;
 }
 
