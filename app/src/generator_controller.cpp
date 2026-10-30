@@ -349,24 +349,30 @@ bool GeneratorController::runQueue(bool overwrite) {
     emit queueChanged();
     emit progressChanged();
     setStatus(tr("Creating the queue…"));
+    // Videos whose script this queue wrote, also in an earlier run: one script
+    // name, one video.
+    std::vector<std::filesystem::path> written;
+    for (const QVariant& v : queue_) {
+        const QVariantMap m = v.toMap();
+        if (m.value("status").toString() == QLatin1String("done"))
+            written.emplace_back(m.value("path").toString().toStdU16String());
+    }
     QPointer<GeneratorController> self(this);
-    queue_worker_ = std::thread([self, items, settings, cancel = queue_cancel_] {
+    queue_worker_ = std::thread([self, items, settings, earlier = std::move(written), cancel = queue_cancel_]() mutable {
         auto post = [self](auto fn) {
             QMetaObject::invokeMethod(qApp, [self, fn] { if (self) fn(self.data()); }, Qt::QueuedConnection);
         };
         const int total = int(items.size());
-        std::vector<std::filesystem::path> earlier;  // videos of this run: one script name, one video
         for (int n = 0; n < total; ++n) {
             const auto& [index, video] = items[size_t(n)];
+            if (cancel->load()) {
+                post([index](GeneratorController* g) { g->setQueueItem(index, "canceled", {}); });
+                continue;
+            }
             const std::string clash = engine::ScriptNameCollision(earlier, video);
-            earlier.push_back(video);
             if (!clash.empty()) {
                 const QString message = QString::fromStdString(clash);
                 post([index, message](GeneratorController* g) { g->setQueueItem(index, "failed", message); });
-                continue;
-            }
-            if (cancel->load()) {
-                post([index](GeneratorController* g) { g->setQueueItem(index, "canceled", {}); });
                 continue;
             }
             post([index](GeneratorController* g) { g->setQueueItem(index, "running", {}); });
@@ -383,6 +389,7 @@ bool GeneratorController::runQueue(bool overwrite) {
                 r.status = engine::QueueItemStatus::kFailed;
                 r.message = e.what();
             }
+            if (r.status == engine::QueueItemStatus::kDone) earlier.push_back(video);  // only a written script blocks
             static const char* const names[] = {"done", "skipped", "failed", "canceled"};
             const QString status = QString::fromLatin1(names[int(r.status)]);
             const QString message = QString::fromStdString(r.message);
@@ -843,7 +850,6 @@ bool GeneratorController::addContactArea(const QRect& area) {
                       : tr("Optional contact zone set."));
     }
     emit contactChanged();
-    if (!extra) emit feelChanged();  // the auto scene follows the primary class
     return true;
 }
 
@@ -881,7 +887,6 @@ void GeneratorController::removeContactArea(int index) {
     if (index == 0 && !contact_areas_.empty() && contact_areas_.front().cls.empty())
         contact_areas_.front().cls = contact_class_.toStdString();
     emit contactChanged();
-    if (index == 0) emit feelChanged();  // the auto scene follows the primary class
 }
 
 void GeneratorController::setAreaClass(int index, const QString& cls) {
@@ -893,16 +898,13 @@ void GeneratorController::setAreaClass(int index, const QString& cls) {
     setStatus(primary ? tr("Contact type → %1").arg(cls)
                       : tr("Extra contact class → %1").arg(cls.isEmpty() ? tr("any") : cls));
     emit contactChanged();
-    if (primary) emit feelChanged();  // the auto scene follows the primary class
 }
 
 void GeneratorController::clearContactAreas() {
     if (contact_areas_.empty() && !mark_contact_ && !mark_extra_) return;
-    const bool had = !contact_areas_.empty();
     contact_areas_.clear();
     mark_contact_ = mark_extra_ = false;
     emit contactChanged();
-    if (had) emit feelChanged();  // no primary class: the auto scene changes
 }
 
 void GeneratorController::clearExtras() {

@@ -738,6 +738,15 @@ private slots:
         QCOMPARE(item(0).value("status").toString(), QStringLiteral("done"));
         QCOMPARE(item(1).value("status").toString(), QStringLiteral("failed"));
         QCOMPARE(item(1).value("message").toString(), QStringLiteral("same script name as x.mp4"));
+
+        // A later run counts what an earlier one wrote (review of #140).
+        const QString avi = own.filePath("x.avi");
+        clips::WriteMoving(std::filesystem::path(avi.toStdU16String()), 8, 80.0, 1.0);
+        QCOMPARE(g.addToQueue({avi}), 1);
+        QVERIFY(g.runQueue(true));
+        QTRY_COMPARE_WITH_TIMEOUT(finished.count(), 2, 60000);
+        QCOMPARE(item(2).value("status").toString(), QStringLiteral("failed"));
+        QCOMPARE(item(2).value("message").toString(), QStringLiteral("same script name as x.mp4"));
     }
 
     void cancelStopsTheRunAndWritesNothing() {

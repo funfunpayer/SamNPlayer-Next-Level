@@ -263,36 +263,44 @@ GenerateRunner::~GenerateRunner() {
 }
 
 uint64_t GenerateRunner::Start(GenerateRequest request) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (running_) return 0;
-    if (worker_.joinable()) {
-        // A restart from the terminal event runs on the old worker itself:
-        // it cannot join itself, so it is parked and joined by a later call.
-        if (worker_.get_id() == std::this_thread::get_id())
-            retired_.push_back(std::move(worker_));
-        else
-            worker_.join();  // the previous run has ended
-    }
-    cancel_ = false;
-    running_ = true;
-    const uint64_t id = ++next_id_;
-    current_id_ = id;
-    // The run is over once its terminal event is about to go out, so the
-    // handler may Start the next one (the flag is not cleared afterwards:
-    // by then it may belong to that next run).
-    auto finish = [this, id] {
-        std::lock_guard<std::mutex> l(mutex_);
-        if (current_id_ == id) running_ = false;
-    };
-    worker_ = std::thread([this, id, finish, req = std::move(request)] {
-        Generate(req, id, [this] { return cancel_.load(); }, [this, finish](const GenerateEvent& e) {
-            if (e.kind == GenerateEventKind::kDone || e.kind == GenerateEventKind::kCanceled ||
-                e.kind == GenerateEventKind::kError)
-                finish();
-            if (on_event_) on_event_(e);
+    std::thread previous;
+    uint64_t id = 0;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        id = next_id_ + 1;
+        uint64_t idle = 0;
+        if (!active_id_.compare_exchange_strong(idle, id)) return 0;  // a run is still going
+        next_id_ = id;
+        if (worker_.joinable()) {
+            // A restart from the terminal event runs on the old worker itself:
+            // it cannot join itself, so it is parked and joined by Wait().
+            if (worker_.get_id() == std::this_thread::get_id())
+                retired_.push_back(std::move(worker_));
+            else
+                previous = std::move(worker_);
+        }
+        cancel_ = false;
+        // The run is over once its terminal event is about to go out, so its
+        // handler may Start the next one; giving back an id that is no longer
+        // the active one does nothing, so it never clears a newer run.
+        auto finish = [this, id] {
+            uint64_t mine = id;
+            active_id_.compare_exchange_strong(mine, 0);
+        };
+        worker_ = std::thread([this, id, finish, req = std::move(request)] {
+            Generate(req, id, [this] { return cancel_.load(); }, [this, finish](const GenerateEvent& e) {
+                if (e.kind == GenerateEventKind::kDone || e.kind == GenerateEventKind::kCanceled ||
+                    e.kind == GenerateEventKind::kError)
+                    finish();
+                if (on_event_) on_event_(e);
+            });
+            finish();
         });
-        finish();
-    });
+    }
+    // The previous worker has sent its terminal event and only returns now
+    // (its give-back takes no lock); it is joined outside the lock, so it
+    // never waits on this Start (review of #140: a deadlock).
+    if (previous.joinable()) previous.join();
     return id;
 }
 

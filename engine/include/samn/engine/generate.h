@@ -83,7 +83,7 @@ public:
     // The new run's id, or 0 when a run is still going (single instance).
     uint64_t Start(GenerateRequest request);
     void Cancel();
-    bool running() const { return running_; }
+    bool running() const { return active_id_.load() != 0; }
     // Waits for the current run to end (tests, shutdown).
     void Wait();
 
@@ -92,10 +92,12 @@ private:
     std::mutex mutex_;
     std::thread worker_;
     std::vector<std::thread> retired_;  // workers that restarted the runner from their own event
-    std::atomic<bool> running_{false};
+    // The running run's id, 0 when idle. Taken and given back without the
+    // mutex: a worker ending its run must never wait for a Start that is
+    // joining it (review of #140).
+    std::atomic<uint64_t> active_id_{0};
     std::atomic<bool> cancel_{false};
-    uint64_t next_id_ = 0;
-    uint64_t current_id_ = 0;  // the run that owns running_; guarded by mutex_
+    uint64_t next_id_ = 0;  // guarded by mutex_
 };
 
 }  // namespace samn::engine
