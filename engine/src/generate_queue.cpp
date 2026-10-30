@@ -1,6 +1,7 @@
 #include "samn/engine/generate_queue.h"
 
 #include <algorithm>
+#include <cwctype>
 #include <system_error>
 
 #include "samn/engine/tip_find.h"
@@ -15,19 +16,19 @@ std::filesystem::path ScriptPathForVideo(const std::filesystem::path& video) {
 }
 
 namespace {
-// Windows file names ignore case: X.mp4 and x.mkv write the same x.funscript.
-std::string ScriptKey(const std::filesystem::path& video) {
-    std::string key = ScriptPathForVideo(video).u8string();
-#ifdef _WIN32
-    for (char& c : key)
-        if (c >= 'A' && c <= 'Z') c = char(c - 'A' + 'a');
+// Windows and macOS file names ignore case by default: X.mp4 and x.mkv write
+// the same x.funscript (also É and é: folded by the C library's towlower).
+std::wstring ScriptKey(const std::filesystem::path& video) {
+    std::wstring key = ScriptPathForVideo(video).lexically_normal().make_preferred().wstring();
+#if defined(_WIN32) || defined(__APPLE__)
+    for (wchar_t& c : key) c = static_cast<wchar_t>(std::towlower(static_cast<std::wint_t>(c)));
 #endif
     return key;
 }
 }  // namespace
 
 std::string ScriptNameCollision(const std::vector<std::filesystem::path>& earlier, const std::filesystem::path& video) {
-    const std::string script = ScriptKey(video);
+    const std::wstring script = ScriptKey(video);
     for (const auto& e : earlier)
         if (ScriptKey(e) == script) return "same script name as " + e.filename().u8string();
     return {};
