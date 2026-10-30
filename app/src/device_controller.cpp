@@ -45,6 +45,11 @@ constexpr const char* kPrefConnectTest = "device.connect_test";
 constexpr int kConnectTimeoutMs = 20000;
 constexpr int kIntifaceConnectTimeoutMs = 30000;
 
+// How long a stop, with the close after it, may wait for a link that stopped
+// answering. A healthy Sam Neo 2 acknowledges each off packet in well under
+// 100 ms; the bound only keeps a quit from hanging.
+constexpr int kStopBudgetMs = 4000;
+
 constexpr const char* kNoDevice = "no device connected \xE2\x80\x94 connect in Settings \xE2\x86\x92 Device first";
 
 QString Q(const std::string& s) { return QString::fromStdString(s); }
@@ -137,6 +142,9 @@ public:
         if (ble_scan_ms > 0) ble_scan_ms_ = ble_scan_ms;
     }
     void SetDiagnosticsOptions(dev::DiagnosticsOptions options) { diag_options_ = std::move(options); }
+    void SetBleTransportFactory(std::function<std::unique_ptr<QtTransport>()> factory) {
+        ble_factory_ = std::move(factory);
+    }
     void Shutdown();
 
 private:
@@ -177,6 +185,14 @@ private:
     void SchedulePump();
     void Pump();
     void DestroySession(bool stop_first);
+    // The transport's cancel while connected: a disconnect or quit (abort_)
+    // ends a wait, e.g. a battery read.
+    std::function<bool()> SessionCancel() const;
+    // A stop gets a cancel of its own, bounded by kStopBudgetMs: abort_ is
+    // set by a disconnect or quit BEFORE the stop runs, and would cut the
+    // off packets short (a Sam Neo 2 write waits for its acknowledgement).
+    void BeginStopWindow();
+    void EndStopWindow();
     dev::LogSink LogSink();
     samn::Settings& Settings();
 
@@ -203,6 +219,7 @@ private:
     std::map<std::string, double> motor_levels_;
     std::string last_command_error_;
     dev::DiagnosticsOptions diag_options_;
+    std::function<std::unique_ptr<QtTransport>()> ble_factory_;
     std::unique_ptr<samn::Settings> settings_;
 };
 
@@ -365,9 +382,28 @@ void DeviceWorker::HandleLost(const std::string& why) {
     EmitSnapshot(false);
 }
 
+std::function<bool()> DeviceWorker::SessionCancel() const {
+    DeviceController* ctl = ctl_;
+    return [ctl] { return ctl->abort_.load(); };
+}
+
+void DeviceWorker::BeginStopWindow() {
+    if (!session_ || !session_->transport) return;
+    QElapsedTimer clock;
+    clock.start();
+    session_->transport->SetCancel([clock] { return clock.hasExpired(kStopBudgetMs); });
+}
+
+void DeviceWorker::EndStopWindow() {
+    if (session_ && session_->transport) session_->transport->SetCancel(SessionCancel());
+}
+
 void DeviceWorker::DestroySession(bool stop_first) {
     if (tick_timer_) tick_timer_->stop();
     if (!session_) return;
+    // The stop and the device's own stop in Disconnect() share one budget;
+    // the session (and its transport) goes away right after.
+    BeginStopWindow();
     if (stop_first) {
         // Always switch off before closing, or a device that just got a test
         // pulse keeps running (0.7).
@@ -494,7 +530,7 @@ void DeviceWorker::Connect(QString kind, QString target) {
         options.service_uuid = protocol.ServiceUuid();
         options.characteristic_uuid = protocol.CharacteristicUuid();
         options.scan_timeout_ms = ble_scan_ms_;
-        se->transport = std::make_unique<BleTransport>(options);
+        se->transport = ble_factory_ ? ble_factory_() : std::make_unique<BleTransport>(options);
         auto device = std::make_unique<dev::SamNeo2Device>(*se->transport);
         device->SetLogSink(LogSink());
         se->neo = device.get();
@@ -514,7 +550,7 @@ void DeviceWorker::Connect(QString kind, QString target) {
         latency.start();
         result = se->device->Connect();
         se->connect_latency_ms = latency.nsecsElapsed() / 1e6;
-        if (se->transport) se->transport->SetCancel([ctl] { return ctl->abort_.load(); });
+        if (se->transport) se->transport->SetCancel(SessionCancel());
     }
 
     connecting_ = false;
@@ -576,7 +612,9 @@ void DeviceWorker::Stop(bool silent) {
         if (!silent) CommandError(kNoDevice);
         return;
     }
+    BeginStopWindow();
     const dev::Status s = session_->device->Stop();
+    EndStopWindow();
     if (!s)
         CommandError(s.message);
     else
@@ -819,14 +857,17 @@ void DeviceController::applyDiagnosticsRunning(bool running) {
     emit diagnosticsRunningChanged();
 }
 
-void DeviceController::setSessionActive(bool active) {
-    if (session_active_ == active) return;
-    session_active_ = active;
-    emit sessionActiveChanged();
+void DeviceController::setSessionActiveFor(const QObject* owner, bool active) {
+    const bool was = sessionActive();
+    if (active)
+        session_holders_.insert(owner);
+    else
+        session_holders_.erase(owner);
+    if (sessionActive() != was) emit sessionActiveChanged();
 }
 
 void DeviceController::connectDevice(const QString& kind, const QString& target) {
-    if (session_active_) {
+    if (sessionActive()) {
         reportError("playback or training is in progress \xE2\x80\x94 stop it first; the device can only "
                     "hold one connection at a time");
         return;
@@ -841,7 +882,7 @@ void DeviceController::connectDevice(const QString& kind, const QString& target)
 }
 
 void DeviceController::disconnectDevice() {
-    if (session_active_) {
+    if (sessionActive()) {
         reportError("playback or training is using this connection \xE2\x80\x94 stop it there first");
         return;
     }
@@ -899,7 +940,7 @@ void DeviceController::setMotorLevels(const QVariantMap& levels) {
 }
 
 void DeviceController::testRawValue(const QString& channel, int value) {
-    if (session_active_) {
+    if (sessionActive()) {
         reportError("device test not available during playback or training");
         return;
     }
@@ -926,7 +967,7 @@ void DeviceController::refreshStatus() {
 }
 
 void DeviceController::runDiagnostics() {
-    if (session_active_) {
+    if (sessionActive()) {
         reportError("device test not available during playback or training");
         return;
     }
@@ -955,6 +996,10 @@ void DeviceController::setBleScanTimeoutMs(int ms) {
 
 void DeviceController::setDiagnosticsOptions(const samn::device::DiagnosticsOptions& options) {
     worker_->Post([w = worker_, options] { w->SetDiagnosticsOptions(options); });
+}
+
+void DeviceController::setBleTransportFactory(std::function<std::unique_ptr<QtTransport>()> factory) {
+    worker_->Post([w = worker_, factory = std::move(factory)] { w->SetBleTransportFactory(factory); });
 }
 
 }  // namespace samn::ui

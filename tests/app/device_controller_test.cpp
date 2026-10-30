@@ -5,11 +5,16 @@
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QtTest>
+#include <atomic>
 #include <memory>
+#include <mutex>
+#include <vector>
 
 #include "device_controller.h"
+#include "device_io/qt_transport.h"
 #include "device_io/serial_line_transport.h"
 #include "fake_servers.h"
+#include "samn/device/protocol.h"
 #include "samn/device/tcode.h"
 
 using samn::ui::DeviceController;
@@ -21,6 +26,74 @@ QStringList MockLines(const QSignalSpy& log) {
     for (const auto& args : log)
         if (args.at(0).toString().startsWith("[mock]")) out << args.at(0).toString();
     return out;
+}
+
+using samn::device::Bytes;
+
+// What the stand-in Sam Neo 2 received; shared with the test thread.
+struct FakeNeoLink {
+    std::mutex mutex;
+    std::vector<Bytes> written;  // acknowledged writes, in order
+    std::atomic<bool> hang{false};  // from now on no write is acknowledged
+    std::vector<Bytes> Written() {
+        std::lock_guard<std::mutex> lock(mutex);
+        return written;
+    }
+};
+
+// The Sam Neo 2's Bluetooth link without Bluetooth: a write with response
+// waits for its acknowledgement (a few ms) with the controller's cancel, the
+// way BleTransport::Send does.
+class FakeNeoTransport : public samn::ui::QtTransport {
+public:
+    explicit FakeNeoTransport(std::shared_ptr<FakeNeoLink> link) : link_(std::move(link)) {}
+    samn::device::Status Connect() override {
+        open_ = true;
+        return samn::device::Status::Ok();
+    }
+    void Disconnect() override { open_ = false; }
+    bool IsConnected() const override { return open_; }
+    samn::device::Status Send(const Bytes& data, samn::device::WriteMode) override {
+        if (!open_) return Fail("Bluetooth: not connected");
+        QElapsedTimer clock;
+        clock.start();
+        const bool acked = waiter_.Until([&] { return !link_->hang && clock.elapsed() >= 5; }, 60000,
+                                         [this] { return Cancelled(); });
+        if (!acked) return Fail(Cancelled() ? "Bluetooth: cancelled" : "Bluetooth: GATT write timeout");
+        std::lock_guard<std::mutex> lock(link_->mutex);
+        link_->written.push_back(data);
+        return samn::device::Status::Ok();
+    }
+    samn::device::ReceiveResult Receive(std::chrono::milliseconds) override {
+        return samn::device::ReceiveResult::Timeout();
+    }
+    samn::device::PeerInfo Peer() const override { return {"Sam Neo 2 (stand-in)", "00:11:22:33:44:55", -40}; }
+
+private:
+    std::shared_ptr<FakeNeoLink> link_;
+    bool open_ = false;
+};
+
+// A "ble" connect of `c` reaches the stand-in; vibration and suction are on.
+void ConnectFakeNeo(DeviceController& c, const std::shared_ptr<FakeNeoLink>& link) {
+    c.setBleTransportFactory([link] { return std::make_unique<FakeNeoTransport>(link); });
+    c.connectSamNeo2();
+    QTRY_COMPARE(c.state(), QString("connected"));
+    c.setVibration(0.6);
+    c.setSuction(0.5);
+    QTRY_COMPARE(link->Written().size(), std::size_t(2));
+}
+
+// Both off packets arrived after the last "on" packet.
+bool EndsSwitchedOff(const std::vector<Bytes>& written) {
+    const samn::device::SamNeo2Protocol proto;
+    bool vibration_off = false, suction_off = false;
+    for (std::size_t i = 2; i < written.size(); ++i) {
+        if (written[i] == proto.EncodeVibration(0)) vibration_off = true;
+        else if (written[i] == proto.EncodeSuction(0)) suction_off = true;
+        else return false;  // anything but "off" after the stop
+    }
+    return vibration_off && suction_off;
 }
 }  // namespace
 
@@ -131,6 +204,32 @@ private slots:
         c.setSessionActive(false);
         c.disconnectDevice();
         QTRY_COMPARE(c.state(), QString("disconnected"));
+    }
+
+    // Playback and Training hold the session each on their own: one of them
+    // ending leaves connect, disconnect and the device tests refused.
+    void sessionHoldsArePerOwner() {
+        DeviceController c;
+        QObject playback, training;
+        QSignalSpy changed(&c, &DeviceController::sessionActiveChanged);
+        c.setSessionActiveFor(&playback, true);
+        c.setSessionActiveFor(&training, true);
+        QCOMPARE(changed.count(), 1);
+        c.setSessionActiveFor(&training, false);
+        QVERIFY(c.sessionActive());
+        QCOMPARE(changed.count(), 1);
+        c.connectMock();
+        QVERIFY(c.lastError().contains("playback or training is in progress"));
+        c.runDiagnostics();
+        QVERIFY(c.lastError().contains("not available during playback"));
+        QVERIFY(!c.diagnosticsRunning());
+        c.setSessionActiveFor(&training, false);  // a second release changes nothing
+        QVERIFY(c.sessionActive());
+        c.setSessionActiveFor(&playback, false);
+        QVERIFY(!c.sessionActive());
+        QCOMPARE(changed.count(), 2);
+        c.connectMock();
+        QTRY_COMPARE(c.state(), QString("connected"));
     }
 
     void levelsAreCoalescedNewestWins() {
@@ -420,6 +519,92 @@ private slots:
         // And the controller still works afterwards.
         c.connectMock();
         QTRY_COMPARE(c.state(), QString("connected"));
+    }
+
+    // A disconnect sets the abort flag before the worker's stop runs: the
+    // stop must still get both off packets through (with response, so they
+    // wait for the device), or the Sam Neo 2 keeps running.
+    void samNeo2DisconnectSwitchesBothChannelsOff() {
+        auto link = std::make_shared<FakeNeoLink>();
+        DeviceController c;
+        ConnectFakeNeo(c, link);
+        c.disconnectDevice();
+        QTRY_COMPARE(c.state(), QString("disconnected"));
+        const std::vector<Bytes> written = link->Written();
+        QVERIFY2(EndsSwitchedOff(written), qPrintable(QString("%1 writes").arg(written.size())));
+        QVERIFY2(c.lastError().isEmpty(), qPrintable(c.lastError()));
+    }
+
+    // Quitting the app while the toy runs switches it off as well.
+    void samNeo2QuitSwitchesBothChannelsOff() {
+        auto link = std::make_shared<FakeNeoLink>();
+        {
+            DeviceController c;
+            ConnectFakeNeo(c, link);
+        }
+        const std::vector<Bytes> written = link->Written();
+        QVERIFY2(EndsSwitchedOff(written), qPrintable(QString("%1 writes").arg(written.size())));
+    }
+
+    // Training's end: stop, then at once disconnect. The stop is not cut
+    // short and reports no error.
+    void samNeo2StopThenDisconnectIsClean() {
+        auto link = std::make_shared<FakeNeoLink>();
+        DeviceController c;
+        ConnectFakeNeo(c, link);
+        c.stop();
+        c.disconnectDevice();
+        QTRY_COMPARE(c.state(), QString("disconnected"));
+        QVERIFY(EndsSwitchedOff(link->Written()));
+        QVERIFY2(c.lastError().isEmpty(), qPrintable(c.lastError()));
+    }
+
+    // A link that stops acknowledging writes cannot hold up the quit forever.
+    void samNeo2HangingLinkDoesNotHoldUpTheQuit() {
+        auto link = std::make_shared<FakeNeoLink>();
+        QElapsedTimer clock;
+        {
+            DeviceController c;
+            ConnectFakeNeo(c, link);
+            link->hang = true;
+            clock.start();
+        }
+        QVERIFY2(clock.elapsed() < 8000, QByteArray::number(clock.elapsed()).constData());
+    }
+
+    // A server that never answers the battery read costs the wait once, not
+    // at every tick: the emergency stop reaches the device at once.
+    void intifaceMuteBatteryDoesNotBlockTheStop() {
+        FakeButtplugServer server(FakeButtplug::MessagesWithBattery());
+        server.battery = FakeButtplugServer::Battery::kMute;
+        DeviceController c;
+        c.setTickIntervalMs(50);
+        c.connectIntiface(server.url());
+        QTRY_COMPARE_WITH_TIMEOUT(c.state(), QString("connected"), 10000);  // after the first, unanswered read
+        QVERIFY(!c.batteryOk());
+        QTest::qWait(300);  // several ticks
+        QElapsedTimer clock;
+        clock.start();
+        c.emergencyStop();
+        QTRY_VERIFY_WITH_TIMEOUT(server.Count("StopDeviceCmd") >= 1, 5000);
+        QVERIFY2(clock.elapsed() < 1000, QByteArray::number(clock.elapsed()).constData());
+        QCOMPARE(server.Count("BatteryLevelCmd"), 1);
+    }
+
+    // A server that refuses the battery read: no wait at all.
+    void intifaceBatteryErrorEndsTheWait() {
+        FakeButtplugServer server(FakeButtplug::MessagesWithBattery());
+        server.battery = FakeButtplugServer::Battery::kError;
+        DeviceController c;
+        c.setTickIntervalMs(50);
+        QElapsedTimer clock;
+        clock.start();
+        c.connectIntiface(server.url());
+        QTRY_COMPARE_WITH_TIMEOUT(c.state(), QString("connected"), 10000);
+        QVERIFY2(clock.elapsed() < 2000, QByteArray::number(clock.elapsed()).constData());
+        QVERIFY(!c.batteryOk());
+        QTest::qWait(300);
+        QCOMPARE(server.Count("BatteryLevelCmd"), 1);
     }
 
     // --- Diagnostics ---

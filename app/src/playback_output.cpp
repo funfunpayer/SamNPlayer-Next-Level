@@ -119,9 +119,16 @@ void PlaybackOutput::save(const char* key, const nlohmann::json& value) {
     }
 }
 
+PlaybackOutput::~PlaybackOutput() {
+    // The session hold is this output's own: it ends with it.
+    if (playing_ && device_) device_->setSessionActiveFor(this, false);
+}
+
 void PlaybackOutput::setDevice(DeviceController* device) {
     if (device_ == device) return;
+    if (playing_ && device_) device_->setSessionActiveFor(this, false);
     device_ = device;
+    if (playing_ && device_) device_->setSessionActiveFor(this, true);
     resetTargets();
     quiet_ = true;
 }
@@ -157,7 +164,10 @@ void PlaybackOutput::resetTargets() {
     strokeNext_ = -1;
     soft_ = true;  // the next move eases in
     lastVib_ = lastSuc_ = -1;
-    for (auto& [name, a] : axes_) a.next = -1;
+    for (auto& [name, a] : axes_) {
+        a.next = -1;
+        a.soft = true;
+    }
 }
 
 bool PlaybackOutput::deviceReady() const { return device_ && device_->connected(); }
@@ -169,12 +179,12 @@ void PlaybackOutput::setPlaying(bool playing) {
         halted_ = false;
         resetTargets();
         lastAt_ = -1;
-        if (device_) device_->setSessionActive(true);
+        if (device_) device_->setSessionActiveFor(this, true);
     } else {
         stale_.stop();
         // After an emergency stop the device is already stopped: no home move.
         if (!halted_) goQuiet(true);
-        if (device_) device_->setSessionActive(false);
+        if (device_) device_->setSessionActiveFor(this, false);
     }
     emit playingChanged();
     emit extendedOChanged();
@@ -191,7 +201,10 @@ void PlaybackOutput::update(qint64 t) {
     if (lastAt_ >= 0 && (t < lastAt_ - kSoftSeekBackMs || t > lastAt_ + kSoftSeekJumpMs)) {
         soft_ = true;
         strokeNext_ = -1;
-        for (auto& [name, a] : axes_) a.next = -1;
+        for (auto& [name, a] : axes_) {
+            a.next = -1;
+            a.soft = true;
+        }
     }
     lastAt_ = t;
     // The first position after a start, a pause or a quiet period: the
@@ -243,6 +256,11 @@ int PlaybackOutput::moveMs(qint64 dueAt, qint64 now) const {
     return std::max<int>(kMinMoveMs, int(ms));
 }
 
+int PlaybackOutput::speedLimitMs(double way) const {
+    if (filter_.maxSpeed <= 0) return 0;
+    return int(std::ceil(way * 100.0 * 1000.0 / filter_.maxSpeed));
+}
+
 void PlaybackOutput::sendStroke(qint64 t) {
     if (!device_->capLinear() || filtered_.empty()) return;
     if (!strokeOn_) {
@@ -257,10 +275,12 @@ void PlaybackOutput::sendStroke(qint64 t) {
     const double lo = lo_ / 100.0, hi = hi_ / 100.0;
     const double pos = lo + it->pos / 100.0 * (hi - lo);
     int dur = moveMs(it->at, t);
-    if (soft_) {
-        const double way = lastPos_ >= 0 ? std::abs(pos - lastPos_) : 1.0;  // unknown start: the whole range
-        dur = std::max(dur, int(way * kSoftSeekFullStrokeMs));
-    }
+    const double way = lastPos_ >= 0 ? std::abs(pos - lastPos_) : 1.0;  // unknown start: the whole range
+    if (soft_) dur = std::max(dur, int(way * kSoftSeekFullStrokeMs));
+    // The filter limits the script; a move starts at a position report, so a
+    // late report, dense actions or a play speed above 1 would still squeeze
+    // the way from the last sent position into a shorter time.
+    dur = std::max(dur, speedLimitMs(way));
     device_->setPosition(pos, dur);
     soft_ = false;
     lastPos_ = pos;
@@ -280,7 +300,15 @@ void PlaybackOutput::sendAxes(qint64 t) {
         if (it == a.actions.end()) continue;
         const int next = int(it - a.actions.begin());
         if (next == a.next) continue;
-        device_->setAxis(QString::fromStdString(name), it->pos / 100.0, moveMs(it->at, t));
+        const double pos = it->pos / 100.0;
+        int dur = moveMs(it->at, t);
+        if (a.soft) {  // eases in like the stroke
+            const double way = a.lastPos >= 0 ? std::abs(pos - a.lastPos) : 1.0;
+            dur = std::max(dur, int(way * kSoftSeekFullStrokeMs));
+        }
+        device_->setAxis(QString::fromStdString(name), pos, dur);
+        a.soft = false;
+        a.lastPos = pos;
         a.next = next;
     }
 }
@@ -297,7 +325,8 @@ void PlaybackOutput::goQuiet(bool home) {
     // A stroker halts where it is; "home" then moves it slowly to the bottom.
     device_->stop();
     if (home && home_ && strokeOn_ && device_->capLinear() && !filtered_.empty()) {
-        device_->setPosition(lo_ / 100.0, kHomeMs);
+        // Where the stop left the stroker is unknown: the speed limit counts the whole range.
+        device_->setPosition(lo_ / 100.0, std::max(kHomeMs, speedLimitMs(1.0)));
         lastPos_ = lo_ / 100.0;
     }
 }
@@ -312,7 +341,7 @@ void PlaybackOutput::emergencyStop() {
     ramp_.stop();
     if (device_) {
         device_->emergencyStop();
-        device_->setSessionActive(false);
+        device_->setSessionActiveFor(this, false);
     }
     emit emergencyStopped();
     emit extendedOChanged();

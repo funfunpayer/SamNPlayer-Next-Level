@@ -7,8 +7,18 @@ using namespace samn::device;
 using namespace std::chrono_literals;
 
 namespace {
+// Fails the n-th Send (0-based) once; every other Send goes through.
+struct FlakyTransport : MockTransport {
+    int fail_at = -1;
+    int calls = 0;
+    Status Send(const Bytes& data, WriteMode mode) override {
+        if (calls++ == fail_at) return Status::Error("gatt busy");
+        return MockTransport::Send(data, mode);
+    }
+};
+
 struct Rig {
-    MockTransport t;
+    FlakyTransport t;
     std::chrono::steady_clock::time_point now{};
     SamNeo2Device dev;
     Rig() : dev(t, nullptr, [this] { return now; }) {
@@ -61,6 +71,50 @@ TEST_CASE("device/samneo2: Stop always writes both channels and remembers them")
     const std::size_t n = r.t.sent.size();
     REQUIRE(r.dev.SetVibration(1));  // same value as before Stop: must not be swallowed
     CHECK(r.t.sent.size() == n + 1);
+}
+
+// A failed vibration-off must not leave the suction on, and the keepalive
+// must never replay the "on" packets of before the Stop.
+TEST_CASE("device/samneo2: a failed off write still switches the other channel off") {  // new
+    Rig r;
+    SamNeo2Protocol proto;
+    REQUIRE(r.dev.SetVibration(1));
+    REQUIRE(r.dev.SetSuction(1));
+    const std::size_t n = r.t.sent.size();
+    r.t.fail_at = r.t.calls;  // the vibration-off write fails
+    const Status s = r.dev.Stop();
+    CHECK_FALSE(s);
+    CHECK(s.message == "gatt busy");  // the first error comes back
+    REQUIRE(r.t.sent.size() == n + 1);
+    CHECK(r.t.sent[n].data == proto.EncodeSuction(0));  // suction-off went out anyway
+    CHECK(*r.dev.LastVibrationPacket() == proto.EncodeVibration(0));
+    CHECK(*r.dev.LastSuctionPacket() == proto.EncodeSuction(0));
+    // The keepalive repeats "off" (also retrying the failed write), never "on".
+    r.now += 5s;
+    REQUIRE(r.dev.TickKeepalive());
+    REQUIRE(r.t.sent.size() == n + 3);
+    CHECK(r.t.sent[n + 1].data == proto.EncodeVibration(0));
+    CHECK(r.t.sent[n + 2].data == proto.EncodeSuction(0));
+
+    // The second write failing: the first error is still reported, both are "off".
+    REQUIRE(r.dev.SetVibration(0.5));
+    REQUIRE(r.dev.SetSuction(0.5));
+    r.t.fail_at = r.t.calls + 1;  // suction-off fails
+    CHECK_FALSE(r.dev.Stop());
+    CHECK(r.t.sent.back().data == proto.EncodeVibration(0));
+    CHECK(*r.dev.LastVibrationPacket() == proto.EncodeVibration(0));
+    CHECK(*r.dev.LastSuctionPacket() == proto.EncodeSuction(0));
+}
+
+TEST_CASE("device/samneo2: disconnect tries both off writes before closing") {  // new
+    Rig r;
+    SamNeo2Protocol proto;
+    REQUIRE(r.dev.SetVibration(1));
+    REQUIRE(r.dev.SetSuction(1));
+    r.t.fail_at = r.t.calls;  // vibration-off fails
+    REQUIRE(r.dev.Disconnect());
+    CHECK(r.t.sent.back().data == proto.EncodeSuction(0));
+    CHECK_FALSE(r.t.IsConnected());
 }
 
 TEST_CASE("device/samneo2: keepalive repeats BOTH channels after 4 s, not before") {  // new
