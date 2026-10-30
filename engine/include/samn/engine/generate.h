@@ -91,9 +91,11 @@ private:
     GenerateCallback on_event_;
     std::mutex mutex_;
     std::thread worker_;
+    std::vector<std::thread> retired_;  // workers that restarted the runner from their own event
     std::atomic<bool> running_{false};
     std::atomic<bool> cancel_{false};
     uint64_t next_id_ = 0;
+    uint64_t current_id_ = 0;  // the run that owns running_; guarded by mutex_
 };
 
 }  // namespace samn::engine

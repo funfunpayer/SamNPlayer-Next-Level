@@ -154,7 +154,7 @@ bool GeneratorController::findTip() {
         // from the shown frame; any other search ends, and a new one starts
         // from the shown frame once it has.
         find_auto_ = pending_auto_ = false;
-        if (!usable || find_start_ms_ != int64_t(std::llround(preview_ms_))) {
+        if (!usable || find_start_ms_ != int64_t(std::floor(preview_ms_))) {
             refind_ = true;
             if (find_cancel_) *find_cancel_ = true;
         }
@@ -169,9 +169,9 @@ bool GeneratorController::findTip() {
     emit findingChanged();
     setStatus(tr("Looking for the rhythmic motion…"));
     const quint64 edits = box_edits_;
-    find_start_ms_ = int64_t(std::llround(preview_ms_));
+    find_start_ms_ = int64_t(std::floor(preview_ms_));
     QPointer<GeneratorController> self(this);
-    finder_ = std::thread([self, edits, cancel = find_cancel_, forVideo = video_path_, startMs = int64_t(std::llround(preview_ms_)),
+    finder_ = std::thread([self, edits, cancel = find_cancel_, forVideo = video_path_, startMs = int64_t(std::floor(preview_ms_)),
                            video = std::filesystem::path(video_path_.toStdU16String())] {
         samn::engine::TipFindOptions o;
         o.start_ms = startMs;  // 0.7: from the shown frame
@@ -355,8 +355,16 @@ bool GeneratorController::runQueue(bool overwrite) {
             QMetaObject::invokeMethod(qApp, [self, fn] { if (self) fn(self.data()); }, Qt::QueuedConnection);
         };
         const int total = int(items.size());
+        std::vector<std::filesystem::path> earlier;  // videos of this run: one script name, one video
         for (int n = 0; n < total; ++n) {
             const auto& [index, video] = items[size_t(n)];
+            const std::string clash = engine::ScriptNameCollision(earlier, video);
+            earlier.push_back(video);
+            if (!clash.empty()) {
+                const QString message = QString::fromStdString(clash);
+                post([index, message](GeneratorController* g) { g->setQueueItem(index, "failed", message); });
+                continue;
+            }
             if (cancel->load()) {
                 post([index](GeneratorController* g) { g->setQueueItem(index, "canceled", {}); });
                 continue;
@@ -671,12 +679,13 @@ void GeneratorController::setSceneFeel(const QString& sc) {
 }
 
 QString GeneratorController::autoScene() const {
-    // 0.7 sceneFromHints with the contact mark's class (no AI scene type yet),
+    // 0.7 sceneFromHints with the primary area's class (no AI scene type yet),
     // but only when a contact area is marked: the class defaults to nipples,
     // and every plain Create would otherwise get the breast feel.
     if (contact_areas_.empty()) return {};
-    if (contact_class_ == QLatin1String("mouth")) return QStringLiteral("oral");
-    if (contact_class_ == QLatin1String("nipples") || contact_class_ == QLatin1String("breasts")) return QStringLiteral("breast");
+    const QString cls = QString::fromStdString(contact_areas_.front().cls);
+    if (cls == QLatin1String("mouth")) return QStringLiteral("oral");
+    if (cls == QLatin1String("nipples") || cls == QLatin1String("breasts")) return QStringLiteral("breast");
     return {};
 }
 
@@ -834,6 +843,7 @@ bool GeneratorController::addContactArea(const QRect& area) {
                       : tr("Optional contact zone set."));
     }
     emit contactChanged();
+    if (!extra) emit feelChanged();  // the auto scene follows the primary class
     return true;
 }
 
@@ -871,6 +881,7 @@ void GeneratorController::removeContactArea(int index) {
     if (index == 0 && !contact_areas_.empty() && contact_areas_.front().cls.empty())
         contact_areas_.front().cls = contact_class_.toStdString();
     emit contactChanged();
+    if (index == 0) emit feelChanged();  // the auto scene follows the primary class
 }
 
 void GeneratorController::setAreaClass(int index, const QString& cls) {
@@ -882,13 +893,16 @@ void GeneratorController::setAreaClass(int index, const QString& cls) {
     setStatus(primary ? tr("Contact type → %1").arg(cls)
                       : tr("Extra contact class → %1").arg(cls.isEmpty() ? tr("any") : cls));
     emit contactChanged();
+    if (primary) emit feelChanged();  // the auto scene follows the primary class
 }
 
 void GeneratorController::clearContactAreas() {
     if (contact_areas_.empty() && !mark_contact_ && !mark_extra_) return;
+    const bool had = !contact_areas_.empty();
     contact_areas_.clear();
     mark_contact_ = mark_extra_ = false;
     emit contactChanged();
+    if (had) emit feelChanged();  // no primary class: the auto scene changes
 }
 
 void GeneratorController::clearExtras() {
@@ -963,7 +977,7 @@ bool GeneratorController::create(bool overwrite) {
     engine::GenerateRequest req;
     req.video = std::filesystem::path(video_path_.toStdU16String());
     req.box = cv::Rect(box_.x(), box_.y(), box_.width(), box_.height());
-    req.start_ms = int64_t(std::llround(box_ms_));
+    req.start_ms = int64_t(std::floor(box_ms_));
     req.camera_compensation = camera_;
     req.scene_cuts = scene_cuts_;
     req.signal.profile = profile_.toStdString();

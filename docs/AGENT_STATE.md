@@ -2,7 +2,21 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 28 Oct 2026, Claude, branch `claude/samn2-auto-tip`: the Generator reads AV1 on Windows (vcpkg `ffmpeg[dav1d]`, test `frame reader: an AV1 video gives pictures`) and finds the tip by itself when a video opens (D-159 item 2 below); main merged in with #137 (System health check, D-162). Before: 28 Oct, #137 `claude/samn2-health`; #135 (self-check handoff); 27 Oct, #132 (Generator spec, *Recommended*, D-160/D-161).
+**Last update:** 30 Oct 2026, Claude, branch `claude/samn2-gen-fixes`: Generator fixes from the bug hunt (handover below). Before: 28 Oct 2026, Claude, branch `claude/samn2-auto-tip`: the Generator reads AV1 on Windows (vcpkg `ffmpeg[dav1d]`, test `frame reader: an AV1 video gives pictures`) and finds the tip by itself when a video opens (D-159 item 2 below); main merged in with #137 (System health check, D-162). Before: 28 Oct, #137 `claude/samn2-health`; #135 (self-check handoff); 27 Oct, #132 (Generator spec, *Recommended*, D-160/D-161).
+
+## Handover: `claude/samn2-gen-fixes` (30 Oct)
+
+Fixes from a read-only Generator bug hunt, each with a test that failed before the fix:
+- A hand-drawn box started one frame late: `FrameReader::SeekMs` now tolerates the half millisecond a rounded frame time carries, and the controller floors the preview time. Test `frame reader: a frame's rounded millisecond seeks to that frame` (24/30/60 fps).
+- Auto scene follows the primary area's class (not the default class for new marks); `setAreaClass` emits `feelChanged`. Test `theAutoSceneFollowsThePrimaryAreaClass`.
+- `GenerateRunner`: running ends before the terminal event, so its handler can `Start` the next run (a worker restarting itself is parked and joined later). Test `generate: the terminal event's handler may start the next run`.
+- `Coast::Reanchor`: a reacquire jump is no longer a coast velocity. Test `parts: a reacquire jump is not a coast velocity`.
+- Queue: two videos with one script name (x.mp4, x.mkv) fail the later one with "same script name as ..." (`ScriptNameCollision`). Tests in `generate_queue_test.cpp` and `twoVideosWithOneScriptNameDoNotOverwriteEachOther`.
+- Track cache key covers `adaptive_cuts` and the seed; `record_checks` gives no key; `kTrackCacheVersion` 3. Test `spec FR-11: the cache key covers ...`.
+- `PositionsToActions` with `scene_ranges`: samples outside every range are normalised over the clip (were up to 25000). Test `post: samples outside every scene range stay within 0..100`.
+
+Not done: the `repair.cpp` camera-baseline splice (dev tool only) and `picture_signals` indexing.
+
 
 ## Handover: `claude/samn2-health` (28 Oct, D-162)
 

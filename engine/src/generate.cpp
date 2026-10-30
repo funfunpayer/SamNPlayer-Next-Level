@@ -265,13 +265,33 @@ GenerateRunner::~GenerateRunner() {
 uint64_t GenerateRunner::Start(GenerateRequest request) {
     std::lock_guard<std::mutex> lock(mutex_);
     if (running_) return 0;
-    if (worker_.joinable()) worker_.join();  // the previous run has ended
+    if (worker_.joinable()) {
+        // A restart from the terminal event runs on the old worker itself:
+        // it cannot join itself, so it is parked and joined by a later call.
+        if (worker_.get_id() == std::this_thread::get_id())
+            retired_.push_back(std::move(worker_));
+        else
+            worker_.join();  // the previous run has ended
+    }
     cancel_ = false;
     running_ = true;
     const uint64_t id = ++next_id_;
-    worker_ = std::thread([this, id, req = std::move(request)] {
-        Generate(req, id, [this] { return cancel_.load(); }, on_event_);
-        running_ = false;
+    current_id_ = id;
+    // The run is over once its terminal event is about to go out, so the
+    // handler may Start the next one (the flag is not cleared afterwards:
+    // by then it may belong to that next run).
+    auto finish = [this, id] {
+        std::lock_guard<std::mutex> l(mutex_);
+        if (current_id_ == id) running_ = false;
+    };
+    worker_ = std::thread([this, id, finish, req = std::move(request)] {
+        Generate(req, id, [this] { return cancel_.load(); }, [this, finish](const GenerateEvent& e) {
+            if (e.kind == GenerateEventKind::kDone || e.kind == GenerateEventKind::kCanceled ||
+                e.kind == GenerateEventKind::kError)
+                finish();
+            if (on_event_) on_event_(e);
+        });
+        finish();
     });
     return id;
 }
@@ -279,8 +299,27 @@ uint64_t GenerateRunner::Start(GenerateRequest request) {
 void GenerateRunner::Cancel() { cancel_ = true; }
 
 void GenerateRunner::Wait() {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (worker_.joinable()) worker_.join();
+    // Joined outside the lock: the worker's own handler may call Start.
+    for (;;) {
+        std::vector<std::thread> threads;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            for (auto& t : retired_) threads.push_back(std::move(t));
+            retired_.clear();
+            if (worker_.joinable()) threads.push_back(std::move(worker_));
+        }
+        bool joined = false;
+        for (auto& t : threads) {
+            if (t.get_id() == std::this_thread::get_id()) {
+                std::lock_guard<std::mutex> lock(mutex_);
+                retired_.push_back(std::move(t));  // cannot join itself
+            } else {
+                t.join();
+                joined = true;
+            }
+        }
+        if (!joined) return;
+    }
 }
 
 }  // namespace samn::engine

@@ -600,6 +600,33 @@ TEST_CASE("spec FR-7: the analysis rate cap tracks fewer frames over the same sp
     fs::remove_all(dir);
 }
 
+TEST_CASE("spec FR-11: the cache key covers adaptive cuts and the seed, and never serves recorded checks") {
+    const fs::path dir = TempDir("samn_spec_cache_key");
+    REQUIRE(WriteClip(dir / "sine.mp4", 30, 2, [](cv::Mat& f, double t) { clips::Disc(f, 160, int(DiscY(t, 80, 1))); }));
+    const cv::Rect box(100, 40, 120, 160);
+    const fs::path video = dir / "sine.mp4";
+    TrackOptions to;
+    const std::string key = TrackCacheKey(video, box, to);
+    REQUIRE(key.size() == 64);
+    TrackOptions other = to;
+    other.adaptive_cuts = true;
+    CHECK(TrackCacheKey(video, box, other) != key);
+    other = to;
+    other.seed_box = cv::Rect(5, 6, 30, 30);
+    CHECK(TrackCacheKey(video, box, other) != key);
+    other.seed_gray = cv::Mat(8, 8, CV_8UC1, cv::Scalar(10));
+    const std::string seeded = TrackCacheKey(video, box, other);
+    CHECK(seeded != key);
+    TrackOptions another = other;
+    another.seed_gray = cv::Mat(8, 8, CV_8UC1, cv::Scalar(11));
+    CHECK(TrackCacheKey(video, box, another) != seeded);
+    CHECK(TrackCacheKey(video, box, other) == seeded);
+    other = to;
+    other.record_checks = true;
+    CHECK(TrackCacheKey(video, box, other).empty());  // no key, no cache
+    fs::remove_all(dir);
+}
+
 TEST_CASE("spec FR-11: the track cache returns the same script and misses on any option change") {
     const fs::path dir = TempDir("samn_spec_cache");
     REQUIRE(WriteClip(dir / "sine.mp4", 30, 4, [](cv::Mat& f, double t) { clips::Disc(f, 160, int(DiscY(t, 80, 1))); }));

@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -23,9 +24,9 @@ namespace {
 constexpr int kW = 160, kH = 96, kFrames = 60;
 constexpr double kFps = 25;
 
-fs::path WritePatternClip() {
+fs::path WritePatternClip(double fps = kFps) {
     const fs::path p = fs::temp_directory_path() / ("samn_pattern_" + std::to_string(std::random_device{}()) + ".avi");
-    cv::VideoWriter w(p.u8string(), cv::CAP_OPENCV_MJPEG, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'), kFps,
+    cv::VideoWriter w(p.u8string(), cv::CAP_OPENCV_MJPEG, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'), fps,
                       cv::Size(kW, kH));
     REQUIRE(w.isOpened());
     for (int i = 0; i < kFrames; ++i) {
@@ -83,6 +84,28 @@ TEST_CASE("frame reader: seek is frame-exact, forwards and back") {
     }
     r.reset();
     fs::remove(clip);
+}
+
+// A hand-drawn box starts at a preview frame's time rounded to whole ms; that
+// must land on the same frame, not the next (30 fps frame 2 = 66.667 -> 67).
+TEST_CASE("frame reader: a frame's rounded millisecond seeks to that frame") {
+    for (const double fps : {30.0, 60.0, 24.0}) {
+        CAPTURE(fps);
+        const fs::path clip = WritePatternClip(fps);
+        std::string error;
+        auto r = FrameReader::Open(clip, &error);
+        REQUIRE_MESSAGE(r, error);
+        VideoFrame f;
+        for (int k = 0; k < kFrames; ++k) {
+            CAPTURE(k);
+            REQUIRE(r->SeekMs(std::llround(k * 1000.0 / fps)));
+            REQUIRE(r->Read(f));
+            CHECK(f.index == k);
+            CHECK(FrameNumber(f.bgr) == k);
+        }
+        r.reset();
+        fs::remove(clip);
+    }
 }
 
 TEST_CASE("frame reader: a missing or broken file is an error with the path") {
