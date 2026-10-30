@@ -44,6 +44,8 @@ nlohmann::json RectJson(const cv::Rect& r) { return {r.x, r.y, r.width, r.height
 }  // namespace
 
 std::string TrackCacheKey(const std::filesystem::path& video, const cv::Rect& box, const TrackOptions& o) {
+    // The per-frame checks are not stored, so a hit would return none.
+    if (o.record_checks) return {};
     std::error_code ec;
     const auto size = std::filesystem::file_size(video, ec);
     if (ec) return {};
@@ -67,7 +69,15 @@ std::string TrackCacheKey(const std::filesystem::path& video, const cv::Rect& bo
                         {"appearance_memory", o.appearance_memory},
                         {"axis", static_cast<int>(o.axis)},
                         {"partner_fixed", o.partner_fixed},
-                        {"distance_stroke", o.distance_stroke}};
+                        {"distance_stroke", o.distance_stroke},
+                        {"adaptive_cuts", o.adaptive_cuts},
+                        {"seed_box", RectJson(o.seed_box)}};
+    if (!o.seed_gray.empty()) {
+        Sha256 seed;
+        for (int y = 0; y < o.seed_gray.rows; ++y)
+            seed.Update(o.seed_gray.ptr(y), static_cast<size_t>(o.seed_gray.cols) * o.seed_gray.elemSize());
+        opts["seed_gray"] = {o.seed_gray.cols, o.seed_gray.rows, o.seed_gray.type(), seed.HexDigest()};
+    }
     nlohmann::json masks = nlohmann::json::array();
     for (const cv::Rect& m : o.mask_rois) masks.push_back(RectJson(m));
     opts["mask_rois"] = masks;

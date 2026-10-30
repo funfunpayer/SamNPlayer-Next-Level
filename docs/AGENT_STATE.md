@@ -2,19 +2,32 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 31 Oct 2026, Cursor, branch `cursor/player-partner-overlay-635a`: Player contact overlay follows the recorded partner path (handover below). Before: 30 Oct, Claude `claude/samn2-data-safety` (#139) and `claude/samn2-stop-safety` (#138); 28 Oct `claude/samn2-auto-tip` (#136); #137 health; #135 self-check handoff.
+**Last update:** 31 Oct 2026, Cursor, branch `cursor/samn2-gen-fixes-635a`: Generator bug-hunt fixes (takeover of #140 onto main after #141). Before: #141 partner overlay; open #142/#143.
 
-## Handover: `cursor/player-partner-overlay-635a` (31 Oct)
+## Handover: `cursor/samn2-gen-fixes-635a` (31 Oct; was `claude/samn2-gen-fixes` / #140)
 
-Player partner overlay — the missing half of G2b's contact marks on Play (AGENT_STATE "Next after Tf/Tj").
+Takeover of Claude's Generator bug-hunt PR (CI was green; conflicted with #141 on `AGENT_STATE.md` only). Fixes, each with a test that failed before:
 
-- **Core:** `SortedPartnerPath` next to `SortedTipPath`; `TipPathAt` works on either sorted path. Test `partner path sorts like the tip path…`.
-- **Player:** loads `trajectory.partner` into `partnerPath_`; `partnerAt(ms)` for QML; `contactMarks.hasPartner` and the hint adds "partner path" when samples exist.
-- **Overlay:** non-fixed gold / magenta boxes centre on the partner sample at the playhead; fixed boxes and scripts without a partner path stay put (still not following the tip — that looked wrong). Tip stays on the tip path.
-- **Still open from that tip:** extras multi-path (`track_multi`); MT-Debug trajectory line overlay (tip accent + partner teal); donation pages / handbook / idle ribbon (Owner GUI leftovers).
+- A hand-drawn box started one frame late: `FrameReader::SeekMs` tolerates the half millisecond a rounded frame time carries; the controller floors the preview time. Test `frame reader: a frame's rounded millisecond seeks to that frame` (24/30/60 fps).
+- Auto scene follows the primary area's class (not the default for new marks); `setAreaClass` emits `feelChanged`. Test `theAutoSceneFollowsThePrimaryAreaClass`.
+- `GenerateRunner`: running ends before the terminal event, so its handler can `Start` the next run (a worker restarting itself is parked and joined later). Test `generate: the terminal event's handler may start the next run`.
+- `Coast::Reanchor`: a reacquire jump is no longer a coast velocity. Test `parts: a reacquire jump is not a coast velocity`.
+- Queue: two videos with one script name (`x.mp4`, `x.mkv`) fail the later one with "same script name as …" (`ScriptNameCollision`). Tests in `generate_queue_test.cpp` and `twoVideosWithOneScriptNameDoNotOverwriteEachOther`.
+- Track cache key covers `adaptive_cuts` and the seed; `record_checks` gives no key; `kTrackCacheVersion` 3. Test `spec FR-11: the cache key covers ...`.
+- `PositionsToActions` with `scene_ranges`: samples outside every range stay within 0..100. Test `post: samples outside every scene range stay within 0..100`.
 
+Not done: the `repair.cpp` camera-baseline splice (dev tool only) and `picture_signals` indexing. **Supersedes open PR #140** once this merges.
 
-## Handover: `claude/samn2-data-safety` (30 Oct)
+## Handover: `cursor/player-partner-overlay-635a` (31 Oct, merged #141)
+
+Player partner overlay — the missing half of G2b's contact marks on Play.
+
+- **Core:** `SortedPartnerPath` next to `SortedTipPath`; `TipPathAt` / `PathAt` on either sorted path.
+- **Player:** `partnerAt(ms)`; `contactMarks.hasPartner`; hint "partner path".
+- **Overlay:** non-fixed gold / magenta follow partner; fixed stay put; tip on tip path.
+- **Still open:** extras multi-path (`track_multi`); MT-Debug trajectory line overlay; handbook / idle ribbon / real donate URLs.
+
+## Handover: `claude/samn2-data-safety` (30 Oct, merged #139)
 
 Data and file fixes from a read-only bug hunt. Each fix has a test that failed before it, with three exceptions: the Windows path tests (they can only fail on Windows), `main.cpp` and the atomic custom-script write (no test).
 
@@ -35,10 +48,9 @@ Data and file fixes from a read-only bug hunt. Each fix has a test that failed b
   - `TrainController::train()` ends a run whose Python cannot start (test `aPythonThatCannotStartEndsTheRun`).
   - `save_custom_script` writes atomically.
   - Notices compare the shortened text, so a long repeat is one toast (test `aLongRepeatIsOne`).
-- **Open (not fixed here):** `samn::config_dir()` reads `APPDATA` / `USERPROFILE` through the narrow `_dupenv_s`, so a Windows user name outside the ANSI code page gives a wrong config folder; that needs `_wdupenv_s`.
+- **Open (not fixed here):** ~~narrow `_dupenv_s`~~ → open PR #142 (`_wdupenv_s`).
 
-
-## Handover: `claude/samn2-stop-safety` (30 Oct, device and playback safety)
+## Handover: `claude/samn2-stop-safety` (30 Oct, device and playback safety, merged #138)
 
 - **Stop before close (Sam Neo 2):** a disconnect, a quit and Training's end set `abort_` before the worker's stop ran, and the BLE "with response" write gave up at once, so the device stayed on. `DeviceWorker::Stop` and `DestroySession` now switch the transport to a cancel of their own (`BeginStopWindow`, bounded by `kStopBudgetMs` = 4 s); `abort_` still ends connects and reads. TCode (serial / TCP / UDP) and Intiface sends never waited on the cancel. Tests: `device_controller_test` `samNeo2*` on a stand-in link (`setBleTransportFactory`).
 - **`SamNeo2Device::StopNow`** tries both off writes, remembers both off packets either way (the keepalive repeats "off", never the old "on") and returns the first error; `Disconnect()` uses it. Tests: `device/samneo2: a failed off write ...`, `... disconnect tries both off writes ...`.
@@ -48,6 +60,7 @@ Data and file fixes from a read-only bug hunt. Each fix has a test that failed b
 - **Session per owner:** `DeviceController::setSessionActiveFor(owner, on)`; playback and training each hold their own, `sessionActive` stays true while any holds it (the QML property's writer is a hold of its own). Tests: `device_controller_test::sessionHoldsArePerOwner`, `playback_output_test::sessionStaysActiveWhileAnyUserDrivesTheDevice`.
 - **Extra axes** (twist / roll / pitch ...) ease their first move after a start or a seek in like the stroke, per axis from its last sent position. Test: `playback_output_test::extraAxesEaseInAfterAStartAndASeek`.
 - **Not verified:** on a real Sam Neo 2 (no hardware here); the stop budget is a guess from the write timeout. The speed limit counts from the last *sent* position: a stroker still on its way to that position can move further than that.
+
 
 ## Handover: `claude/samn2-health` (28 Oct, D-162)
 

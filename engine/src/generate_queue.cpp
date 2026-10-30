@@ -14,6 +14,25 @@ std::filesystem::path ScriptPathForVideo(const std::filesystem::path& video) {
     return out;
 }
 
+namespace {
+// Windows file names ignore case: X.mp4 and x.mkv write the same x.funscript.
+std::string ScriptKey(const std::filesystem::path& video) {
+    std::string key = ScriptPathForVideo(video).u8string();
+#ifdef _WIN32
+    for (char& c : key)
+        if (c >= 'A' && c <= 'Z') c = char(c - 'A' + 'a');
+#endif
+    return key;
+}
+}  // namespace
+
+std::string ScriptNameCollision(const std::vector<std::filesystem::path>& earlier, const std::filesystem::path& video) {
+    const std::string script = ScriptKey(video);
+    for (const auto& e : earlier)
+        if (ScriptKey(e) == script) return "same script name as " + e.filename().u8string();
+    return {};
+}
+
 QueueItemOutcome GenerateQueueItem(const std::filesystem::path& video, const QueueSettings& settings,
                                    const std::function<bool()>& cancel,
                                    const std::function<void(int percent)>& progress) {

@@ -47,6 +47,12 @@ void Coast::ObserveOk(const cv::Rect& r) {
     lost_ = 0;
 }
 
+void Coast::Reanchor(const cv::Rect& r) {
+    ObserveOk(r);
+    have_vel_ = false;
+    vx_ = vy_ = 0;
+}
+
 std::optional<cv::Rect> Coast::OnLost() {
     ++lost_;
     if (!have_pos_ || lost_ > kDefaultFrames || box_.width <= 0 || box_.height <= 0) return std::nullopt;
