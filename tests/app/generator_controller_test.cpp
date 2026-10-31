@@ -321,6 +321,9 @@ private slots:
         const double impulseActive = g.contactFeelProbe().value("activePct").toDouble();
         QVERIFY(impulseActive < softActive);
         QVERIFY(!g.contactFeelProbe().value("hint").toString().isEmpty());
+        // Restore defaults so later tests that expect soft / 0.75 stay clean.
+        g.setContactSpan(0.75);
+        g.setContactCurve("soft");
     }
 
     // 0.7 Step 3: sensitivity and curve of contact vibration, written into
