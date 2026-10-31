@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <fstream>
 #include <random>
+#include <string>
 
 #include "samn/settings.h"
 
@@ -89,6 +90,65 @@ TEST_CASE("config_dir: SAMN_CONFIG_DIR wins") {
     setenv("XDG_CONFIG_HOME", "/tmp/xdg_test", 1);
     CHECK(config_dir() == fs::path("/tmp/xdg_test/SamNPlayer2"));
     unsetenv("XDG_CONFIG_HOME");
+}
+
+TEST_CASE("config_dir: a non-ASCII SAMN_CONFIG_DIR stays intact") {
+    // UTF-8 path (Linux / macOS native). Windows covers the same with the
+    // wide env test below. "Jürgen" as UTF-8 bytes so the source file stays ASCII.
+    const char* dir = "/tmp/samn_cfg_J\xc3\xbcrgen";
+    setenv("SAMN_CONFIG_DIR", dir, 1);
+    CHECK(config_dir() == fs::u8path(dir));
+    unsetenv("SAMN_CONFIG_DIR");
+}
+#else
+TEST_CASE("config_dir: wide env keeps a non-ASCII folder") {
+    // Bug hunt open item: narrow _dupenv_s mangled user names outside the
+    // ANSI code page. _wdupenv_s must keep the full path.
+    const std::wstring prev_cfg = [] {
+        wchar_t* buf = nullptr;
+        size_t len = 0;
+        if (_wdupenv_s(&buf, &len, L"SAMN_CONFIG_DIR") == 0 && buf) {
+            std::wstring v(buf);
+            std::free(buf);
+            return v;
+        }
+        return std::wstring();
+    }();
+    const std::wstring want = L"C:\\Users\\J\u00FCrgen\\AppData\\Roaming\\SamNCfgTest";
+    REQUIRE(_wputenv_s(L"SAMN_CONFIG_DIR", want.c_str()) == 0);
+    CHECK(config_dir() == fs::path(want));
+    if (prev_cfg.empty())
+        _wputenv_s(L"SAMN_CONFIG_DIR", L"");
+    else
+        _wputenv_s(L"SAMN_CONFIG_DIR", prev_cfg.c_str());
+}
+
+TEST_CASE("config_dir: wide APPDATA keeps a non-ASCII folder") {
+    wchar_t* prev_cfg_buf = nullptr;
+    size_t prev_cfg_len = 0;
+    _wdupenv_s(&prev_cfg_buf, &prev_cfg_len, L"SAMN_CONFIG_DIR");
+    _wputenv_s(L"SAMN_CONFIG_DIR", L"");  // fall through to APPDATA
+
+    wchar_t* prev_app_buf = nullptr;
+    size_t prev_app_len = 0;
+    _wdupenv_s(&prev_app_buf, &prev_app_len, L"APPDATA");
+    const std::wstring prev_app = prev_app_buf ? std::wstring(prev_app_buf) : std::wstring();
+    std::free(prev_app_buf);
+
+    const std::wstring app = L"C:\\Users\\\u592A\u90CE\\AppData\\Roaming";  // 太郎
+    REQUIRE(_wputenv_s(L"APPDATA", app.c_str()) == 0);
+    CHECK(config_dir() == fs::path(app) / L"SamNPlayer2");
+
+    if (prev_app.empty())
+        _wputenv_s(L"APPDATA", L"");
+    else
+        _wputenv_s(L"APPDATA", prev_app.c_str());
+    if (prev_cfg_buf) {
+        _wputenv_s(L"SAMN_CONFIG_DIR", prev_cfg_buf);
+        std::free(prev_cfg_buf);
+    } else {
+        _wputenv_s(L"SAMN_CONFIG_DIR", L"");
+    }
 }
 #endif
 

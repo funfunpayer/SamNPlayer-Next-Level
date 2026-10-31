@@ -16,7 +16,8 @@
 namespace samn {
 
 // SAMN_CONFIG_DIR, else %APPDATA%/SamNPlayer2 (Windows), else
-// $XDG_CONFIG_HOME or ~/.config + /SamNPlayer2.
+// $XDG_CONFIG_HOME or ~/.config + /SamNPlayer2. On Windows the env vars are
+// read wide (_wdupenv_s) so a user name outside the ANSI code page stays intact.
 std::filesystem::path config_dir();
 
 class Settings {
