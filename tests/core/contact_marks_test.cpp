@@ -71,6 +71,22 @@ TEST_CASE("contact proximity: inside the core box is 1, far away 0, the margin f
     CHECK(ProximityToBox(120, 120, Box(100, 100, 0, 40), kSpatialContactMargin) == 0);
 }
 
+TEST_CASE("partner path sorts like the tip path and TipPathAt finds a sample") {
+    TrajectoryData path;
+    path.partner = {{2000, 80, 40}, {0, 10, 10}, {1000, 50, 20}};
+    const auto sorted = SortedPartnerPath(path);
+    REQUIRE(sorted.size() == 3);
+    CHECK(sorted[0].at_ms == 0);
+    CHECK(sorted[1].at_ms == 1000);
+    CHECK(sorted[2].at_ms == 2000);
+    const auto at = TipPathAt(sorted, 1100);
+    REQUIRE(at);
+    CHECK(at->x == doctest::Approx(50.0));
+    CHECK(at->y == doctest::Approx(20.0));
+    CHECK_FALSE(TipPathAt(sorted, 5000));
+    CHECK(SortedPartnerPath(Path({})).empty());
+}
+
 TEST_CASE("spatial contact follows the tip path through a contact area") {
     ContactMarks marks;
     marks.primary = Box(50, 50, 20, 20, "nipples");

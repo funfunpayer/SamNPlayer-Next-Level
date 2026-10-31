@@ -107,9 +107,10 @@ class PlayerController : public QObject {
     Q_PROPERTY(bool posOverlay READ posOverlay WRITE setPosOverlay NOTIFY viewOptionsChanged)
     // The script's contact marks on the video (0.7 "Show contact areas", on
     // by default, remembered): {tipClass, tip, primary, extras, driveStroke,
-    // width, height, hint}; boxes {x, y, w, h, cls, fixed} in video pixels;
-    // width/height of the tip path's frame (0 when there is none). Empty
-    // when the script has no marks.
+    // width, height, hasPartner, hint}; boxes {x, y, w, h, cls, fixed} in
+    // video pixels; width/height of the tip path's frame (0 when there is
+    // none); hasPartner when trajectory.partner was recorded. Empty when
+    // the script has no marks.
     Q_PROPERTY(QVariantMap contactMarks READ contactMarks NOTIFY scriptChanged)
     Q_PROPERTY(bool showContactMarks READ showContactMarks WRITE setShowContactMarks NOTIFY viewOptionsChanged)
     Q_PROPERTY(int suctionNow READ suctionNow NOTIFY playheadMsChanged)
@@ -345,9 +346,10 @@ public:
     QVariantMap contactMarks() const { return contactMarks_; }
     bool showContactMarks() const;
     void setShowContactMarks(bool on);
-    // The tip's place at a script time (the playhead) from the recorded tip
-    // path ({x, y} in video pixels), empty when no sample is near it.
+    // Tip / partner place at a script time (the playhead) from the recorded
+    // paths ({x, y} in video pixels), empty when no sample is near it.
     Q_INVOKABLE QVariantMap tipAt(double scriptMs) const;
+    Q_INVOKABLE QVariantMap partnerAt(double scriptMs) const;
     int suctionNow() const;
     int sleepMinutes() const { return sleepMinutes_; }
     void setSleepMinutes(int minutes);
@@ -453,7 +455,8 @@ private:
     std::string profile_;
     bool recipeHasContact_ = false;
     QVariantMap contactMarks_;
-    std::vector<samn::TrajectoryPoint> tipPath_;  // sorted by time
+    std::vector<samn::TrajectoryPoint> tipPath_;      // sorted by time
+    std::vector<samn::TrajectoryPoint> partnerPath_;  // sorted by time (gold contact)
     bool contactControls_ = false, contactKnobsLive_ = false;
     bool opening_ = false;  // openScript sets the contact knobs
     std::vector<samn::StrengthPreset> strength_;

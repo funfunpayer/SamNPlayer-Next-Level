@@ -579,9 +579,9 @@ Item {
                     }
                 }
                 // The script's contact marks on the picture (0.7 playback.js
-                // contact overlay): tip blue and moving with the recorded tip
-                // path, contact areas gold (first) and magenta (more) where
-                // contact vibration measures them.
+                // contact overlay): tip blue on the tip path; gold / magenta
+                // contact areas stay put when fixed, else follow the partner
+                // path when one was recorded (not the tip — that looked wrong).
                 Item {
                     id: marksLayer
                     objectName: "contactMarksLayer"
@@ -592,8 +592,17 @@ Item {
                     readonly property real srcW: res.width > 0 ? res.width : (m.width || 0)
                     readonly property real srcH: res.height > 0 ? res.height : (m.height || 0)
                     readonly property var tipNow: m.tip ? ctrl.tipAt(ctrl.playheadMs) : ({})
+                    readonly property var partnerNow: m.hasPartner ? ctrl.partnerAt(ctrl.playheadMs) : ({})
                     visible: ctrl.showContactMarks && ctrl.videoName !== "" && m.hint !== undefined && srcW > 0 && srcH > 0
                     x: area.x; y: area.y; width: area.width; height: area.height
+                    function followPartner(box) {
+                        const b = Object.assign({}, box)
+                        if (!b.fixed && partnerNow.x !== undefined) {
+                            b.x = partnerNow.x - b.w / 2
+                            b.y = partnerNow.y - b.h / 2
+                        }
+                        return b
+                    }
                     function boxes() {
                         const out = []
                         if (m.tip) {
@@ -602,9 +611,10 @@ Item {
                             if (tipNow.x !== undefined) { b.x = tipNow.x - b.w / 2; b.y = tipNow.y - b.h / 2 }
                             out.push({ b: b, color: "#50b4ff", label: b.cls || m.tipClass || qsTr("tip") })
                         }
-                        if (m.primary) out.push({ b: m.primary, color: "#f2b03d", label: m.primary.cls || qsTr("contact") })
+                        if (m.primary)
+                            out.push({ b: followPartner(m.primary), color: "#f2b03d", label: m.primary.cls || qsTr("contact") })
                         for (let i = 0; i < (m.extras || []).length; ++i)
-                            out.push({ b: m.extras[i], color: "#e070a0", label: m.extras[i].cls || qsTr("extra %1").arg(i + 1) })
+                            out.push({ b: followPartner(m.extras[i]), color: "#e070a0", label: m.extras[i].cls || qsTr("extra %1").arg(i + 1) })
                         return out
                     }
                     Repeater {
