@@ -275,6 +275,12 @@ TEST_CASE("generate: contact vibration stores the recipe, the marks and the tip'
     CHECK(d.trajectory->partner.front().x == doctest::Approx(35.0).epsilon(0.05));
     CHECK(d.trajectory->partner.front().y == doctest::Approx(35.0).epsilon(0.05));
     CHECK(d.trajectory->partner.back().x == doctest::Approx(35.0).epsilon(0.05));
+    // track_multi: fixed extra path centres stay on the magenta box mid.
+    REQUIRE(d.trajectory->extras.size() == 1);
+    REQUIRE(d.trajectory->extras[0].size() == d.trajectory->tip.size());
+    CHECK(d.trajectory->extras[0].front().x == doctest::Approx(5.0).epsilon(0.05));
+    CHECK(d.trajectory->extras[0].front().y == doctest::Approx(5.0).epsilon(0.05));
+    CHECK(d.trajectory->extras[0].back().x == doctest::Approx(5.0).epsilon(0.05));
     // The Player turns tip path into contact vibration (static boxes).
     const samn::MapOptions o = samn::MapOptionsFromScript(d.ToFunscript());
     REQUIRE(o.spatial_contact);
@@ -311,6 +317,34 @@ TEST_CASE("generate: non-fixed partner path follows the second disc (G2b)") {
     }
     // Partner moves horizontally ~±40 px around 200 → range well above a fixed box.
     CHECK(p_hi - p_lo >= 30.0);
+    fs::remove_all(dir);
+}
+
+TEST_CASE("generate: non-fixed extra path follows the third disc (track_multi)") {
+    const fs::path dir = TempDir("samn_generate_extra");
+    REQUIRE(clips::WriteTipPartnerAndExtra(dir / "three.mp4", 3, 60.0, 40.0, 80.0));
+    GenerateRequest req = Request(dir, "three.mp4", "standard");
+    req.box = cv::Rect(65, 85, 70, 70);
+    req.contact_vibration = true;
+    req.contact_area = samn::ContactMarkBox{165, 145, 70, 70, "nipples", true};
+    req.extra_areas = {samn::ContactMarkBox{245, 85, 70, 70, "mouth", false}};
+    req.camera_compensation = false;
+    req.scene_cuts = false;
+    Recorder rec;
+    Generate(req, 1, {}, rec.fn());
+    REQUIRE(rec.take().back().kind == GenerateEventKind::kDone);
+    const samn::Document d = samn::LoadDocument(dir / "standard.samn");
+    REQUIRE(d.trajectory);
+    REQUIRE(d.trajectory->extras.size() == 1);
+    REQUIRE(d.trajectory->extras[0].size() == d.trajectory->tip.size());
+    REQUIRE(d.trajectory->extras[0].size() >= 20);
+    double y_lo = d.trajectory->extras[0].front().y, y_hi = y_lo;
+    for (const auto& p : d.trajectory->extras[0]) {
+        y_lo = std::min(y_lo, p.y);
+        y_hi = std::max(y_hi, p.y);
+    }
+    // Extra moves vertically ~±40 px around 120 → range well above a fixed box.
+    CHECK(y_hi - y_lo >= 30.0);
     fs::remove_all(dir);
 }
 

@@ -87,6 +87,21 @@ TEST_CASE("partner path sorts like the tip path and TipPathAt finds a sample") {
     CHECK(SortedPartnerPath(Path({})).empty());
 }
 
+TEST_CASE("extra path sorts like the tip path and TipPathAt finds a sample") {
+    TrajectoryData path;
+    path.extras = {{{1500, 9, 9}, {0, 1, 1}, {500, 4, 4}}};
+    const auto sorted = SortedExtraPath(path, 0);
+    REQUIRE(sorted.size() == 3);
+    CHECK(sorted[0].at_ms == 0);
+    CHECK(sorted[1].at_ms == 500);
+    CHECK(sorted[2].at_ms == 1500);
+    const auto at = TipPathAt(sorted, 600);
+    REQUIRE(at);
+    CHECK(at->x == doctest::Approx(4.0));
+    CHECK(SortedExtraPath(path, 1).empty());
+    CHECK(SortedExtraPath(Path({}), 0).empty());
+}
+
 TEST_CASE("spatial contact follows the tip path through a contact area") {
     ContactMarks marks;
     marks.primary = Box(50, 50, 20, 20, "nipples");

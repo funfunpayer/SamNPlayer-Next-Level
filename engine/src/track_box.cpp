@@ -199,6 +199,28 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
         }
     }
 
+    // Magenta extras (track_multi): fixed box or a CSRT per extra. Centres
+    // feed .samn trajectory.extras (index matches contactMarks.extras).
+    struct ExtraState {
+        cv::Rect last;
+        bool fixed = true;
+        std::unique_ptr<vision::Tracker> tracker;
+    };
+    std::vector<ExtraState> extras;
+    extras.reserve(opts.extra_boxes.size());
+    for (const TrackOptions::ExtraBoxOption& e : opts.extra_boxes) {
+        if (e.box.width <= 0 || e.box.height <= 0) continue;
+        ExtraState s;
+        s.last = e.box;
+        s.fixed = e.fixed;
+        if (!e.fixed) {
+            s.tracker = vision::CreateTracker(vision::TrackerKind::kCsrt, &why);
+            if (!s.tracker) return fail(why);
+            s.tracker->Init(frame.bgr, s.last);
+        }
+        extras.push_back(std::move(s));
+    }
+
     const bool needs_gray = opts.camera_compensation || opts.scene_cuts || opts.appearance_memory;
     cv::Mat prev_gray, gray;
     if (needs_gray) cv::cvtColor(frame.bgr, prev_gray, cv::COLOR_BGR2GRAY);
@@ -221,6 +243,14 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
     if (want_partner) {
         res.partner_xs.push_back(Centre(partner_last).x);
         res.partner_ys.push_back(Centre(partner_last).y);
+    }
+    if (!extras.empty()) {
+        res.extra_xs.resize(extras.size());
+        res.extra_ys.resize(extras.size());
+        for (size_t i = 0; i < extras.size(); ++i) {
+            res.extra_xs[i].push_back(Centre(extras[i].last).x);
+            res.extra_ys[i].push_back(Centre(extras[i].last).y);
+        }
     }
     std::optional<AdaptiveSceneCut> adaptive_cut;
     if (opts.scene_cuts && opts.adaptive_cuts)
@@ -349,6 +379,17 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
             res.partner_ys.push_back(Centre(partner_last).y);
         }
 
+        for (size_t i = 0; i < extras.size(); ++i) {
+            ExtraState& e = extras[i];
+            if (e.fixed || cut || !e.tracker) {
+                // Fixed (or after a cut): keep the last known centre.
+            } else if (auto eb = e.tracker->Update(frame.bgr)) {
+                e.last = *eb;
+            }
+            res.extra_xs[i].push_back(Centre(e.last).x);
+            res.extra_ys[i].push_back(Centre(e.last).y);
+        }
+
         if (distance_stroke) {
             // GD-08: tip loss or no usable partner holds the last good gap.
             if (tip_ok && partner_ok) {
@@ -368,6 +409,7 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
                 std::vector<cv::Rect> excludes = opts.mask_rois;
                 excludes.push_back(last);
                 if (want_partner) excludes.push_back(partner_last);
+                for (const ExtraState& e : extras) excludes.push_back(e.last);
                 dy = CameraMotionY(prev_gray, gray, excludes, recorder ? &inliers : nullptr);
                 if (dy == 0.0) ++res.stats.camera_frames_lost;
             }

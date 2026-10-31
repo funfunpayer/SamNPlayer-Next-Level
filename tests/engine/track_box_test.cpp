@@ -221,6 +221,30 @@ TEST_CASE("track: fixed partner centres stay put; tracked partner moves") {
     CHECK(Ptp(tracked->partner_xs) >= 30);
 }
 
+TEST_CASE("track: fixed extra centres stay put; tracked extra moves") {
+    TempDir dir;
+    const fs::path clip = dir.path / "three.mp4";
+    REQUIRE(clips::WriteTipPartnerAndExtra(clip, 3, 60.0, 40.0, 80.0));
+    TrackOptions o = Plain();
+    o.partner_box = cv::Rect(165, 145, 70, 70);
+    o.partner_fixed = true;
+    o.extra_boxes = {{cv::Rect(245, 85, 70, 70), true}};
+    std::string error;
+    auto fixed = TrackBox(clip, cv::Rect(65, 85, 70, 70), o, &error);
+    REQUIRE_MESSAGE(fixed, error);
+    REQUIRE(fixed->extra_ys.size() == 1);
+    REQUIRE(fixed->extra_ys[0].size() == fixed->times_ms.size());
+    CHECK(std::abs(fixed->extra_xs[0].front() - 280.0) <= 5);
+    CHECK(std::abs(fixed->extra_ys[0].back() - fixed->extra_ys[0].front()) <= 1);
+
+    o.extra_boxes[0].fixed = false;
+    auto tracked = TrackBox(clip, cv::Rect(65, 85, 70, 70), o, &error);
+    REQUIRE_MESSAGE(tracked, error);
+    REQUIRE(tracked->extra_ys.size() == 1);
+    REQUIRE(tracked->extra_ys[0].size() == tracked->times_ms.size());
+    CHECK(Ptp(tracked->extra_ys[0]) >= 30);
+}
+
 // Tf/Tj: tip barely moves on Y; partner swings on X → distance stroke range
 // follows the gap, not tip Y (GD-08 / P3.4).
 TEST_CASE("track: distance stroke follows tip-partner gap not tip Y") {

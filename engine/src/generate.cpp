@@ -1,5 +1,6 @@
 #include "samn/engine/generate.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 
@@ -52,8 +53,9 @@ std::string FunscriptJson(const GenerateRequest& req, const std::vector<Action>&
     return nlohmann::json{{"actions", acts}, {"metadata", meta}}.dump(2);
 }
 
-// Tip (+ optional partner) path for spatial contact (0.7 buildTrajectoryData):
-// box centres in frame pixels, one point per kTipPathStepMs, 0.1 px.
+// Tip (+ optional partner / extras) path for spatial contact (0.7
+// buildTrajectoryData): box centres in frame pixels, one point per
+// kTipPathStepMs, 0.1 px.
 constexpr int64_t kTipPathStepMs = 50;
 
 TrajectoryData BuildTrajectory(const TrackResult& tr) {
@@ -64,11 +66,18 @@ TrajectoryData BuildTrajectory(const TrackResult& tr) {
     const bool have_partner =
         !tr.partner_xs.empty() && tr.partner_xs.size() == tr.times_ms.size() &&
         tr.partner_ys.size() == tr.times_ms.size();
+    const size_t n_extras = std::min(tr.extra_xs.size(), tr.extra_ys.size());
+    t.extras.resize(n_extras);
     for (size_t i = 0; i < tr.times_ms.size() && i < tr.xs.size() && i < tr.frame_ys.size(); ++i) {
         if (!t.tip.empty() && tr.times_ms[i] - t.tip.back().at_ms < kTipPathStepMs) continue;
         t.tip.push_back({tr.times_ms[i], tenth(tr.xs[i]), tenth(tr.frame_ys[i])});
         if (have_partner) t.partner.push_back({tr.times_ms[i], tenth(tr.partner_xs[i]), tenth(tr.partner_ys[i])});
+        for (size_t e = 0; e < n_extras; ++e) {
+            if (tr.extra_xs[e].size() != tr.times_ms.size() || tr.extra_ys[e].size() != tr.times_ms.size()) continue;
+            t.extras[e].push_back({tr.times_ms[i], tenth(tr.extra_xs[e][i]), tenth(tr.extra_ys[e][i])});
+        }
     }
+    // Keep empty slots so extras[i] stays aligned with contactMarks.extras[i].
     return t;
 }
 
@@ -146,12 +155,18 @@ void GenerateUnguarded(const GenerateRequest& req, uint64_t run_id, const std::f
     to.mask_rois = req.mask_rois;
     // G2b: gold contact → partner path (fixed box or second CSRT).
     // Tf/Tj: tip↔partner 2D distance drives the stroke (GD-08); everyday
-    // contact vibration stays tip-axis.
+    // contact vibration stays tip-axis. Magenta extras → track_multi paths.
     if (req.contact_area && req.contact_area->w > 0 && req.contact_area->h > 0) {
         to.partner_box = cv::Rect(static_cast<int>(req.contact_area->x), static_cast<int>(req.contact_area->y),
                                   static_cast<int>(req.contact_area->w), static_cast<int>(req.contact_area->h));
         to.partner_fixed = req.contact_area->fixed;
         to.distance_stroke = IsDistanceProfile(req.signal.profile);
+    }
+    for (const ContactMarkBox& e : req.extra_areas) {
+        if (e.w <= 0 || e.h <= 0) continue;
+        to.extra_boxes.push_back(
+            {cv::Rect(static_cast<int>(e.x), static_cast<int>(e.y), static_cast<int>(e.w), static_cast<int>(e.h)),
+             e.fixed});
     }
     to.cancel = cancel;
     // Progress from the first frame on (GD-21).

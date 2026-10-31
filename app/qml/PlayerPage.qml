@@ -579,9 +579,9 @@ Item {
                     }
                 }
                 // The script's contact marks on the picture (0.7 playback.js
-                // contact overlay): tip blue on the tip path; gold / magenta
-                // contact areas stay put when fixed, else follow the partner
-                // path when one was recorded (not the tip — that looked wrong).
+                // contact overlay): tip blue on the tip path; gold stays put
+                // when fixed else follows partner; magenta extras follow their
+                // own path (track_multi), else partner for old scripts.
                 Item {
                     id: marksLayer
                     objectName: "contactMarksLayer"
@@ -603,6 +603,20 @@ Item {
                         }
                         return b
                     }
+                    function followExtra(box, index) {
+                        const b = Object.assign({}, box)
+                        if (b.fixed) return b
+                        const own = m.hasExtras ? ctrl.extraAt(index, ctrl.playheadMs) : ({})
+                        if (own.x !== undefined) {
+                            b.x = own.x - b.w / 2
+                            b.y = own.y - b.h / 2
+                        } else if (partnerNow.x !== undefined) {
+                            // Old scripts: extras followed the partner path.
+                            b.x = partnerNow.x - b.w / 2
+                            b.y = partnerNow.y - b.h / 2
+                        }
+                        return b
+                    }
                     function boxes() {
                         const out = []
                         if (m.tip) {
@@ -614,7 +628,7 @@ Item {
                         if (m.primary)
                             out.push({ b: followPartner(m.primary), color: "#f2b03d", label: m.primary.cls || qsTr("contact") })
                         for (let i = 0; i < (m.extras || []).length; ++i)
-                            out.push({ b: followPartner(m.extras[i]), color: "#e070a0", label: m.extras[i].cls || qsTr("extra %1").arg(i + 1) })
+                            out.push({ b: followExtra(m.extras[i], i), color: "#e070a0", label: m.extras[i].cls || qsTr("extra %1").arg(i + 1) })
                         return out
                     }
                     Repeater {

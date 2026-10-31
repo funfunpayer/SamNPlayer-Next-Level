@@ -812,12 +812,12 @@ bool GeneratorController::addContactArea(const QRect& area) {
         return false;
     }
     if (extra) {
-        // Stay fixed (0.7): keep the magenta box where drawn; off = follow
-        // partner path once extras multi-path records it.
+        // Stay fixed (0.7): keep the magenta box where drawn; off = record
+        // its own centre path (track_multi / trajectory.extras).
         const bool stay = extras_stay_fixed_;
         contact_areas_.push_back({r.x(), r.y(), r.width(), r.height(), extra_class_.toStdString(), stay});
         const int n = static_cast<int>(contact_areas_.size()) - 1;
-        const QString how = stay ? tr("stay fixed") : tr("follows partner path");
+        const QString how = stay ? tr("stay fixed") : tr("follows own path");
         setStatus(extra_class_.isEmpty() ? tr("Extra contact #%1 added, %2.").arg(n).arg(how)
                                          : tr("Extra contact #%1 (%2) added, %3.").arg(n).arg(extra_class_).arg(how));
     } else {

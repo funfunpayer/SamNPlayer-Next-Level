@@ -574,6 +574,11 @@ JV Enc(const TrajectoryData& t) {
     Put(o, "height", JInt(t.height));
     if (!t.tip.empty()) Put(o, "tip", EncPoints(t.tip));
     if (!t.partner.empty()) Put(o, "partner", EncPoints(t.partner));
+    if (!t.extras.empty()) {
+        JV a = JArr();
+        for (const auto& path : t.extras) a.a.push_back(EncPoints(path));
+        Put(o, "extras", std::move(a));
+    }
     return o;
 }
 JV Enc(const SceneMapVideo& v) {
@@ -935,6 +940,7 @@ void DecodeValue(const JV& v, TrajectoryData& r) {
     o.Get("height", r.height);
     o.Get("tip", r.tip);
     o.Get("partner", r.partner);
+    o.Get("extras", r.extras);
 }
 void DecodeValue(const JV& v, SceneMapVideo& r) {
     const ObjView o = Need(v, "SceneMapVideo");
@@ -1154,7 +1160,8 @@ bool Same(const ContactMarks& a, const ContactMarks& b) {
            Same(a.extras, b.extras) && a.drive_stroke == b.drive_stroke;
 }
 bool Same(const TrajectoryData& a, const TrajectoryData& b) {
-    return a.width == b.width && a.height == b.height && Same(a.tip, b.tip) && Same(a.partner, b.partner);
+    return a.width == b.width && a.height == b.height && Same(a.tip, b.tip) && Same(a.partner, b.partner) &&
+           Same(a.extras, b.extras);
 }
 bool Same(const SceneMapData& a, const SceneMapData& b) {
     return a.version == b.version && a.video.duration_ms == b.video.duration_ms && a.video.width == b.video.width &&
@@ -1545,15 +1552,18 @@ std::vector<T> ShiftSpans(const std::vector<T>& spans, int64_t delta_ms, int* dr
 }
 
 void ShiftTrajectory(TrajectoryData& t, int64_t delta_ms) {
-    for (std::vector<TrajectoryPoint>* points : {&t.tip, &t.partner}) {
+    auto shift = [delta_ms](std::vector<TrajectoryPoint>& points) {
         std::vector<TrajectoryPoint> kept;
-        kept.reserve(points->size());
-        for (TrajectoryPoint p : *points) {
+        kept.reserve(points.size());
+        for (TrajectoryPoint p : points) {
             p.at_ms += delta_ms;
             if (p.at_ms >= 0) kept.push_back(p);
         }
-        *points = std::move(kept);
-    }
+        points = std::move(kept);
+    };
+    shift(t.tip);
+    shift(t.partner);
+    for (auto& path : t.extras) shift(path);
 }
 
 void ShiftRanges(DeviceRecipe& r, int64_t delta_ms) {
@@ -1600,7 +1610,11 @@ std::vector<std::pair<std::string, std::string>> ShiftedFunscriptMetadata(const 
             Put(axes, "suction", EncActions(ShiftActions(m.samn_axes->suction, delta_ms).first));
         out.emplace_back("samn_axes", DumpToString(axes));
     }
-    if (m.trajectory && (!m.trajectory->tip.empty() || !m.trajectory->partner.empty())) {
+    const bool has_extras =
+        m.trajectory &&
+        std::any_of(m.trajectory->extras.begin(), m.trajectory->extras.end(),
+                    [](const std::vector<TrajectoryPoint>& p) { return !p.empty(); });
+    if (m.trajectory && (!m.trajectory->tip.empty() || !m.trajectory->partner.empty() || has_extras)) {
         TrajectoryData t = *m.trajectory;
         ShiftTrajectory(t, delta_ms);
         out.emplace_back("trajectory", DumpToString(Enc(t)));
