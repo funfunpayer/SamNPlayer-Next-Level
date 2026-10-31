@@ -1273,13 +1273,13 @@ void PlayerController::setShowContactMarks(bool on) {
 }
 
 QVariantMap PlayerController::tipAt(double scriptMs) const {
-    const auto p = samn::TipPathAt(tipPath_, int64_t(std::llround(scriptMs)));
+    const auto p = samn::PathAt(tipPath_, int64_t(std::llround(scriptMs)));
     if (!p) return {};
     return {{"x", p->x}, {"y", p->y}};
 }
 
 QVariantMap PlayerController::partnerAt(double scriptMs) const {
-    const auto p = samn::TipPathAt(partnerPath_, int64_t(std::llround(scriptMs)));
+    const auto p = samn::PathAt(partnerPath_, int64_t(std::llround(scriptMs)));
     if (!p) return {};
     return {{"x", p->x}, {"y", p->y}};
 }
