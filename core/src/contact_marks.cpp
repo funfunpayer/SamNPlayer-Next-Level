@@ -58,18 +58,18 @@ std::vector<TrajectoryPoint> SortedTipPath(const TrajectoryData& path) { return 
 
 std::vector<TrajectoryPoint> SortedPartnerPath(const TrajectoryData& path) { return SortedPoints(path.partner); }
 
-std::optional<TrajectoryPoint> TipPathAt(const std::vector<TrajectoryPoint>& tip, int64_t at_ms) {
-    if (tip.empty()) return std::nullopt;
+std::optional<TrajectoryPoint> PathAt(const std::vector<TrajectoryPoint>& path, int64_t at_ms) {
+    if (path.empty()) return std::nullopt;
     // The nearest sample; on a tie the first one (0.7 tipAtMs scanned for
     // the first minimum).
-    const auto first_at = [&tip](int64_t t) {
-        return std::lower_bound(tip.begin(), tip.end(), t, [](const TrajectoryPoint& p, int64_t v) { return p.at_ms < v; });
+    const auto first_at = [&path](int64_t t) {
+        return std::lower_bound(path.begin(), path.end(), t, [](const TrajectoryPoint& p, int64_t v) { return p.at_ms < v; });
     };
     const auto it = first_at(at_ms);
     const TrajectoryPoint* best = nullptr;
-    if (it == tip.end()) {
-        best = &*first_at(tip.back().at_ms);
-    } else if (it == tip.begin()) {
+    if (it == path.end()) {
+        best = &*first_at(path.back().at_ms);
+    } else if (it == path.begin()) {
         best = &*it;
     } else {
         const auto before = first_at(std::prev(it)->at_ms);
@@ -84,7 +84,7 @@ SpatialContact::SpatialContact(ContactMarks marks, const TrajectoryData& path)
 
 double SpatialContact::At(int64_t at_ms) const {
     if (!HasContactAreas(marks_)) return 0;
-    const auto p = TipPathAt(tip_, at_ms);
+    const auto p = PathAt(tip_, at_ms);
     if (!p) return 0;
     double out = 0;
     if (marks_.primary) out = std::max(out, ProximityToBox(p->x, p->y, *marks_.primary, kSpatialContactMargin));

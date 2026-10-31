@@ -97,13 +97,15 @@ Item {
         id: face
         anchors.centerIn: parent
         width: parent.width - 10; height: width; radius: width / 2
+        // Lighter navy face — a near-black disc read as a muddy oval on the
+        // empty home (Owner 26 Oct). Keep depth without a black hole.
         gradient: Gradient {
-            GradientStop { position: 0; color: "#0e3a62" }
-            GradientStop { position: 0.55; color: "#071e36" }
-            GradientStop { position: 1; color: "#030c1a" }
+            GradientStop { position: 0; color: "#124a78" }
+            GradientStop { position: 0.55; color: "#0a2c4c" }
+            GradientStop { position: 1; color: "#061828" }
         }
         border.width: 1
-        border.color: Qt.rgba(90 / 255, 190 / 255, 255 / 255, area.containsMouse ? 0.50 : 0.28)
+        border.color: Qt.rgba(90 / 255, 190 / 255, 255 / 255, area.containsMouse ? 0.55 : 0.34)
         scale: area.pressed ? 0.94 : (area.containsMouse ? 1.05 : 1.0)
         Behavior on scale { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
         Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
