@@ -21,26 +21,32 @@ namespace fs = std::filesystem;
 
 namespace {
 
-std::string env(const char* name) {
 #ifdef _WIN32
-    // _dupenv_s: the safe CRT variant (getenv is deprecated on MSVC).
-    char* buf = nullptr;
+// Wide env → path. The narrow _dupenv_s / getenv path uses the ANSI code
+// page, so a user name outside that page (e.g. Jürgen, 太郎) yields a wrong
+// %APPDATA% and the settings land in another folder.
+fs::path env_path(const wchar_t* name) {
+    wchar_t* buf = nullptr;
     size_t len = 0;
-    if (_dupenv_s(&buf, &len, name) != 0 || buf == nullptr) return {};
-    std::string v(buf);
+    if (_wdupenv_s(&buf, &len, name) != 0 || buf == nullptr) return {};
+    fs::path p(buf);
     std::free(buf);
-    return v;
-#else
-    const char* v = std::getenv(name);
-    return v ? std::string(v) : std::string();
-#endif
+    return p;
 }
+#else
+fs::path env_path(const char* name) {
+    const char* v = std::getenv(name);
+    return v ? fs::path(v) : fs::path();
+}
+#endif
 
 fs::path home_dir() {
 #ifdef _WIN32
-    if (auto p = env("USERPROFILE"); !p.empty()) return fs::path(p);
+    if (auto p = env_path(L"USERPROFILE"); !p.empty()) return p;
+    if (auto h = env_path(L"HOME"); !h.empty()) return h;
+#else
+    if (auto h = env_path("HOME"); !h.empty()) return h;
 #endif
-    if (auto h = env("HOME"); !h.empty()) return fs::path(h);
     return fs::path();
 }
 
@@ -58,20 +64,15 @@ bool replace_file(const fs::path& from, const fs::path& to) {
 }  // namespace
 
 fs::path config_dir() {
-    if (auto e = env("SAMN_CONFIG_DIR"); !e.empty()) return fs::path(e);
-    fs::path base;
 #ifdef _WIN32
-    if (auto a = env("APPDATA"); !a.empty())
-        base = fs::path(a);
-    else
-        base = home_dir() / "AppData" / "Roaming";
+    if (auto e = env_path(L"SAMN_CONFIG_DIR"); !e.empty()) return e;
+    if (auto a = env_path(L"APPDATA"); !a.empty()) return a / "SamNPlayer2";
+    return home_dir() / "AppData" / "Roaming" / "SamNPlayer2";
 #else
-    if (auto x = env("XDG_CONFIG_HOME"); !x.empty())
-        base = fs::path(x);
-    else
-        base = home_dir() / ".config";
+    if (auto e = env_path("SAMN_CONFIG_DIR"); !e.empty()) return e;
+    if (auto x = env_path("XDG_CONFIG_HOME"); !x.empty()) return x / "SamNPlayer2";
+    return home_dir() / ".config" / "SamNPlayer2";
 #endif
-    return base / "SamNPlayer2";
 }
 
 Settings::Settings(fs::path path) : path_(path.empty() ? config_dir() / "settings.json" : std::move(path)) {
