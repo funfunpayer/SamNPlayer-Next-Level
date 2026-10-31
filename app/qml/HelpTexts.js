@@ -190,6 +190,7 @@ const texts = {
     "generator.reject": "Delete this teacher candidate from the companion .samn.",
     // src/generator.js:253 (Sensitivity)
     "generator.sensitivity": "Lower = engages earlier (wider contact window). Higher = deep only (near peak position). Default 0.75 = top quarter of the video signal.",
+    "gen-feel-probe": "Live preview of contact vibration on a synthetic bounce. Orange = stroke depth, cyan = vibe. Earlier sensitivity lights more of the stroke; Impulse fires only near the peak.",
     // src/generator.js:470 (Smoothing window)
     "generator.smoothing-window": "Signal smoothing window width in frames. Larger = calmer but slower. Default 11.",
     // src/generator.js:548 (Start (s))

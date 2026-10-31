@@ -69,6 +69,7 @@ class GeneratorController : public QObject {
     // (linear | soft | peak | impulse; soft by default).
     Q_PROPERTY(double contactSpan READ contactSpan WRITE setContactSpan NOTIFY optionsChanged)
     Q_PROPERTY(QString contactCurve READ contactCurve WRITE setContactCurve NOTIFY optionsChanged)
+    Q_PROPERTY(QVariantMap contactFeelProbe READ contactFeelProbe NOTIFY optionsChanged)
     // 0.8 "Optimize after Create": "" (off), "general" or "neo2" (D-156).
     Q_PROPERTY(QString optimizeTarget READ optimizeTarget WRITE setOptimizeTarget NOTIFY optionsChanged)
     // 0.7 "0–100 on video" over the preview (default on; generator.pos_overlay).
@@ -183,6 +184,9 @@ public:
     void setContactSpan(double span);
     QString contactCurve() const { return contact_curve_; }
     void setContactCurve(const QString& curve);
+    // Live Feel probe (0.7 PreviewContactVibration): {activePct, peak, hint,
+    // stroke:[{x,y}], vib:[{x,y}], peaks:[{x,y}]} with x/y in 0..1.
+    QVariantMap contactFeelProbe() const;
     QString optimizeTarget() const { return optimize_target_; }
     bool posOverlay() const { return pos_overlay_; }
     void setPosOverlay(bool on);

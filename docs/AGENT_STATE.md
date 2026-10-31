@@ -2,16 +2,22 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 31 Oct 2026, Cursor, branch `cursor/player-partner-overlay-635a`: Player contact overlay follows the recorded partner path (handover below). Before: 30 Oct, Claude `claude/samn2-data-safety` (#139) and `claude/samn2-stop-safety` (#138); 28 Oct `claude/samn2-auto-tip` (#136); #137 health; #135 self-check handoff.
+**Last update:** 1 Nov 2026, Cursor, branch `cursor/g3-feel-probe-635a`: Generator Feel probe (handover below). Before: extras multi-path #145; partner overlay #141; 30 Oct Claude #139/#138.
+
+## Handover: `cursor/g3-feel-probe-635a` (1 Nov)
+
+Generator G3 Feel probe — live Sensitivity / Curve preview before Create.
+
+- **Core:** `samn::PreviewContactVibration` / `SyntheticContactBounce` (`contact_preview.h`): fixed ~3 s bounce through `ToIntensityCurve` with contact vibration; returns active%, peak, stroke/vib polylines, peak dots (≥15).
+- **UI:** Feel card under Curve — badges, 72 px Canvas (orange stroke, cyan vibe), hint. `GeneratorController::contactFeelProbe`.
+- **Tests:** `preview: span earlier…`, `preview: impulse is quieter…`, `contactFeelProbeFollowsSpanAndCurve`.
+- **Still open:** Player Inspector feel probe / Save to script; G4 advanced; FuseTipPartners; MT-Debug trajectory line; handbook / idle ribbon / donate URLs.
 
 ## Handover: `cursor/player-partner-overlay-635a` (31 Oct)
 
-Player partner overlay — the missing half of G2b's contact marks on Play (AGENT_STATE "Next after Tf/Tj").
+Player partner overlay — merged as #141.
 
-- **Core:** `SortedPartnerPath` next to `SortedTipPath`; `TipPathAt` works on either sorted path. Test `partner path sorts like the tip path…`.
-- **Player:** loads `trajectory.partner` into `partnerPath_`; `partnerAt(ms)` for QML; `contactMarks.hasPartner` and the hint adds "partner path" when samples exist.
-- **Overlay:** non-fixed gold / magenta boxes centre on the partner sample at the playhead; fixed boxes and scripts without a partner path stay put (still not following the tip — that looked wrong). Tip stays on the tip path.
-- **Still open from that tip:** extras multi-path (`track_multi`); MT-Debug trajectory line overlay (tip accent + partner teal); donation pages / handbook / idle ribbon (Owner GUI leftovers).
+- **Core / Player:** `SortedPartnerPath`, `partnerAt`; overlay follows partner when not fixed.
 
 
 ## Handover: `claude/samn2-data-safety` (30 Oct)
@@ -203,7 +209,7 @@ Data and file fixes from a read-only bug hunt. Each fix has a test that failed b
 
 ## Next (in order; the work list is `LESSONS.md` § Gaps, `TEST_PARITY.md` and `P3_GENERATOR.md`)
 
-0. **Generator:** G2 stack ✅ (#114–#116); Tf/Tj distance stroke ✅ (Cursor #119, finished by Claude); G3 feel ✅; Player partner overlay ✅ (this PR); next G3 feel probe, extras multi (`track_multi`), G4 advanced settings → G8 `.sam`.
+0. **Generator:** G2 stack ✅ (#114–#116); Tf/Tj distance stroke ✅ (Cursor #119, finished by Claude); G3 feel ✅; Player partner overlay ✅ (#141); extras multi (`track_multi`) ✅ (#145); G3 feel probe ✅ (this PR); next G4 advanced settings → G8 `.sam`.
 1. **Look polish:** ✅ (#122, Claude takeover of Cursor #117; reduced-motion gates and a window-wide loop test added).
 2. **Owner GUI leftovers:** handbook (§12), idle ribbon (§11), donation pages (Manifest §2). Owner 26 Oct: the glow behind the empty Play button looks odd (dark oval), the GUI still looks makeshift in places: a polish pass after the Generator. Reduced motion ✅ (#120).
 3. **AI Train D-155:** script compare with labels, then golden-clip run (Owner clips).
@@ -219,7 +225,7 @@ Data and file fixes from a read-only bug hunt. Each fix has a test that failed b
 
 ### Handoff note (for the next agent)
 - **Routing:** one theme per agent. Generator Tf/Tj distance on this tip; Look #117 parallel (do not steal Look files for feature work).
-- Next after partner overlay: extras multi-path (`track_multi`); then G4 advanced. Soft masks + partner path + distance stroke + Play overlay follow are on `main` once this merges.
+- Next after feel probe: G4 advanced (Tracking & polarity polish / Signal & quality / Expert knobs that already have engine hooks).
 - Do not push to `claude/*`. Push often; update this file every PR.
 
 Owner reminders (16–17 Oct): the Generator is the Editor; detection better than 0.7 but measured against it; curves stay real curves (audio too); every function of 0.7 and all earlier versions and plans comes along, what was removed on purpose stays out (and why is in `VERSIONS_AND_PLANS.md`).

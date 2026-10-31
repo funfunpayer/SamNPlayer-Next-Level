@@ -20,6 +20,7 @@
 #include "samn/engine/generate_queue.h"
 #include "samn/engine/tip_find.h"
 #include "samn/contact_marks.h"
+#include "samn/contact_preview.h"
 #include "samn/ozone.h"
 #include "samn/polarity.h"
 #include "samn/samn_file.h"
@@ -599,6 +600,24 @@ void GeneratorController::setContactCurve(const QString& curve) {
     contact_curve_ = v;
     saveSetting("generator.contact_vibration_curve", v.toStdString());
     emit optionsChanged();
+}
+
+QVariantMap GeneratorController::contactFeelProbe() const {
+    const samn::ContactVibrationPreview p =
+        samn::PreviewContactVibration(contact_span_, contact_curve_.toStdString());
+    QVariantList stroke, vib, peaks;
+    stroke.reserve(int(p.stroke.size()));
+    vib.reserve(int(p.vib.size()));
+    peaks.reserve(int(p.peaks.size()));
+    for (const auto& pt : p.stroke) stroke << QVariantMap{{"x", pt.x}, {"y", pt.y}};
+    for (const auto& pt : p.vib) vib << QVariantMap{{"x", pt.x}, {"y", pt.y}};
+    for (const auto& pt : p.peaks) peaks << QVariantMap{{"x", pt.x}, {"y", pt.y}};
+    return {{"activePct", p.active_pct},
+            {"peak", p.peak},
+            {"hint", QString::fromStdString(p.hint)},
+            {"stroke", stroke},
+            {"vib", vib},
+            {"peaks", peaks}};
 }
 
 void GeneratorController::setOptimizeTarget(const QString& target) {

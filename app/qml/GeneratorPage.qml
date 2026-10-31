@@ -1686,6 +1686,88 @@ Item {
                                 onActivated: gen.contactCurve = currentValue
                             }
                         }
+                        // 0.7 Feel probe: synthetic bounce through Sensitivity / Curve.
+                        ColumnLayout {
+                            id: feelProbeBox
+                            objectName: "contactFeelProbe"
+                            Layout.fillWidth: true
+                            spacing: 4
+                            readonly property var probe: gen.contactFeelProbe
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 8
+                                Text {
+                                    textFormat: Text.PlainText
+                                    text: qsTr("Feel probe")
+                                    color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                                }
+                                HelpChip { key: "gen-feel-probe"; Layout.alignment: Qt.AlignVCenter }
+                                Item { Layout.fillWidth: true }
+                                Text {
+                                    objectName: "feelProbeActive"
+                                    textFormat: Text.PlainText
+                                    text: qsTr("%1% active").arg(Math.round(feelProbeBox.probe.activePct || 0))
+                                    color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 12
+                                }
+                                Text {
+                                    objectName: "feelProbePeak"
+                                    textFormat: Text.PlainText
+                                    text: qsTr("peak %1").arg(Math.round(feelProbeBox.probe.peak || 0))
+                                    color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                                }
+                            }
+                            Canvas {
+                                id: feelProbeCanvas
+                                objectName: "feelProbeCanvas"
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 72
+                                property var probe: feelProbeBox.probe
+                                onProbeChanged: requestPaint()
+                                onWidthChanged: requestPaint()
+                                onHeightChanged: requestPaint()
+                                onPaint: {
+                                    const ctx = getContext("2d")
+                                    ctx.reset()
+                                    const w = width, h = height
+                                    ctx.fillStyle = Qt.rgba(1, 1, 1, 0.04)
+                                    ctx.fillRect(0, 0, w, h)
+                                    const stroke = probe.stroke || []
+                                    const vib = probe.vib || []
+                                    const peaks = probe.peaks || []
+                                    function poly(pts, color, width) {
+                                        if (pts.length < 2) return
+                                        ctx.beginPath()
+                                        ctx.strokeStyle = color
+                                        ctx.lineWidth = width
+                                        ctx.lineJoin = "round"
+                                        for (let i = 0; i < pts.length; ++i) {
+                                            const x = pts[i].x * w
+                                            const y = (1 - pts[i].y) * h
+                                            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
+                                        }
+                                        ctx.stroke()
+                                    }
+                                    poly(stroke, Theme.orange, 1.5)
+                                    poly(vib, Theme.cyan, 1.75)
+                                    ctx.fillStyle = Theme.cyan
+                                    for (let i = 0; i < peaks.length; ++i) {
+                                        const x = peaks[i].x * w
+                                        const y = (1 - peaks[i].y) * h
+                                        ctx.beginPath()
+                                        ctx.arc(x, y, 2.5, 0, Math.PI * 2)
+                                        ctx.fill()
+                                    }
+                                }
+                            }
+                            Text {
+                                objectName: "feelProbeHint"
+                                Layout.fillWidth: true
+                                textFormat: Text.PlainText
+                                wrapMode: Text.WordWrap
+                                text: feelProbeBox.probe.hint || ""
+                                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11
+                            }
+                        }
                         RowLayout {
                             Layout.fillWidth: true; spacing: 8
                             FlowButton {
