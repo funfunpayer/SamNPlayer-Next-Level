@@ -13,6 +13,12 @@ namespace {
 
 bool Drawable(const ContactMarkBox& b) { return b.w > 0 && b.h > 0; }
 
+std::vector<TrajectoryPoint> SortedPoints(std::vector<TrajectoryPoint> points) {
+    std::stable_sort(points.begin(), points.end(),
+                     [](const TrajectoryPoint& a, const TrajectoryPoint& b) { return a.at_ms < b.at_ms; });
+    return points;
+}
+
 }  // namespace
 
 const std::vector<std::string>& TipClasses() {
@@ -48,11 +54,9 @@ double ProximityToBox(double x, double y, const ContactMarkBox& b, double margin
     return t >= 1 ? 0 : 1 - t;
 }
 
-std::vector<TrajectoryPoint> SortedTipPath(const TrajectoryData& path) {
-    std::vector<TrajectoryPoint> tip = path.tip;
-    std::stable_sort(tip.begin(), tip.end(), [](const TrajectoryPoint& a, const TrajectoryPoint& b) { return a.at_ms < b.at_ms; });
-    return tip;
-}
+std::vector<TrajectoryPoint> SortedTipPath(const TrajectoryData& path) { return SortedPoints(path.tip); }
+
+std::vector<TrajectoryPoint> SortedPartnerPath(const TrajectoryData& path) { return SortedPoints(path.partner); }
 
 std::optional<TrajectoryPoint> TipPathAt(const std::vector<TrajectoryPoint>& tip, int64_t at_ms) {
     if (tip.empty()) return std::nullopt;

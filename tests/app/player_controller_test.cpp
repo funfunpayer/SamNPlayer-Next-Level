@@ -1027,9 +1027,11 @@ private slots:
         QCOMPARE(m.value("primary").toMap().value("cls").toString(), QString("nipples"));
         QCOMPARE(m.value("extras").toList().size(), 1);
         QCOMPARE(m.value("width").toInt(), 320);
+        QCOMPARE(m.value("hasPartner").toBool(), false);
         QCOMPARE(m.value("hint").toString(), QString("Tip: glans · 3 marked boxes · feel only (the tip tracker drives the stroke)"));
         QCOMPARE(c.tipAt(1100).value("x").toDouble(), 60.0);
         QVERIFY(c.tipAt(5000).isEmpty());  // past the path
+        QVERIFY(c.partnerAt(1000).isEmpty());
         QVERIFY(c.showContactMarks());
         c.setShowContactMarks(false);
         QVERIFY(!c.showContactMarks());
@@ -1042,12 +1044,29 @@ private slots:
         const int away = c.vibrationNow();
         QVERIFY2(inArea > away + 20, qPrintable(QString("%1 vs %2").arg(inArea).arg(away)));
 
+        // Partner path: non-fixed gold contact follows it in the overlay
+        // (partnerAt); fixed extras stay put (hasPartner + fixed flag).
+        path.partner = {{0, 20, 20}, {1000, 180, 120}, {2000, 20, 20}, {3000, 20, 20}};
+        doc.trajectory = path;
+        const QString withPartner = d.filePath("marks-partner.samn");
+        samn::SaveDocument(std::filesystem::u8path(withPartner.toStdString()), doc);
+        QVERIFY(c.openPath(withPartner));
+        const QVariantMap mp = c.contactMarks();
+        QVERIFY(mp.value("hasPartner").toBool());
+        QVERIFY(mp.value("hint").toString().contains(QString("partner path")));
+        QCOMPARE(c.partnerAt(1100).value("x").toDouble(), 180.0);
+        QCOMPARE(c.partnerAt(1100).value("y").toDouble(), 120.0);
+        QVERIFY(c.partnerAt(5000).isEmpty());
+        QVERIFY(!mp.value("primary").toMap().value("fixed").toBool());
+        QVERIFY(mp.value("extras").toList().at(0).toMap().value("fixed").toBool());
+
         // A plain script has no marks.
         const QString plain = d.filePath("plain.funscript");
         writeFile(plain, QByteArray(R"({"actions":)") + kRefActions + "}");
         QVERIFY(c.openPath(plain));
         QVERIFY(c.contactMarks().isEmpty());
         QVERIFY(c.tipAt(1000).isEmpty());
+        QVERIFY(c.partnerAt(1000).isEmpty());
     }
 
     // 0.7 Settings → Play "Honor inverted flag" (on by default) and the

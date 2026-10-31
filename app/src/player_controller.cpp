@@ -435,10 +435,13 @@ QVariantMap MarksInfo(const samn::ContactMarks& m, const std::optional<samn::Tra
     out["extras"] = extras;
     out["width"] = path ? qint64(path->width) : 0;
     out["height"] = path ? qint64(path->height) : 0;
+    const bool hasPartner = path && !path->partner.empty();
+    out["hasPartner"] = hasPartner;
     QStringList hint;
     if (!m.tip_class.empty()) hint << QCoreApplication::translate("PlayerController", "Tip: %1").arg(QString::fromStdString(m.tip_class));
     if (boxes == 1) hint << QCoreApplication::translate("PlayerController", "1 marked box");
     else if (boxes > 1) hint << QCoreApplication::translate("PlayerController", "%1 marked boxes").arg(boxes);
+    if (hasPartner) hint << QCoreApplication::translate("PlayerController", "partner path");
     hint << (m.drive_stroke ? QCoreApplication::translate("PlayerController", "distance drives the stroke")
                             : QCoreApplication::translate("PlayerController", "feel only (the tip tracker drives the stroke)"));
     out["hint"] = hint.join(QStringLiteral(" · "));
@@ -620,6 +623,7 @@ bool PlayerController::openScript(const QString& pathIn, const QString& videoIn)
                         ? MarksInfo(*doc.contact_marks, doc.trajectory)
                         : QVariantMap{};
     tipPath_ = doc.trajectory ? samn::SortedTipPath(*doc.trajectory) : std::vector<samn::TrajectoryPoint>{};
+    partnerPath_ = doc.trajectory ? samn::SortedPartnerPath(*doc.trajectory) : std::vector<samn::TrajectoryPoint>{};
     // 0.7 showContact: contact in the recipe, Neo axes, or tf / tj.
     contactControls_ = recipeHasContact_ || !doc.vibration.empty() || !doc.suction.empty() ||
                        samn::IsDistanceProfile(doc.profile);
@@ -1071,6 +1075,7 @@ void PlayerController::clearScript() {
     activeStrength_.clear();
     contactMarks_.clear();
     tipPath_.clear();
+    partnerPath_.clear();
     contactControls_ = contactKnobsLive_ = false;
     emit mappedChanged();
     stroke_.clear();
@@ -1269,6 +1274,12 @@ void PlayerController::setShowContactMarks(bool on) {
 
 QVariantMap PlayerController::tipAt(double scriptMs) const {
     const auto p = samn::TipPathAt(tipPath_, int64_t(std::llround(scriptMs)));
+    if (!p) return {};
+    return {{"x", p->x}, {"y", p->y}};
+}
+
+QVariantMap PlayerController::partnerAt(double scriptMs) const {
+    const auto p = samn::TipPathAt(partnerPath_, int64_t(std::llround(scriptMs)));
     if (!p) return {};
     return {{"x", p->x}, {"y", p->y}};
 }
