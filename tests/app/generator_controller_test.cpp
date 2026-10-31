@@ -430,6 +430,33 @@ private slots:
         g.setVibFollow(false);
     }
 
+    // The auto scene follows the primary area's class, not the default class
+    // for new marks, and the Feel page hears about a change.
+    void theAutoSceneFollowsThePrimaryAreaClass() {
+        GeneratorController g;
+        g.setSceneFeel("auto");
+        QTemporaryDir own;
+        const QString video = own.filePath("a.mp4");
+        clips::WriteMoving(std::filesystem::path(video.toStdU16String()), 2, 80.0, 1.0);
+        QVERIFY(g.openVideo(video));
+        g.setBox(QRect(100, 40, 120, 160));
+        QCOMPARE(g.contactClass(), QStringLiteral("nipples"));  // the default for new marks
+        g.setMarkContact(true);
+        QVERIFY(g.addContactArea(QRect(130, 90, 60, 60)));
+        QCOMPARE(g.autoScene(), QStringLiteral("breast"));
+        QSignalSpy feel(&g, &GeneratorController::feelChanged);
+        g.setAreaClass(0, "mouth");
+        QVERIFY(feel.count() >= 1);
+        QCOMPARE(g.contactClass(), QStringLiteral("nipples"));
+        QCOMPARE(g.autoScene(), QStringLiteral("oral"));
+
+        QSignalSpy created(&g, &GeneratorController::created);
+        QVERIFY(g.create());
+        QTRY_COMPARE_WITH_TIMEOUT(created.count(), 1, 60000);
+        const samn::Document d = samn::LoadDocument(std::filesystem::path(own.filePath("a.samn").toStdU16String()));
+        QCOMPARE(QString::fromStdString(d.recipe.scene_feel), QStringLiteral("oral"));
+    }
+
     void findTipProposesTheBoxAndCandidates() {
         GeneratorController g;
         // The explicit Find tip only: no automatic search on open.
@@ -695,6 +722,31 @@ private slots:
         QVERIFY(!QFileInfo::exists(own.filePath("c.funscript")));
         g.removeFromQueue(0);
         QCOMPARE(g.queue().size(), 1);
+    }
+
+    void twoVideosWithOneScriptNameDoNotOverwriteEachOther() {
+        GeneratorController g;
+        QTemporaryDir own;
+        const QString mp4 = own.filePath("x.mp4"), mkv = own.filePath("x.mkv");
+        clips::WriteMoving(std::filesystem::path(mp4.toStdU16String()), 8, 80.0, 1.0);
+        clips::WriteMoving(std::filesystem::path(mkv.toStdU16String()), 8, 80.0, 1.0);
+        QCOMPARE(g.addToQueue({mp4, mkv}), 2);
+        QSignalSpy finished(&g, &GeneratorController::queueFinished);
+        QVERIFY(g.runQueue(true));
+        QTRY_COMPARE_WITH_TIMEOUT(finished.count(), 1, 60000);
+        auto item = [&](int i) { return g.queue().at(i).toMap(); };
+        QCOMPARE(item(0).value("status").toString(), QStringLiteral("done"));
+        QCOMPARE(item(1).value("status").toString(), QStringLiteral("failed"));
+        QCOMPARE(item(1).value("message").toString(), QStringLiteral("same script name as x.mp4"));
+
+        // A later run counts what an earlier one wrote (review of #140).
+        const QString avi = own.filePath("x.avi");
+        clips::WriteMoving(std::filesystem::path(avi.toStdU16String()), 8, 80.0, 1.0);
+        QCOMPARE(g.addToQueue({avi}), 1);
+        QVERIFY(g.runQueue(true));
+        QTRY_COMPARE_WITH_TIMEOUT(finished.count(), 2, 60000);
+        QCOMPARE(item(2).value("status").toString(), QStringLiteral("failed"));
+        QCOMPARE(item(2).value("message").toString(), QStringLiteral("same script name as x.mp4"));
     }
 
     void cancelStopsTheRunAndWritesNothing() {

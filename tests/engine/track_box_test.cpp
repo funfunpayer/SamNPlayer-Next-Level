@@ -327,6 +327,21 @@ TEST_CASE("parts: coast moves on for 8 frames, then gives up") {
     CHECK(held->tl() == cv::Point(5, 5));
 }
 
+TEST_CASE("parts: a reacquire jump is not a coast velocity") {
+    Coast c;
+    c.ObserveOk({10, 10, 20, 20});
+    for (int i = 0; i < Coast::kDefaultFrames + 1; ++i) c.OnLost();
+    c.Reanchor({210, 110, 20, 20});  // found again far away
+    auto r = c.OnLost();
+    REQUIRE(r);
+    CHECK(r->tl() == cv::Point(210, 110));  // held, not 210 + 200
+    // Real motion after the re-anchor is still picked up.
+    c.ObserveOk({213, 110, 20, 20});
+    r = c.OnLost();
+    REQUIRE(r);
+    CHECK(r->x == 216);
+}
+
 TEST_CASE("parts: appearance memory knows the start region and fails closed") {
     cv::Mat bgr = clips::Texture(clips::kW, clips::kH, 11, 140);
     clips::Disc(bgr, 160, 120);
