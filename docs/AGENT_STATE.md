@@ -2,7 +2,15 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 31 Oct 2026, Cursor, branch `cursor/config-dir-wide-env-635a`: Windows `config_dir` reads env wide (handover below). Before: #141 Player partner overlay; 30 Oct Claude data/device safety (#139, #138).
+**Last update:** 1 Nov 2026, Claude, branch `claude/review-previous-work-jnjttn`: Script Doctor metric assertions (GAP-12 leftovers, handover below). Before: #142 Windows `config_dir` wide env; #141 Player partner overlay.
+
+## Handover: `claude/review-previous-work-jnjttn` (1 Nov)
+
+GAP-12 leftovers from the quality list of #142.
+
+- **Tests only** (`tests/core/script_quality_test.cpp`): four cases assert `DeviceCompatMetrics` values: slow full strokes (50+ in more than 900 ms; exactly 900 ms and a 49 move do not count), the warning needs more than 25 % of the large moves, the 5-95 count (5 and 95 are usable), average and 95th-percentile intensity (a zero-length step adds no weight), and "too close" stays strictly under 100 ms. Every expected number was checked against 0.7 `funscript.EvaluateDeviceCompat` with a throw-away Go probe; the C++ code needed no change.
+- **Verified:** core build without Qt/OpenCV (Linux, GCC), `core_tests` 434/434 green.
+- **Still open for quality:** Quality Doctor (P3.6), limits enforced on output (not only reported); MT-Debug trajectory line overlay; `track_multi`.
 
 ## Handover: `cursor/config-dir-wide-env-635a` (31 Oct)
 
@@ -10,7 +18,7 @@ Code quality from the data-safety bug hunt's open item: `config_dir()` used narr
 
 - **Fix:** `_wdupenv_s` → `fs::path` for those vars (`core/src/settings.cpp`).
 - **Tests:** Linux non-ASCII `SAMN_CONFIG_DIR`; Windows wide `SAMN_CONFIG_DIR` and `APPDATA` (`settings_test.cpp`).
-- **Still open for quality:** Script Doctor metrics assertions (GAP-12 leftovers); Quality Doctor (P3.6); MT-Debug trajectory line overlay; `track_multi`.
+- **Still open for quality:** ~~Script Doctor metrics assertions (GAP-12 leftovers)~~ (done 1 Nov); Quality Doctor (P3.6); MT-Debug trajectory line overlay; `track_multi`.
 
 ## Handover: `cursor/player-partner-overlay-635a` (31 Oct, merged #141)
 
