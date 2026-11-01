@@ -4,6 +4,16 @@
 
 **Last update:** 1 Nov 2026, Claude, branch `claude/review-previous-work-jnjttn`: Script Doctor metric assertions (GAP-12 leftovers, handover below). Before: #142 Windows `config_dir` wide env; #141 Player partner overlay.
 
+## Handover: `cursor/training-coach-neo2-635a` (1 Nov)
+
+Owner training overview → only what Training already can use (device sessions). **Ignored:** gym/hip mobility flows, medical study dump, physical Squeeze of the glans, weekly strength calendar.
+
+- **Built-in copy** (`core/src/training.cpp`): Stop-Start / Plateau / Breathing pace / Pelvic floor descriptions teach feedback 5–7, Interrupt at 8, out-breath, fully release (never press down), practice path.
+- **UI** (`TrainingPage.qml`): Feedback card arousal scale rules; Safety stop-on-pain line; About path (Breathing → Stop-Start → Plateau) + 2–3×/week / 15–25 min / start low / lube; program blurb shows up to 5 lines.
+- **Recap hints** (`training_controller.cpp`): many interrupts → Gentle/longer rest; avg feedback ≥8 → start lower; clean/low → raise one variable, keep 2–3/week.
+- **Not changed:** engine timings, new presets, Player Extended-O (Play feature), diary schema (history/CSV already exist).
+- **Next:** back to Generator G4a/G4b or Owner GUI leftovers — this tip is coaching only.
+
 ## Handover: `cursor/g4-advanced-shell-635a` (1 Nov) — G4a
 
 Advanced settings shell on Create (closed by default). Engine hooks already existed; this wires the GUI + settings + queue.

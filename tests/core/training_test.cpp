@@ -641,10 +641,16 @@ TEST_CASE("the body programs are cue patterns of suction and light vibration") {
     // ~6 breaths a minute: 4.5 s in, 0.5 s hold, 4.5 s out, 0.5 s rest = 10 s a breath.
     const auto& v = *b->phases[0].vibration;
     CHECK(v.ramp_up_ms + v.hold_ms + v.ramp_down_ms + b->phases[0].rest_ms == 10000);
+    CHECK(b->description.find("out-breath") != std::string::npos);
     const auto* p = builtin_script("pelvic-floor");
     REQUIRE(p);
     CHECK(p->phases[0].suction->hold_ms == 2500);
     CHECK(p->phases[0].suction->peak_level > p->phases[0].vibration->peak_level);
+    CHECK(p->description.find("release") != std::string::npos);
+    const auto* ss = builtin_script("stop-start");
+    REQUIRE(ss);
+    CHECK(ss->description.find("Interrupt") != std::string::npos);
+    CHECK(ss->description.find("5") != std::string::npos);
 }
 
 // ---------------------------------------------------------------- preview

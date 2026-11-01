@@ -176,9 +176,11 @@ Item {
                         Text {
                             textFormat: Text.PlainText
                             Layout.fillWidth: true; Layout.fillHeight: true
-                            text: page.custom ? qsTr("Stop-Start or Plateau with the timings on the right.") : ctl.scriptDescription
+                            text: page.custom
+                                  ? qsTr("Stop-Start (fully to 0 between cycles) or Plateau (high floor / edging). Stay at feedback 5–7; Interrupt at 8.")
+                                  : ctl.scriptDescription
                             color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 11
-                            wrapMode: Text.WordWrap; elide: Text.ElideRight; maximumLineCount: 2
+                            wrapMode: Text.WordWrap; elide: Text.ElideRight; maximumLineCount: 5
                         }
                     }
                     Rectangle { Layout.preferredWidth: 1; Layout.fillHeight: true; Layout.topMargin: 4; Layout.bottomMargin: 4; color: Theme.cardBorder }
@@ -765,7 +767,11 @@ Item {
                         }
                         RowLayout {
                             Layout.fillWidth: true; spacing: 10
-                            Text { textFormat: Text.PlainText; Layout.fillWidth: true; wrapMode: Text.WordWrap; text: qsTr("Esc interrupts the current cycle at any time."); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
+                            Text {
+                                textFormat: Text.PlainText; Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                text: qsTr("Esc interrupts the current cycle. Stop the session on pain, numbness, skin irritation, or after alcohol.")
+                                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
                             FlowButton { text: qsTr("Stop session"); icon: "warning"; danger: true; enabled: ctl.active; onClicked: ctl.emergencyStop() }
                         }
                     }
@@ -779,7 +785,11 @@ Item {
                         x: 14; y: 14; width: parent.width - 28
                         spacing: 8
                         Text { textFormat: Text.PlainText; text: qsTr("Feedback"); color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 15; font.weight: Font.Medium }
-                        Text { textFormat: Text.PlainText; Layout.fillWidth: true; wrapMode: Text.WordWrap; text: qsTr("How close are you right now? High values → shorter, gentler next cycles with longer rest. Target is 7."); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11 }
+                        Text {
+                            textFormat: Text.PlainText; Layout.fillWidth: true; wrapMode: Text.WordWrap
+                            text: qsTr("Arousal 1–10. Stay mostly at 5–7. At 8: Interrupt (or lower intensity) and lengthen the out-breath. 9–10 interrupt the cycle for you and soften the next one. Target is 7.")
+                            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11
+                        }
                         Row {
                             spacing: 5
                             Repeater {
@@ -890,7 +900,7 @@ Item {
                         id: about
                         x: 14; y: 14; width: parent.width - 28
                         wrapMode: Text.WordWrap
-                        text: qsTr("Standalone up/down cycles for stamina/control training — no video or script required. Classic Stop-Start and Plateau stay available (Preset dropdown + Custom → Technique). Newer multi-phase presets (wave / massage / variable) sit beside them. Vibration and suction are both stepless. Each cycle is logged (Settings → log folder) so drive can be tuned later.")
+                        text: qsTr("Standalone up/down cycles for stamina/control on Sam Neo 2 — no video or script required. Path: Breathing pace → Stop-Start → Plateau / Edge ladder; Pelvic floor cues when you want squeeze–release practice. 2–3 sessions a week, about 15–25 minutes, start low, use lube, clean the toy. Classic Stop-Start and Plateau also live under Custom → Technique. Each cycle is logged (Settings → log folder). Not medical advice.")
                         color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 11
                     }
                 }
