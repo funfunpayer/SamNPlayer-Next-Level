@@ -544,6 +544,12 @@ private slots:
             QTRY_VERIFY_WITH_TIMEOUT(page->isVisible() && page->property("opacity").toDouble() > 0.99, kWait);
             QVERIFY(byName("generalTab")->isVisible());
             QVERIFY(!byName("logTab")->isVisible());
+            // Support card: appeal, GitHub, and the donate placeholder (D-022 / D-153).
+            QVERIFY(byName("supportSection") && byName("supportSection")->isVisible());
+            QVERIFY(byName("supportOpenGithub"));
+            QQuickItem* donate = byName("donateComingSoon");
+            QVERIFY(donate && donate->isVisible());
+            QVERIFY(donate->property("text").toString().contains(QStringLiteral("Donation page coming soon")));
             page->setProperty("tab", 1);
             QTRY_VERIFY_WITH_TIMEOUT(byName("deviceTab")->isVisible(), kWait);
             page->setProperty("tab", 2);

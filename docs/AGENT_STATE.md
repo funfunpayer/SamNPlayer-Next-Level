@@ -4,6 +4,15 @@
 
 **Last update:** 1 Nov 2026, Claude, branch `claude/review-previous-work-jnjttn`: Script Doctor metric assertions (GAP-12 leftovers, handover below). Before: #142 Windows `config_dir` wide env; #141 Player partner overlay.
 
+## Handover: `cursor/code-gui-polish-635a` (31 Oct)
+
+Code clarity + Owner GUI polish (26 Oct: dark oval behind empty Play; Support/donate leftovers).
+
+- **Empty home:** removed the wide stage oval; soft **round** bloom only behind the Play; Play face a lighter navy (less black disc).
+- **Code:** `TipPathAt` → `PathAt` (tip and partner); `SAMN_UPDATE_URL` uses `fromUtf8` (not `fromLocal8Bit`).
+- **Support (Settings → General):** appeal text, GitHub button, "Donation page coming soon." (`supportSection` / `donateComingSoon`); shell test extended.
+- **Still open:** real donate URLs (D-022, Owner), handbook, idle ribbon, `#140` merge, `track_multi`.
+
 ## Handover: `claude/review-previous-work-jnjttn` (1 Nov)
 
 GAP-12 leftovers from the quality list of #142.
@@ -221,7 +230,7 @@ Data and file fixes from a read-only bug hunt. Each fix has a test that failed b
 
 0. **Generator:** G2 stack ✅ (#114–#116); Tf/Tj distance stroke ✅ (Cursor #119, finished by Claude); G3 feel ✅; Player partner overlay ✅ (this PR); next G3 feel probe, extras multi (`track_multi`), G4 advanced settings → G8 `.sam`.
 1. **Look polish:** ✅ (#122, Claude takeover of Cursor #117; reduced-motion gates and a window-wide loop test added).
-2. **Owner GUI leftovers:** handbook (§12), idle ribbon (§11), donation pages (Manifest §2). Owner 26 Oct: the glow behind the empty Play button looks odd (dark oval), the GUI still looks makeshift in places: a polish pass after the Generator. Reduced motion ✅ (#120).
+2. **Owner GUI leftovers:** handbook (§12), idle ribbon (§11), real donation URLs (Manifest §2 / D-022). Empty-Play dark oval ✅ (this PR); Support card shows "Donation page coming soon." Reduced motion ✅ (#120). Broader look polish after the Generator still welcome.
 3. **AI Train D-155:** script compare with labels, then golden-clip run (Owner clips).
 4. **Windows CI flakiness** under ctest; diagnostics already run functions alone.
 5. **Self-checking engine** (`docs/P3_SELF_CHECK_ENGINE.md`, merged with #133; **start with the handoff `docs/HANDOFF_2026-10-27_SELF_CHECK.md`**, tool `samn_selfcheck`): SC-1 sample gate, SC-2 checker signals recorded by `TrackBox` (`record_checks`) and SC-3 window verifier are built (`self_check.h`, `track_checks_test.cpp`; 83 engine tests). Measured in design §3.3: synthetic 13/13 bad windows fail, 0 false alarms; on the Owner clip the scene-cut test fires 1992 times and blocks the verifier. `AdaptiveSceneCut` (`adaptive_cuts`, off) takes the Owner clip from 1992 cuts to 2 but tracking gets worse (the false cuts were re-anchoring), design §3.4; on that clip the verdicts do not yet separate good from bad windows, so thresholds wait for the golden clips. SC-5 verified repair is built (`repair.h`, `repair_test.cpp`); on the Owner clip it repairs nothing at the strict setting because the look against the start crop cannot tell right from wrong there (design §3.5). Next in order: an identity check that works on real clips (continuity with the last good window, rhythm cell, detector) → speed (cached flow) → robust axis choice (principal axis) → wire `GateSamples` in front of the P3.2 chain behind a switch → SC-4 fast lane → SC-5 verified repair with YOLO-family re-anchoring → SC-6 golden gate. AI blocks the Owner asked for (YOLO, MediaPipe, OpenCV DL, Whisper, CLIP): roles and licences in §5a of the design.

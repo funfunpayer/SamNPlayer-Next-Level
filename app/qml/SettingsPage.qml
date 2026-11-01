@@ -250,14 +250,22 @@ Item {
                             }
                         }
                     }
-                    // Support the project (D-153): the GitHub page for now.
+                    // Support the project (D-153 / D-022): GitHub now; donation
+                    // buttons appear when URLs are set (still "coming soon").
                     GlassCard {
+                        objectName: "supportSection"
                         Layout.fillWidth: true; implicitHeight: supCol.implicitHeight + 28
                         visible: root.updates !== null
                         ColumnLayout {
                             id: supCol
                             anchors.fill: parent; anchors.margins: 14; spacing: 10
                             Text { textFormat: Text.PlainText; text: qsTr("Support SamNPlayer"); color: Theme.text; font.family: Theme.font; font.pixelSize: 15 }
+                            Text {
+                                textFormat: Text.PlainText
+                                Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                text: qsTr("SamNPlayer is free and open source. A star or an issue on GitHub helps; donation pages follow when they are ready.")
+                                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
                             RowLayout {
                                 Layout.fillWidth: true
                                 Text {
@@ -272,7 +280,18 @@ Item {
                                     onToggled: (c) => root.updates.supportNoteAtStart = c
                                 }
                             }
-                            FlowButton { icon: "heart"; text: qsTr("Open the GitHub page"); onClicked: root.updates.openProjectPage() }
+                            FlowButton {
+                                objectName: "supportOpenGithub"
+                                icon: "heart"; text: qsTr("Open the GitHub page")
+                                onClicked: root.updates.openProjectPage()
+                            }
+                            Text {
+                                objectName: "donateComingSoon"
+                                textFormat: Text.PlainText
+                                Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                text: qsTr("Donation page coming soon.")
+                                color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
                         }
                     }
                     // 0.7 Runtime & updates, check only (D-147).

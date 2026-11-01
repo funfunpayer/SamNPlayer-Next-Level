@@ -36,12 +36,12 @@ bool HasContactAreas(const ContactMarks& marks);
 double ProximityToBox(double x, double y, const ContactMarkBox& box, double margin);
 
 // Tip / partner paths sorted by time (stable: of equal times the first stays
-// first). Same shape so TipPathAt works on either.
+// first). Same shape so PathAt works on either.
 std::vector<TrajectoryPoint> SortedTipPath(const TrajectoryData& path);
 std::vector<TrajectoryPoint> SortedPartnerPath(const TrajectoryData& path);
 // The sample nearest to at_ms (the first on a tie, 0.7 tipAtMs) in a sorted
 // tip or partner path; nullopt when there is none within kTipPathMaxGapMs.
-std::optional<TrajectoryPoint> TipPathAt(const std::vector<TrajectoryPoint>& sorted, int64_t at_ms);
+std::optional<TrajectoryPoint> PathAt(const std::vector<TrajectoryPoint>& sorted, int64_t at_ms);
 
 // The tip path against the contact areas: 0..1 per video time. Built once
 // (the path is sorted by time), asked per tick.
