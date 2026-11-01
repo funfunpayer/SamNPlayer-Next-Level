@@ -51,6 +51,13 @@ class GeneratorController : public QObject {
     Q_PROPERTY(bool slidingDynamics READ slidingDynamics WRITE setSlidingDynamics NOTIFY optionsChanged)
     Q_PROPERTY(bool adaptiveKeyframes READ adaptiveKeyframes WRITE setAdaptiveKeyframes NOTIFY optionsChanged)
     Q_PROPERTY(QString motionAxis READ motionAxis WRITE setMotionAxis NOTIFY optionsChanged)
+    // G4b Expert (closed under Advanced): post-track knobs. 0 = profile default
+    // for smooth / peak spacing / prominence; 0 = off for RDP and max speed.
+    Q_PROPERTY(int smoothWindow READ smoothWindow WRITE setSmoothWindow NOTIFY optionsChanged)
+    Q_PROPERTY(int minPeakDistanceMs READ minPeakDistanceMs WRITE setMinPeakDistanceMs NOTIFY optionsChanged)
+    Q_PROPERTY(double peakProminence READ peakProminence WRITE setPeakProminence NOTIFY optionsChanged)
+    Q_PROPERTY(double rdpTolerance READ rdpTolerance WRITE setRdpTolerance NOTIFY optionsChanged)
+    Q_PROPERTY(int maxSpeed READ maxSpeed WRITE setMaxSpeed NOTIFY optionsChanged)
     Q_PROPERTY(bool autoOZone READ autoOZone WRITE setAutoOZone NOTIFY optionsChanged)
     // Find the tip by itself when a video opens (D-159, on): a sure find
     // becomes the box, an unsure one only shows its candidates, and a box the
@@ -178,6 +185,16 @@ public:
     void setAdaptiveKeyframes(bool v);
     QString motionAxis() const { return motion_axis_; }
     void setMotionAxis(const QString& axis);
+    int smoothWindow() const { return smooth_window_; }
+    void setSmoothWindow(int v);
+    int minPeakDistanceMs() const { return min_peak_distance_ms_; }
+    void setMinPeakDistanceMs(int v);
+    double peakProminence() const { return peak_prominence_; }
+    void setPeakProminence(double v);
+    double rdpTolerance() const { return rdp_tolerance_; }
+    void setRdpTolerance(double v);
+    int maxSpeed() const { return max_speed_; }
+    void setMaxSpeed(int v);
     bool autoOZone() const { return auto_ozone_; }
     void setAutoOZone(bool v);
     bool autoTip() const { return auto_tip_; }
@@ -351,6 +368,12 @@ private:
     bool invert_ = false, camera_ = true, scene_cuts_ = true, auto_ozone_ = true;
     bool sliding_ = true, adaptive_keyframes_ = true;
     QString motion_axis_ = QStringLiteral("auto");
+    // Expert defaults match PostOptions / 0.7 Everyday (smooth 11, spacing 150).
+    int smooth_window_ = 11;
+    int min_peak_distance_ms_ = 150;
+    double peak_prominence_ = 0;
+    double rdp_tolerance_ = 0;
+    int max_speed_ = 0;
     bool gap_handling_ = true, outlier_rejection_ = true, track_cache_ = false;
     bool auto_tip_ = true;
     bool find_auto_ = false;     // the running search was started by openVideo
@@ -372,7 +395,7 @@ private:
     std::unique_ptr<samn::Settings> settings_;
     void loadSettings();
     void saveSetting(const char* key, const nlohmann::json& value);
-    // Gap / outlier / cache / Sliding / Adaptive into a run's signal options.
+    // Gap / outlier / cache / Sliding / Adaptive / Expert into a run's signal options.
     void applySwitches(engine::SignalOptions& signal, std::filesystem::path& track_cache_dir) const;
     engine::TrackAxis trackAxis() const;
     QString tip_class_ = QStringLiteral("glans");

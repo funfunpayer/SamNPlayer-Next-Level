@@ -1989,6 +1989,140 @@ Item {
                                 }
                                 HelpChip { key: "generator.motion-axis"; Layout.alignment: Qt.AlignVCenter }
                             }
+                            // G4b Expert (closed by default): post-track knobs + Impulse mirror.
+                            ColumnLayout {
+                                id: expertBox
+                                objectName: "expertPanel"
+                                Layout.fillWidth: true
+                                spacing: 6
+                                property bool expertOpen: false
+                                Item {
+                                    objectName: "expertToggle"
+                                    Layout.fillWidth: true
+                                    implicitHeight: expHead.implicitHeight
+                                    RowLayout {
+                                        id: expHead
+                                        anchors.fill: parent
+                                        spacing: 8
+                                        Text {
+                                            textFormat: Text.PlainText
+                                            text: qsTr("Expert")
+                                            color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 12; font.weight: Font.Medium
+                                        }
+                                        Text {
+                                            textFormat: Text.PlainText
+                                            Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                            text: qsTr("Smoothing, spacing, RDP, max speed — Everyday leaves these alone")
+                                            color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 11
+                                        }
+                                        Icon {
+                                            name: "chevronDown"; width: 14; height: 14; color: Theme.textDim
+                                            rotation: expertBox.expertOpen ? 180 : 0
+                                            Behavior on rotation { NumberAnimation { duration: Theme.animFast } }
+                                        }
+                                    }
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: expertBox.expertOpen = !expertBox.expertOpen
+                                    }
+                                }
+                                ColumnLayout {
+                                    visible: expertBox.expertOpen
+                                    Layout.fillWidth: true
+                                    spacing: 8
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        Text {
+                                            textFormat: Text.PlainText
+                                            Layout.fillWidth: true
+                                            text: qsTr("Impulse contact curve"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                                        }
+                                        HelpChip { key: "gen-contact-impulse"; Layout.alignment: Qt.AlignVCenter }
+                                        FlowToggle {
+                                            objectName: "toggle_impulseMirror"
+                                            enabled: !gen.running
+                                            checked: gen.contactCurve === "impulse"
+                                            onToggled: (c) => gen.contactCurve = c ? "impulse" : "soft"
+                                        }
+                                    }
+                                    component ExpertRow: RowLayout {
+                                        id: er
+                                        property string label
+                                        property string help
+                                        property string valueText
+                                        property alias slider: sl
+                                        Layout.fillWidth: true; spacing: 8
+                                        ColumnLayout {
+                                            Layout.fillWidth: true; spacing: 2
+                                            RowLayout {
+                                                Layout.fillWidth: true
+                                                Text {
+                                                    textFormat: Text.PlainText
+                                                    Layout.fillWidth: true
+                                                    text: er.label; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                                                }
+                                                Text {
+                                                    textFormat: Text.PlainText
+                                                    text: er.valueText; color: Theme.cyan; font.family: Theme.fontSoft; font.pixelSize: 12
+                                                }
+                                                HelpChip { key: er.help; Layout.alignment: Qt.AlignVCenter }
+                                            }
+                                            FlowSlider {
+                                                id: sl
+                                                Layout.fillWidth: true
+                                                enabled: !gen.running
+                                            }
+                                        }
+                                    }
+                                    ExpertRow {
+                                        objectName: "expertSmooth"
+                                        label: qsTr("Smoothing window")
+                                        help: "generator.smoothing-window"
+                                        valueText: gen.smoothWindow === 0 ? qsTr("profile") : String(gen.smoothWindow)
+                                        slider.from: 0; slider.to: 51; slider.value: gen.smoothWindow
+                                        slider.onMoved: (v) => gen.smoothWindow = Math.round(v)
+                                    }
+                                    ExpertRow {
+                                        objectName: "expertMinPeak"
+                                        label: qsTr("Min keyframe spacing (ms)")
+                                        help: "generator.min-keyframe-spacing-ms"
+                                        valueText: gen.minPeakDistanceMs === 0 ? qsTr("profile") : (gen.minPeakDistanceMs + " ms")
+                                        slider.from: 0; slider.to: 500; slider.value: gen.minPeakDistanceMs
+                                        slider.onMoved: (v) => gen.minPeakDistanceMs = Math.round(v)
+                                    }
+                                    ExpertRow {
+                                        objectName: "expertProminence"
+                                        label: qsTr("Peak prominence")
+                                        help: "generator.peak-prominence-0-profile-default"
+                                        valueText: gen.peakProminence === 0 ? qsTr("profile") : gen.peakProminence.toFixed(2)
+                                        slider.from: 0; slider.to: 1; slider.value: gen.peakProminence
+                                        slider.onMoved: (v) => gen.peakProminence = v
+                                    }
+                                    ExpertRow {
+                                        objectName: "expertRdp"
+                                        label: qsTr("RDP tolerance")
+                                        help: "generator.rdp-tolerance-0-off"
+                                        valueText: gen.rdpTolerance === 0 ? qsTr("off") : gen.rdpTolerance.toFixed(1)
+                                        slider.from: 0; slider.to: 20; slider.value: gen.rdpTolerance
+                                        slider.onMoved: (v) => gen.rdpTolerance = v
+                                    }
+                                    ExpertRow {
+                                        objectName: "expertMaxSpeed"
+                                        label: qsTr("Max speed")
+                                        help: "generator.max-speed-0-off"
+                                        valueText: gen.maxSpeed === 0 ? qsTr("off") : String(gen.maxSpeed)
+                                        slider.from: 0; slider.to: 800; slider.value: gen.maxSpeed
+                                        slider.onMoved: (v) => gen.maxSpeed = Math.round(v)
+                                    }
+                                    Text {
+                                        textFormat: Text.PlainText
+                                        Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                        text: qsTr("Tracking method stays CSRT. Live postprocess probe comes next.")
+                                        color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 11
+                                    }
+                                }
+                            }
                         }
                     }
                     Rectangle {

@@ -2,7 +2,11 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 1 Nov 2026, Cursor, branch `cursor/g4-advanced-shell-635a`: G4a Advanced shell (handover below). Before: partner overlay on `main` (#141); feel probe / track_multi on open PRs; 30 Oct data/stop safety (#139/#138).
+**Last update:** 1 Nov 2026, Cursor, branch `cursor/g4-expert-sliders-635a`: G4b Expert knobs under Advanced. Stacks on G4a (#147).
+
+## Handover: `cursor/g4-expert-sliders-635a` (1 Nov)
+
+G4b Expert tuning under Create → Advanced (smooth / spacing / prominence / RDP / max speed + Impulse mirror). Live postprocess probe still open. Stacks on G4a Advanced shell.
 
 ## Handover: `cursor/g4-advanced-shell-635a` (1 Nov) — G4a
 

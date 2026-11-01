@@ -394,6 +394,49 @@ private slots:
         }
     }
 
+    // G4b Expert: smooth / spacing / prominence / RDP / max-speed remembered with steps.
+    void expertKnobChoicesAreRemembered() {
+        {
+            GeneratorController g;
+            QCOMPARE(g.smoothWindow(), 11);
+            QCOMPARE(g.minPeakDistanceMs(), 150);
+            QCOMPARE(g.peakProminence(), 0.0);
+            QCOMPARE(g.rdpTolerance(), 0.0);
+            QCOMPARE(g.maxSpeed(), 0);
+            g.setSmoothWindow(20);  // even → 19
+            QCOMPARE(g.smoothWindow(), 19);
+            g.setMinPeakDistanceMs(157);  // → 150
+            QCOMPARE(g.minPeakDistanceMs(), 150);
+            g.setMinPeakDistanceMs(160);
+            g.setPeakProminence(0.37);  // → 0.35
+            QCOMPARE(g.peakProminence(), 0.35);
+            g.setRdpTolerance(1.2);  // → 1.0
+            QCOMPARE(g.rdpTolerance(), 1.0);
+            g.setMaxSpeed(175);  // → 150
+            QCOMPARE(g.maxSpeed(), 150);
+        }
+        const samn::Settings s;
+        QCOMPARE(s.get("generator.smooth_window").get<int>(), 19);
+        QCOMPARE(s.get("generator.min_peak_distance_ms").get<int>(), 160);
+        QCOMPARE(s.get("generator.peak_prominence").get<double>(), 0.35);
+        QCOMPARE(s.get("generator.rdp_tolerance").get<double>(), 1.0);
+        QCOMPARE(s.get("generator.max_speed").get<int>(), 150);
+        {
+            GeneratorController g;
+            QCOMPARE(g.smoothWindow(), 19);
+            QCOMPARE(g.minPeakDistanceMs(), 160);
+            QCOMPARE(g.peakProminence(), 0.35);
+            QCOMPARE(g.rdpTolerance(), 1.0);
+            QCOMPARE(g.maxSpeed(), 150);
+            // Restore Everyday defaults for later tests.
+            g.setSmoothWindow(11);
+            g.setMinPeakDistanceMs(150);
+            g.setPeakProminence(0);
+            g.setRdpTolerance(0);
+            g.setMaxSpeed(0);
+        }
+    }
+
     // G3 (0.7 gen_feel.js): the feel follows the device; the Sam Neo 2 feel
     // goes into the new script right after Create, the default changes nothing.
     void theNeoFeelGoesIntoTheNewScript() {
