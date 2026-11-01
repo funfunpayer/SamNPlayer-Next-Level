@@ -303,6 +303,29 @@ private slots:
         QCOMPARE(g.contactAreas().first().toMap().value("cls").toString(), QStringLiteral("nipples"));
     }
 
+    // 0.7 Feel probe: live PreviewContactVibration for Sensitivity / Curve.
+    void contactFeelProbeFollowsSpanAndCurve() {
+        GeneratorController g;
+        g.setContactSpan(0.40);
+        g.setContactCurve("linear");
+        const QVariantMap early = g.contactFeelProbe();
+        QVERIFY(early.value("stroke").toList().size() >= 20);
+        QVERIFY(early.value("vib").toList().size() == early.value("stroke").toList().size());
+        g.setContactSpan(0.90);
+        const QVariantMap deep = g.contactFeelProbe();
+        QVERIFY(early.value("activePct").toDouble() > deep.value("activePct").toDouble() + 5.0);
+        g.setContactSpan(0.75);
+        g.setContactCurve("soft");
+        const double softActive = g.contactFeelProbe().value("activePct").toDouble();
+        g.setContactCurve("impulse");
+        const double impulseActive = g.contactFeelProbe().value("activePct").toDouble();
+        QVERIFY(impulseActive < softActive);
+        QVERIFY(!g.contactFeelProbe().value("hint").toString().isEmpty());
+        // Restore defaults so later tests that expect soft / 0.75 stay clean.
+        g.setContactSpan(0.75);
+        g.setContactCurve("soft");
+    }
+
     // 0.7 Step 3: sensitivity and curve of contact vibration, written into
     // the script; the Generator's choices are remembered (generator.* keys).
     void contactFeelAndChoicesAreRemembered() {

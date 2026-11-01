@@ -4,6 +4,15 @@
 
 **Last update:** 1 Nov 2026, Claude, branch `claude/review-previous-work-jnjttn`: Script Doctor metric assertions (GAP-12 leftovers, handover below). Before: #142 Windows `config_dir` wide env; #141 Player partner overlay.
 
+## Handover: `cursor/g3-feel-probe-635a` (1 Nov)
+
+Generator G3 Feel probe — live Sensitivity / Curve preview before Create.
+
+- **Core:** `samn::PreviewContactVibration` / `SyntheticContactBounce` (`contact_preview.h`): fixed ~3 s bounce through `ToIntensityCurve` with contact vibration; returns active%, peak, stroke/vib polylines, peak dots (≥15).
+- **UI:** Feel card under Curve — badges, 72 px Canvas (orange stroke, cyan vibe), hint. `GeneratorController::contactFeelProbe`.
+- **Tests:** `preview: span earlier…`, `preview: impulse is quieter…`, `contactFeelProbeFollowsSpanAndCurve`.
+- **Still open:** Player Inspector feel probe / Save to script; G4 advanced; FuseTipPartners; MT-Debug trajectory line; handbook / idle ribbon / donate URLs.
+
 ## Handover: `cursor/track-multi-extras-635a` (31 Oct)
 
 Generator extras multi-path (`track_multi`) — magenta contact areas get their own centre paths.
