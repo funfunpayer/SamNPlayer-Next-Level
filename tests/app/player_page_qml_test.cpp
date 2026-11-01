@@ -223,11 +223,12 @@ private:
         QVERIFY(!card->isVisible());
 
         // "Always create right away": the next video without a script starts it.
+        // asked already has Create + Beat bar; auto-create appends a third entry.
         QMetaObject::invokeMethod(named(page, "noScriptAutoCreate"), "toggled", Q_ARG(bool, true));
         QVERIFY(ctrl->autoCreate());
         QVERIFY(ctrl->openPath(video));
-        QTRY_COMPARE(asked().size(), 2);
-        QVERIFY2(same(asked().at(1), "true"), qPrintable(asked().at(1)));
+        QTRY_COMPARE(asked().size(), 3);
+        QVERIFY2(same(asked().at(2), "true"), qPrintable(asked().at(2)));
         ctrl->setAutoCreate(false);
     }
 
