@@ -27,6 +27,8 @@ Item {
     property DeviceController device: null
     // "Play in the Player": the Player plays, it does not edit (D-144).
     signal reviewRequested(string path)
+    // Opens the in-app user handbook (Main.qml hosts it).
+    signal handbookRequested()
 
     GeneratorController {
         id: gen
@@ -297,6 +299,7 @@ Item {
             onAddVideos: queueDialog.open()
             onOpenVideo: (p) => { if (!gen.running) gen.openVideo(p) }
             onOpenScript: (p) => edit.open(p)
+            onHandbookRequested: page.handbookRequested()
         }
 
         // ---- main column: video, curves ----
@@ -323,6 +326,13 @@ Item {
                             visible: gen.hasVideo
                             text: gen.videoInfo; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                         }
+                        FlowButton {
+                            objectName: "openHandbookCreate"
+                            visible: !gen.hasVideo
+                            icon: "info"; text: qsTr("User handbook")
+                            onClicked: page.handbookRequested()
+                        }
+                        HelpChip { key: "gen-open-handbook"; visible: !gen.hasVideo }
                         Item { Layout.fillWidth: true }
                         // Step chips: done ✓, current highlighted.
                         Row {

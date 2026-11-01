@@ -77,6 +77,8 @@ qt_add_qml_module(samn_app
     qml/DualRing.qml
     qml/HelpChip.qml
     qml/HelpTexts.js
+    qml/Handbook.qml
+    qml/HandbookTexts.js
     qml/VideoTransport.qml
     qml/GeneratorProjectPanel.qml
     qml/AiTrainPage.qml

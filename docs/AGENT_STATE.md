@@ -2,7 +2,17 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 31 Oct 2026, Cursor, branch `cursor/player-partner-overlay-635a`: Player contact overlay follows the recorded partner path (handover below). Before: 30 Oct, Claude `claude/samn2-data-safety` (#139) and `claude/samn2-stop-safety` (#138); 28 Oct `claude/samn2-auto-tip` (#136); #137 health; #135 self-check handoff.
+**Last update:** 1 Nov 2026, Cursor, branch `cursor/user-handbook-635a`: in-app User handbook modal (PARITY §12). Before: partner overlay on `main` (#141); open PRs G4a / Training coach / GAP-20 settings stamp.
+
+## Handover: `cursor/user-handbook-635a` (1 Nov)
+
+In-app User handbook (0.7 `handbook.js` / PARITY §12).
+
+- **Copy:** `app/qml/HandbookTexts.js` — 11 sections verbatim from 0.7.
+- **UI:** `Handbook.qml` overlay (lilac accent via `Theme.laneSuction`): left section nav, scroll-synced active highlight, body, footer, Close / backdrop / Esc.
+- **Wire:** Settings → General → *Open user handbook*; Create header *User handbook* + Project nav entry; `Main.qml` hosts one instance; Esc closes handbook before Settings; `overlayOpen` covers handbook + Settings.
+- **Test:** `shell_qml_test::userHandbookOpensFromSettingsAndCreate`.
+- **Still open Owner GUI leftovers:** idle ribbon (§11), donation pages (Manifest §2). Parallel open: G4a Advanced (#147), Training coach (#148), GAP-20 (#149), G3 feel probe / extras / polish.
 
 ## Handover: `cursor/player-partner-overlay-635a` (31 Oct)
 
@@ -11,7 +21,7 @@ Player partner overlay — the missing half of G2b's contact marks on Play (AGEN
 - **Core:** `SortedPartnerPath` next to `SortedTipPath`; `TipPathAt` works on either sorted path. Test `partner path sorts like the tip path…`.
 - **Player:** loads `trajectory.partner` into `partnerPath_`; `partnerAt(ms)` for QML; `contactMarks.hasPartner` and the hint adds "partner path" when samples exist.
 - **Overlay:** non-fixed gold / magenta boxes centre on the partner sample at the playhead; fixed boxes and scripts without a partner path stay put (still not following the tip — that looked wrong). Tip stays on the tip path.
-- **Still open from that tip:** extras multi-path (`track_multi`); MT-Debug trajectory line overlay (tip accent + partner teal); donation pages / handbook / idle ribbon (Owner GUI leftovers).
+- **Still open from that tip:** extras multi-path (`track_multi`); MT-Debug trajectory line overlay (tip accent + partner teal); donation pages / idle ribbon (Owner GUI leftovers; handbook ✅ on `cursor/user-handbook-635a`).
 
 
 ## Handover: `claude/samn2-data-safety` (30 Oct)
@@ -199,13 +209,13 @@ Data and file fixes from a read-only bug hunt. Each fix has a test that failed b
 - **Phases** (D-157, #85, #86 and `claude/samn2-phase-feel`): playback shaping per phase (`.samn` `phase_ranges`, `ApplyPhaseShape` in `PlaybackFrames`, Editor *Phases shape playback*); the Training's video stage follows the film's phases (skip intro / empty, climax: pause by default); the phase lane in the label editor; rule-based suggestions (`core/include/samn/phase_rules.h`, `vision/include/samn/vision/picture_signals.h`, *Suggest phases*).
 - **AI Train as a plugin mode** (#82 plan, #84, D-155, `docs/P4_AI_TRAIN.md`): the `Plugins` singleton and Settings switch, the fourth tab, the label editor (`label_track.h`, `LabelController`, `LabelEditor.qml`): classes with several objects, the contact point, *not in the picture* (X), *there but covered* (H), exclusion zones ("not this", `ExcludeZonesAt`), lanes, undo, export as images / YOLO labels / classes.txt.
 
-**Parity (22 Oct, Ignore region on this branch):** recount with `python3 ci/parity_status.py` after merge. Owner GUI order: toasts ✅, help chips ✅, reduced motion ✅ (#113 taken over by Claude), handbook + idle ribbon still open. Generator: G1/G1b ✅, G2a #114, G2b UI #115, **Ignore region this PR**, then G2b engine → G3….
+**Parity (1 Nov):** recount with `python3 ci/parity_status.py` after handbook merges. Owner GUI order: toasts ✅, help chips ✅, reduced motion ✅, handbook ✅ (this PR); idle ribbon + donate still open. Generator: G2/G3/partner on `main` or open PRs; G4a Advanced open (#147).
 
 ## Next (in order; the work list is `LESSONS.md` § Gaps, `TEST_PARITY.md` and `P3_GENERATOR.md`)
 
-0. **Generator:** G2 stack ✅ (#114–#116); Tf/Tj distance stroke ✅ (Cursor #119, finished by Claude); G3 feel ✅; Player partner overlay ✅ (this PR); next G3 feel probe, extras multi (`track_multi`), G4 advanced settings → G8 `.sam`.
+0. **Generator:** G2/G3/partner ✅ on `main` or open; next land G4a (#147), then G4b Expert sliders → G8 `.sam`. Feel probe / extras multi open as separate PRs.
 1. **Look polish:** ✅ (#122, Claude takeover of Cursor #117; reduced-motion gates and a window-wide loop test added).
-2. **Owner GUI leftovers:** handbook (§12), idle ribbon (§11), donation pages (Manifest §2). Owner 26 Oct: the glow behind the empty Play button looks odd (dark oval), the GUI still looks makeshift in places: a polish pass after the Generator. Reduced motion ✅ (#120).
+2. **Owner GUI leftovers:** handbook ✅ (this PR); idle ribbon (§11), donation pages (Manifest §2). Owner 26 Oct: the glow behind the empty Play button looks odd (dark oval), the GUI still looks makeshift in places: a polish pass after the Generator. Reduced motion ✅ (#120).
 3. **AI Train D-155:** script compare with labels, then golden-clip run (Owner clips).
 4. **Windows CI flakiness** under ctest; diagnostics already run functions alone.
 5. **Self-checking engine** (`docs/P3_SELF_CHECK_ENGINE.md`, merged with #133; **start with the handoff `docs/HANDOFF_2026-10-27_SELF_CHECK.md`**, tool `samn_selfcheck`): SC-1 sample gate, SC-2 checker signals recorded by `TrackBox` (`record_checks`) and SC-3 window verifier are built (`self_check.h`, `track_checks_test.cpp`; 83 engine tests). Measured in design §3.3: synthetic 13/13 bad windows fail, 0 false alarms; on the Owner clip the scene-cut test fires 1992 times and blocks the verifier. `AdaptiveSceneCut` (`adaptive_cuts`, off) takes the Owner clip from 1992 cuts to 2 but tracking gets worse (the false cuts were re-anchoring), design §3.4; on that clip the verdicts do not yet separate good from bad windows, so thresholds wait for the golden clips. SC-5 verified repair is built (`repair.h`, `repair_test.cpp`); on the Owner clip it repairs nothing at the strict setting because the look against the start crop cannot tell right from wrong there (design §3.5). Next in order: an identity check that works on real clips (continuity with the last good window, rhythm cell, detector) → speed (cached flow) → robust axis choice (principal axis) → wire `GateSamples` in front of the P3.2 chain behind a switch → SC-4 fast lane → SC-5 verified repair with YOLO-family re-anchoring → SC-6 golden gate. AI blocks the Owner asked for (YOLO, MediaPipe, OpenCV DL, Whisper, CLIP): roles and licences in §5a of the design.
