@@ -218,8 +218,18 @@ private slots:
         combo->setProperty("currentIndex", 3);
         QMetaObject::invokeMethod(combo, "activated", Q_ARG(int, 3));
         QTRY_COMPARE(gen->profile(), QStringLiteral("autotune"));
+        // G4a: Invert / Sliding / Axis live under Create → Advanced (closed).
+        auto* advancedToggle = named(root.get(), "advancedToggle");
+        QVERIFY(advancedToggle);
+        QVERIFY(!named(root.get(), "toggle_invert")->isVisible());
+        QTest::mouseClick(&window, Qt::LeftButton, {},
+                          advancedToggle->mapToScene(QPointF(advancedToggle->width() / 2,
+                                                             advancedToggle->height() / 2))
+                              .toPoint());
+        QTRY_VERIFY(named(root.get(), "toggle_invert")->isVisible());
+        QVERIFY(named(root.get(), "toggle_slidingDynamics"));
+        QVERIFY(named(root.get(), "motionAxisCombo"));
         auto* invert = named(root.get(), "toggle_invert");
-        QVERIFY(invert);
         QTest::mouseClick(&window, Qt::LeftButton, {},
                           invert->mapToScene(QPointF(invert->width() / 2, invert->height() / 2)).toPoint());
         QTRY_VERIFY(gen->invert());

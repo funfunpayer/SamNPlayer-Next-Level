@@ -53,6 +53,7 @@ QueueItemOutcome GenerateQueueItem(const std::filesystem::path& video, const Que
     req.video = video;
     req.box = tip->box;
     req.signal = settings.signal;
+    req.axis = settings.axis;
     req.camera_compensation = settings.camera_compensation;
     req.scene_cuts = settings.scene_cuts;
     req.auto_ozone = settings.auto_ozone;

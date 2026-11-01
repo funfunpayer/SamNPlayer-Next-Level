@@ -81,6 +81,9 @@ void GeneratorController::loadSettings() {
         setProfile(str("generator.profile", profile_));
         camera_ = flag("generator.camera_compensation", camera_);
         scene_cuts_ = flag("generator.scene_cuts", scene_cuts_);
+        sliding_ = flag("generator.sliding_dynamics", sliding_);
+        adaptive_keyframes_ = flag("generator.adaptive_keyframe", adaptive_keyframes_);
+        setMotionAxis(str("generator.axis", motion_axis_));
         auto_ozone_ = flag("generator.auto_ozone", auto_ozone_);
         auto_tip_ = flag("generator.auto_tip", auto_tip_);
         gap_handling_ = flag("generator.gap_handling", gap_handling_);
@@ -114,10 +117,20 @@ void GeneratorController::applySwitches(engine::SignalOptions& signal,
     signal.max_gap_ms = gap_handling_ ? kGapBridgeMs : 0;
     // Off is -1: Recommended would otherwise turn it on by itself.
     signal.outlier_mad_factor = outlier_rejection_ ? kOutlierMadFactor : -1;
+    // G4a: Sliding on → 3000 ms; off → -1 so profile recipes do not refill it.
+    signal.dynamic_range_ms = sliding_ ? 3000 : -1;
+    // G4a: Adaptive Keyframes on → error 6 (0.7); off → 0.
+    signal.adaptive_error = adaptive_keyframes_ ? 6 : 0;
     // D-159 device fit: a stroker keeps 0.7's 100 ms between actions.
     if (profile_ == QLatin1String(samn::ProfileRecommended) && feelKind() == QLatin1String("stroker"))
         signal.min_action_interval_ms = 100;
     track_cache_dir = track_cache_ ? samn::config_dir() / "cache" / "track" : std::filesystem::path();
+}
+
+engine::TrackAxis GeneratorController::trackAxis() const {
+    if (motion_axis_ == QLatin1String("x")) return engine::TrackAxis::kX;
+    if (motion_axis_ == QLatin1String("y")) return engine::TrackAxis::kY;
+    return engine::TrackAxis::kAuto;
 }
 
 void GeneratorController::saveSetting(const char* key, const nlohmann::json& value) {
@@ -333,6 +346,7 @@ bool GeneratorController::runQueue(bool overwrite) {
     engine::QueueSettings settings;
     settings.signal.profile = profile_.toStdString();
     settings.signal.invert = invert_;
+    settings.axis = trackAxis();
     settings.camera_compensation = camera_;
     settings.scene_cuts = scene_cuts_;
     settings.auto_ozone = auto_ozone_;
@@ -528,6 +542,8 @@ void GeneratorController::setProfile(const QString& p) {
 SAMN_SETTER(setInvert, invert_, nullptr)
 SAMN_SETTER(setCameraCompensation, camera_, "generator.camera_compensation")
 SAMN_SETTER(setSceneCuts, scene_cuts_, "generator.scene_cuts")
+SAMN_SETTER(setSlidingDynamics, sliding_, "generator.sliding_dynamics")
+SAMN_SETTER(setAdaptiveKeyframes, adaptive_keyframes_, "generator.adaptive_keyframe")
 SAMN_SETTER(setAutoOZone, auto_ozone_, "generator.auto_ozone")
 SAMN_SETTER(setAutoTip, auto_tip_, "generator.auto_tip")
 SAMN_SETTER(setGapHandling, gap_handling_, "generator.gap_handling")
@@ -535,6 +551,14 @@ SAMN_SETTER(setOutlierRejection, outlier_rejection_, "generator.outlier_rejectio
 SAMN_SETTER(setTrackCache, track_cache_, "generator.track_cache")
 SAMN_SETTER(setContactVibration, contact_vibration_, "generator.contact_vibration")
 #undef SAMN_SETTER
+
+void GeneratorController::setMotionAxis(const QString& axis) {
+    const QString v = axis == QLatin1String("x") || axis == QLatin1String("y") ? axis : QStringLiteral("auto");
+    if (v == motion_axis_) return;
+    motion_axis_ = v;
+    saveSetting("generator.axis", v.toStdString());
+    emit optionsChanged();
+}
 
 void GeneratorController::setPartnerFixed(bool v) {
     if (v == partner_fixed_) return;
@@ -966,6 +990,7 @@ bool GeneratorController::create(bool overwrite) {
     req.start_ms = int64_t(std::llround(box_ms_));
     req.camera_compensation = camera_;
     req.scene_cuts = scene_cuts_;
+    req.axis = trackAxis();
     req.signal.profile = profile_.toStdString();
     req.signal.invert = invert_;
     req.output = funscriptPath();

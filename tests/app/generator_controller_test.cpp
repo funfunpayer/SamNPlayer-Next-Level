@@ -363,6 +363,37 @@ private slots:
         }
     }
 
+    // G4a Advanced: Sliding / Adaptive / axis are remembered; defaults on/on/auto.
+    void advancedShellChoicesAreRemembered() {
+        {
+            GeneratorController g;
+            QVERIFY(g.slidingDynamics());
+            QVERIFY(g.adaptiveKeyframes());
+            QCOMPARE(g.motionAxis(), QStringLiteral("auto"));
+            g.setSlidingDynamics(false);
+            g.setAdaptiveKeyframes(false);
+            g.setMotionAxis("x");
+            QCOMPARE(g.motionAxis(), QStringLiteral("x"));
+            g.setMotionAxis("nonsense");  // unknown → auto (like feelDevice)
+            QCOMPARE(g.motionAxis(), QStringLiteral("auto"));
+            g.setMotionAxis("y");
+        }
+        const samn::Settings s;
+        QCOMPARE(s.get("generator.sliding_dynamics").get<bool>(), false);
+        QCOMPARE(s.get("generator.adaptive_keyframe").get<bool>(), false);
+        QCOMPARE(QString::fromStdString(s.get("generator.axis").get<std::string>()), QStringLiteral("y"));
+        {
+            GeneratorController g;
+            QVERIFY(!g.slidingDynamics());
+            QVERIFY(!g.adaptiveKeyframes());
+            QCOMPARE(g.motionAxis(), QStringLiteral("y"));
+            // Restore defaults for later tests that share the settings file.
+            g.setSlidingDynamics(true);
+            g.setAdaptiveKeyframes(true);
+            g.setMotionAxis("auto");
+        }
+    }
+
     // G3 (0.7 gen_feel.js): the feel follows the device; the Sam Neo 2 feel
     // goes into the new script right after Create, the default changes nothing.
     void theNeoFeelGoesIntoTheNewScript() {

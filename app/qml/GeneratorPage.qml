@@ -1564,11 +1564,9 @@ Item {
                             onActivated: gen.vibSource = currentValue
                         }
                     }
+                    // Invert / camera / scene-cuts live under Create → Advanced (G4a).
                     Repeater {
-                        model: [{ text: qsTr("Invert motion direction"), key: "invert", help: "gen-invert" },
-                                { text: qsTr("Camera motion compensation"), key: "cameraCompensation", help: "gen-camcomp" },
-                                { text: qsTr("Scene-cut detection"), key: "sceneCuts", help: "gen-scenecut" },
-                                { text: qsTr("Find the tip by itself"), key: "autoTip", help: "gen-auto-tip" },
+                        model: [{ text: qsTr("Find the tip by itself"), key: "autoTip", help: "gen-auto-tip" },
                                 { text: qsTr("Suggest O-zone automatically"), key: "autoOZone", help: "gen-auto-ozone" },
                                 { text: qsTr("Bridge short tracking gaps"), key: "gapHandling", help: "gen-gaps" },
                                 { text: qsTr("Ignore single-frame jumps"), key: "outlierRejection", help: "gen-outliers" },
@@ -1876,6 +1874,122 @@ Item {
                             onActivated: (i) => gen.optimizeTarget = targets[i]
                         }
                         HelpChip { key: "gen-optimize-target"; Layout.alignment: Qt.AlignVCenter }
+                    }
+                    // G4a Advanced shell (closed by default): Tracking, Sliding,
+                    // Adaptive Keyframes, motion axis. Expert sliders = G4b.
+                    ColumnLayout {
+                        id: advancedBox
+                        objectName: "advancedPanel"
+                        Layout.fillWidth: true
+                        spacing: 6
+                        property bool advancedOpen: false
+                        Item {
+                            objectName: "advancedToggle"
+                            Layout.fillWidth: true
+                            implicitHeight: advHead.implicitHeight
+                            RowLayout {
+                                id: advHead
+                                anchors.fill: parent
+                                spacing: 8
+                                Text {
+                                    textFormat: Text.PlainText
+                                    text: qsTr("Advanced")
+                                    color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 13; font.weight: Font.Medium
+                                }
+                                Text {
+                                    textFormat: Text.PlainText
+                                    Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                    text: qsTr("Everyday Create works with this closed")
+                                    color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 11
+                                }
+                                Icon {
+                                    name: "chevronDown"; width: 16; height: 16; color: Theme.textDim
+                                    rotation: advancedBox.advancedOpen ? 180 : 0
+                                    Behavior on rotation { NumberAnimation { duration: Theme.animFast } }
+                                }
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: advancedBox.advancedOpen = !advancedBox.advancedOpen
+                            }
+                        }
+                        ColumnLayout {
+                            visible: advancedBox.advancedOpen
+                            Layout.fillWidth: true
+                            spacing: 6
+                            Text {
+                                textFormat: Text.PlainText
+                                text: qsTr("Tracking")
+                                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                            Repeater {
+                                model: [{ text: qsTr("Invert motion direction"), key: "invert", help: "gen-invert" },
+                                        { text: qsTr("Camera motion compensation"), key: "cameraCompensation", help: "gen-camcomp" },
+                                        { text: qsTr("Scene-cut detection"), key: "sceneCuts", help: "gen-scenecut" }]
+                                delegate: RowLayout {
+                                    required property var modelData
+                                    Layout.fillWidth: true
+                                    Text {
+                                        textFormat: Text.PlainText
+                                        Layout.fillWidth: true
+                                        text: modelData.text; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                                    }
+                                    HelpChip { key: modelData.help; Layout.alignment: Qt.AlignVCenter }
+                                    FlowToggle {
+                                        objectName: "toggle_" + modelData.key
+                                        enabled: !gen.running
+                                        checked: gen[modelData.key]
+                                        onToggled: (c) => gen[modelData.key] = c
+                                    }
+                                }
+                            }
+                            Text {
+                                textFormat: Text.PlainText
+                                text: qsTr("Signal")
+                                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                            Repeater {
+                                model: [{ text: qsTr("Sliding dynamics"), key: "slidingDynamics", help: "gen-dynrange" },
+                                        { text: qsTr("Adaptive Keyframes"), key: "adaptiveKeyframes", help: "gen-adaptive" }]
+                                delegate: RowLayout {
+                                    required property var modelData
+                                    Layout.fillWidth: true
+                                    Text {
+                                        textFormat: Text.PlainText
+                                        Layout.fillWidth: true
+                                        text: modelData.text; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                                    }
+                                    HelpChip { key: modelData.help; Layout.alignment: Qt.AlignVCenter }
+                                    FlowToggle {
+                                        objectName: "toggle_" + modelData.key
+                                        enabled: !gen.running
+                                        checked: gen[modelData.key]
+                                        onToggled: (c) => gen[modelData.key] = c
+                                    }
+                                }
+                            }
+                            RowLayout {
+                                Layout.fillWidth: true; spacing: 8
+                                Text {
+                                    textFormat: Text.PlainText
+                                    text: qsTr("Motion axis")
+                                    color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                                }
+                                FlowCombo {
+                                    objectName: "motionAxisCombo"
+                                    Layout.fillWidth: true
+                                    enabled: !gen.running
+                                    textRole: "label"; valueRole: "value"
+                                    model: [{ label: qsTr("Automatic"), value: "auto" },
+                                            { label: qsTr("Force horizontal"), value: "x" },
+                                            { label: qsTr("Force vertical"), value: "y" }]
+                                    currentIndex: Math.max(0, indexOfValue(gen.motionAxis))
+                                    onActivated: gen.motionAxis = currentValue
+                                }
+                                HelpChip { key: "generator.motion-axis"; Layout.alignment: Qt.AlignVCenter }
+                            }
+                        }
                     }
                     Rectangle {
                         objectName: "progressBar"
