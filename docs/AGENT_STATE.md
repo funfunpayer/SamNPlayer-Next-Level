@@ -4,6 +4,20 @@
 
 **Last update:** 1 Nov 2026, Claude, branch `claude/review-previous-work-jnjttn`: Script Doctor metric assertions (GAP-12 leftovers, handover below). Before: #142 Windows `config_dir` wide env; #141 Player partner overlay.
 
+## Handover: `cursor/samn2-gen-fixes-635a` (31 Oct; was `claude/samn2-gen-fixes` / #140)
+
+Takeover of Claude's Generator bug-hunt PR (CI was green; conflicted with #141 on `AGENT_STATE.md` only). Fixes, each with a test that failed before:
+
+- A hand-drawn box started one frame late: `FrameReader::SeekMs` tolerates the half millisecond a rounded frame time carries; the controller floors the preview time. Test `frame reader: a frame's rounded millisecond seeks to that frame` (24/30/60 fps).
+- Auto scene follows the primary area's class (not the default for new marks); `setAreaClass` emits `feelChanged`. Test `theAutoSceneFollowsThePrimaryAreaClass`.
+- `GenerateRunner`: running ends before the terminal event, so its handler can `Start` the next run (a worker restarting itself is parked and joined later). Test `generate: the terminal event's handler may start the next run`.
+- `Coast::Reanchor`: a reacquire jump is no longer a coast velocity. Test `parts: a reacquire jump is not a coast velocity`.
+- Queue: two videos with one script name (`x.mp4`, `x.mkv`) fail the later one with "same script name as …" (`ScriptNameCollision`). Tests in `generate_queue_test.cpp` and `twoVideosWithOneScriptNameDoNotOverwriteEachOther`.
+- Track cache key covers `adaptive_cuts` and the seed; `record_checks` gives no key; `kTrackCacheVersion` 3. Test `spec FR-11: the cache key covers ...`.
+- `PositionsToActions` with `scene_ranges`: samples outside every range stay within 0..100. Test `post: samples outside every scene range stay within 0..100`.
+
+Not done: the `repair.cpp` camera-baseline splice (dev tool only) and `picture_signals` indexing. **Supersedes open PR #140** once this merges.
+
 ## Handover: `cursor/code-gui-polish-635a` (31 Oct)
 
 Code clarity + Owner GUI polish (26 Oct: dark oval behind empty Play; Support/donate leftovers).
@@ -63,7 +77,7 @@ Data and file fixes from a read-only bug hunt. Each fix has a test that failed b
 - **Open (not fixed here):** ~~`samn::config_dir()` narrow `_dupenv_s`~~ → fixed on `cursor/config-dir-wide-env-635a` (`_wdupenv_s`).
 
 
-## Handover: `claude/samn2-stop-safety` (30 Oct, device and playback safety)
+## Handover: `claude/samn2-stop-safety` (30 Oct, device and playback safety, merged #138)
 
 - **Stop before close (Sam Neo 2):** a disconnect, a quit and Training's end set `abort_` before the worker's stop ran, and the BLE "with response" write gave up at once, so the device stayed on. `DeviceWorker::Stop` and `DestroySession` now switch the transport to a cancel of their own (`BeginStopWindow`, bounded by `kStopBudgetMs` = 4 s); `abort_` still ends connects and reads. TCode (serial / TCP / UDP) and Intiface sends never waited on the cancel. Tests: `device_controller_test` `samNeo2*` on a stand-in link (`setBleTransportFactory`).
 - **`SamNeo2Device::StopNow`** tries both off writes, remembers both off packets either way (the keepalive repeats "off", never the old "on") and returns the first error; `Disconnect()` uses it. Tests: `device/samneo2: a failed off write ...`, `... disconnect tries both off writes ...`.
@@ -73,6 +87,7 @@ Data and file fixes from a read-only bug hunt. Each fix has a test that failed b
 - **Session per owner:** `DeviceController::setSessionActiveFor(owner, on)`; playback and training each hold their own, `sessionActive` stays true while any holds it (the QML property's writer is a hold of its own). Tests: `device_controller_test::sessionHoldsArePerOwner`, `playback_output_test::sessionStaysActiveWhileAnyUserDrivesTheDevice`.
 - **Extra axes** (twist / roll / pitch ...) ease their first move after a start or a seek in like the stroke, per axis from its last sent position. Test: `playback_output_test::extraAxesEaseInAfterAStartAndASeek`.
 - **Not verified:** on a real Sam Neo 2 (no hardware here); the stop budget is a guess from the write timeout. The speed limit counts from the last *sent* position: a stroker still on its way to that position can move further than that.
+
 
 ## Handover: `claude/samn2-health` (28 Oct, D-162)
 

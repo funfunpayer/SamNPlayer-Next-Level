@@ -358,7 +358,11 @@ std::optional<PostResult> PositionsToActions(const std::vector<double>& t_in, co
                    : MinMax(seg);
     };
     if (!o.scene_ranges.empty()) {
-        pos = s;
+        // Samples outside every range (or in ranges too short to normalise on
+        // their own) are normalised over the whole clip.
+        auto [glo, ghi] = range_of(s);
+        if (ghi - glo < 1e-6) std::tie(glo, ghi) = MinMax(s);
+        for (int i = 0; i < n; ++i) pos[i] = ghi - glo < 1e-6 ? 0.5 : Clip01((s[i] - glo) / (ghi - glo));
         for (auto [start, end] : o.scene_ranges) {
             end = std::min(end, n);
             if (end - start < 3) continue;

@@ -49,7 +49,10 @@ bool FrameReader::Read(VideoFrame& out) {
 }
 
 bool FrameReader::SeekMs(int64_t ms) {
-    int64_t target = static_cast<int64_t>(std::ceil(std::max<int64_t>(0, ms) * fps_ / 1000.0 - 1e-6));
+    // Callers hold whole milliseconds, so a frame's time arrives rounded up by
+    // up to half a ms; tolerate that, or the frame after it would be returned.
+    const double t = std::max(0.0, static_cast<double>(ms) - 0.5);
+    int64_t target = static_cast<int64_t>(std::ceil(t * fps_ / 1000.0 - 1e-6));
     if (frame_count_ > 0) target = std::min(target, frame_count_ - 1);
     if (!impl_->cap.set(cv::CAP_PROP_POS_FRAMES, static_cast<double>(target))) return false;
     impl_->next_index = target;

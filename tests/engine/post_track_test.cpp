@@ -181,6 +181,28 @@ TEST_CASE("post: scenes are normalised each on their own") {
     CHECK(*hi - *lo < 20);
 }
 
+TEST_CASE("post: samples outside every scene range stay within 0..100") {
+    std::vector<double> t, y;
+    for (int i = 0; i < 120; ++i) {
+        t.push_back(i * 33.3);
+        y.push_back(100 + 80 * std::sin(i / 4.0));
+    }
+    PostOptions o;
+    o.scene_ranges = {{0, 60}};  // the second half belongs to no scene
+    std::string error;
+    const auto r = PositionsToActions(t, y, o, &error);
+    REQUIRE_MESSAGE(r, error);
+    REQUIRE(!r->actions.empty());
+    for (const auto& a : r->actions) {
+        CHECK(a.pos >= 0);
+        CHECK(a.pos <= 100);
+    }
+    for (const double p : r->dense_pos) {
+        CHECK(p >= 0);
+        CHECK(p <= 100);
+    }
+}
+
 TEST_CASE("post: clamp keeps positions in range") {
     const auto out = ClampActionsPos({{0, -5}, {100, 50}, {200, 130}}, 10, 90);
     CHECK(out[0].pos == 10);

@@ -72,7 +72,10 @@ void Generate(const GenerateRequest& request, uint64_t run_id, const std::functi
               const GenerateCallback& on_event);
 
 // Runs one generation at a time on its own thread. Events arrive on that
-// thread; the caller hands them to its UI thread.
+// thread; the caller hands them to its UI thread. The callback must be
+// thread-safe: a run started right after the last one's end can send while
+// the old thread is still in its terminal event, and that terminal event must
+// not wait on the thread that calls Start.
 class GenerateRunner {
 public:
     explicit GenerateRunner(GenerateCallback on_event);
@@ -83,7 +86,7 @@ public:
     // The new run's id, or 0 when a run is still going (single instance).
     uint64_t Start(GenerateRequest request);
     void Cancel();
-    bool running() const { return running_; }
+    bool running() const { return active_id_.load() != 0; }
     // Waits for the current run to end (tests, shutdown).
     void Wait();
 
@@ -91,9 +94,13 @@ private:
     GenerateCallback on_event_;
     std::mutex mutex_;
     std::thread worker_;
-    std::atomic<bool> running_{false};
+    std::vector<std::thread> retired_;  // workers that restarted the runner from their own event
+    // The running run's id, 0 when idle. Taken and given back without the
+    // mutex: a worker ending its run must never wait for a Start that is
+    // joining it (review of #140).
+    std::atomic<uint64_t> active_id_{0};
     std::atomic<bool> cancel_{false};
-    uint64_t next_id_ = 0;
+    uint64_t next_id_ = 0;  // guarded by mutex_
 };
 
 }  // namespace samn::engine

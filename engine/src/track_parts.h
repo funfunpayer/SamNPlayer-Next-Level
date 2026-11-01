@@ -61,6 +61,9 @@ class Coast {
 public:
     static constexpr int kDefaultFrames = 8;
     void ObserveOk(const cv::Rect& r);
+    // A box found again after a loss or a cut: the position counts, the jump
+    // to it is not a velocity.
+    void Reanchor(const cv::Rect& r);
     // The coasted box, or nullopt when the budget is spent.
     std::optional<cv::Rect> OnLost();
 

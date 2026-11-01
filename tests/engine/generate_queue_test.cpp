@@ -67,3 +67,13 @@ TEST_CASE("queue item: no rhythm, missing and cancel are not done") {
     CHECK(!fs::exists(dir / "c.funscript"));
     fs::remove_all(dir);
 }
+
+TEST_CASE("queue: videos that share a script name are told apart") {
+    using samn::engine::ScriptNameCollision;
+    const fs::path dir = fs::temp_directory_path() / "samn_queue_names";
+    CHECK(ScriptNameCollision({}, dir / "x.mp4").empty());
+    CHECK(ScriptNameCollision({dir / "y.mp4"}, dir / "x.mp4").empty());
+    CHECK(ScriptNameCollision({dir / "x.mp4"}, dir / "other" / "x.mkv").empty());  // another folder
+    const std::string msg = ScriptNameCollision({dir / "y.mp4", dir / "x.mp4"}, dir / "x.mkv");
+    CHECK(msg == "same script name as x.mp4");
+}
