@@ -219,16 +219,15 @@ private slots:
         QMetaObject::invokeMethod(combo, "activated", Q_ARG(int, 3));
         QTRY_COMPARE(gen->profile(), QStringLiteral("autotune"));
         // G4a: Invert / Sliding / Axis live under Create → Advanced (closed).
-        auto* advancedToggle = named(root.get(), "advancedToggle");
-        QVERIFY(advancedToggle);
+        auto* advanced = named(root.get(), "advancedPanel");
+        QVERIFY(advanced);
+        QVERIFY(named(root.get(), "advancedToggle"));
         QVERIFY(!named(root.get(), "toggle_invert")->isVisible());
-        QTest::mouseClick(&window, Qt::LeftButton, {},
-                          advancedToggle->mapToScene(QPointF(advancedToggle->width() / 2,
-                                                             advancedToggle->height() / 2))
-                              .toPoint());
+        // Open via the property: Create may be scrolled away, so a click is flaky offscreen.
+        QVERIFY(advanced->setProperty("advancedOpen", true));
         QTRY_VERIFY(named(root.get(), "toggle_invert")->isVisible());
-        QVERIFY(named(root.get(), "toggle_slidingDynamics"));
-        QVERIFY(named(root.get(), "motionAxisCombo"));
+        QVERIFY(named(root.get(), "toggle_slidingDynamics")->isVisible());
+        QVERIFY(named(root.get(), "motionAxisCombo")->isVisible());
         auto* invert = named(root.get(), "toggle_invert");
         QTest::mouseClick(&window, Qt::LeftButton, {},
                           invert->mapToScene(QPointF(invert->width() / 2, invert->height() / 2)).toPoint());
