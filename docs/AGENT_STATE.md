@@ -2,9 +2,17 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 31 Oct 2026, Cursor, branch `cursor/player-partner-overlay-635a`: Player contact overlay follows the recorded partner path (handover below). Before: 30 Oct, Claude `claude/samn2-data-safety` (#139) and `claude/samn2-stop-safety` (#138); 28 Oct `claude/samn2-auto-tip` (#136); #137 health; #135 self-check handoff.
+**Last update:** 31 Oct 2026, Cursor, branch `cursor/config-dir-wide-env-635a`: Windows `config_dir` reads env wide (handover below). Before: #141 Player partner overlay; 30 Oct Claude data/device safety (#139, #138).
 
-## Handover: `cursor/player-partner-overlay-635a` (31 Oct)
+## Handover: `cursor/config-dir-wide-env-635a` (31 Oct)
+
+Code quality from the data-safety bug hunt's open item: `config_dir()` used narrow `_dupenv_s` for `%APPDATA%` / `%USERPROFILE%` / `SAMN_CONFIG_DIR`, so a Windows user name outside the ANSI code page pointed settings at the wrong folder.
+
+- **Fix:** `_wdupenv_s` → `fs::path` for those vars (`core/src/settings.cpp`).
+- **Tests:** Linux non-ASCII `SAMN_CONFIG_DIR`; Windows wide `SAMN_CONFIG_DIR` and `APPDATA` (`settings_test.cpp`).
+- **Still open for quality:** Script Doctor metrics assertions (GAP-12 leftovers); Quality Doctor (P3.6); MT-Debug trajectory line overlay; `track_multi`.
+
+## Handover: `cursor/player-partner-overlay-635a` (31 Oct, merged #141)
 
 Player partner overlay — the missing half of G2b's contact marks on Play (AGENT_STATE "Next after Tf/Tj").
 
@@ -35,7 +43,7 @@ Data and file fixes from a read-only bug hunt. Each fix has a test that failed b
   - `TrainController::train()` ends a run whose Python cannot start (test `aPythonThatCannotStartEndsTheRun`).
   - `save_custom_script` writes atomically.
   - Notices compare the shortened text, so a long repeat is one toast (test `aLongRepeatIsOne`).
-- **Open (not fixed here):** `samn::config_dir()` reads `APPDATA` / `USERPROFILE` through the narrow `_dupenv_s`, so a Windows user name outside the ANSI code page gives a wrong config folder; that needs `_wdupenv_s`.
+- **Open (not fixed here):** ~~`samn::config_dir()` narrow `_dupenv_s`~~ → fixed on `cursor/config-dir-wide-env-635a` (`_wdupenv_s`).
 
 
 ## Handover: `claude/samn2-stop-safety` (30 Oct, device and playback safety)
