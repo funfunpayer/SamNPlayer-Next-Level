@@ -4,6 +4,10 @@
 
 **Last update:** 1 Nov 2026, Claude, branch `claude/review-previous-work-jnjttn`: Script Doctor metric assertions (GAP-12 leftovers, handover below). Before: #142 Windows `config_dir` wide env; #141 Player partner overlay.
 
+## Handover: `cursor/beatbar-noscript-635a` (1 Nov)
+
+Player no-script card → **From the beat bar** (0.7 CreateBeatBarScript). Editor writes `<video> (Beat bar).funscript` / `(Beat bar N)` (D-075 never overwrite); status "Reading the beat bar…". Generator `beatBarFor` opens the video and runs `strokeFromBeatBar`.
+
 ## Handover: `cursor/g4-expert-sliders-635a` (1 Nov)
 
 G4b Expert tuning under Create → Advanced (smooth / spacing / prominence / RDP / max speed + Impulse mirror). Live postprocess probe still open. Stacks on G4a Advanced shell.

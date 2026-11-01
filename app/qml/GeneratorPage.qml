@@ -196,6 +196,13 @@ Item {
         if (start) page.startCreate()
         return true
     }
+    // From the Player's "From the beat bar" (0.7 CreateBeatBarScript): open the
+    // video and read the scrolling beat strip into a new "(Beat bar).funscript".
+    function beatBarFor(video) {
+        if (gen.running || gen.queueRunning || edit.busy) return false
+        if (!gen.openVideo(video.toString())) return false
+        return edit.strokeFromBeatBar()
+    }
     // 0.7 syncWorkflowSteps: one line on what to do next, verbatim.
     function stepPrompt() {
         if (!gen.hasVideo) return qsTr("Start here: choose a video. Like FunGen2 — no motion path to paint; we find the tip.")

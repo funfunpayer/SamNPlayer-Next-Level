@@ -39,6 +39,8 @@ Item {
     // "Create script" for a video without one (0.7 open_media.js): Main.qml
     // opens the Generator with the video; `start` runs it right away.
     signal createRequested(url video, bool start)
+    // "From the beat bar" on the no-script card (Cock Hero / Fap Hero).
+    signal beatBarRequested(url video)
     signal editRequested(string script, url video, bool scenes)
     // The last script that was open, for "Back to the script" (0.7).
     property string lastScript: ""
@@ -761,6 +763,11 @@ Item {
                                 objectName: "noScriptCreate"
                                 primary: true; text: qsTr("Create script")
                                 onClicked: page.createRequested(ctrl.videoUrl, false)
+                            }
+                            FlowButton {
+                                objectName: "noScriptBeatBar"
+                                text: qsTr("From the beat bar")
+                                onClicked: page.beatBarRequested(ctrl.videoUrl)
                             }
                             FlowButton { objectName: "noScriptChoose"; text: qsTr("Choose script…"); onClicked: scriptDialog.open() }
                             FlowButton { objectName: "noScriptOpenOther"; text: qsTr("Open other…"); onClicked: openDialog.open() }
