@@ -78,6 +78,27 @@ QString friendlyTechnique(const QString& technique, const QString& channel) {
     return t + "/" + c;
 }
 
+// Short next-session cue from the last log (Sam Neo 2 practice path).
+QString recapHint(const trn::SessionSummary& s) {
+    const bool manyStops =
+        s.cycles_stopped_early >= 2 ||
+        (s.cycles_completed > 0 && s.cycles_stopped_early * 2 >= s.cycles_completed);
+    if (manyStops)
+        return QStringLiteral(
+            "Many interrupts — try Gentle tier or longer rest, and pause at feedback 8 instead of riding to 9.");
+    if (s.arousal_reports_count > 0 && s.mean_arousal_reported >= 8.0)
+        return QStringLiteral(
+            "Average feedback was high — start lower next time; Interrupt earlier and lengthen the out-breath.");
+    if (s.arousal_reports_count > 0 && s.mean_arousal_reported <= 6.0 && s.cycles_stopped_early == 0)
+        return QStringLiteral(
+            "Solid control — raise only one thing next week (cycles, duration, or intensity), keep 2\xE2\x80\x933 "
+            "sessions/week.");
+    if (s.cycles_stopped_early == 0 && s.cycles_completed >= 3)
+        return QStringLiteral(
+            "Clean session — keep 2\xE2\x80\x933 sessions a week; control first, not max intensity.");
+    return QStringLiteral("Logged under Recent sessions. Export CSV from History when you want a file.");
+}
+
 QVariantMap toMap(const nlohmann::json& j) {
     return QJsonDocument::fromJson(QByteArray::fromStdString(j.dump())).object().toVariantMap();
 }
@@ -898,7 +919,7 @@ void TrainingController::refreshHistory() {
         if (s.channel != "script") title = title.section('/', 0, 0);
         recap_ = QVariantMap{{"title", title},
                              {"summary", summary},
-                             {"hint", "Logged under Recent sessions. Export CSV from History when you want a file."}};
+                             {"hint", recapHint(s)}};
     }
     emit historyChanged();
     rebuildPlan();  // the history nudge reads it

@@ -468,6 +468,7 @@ private slots:
         QTRY_COMPARE_WITH_TIMEOUT(done.count(), 1, 10000);
         QCOMPARE(r.tc.logLines().filter("stopped by you").size(), 2);
         QCOMPARE(r.tc.recap().value("summary").toString(), QString("2 cycles \xC2\xB7 avg peak 80% \xC2\xB7 2\xC3\x97 interrupted"));
+        QVERIFY(r.tc.recap().value("hint").toString().contains("Many interrupts"));
     }
 
     void feedbackIsValidatedAndHighValuesInterrupt() {
@@ -648,6 +649,7 @@ private slots:
         QCOMPARE(tc.history().size(), 1);
         QCOMPARE(tc.recap().value("title").toString(), QString("vibration massage"));
         QCOMPARE(tc.recap().value("summary").toString(), QString("1 cycles \xC2\xB7 avg peak 50% \xC2\xB7 avg feedback 8.0"));
+        QVERIFY(tc.recap().value("hint").toString().contains("high"));
         QVERIFY(tc.history().at(0).toMap().value("text").toString().contains("vibration massage: 1 cycles, avg peak 50%, avg feedback 8.0"));
     }
 };

@@ -2,16 +2,24 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 31 Oct 2026, Cursor, branch `cursor/player-partner-overlay-635a`: Player contact overlay follows the recorded partner path (handover below). Before: 30 Oct, Claude `claude/samn2-data-safety` (#139) and `claude/samn2-stop-safety` (#138); 28 Oct `claude/samn2-auto-tip` (#136); #137 health; #135 self-check handoff.
+**Last update:** 1 Nov 2026, Cursor, branch `cursor/training-coach-neo2-635a`: Training coaching from Owner Sam Neo 2 practice notes (handover below). Parallel open: G4a Advanced shell `#147`. Before: partner overlay on main (#141).
 
-## Handover: `cursor/player-partner-overlay-635a` (31 Oct)
+## Handover: `cursor/training-coach-neo2-635a` (1 Nov)
 
-Player partner overlay — the missing half of G2b's contact marks on Play (AGENT_STATE "Next after Tf/Tj").
+Owner training overview → only what Training already can use (device sessions). **Ignored:** gym/hip mobility flows, medical study dump, physical Squeeze of the glans, weekly strength calendar.
 
-- **Core:** `SortedPartnerPath` next to `SortedTipPath`; `TipPathAt` works on either sorted path. Test `partner path sorts like the tip path…`.
-- **Player:** loads `trajectory.partner` into `partnerPath_`; `partnerAt(ms)` for QML; `contactMarks.hasPartner` and the hint adds "partner path" when samples exist.
-- **Overlay:** non-fixed gold / magenta boxes centre on the partner sample at the playhead; fixed boxes and scripts without a partner path stay put (still not following the tip — that looked wrong). Tip stays on the tip path.
-- **Still open from that tip:** extras multi-path (`track_multi`); MT-Debug trajectory line overlay (tip accent + partner teal); donation pages / handbook / idle ribbon (Owner GUI leftovers).
+- **Built-in copy** (`core/src/training.cpp`): Stop-Start / Plateau / Breathing pace / Pelvic floor descriptions teach feedback 5–7, Interrupt at 8, out-breath, fully release (never press down), practice path.
+- **UI** (`TrainingPage.qml`): Feedback card arousal scale rules; Safety stop-on-pain line; About path (Breathing → Stop-Start → Plateau) + 2–3×/week / 15–25 min / start low / lube; program blurb shows up to 5 lines.
+- **Recap hints** (`training_controller.cpp`): many interrupts → Gentle/longer rest; avg feedback ≥8 → start lower; clean/low → raise one variable, keep 2–3/week.
+- **Not changed:** engine timings, new presets, Player Extended-O (Play feature), diary schema (history/CSV already exist).
+- **Next:** back to Generator G4a/G4b or Owner GUI leftovers — this tip is coaching only.
+
+## Handover: `cursor/player-partner-overlay-635a` (31 Oct) — on main as #141
+
+Player partner overlay — the missing half of G2b's contact marks on Play.
+
+- **Core / Player / Overlay:** partner path centres non-fixed contact boxes; tip stays on tip path.
+- **Follow-ups:** extras multi-path / G4 advanced / MT-Debug still open on other branches.
 
 
 ## Handover: `claude/samn2-data-safety` (30 Oct)
