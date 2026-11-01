@@ -122,6 +122,8 @@ struct TrajectoryData {
     int64_t height = 0;
     std::vector<TrajectoryPoint> tip;
     std::vector<TrajectoryPoint> partner;
+    // Extra contact centres (G2b track_multi); index matches contactMarks.extras.
+    std::vector<std::vector<TrajectoryPoint>> extras;
 };
 
 struct SceneMapVideo {

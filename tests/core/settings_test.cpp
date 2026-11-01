@@ -43,10 +43,55 @@ TEST_CASE("broken settings file is kept aside") {
     {
         Settings st(p);
         CHECK(st.get("x").is_null());
-        CHECK(fs::exists(t.path / "settings.broken.json"));
+        int asides = 0;
+        std::string first;
+        for (const auto& e : fs::directory_iterator(t.path)) {
+            const std::string name = e.path().filename().string();
+            if (name.rfind("settings.broken.", 0) == 0 && name.size() > std::string("settings.broken.").size()) {
+                ++asides;
+                first = name;
+            }
+        }
+        CHECK(asides == 1);
+        CHECK(first.find("settings.broken.") == 0);
+        CHECK(first.find(".json") != std::string::npos);
+        CHECK_FALSE(fs::exists(t.path / "settings.broken.json"));  // fixed name no longer used
         st.set("x", 1);
     }
     CHECK(Settings(p).get("x") == 1);
+}
+
+TEST_CASE("a second broken settings file keeps the first aside") {
+    TempDir t;
+    fs::path p = t.path / "settings.json";
+    std::ofstream(p) << "{first";
+    { Settings st(p); }
+    // Plant a second corrupt file while the first aside stays.
+    std::ofstream(p) << "{second";
+    // Ensure a unique stamp collision path: copy the existing aside name's
+    // stamp by writing another corrupt load in the same second if needed.
+    std::string first_aside;
+    for (const auto& e : fs::directory_iterator(t.path)) {
+        const std::string name = e.path().filename().string();
+        if (name.rfind("settings.broken.", 0) == 0) first_aside = name;
+    }
+    REQUIRE_FALSE(first_aside.empty());
+    { Settings st(p); }
+    int asides = 0;
+    bool saw_first = false;
+    for (const auto& e : fs::directory_iterator(t.path)) {
+        const std::string name = e.path().filename().string();
+        if (name.rfind("settings.broken.", 0) == 0) {
+            ++asides;
+            if (name == first_aside) saw_first = true;
+        }
+    }
+    CHECK(asides == 2);
+    CHECK(saw_first);
+    // Both asides still hold their corrupt text.
+    std::ifstream a(t.path / first_aside);
+    std::string body((std::istreambuf_iterator<char>(a)), {});
+    CHECK(body.find("first") != std::string::npos);
 }
 
 // 0.7 cmd/gui-wails/settings_store_test.go TestSettingsStoreNullFile: a file

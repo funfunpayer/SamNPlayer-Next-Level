@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <functional>
 #include <string>
+#include <vector>
 
 #include "samn/engine/generate.h"
 
@@ -15,6 +16,7 @@ namespace samn::engine {
 // video, box and output (those come per item).
 struct QueueSettings {
     SignalOptions signal;
+    TrackAxis axis = TrackAxis::kAuto;
     bool camera_compensation = true;
     bool scene_cuts = true;
     bool auto_ozone = true;
@@ -44,6 +46,10 @@ constexpr double kWeakTipScore = 0.05;
 
 // 0.7 scriptPathForVideo: <video name>.funscript beside the video.
 std::filesystem::path ScriptPathForVideo(const std::filesystem::path& video);
+
+// Non-empty when an earlier video of the same run writes the same script
+// (x.mp4 and x.mkv both want x.funscript): the message names that video.
+std::string ScriptNameCollision(const std::vector<std::filesystem::path>& earlier, const std::filesystem::path& video);
 
 // percent covers the whole item: Find tip 0..20, creating 20..100.
 QueueItemOutcome GenerateQueueItem(const std::filesystem::path& video, const QueueSettings& settings,

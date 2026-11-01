@@ -27,6 +27,8 @@ Item {
     property DeviceController device: null
     // "Play in the Player": the Player plays, it does not edit (D-144).
     signal reviewRequested(string path)
+    // Opens the in-app user handbook (Main.qml hosts it).
+    signal handbookRequested()
 
     GeneratorController {
         id: gen
@@ -194,6 +196,13 @@ Item {
         if (start) page.startCreate()
         return true
     }
+    // From the Player's "From the beat bar" (0.7 CreateBeatBarScript): open the
+    // video and read the scrolling beat strip into a new "(Beat bar).funscript".
+    function beatBarFor(video) {
+        if (gen.running || gen.queueRunning || edit.busy) return false
+        if (!gen.openVideo(video.toString())) return false
+        return edit.strokeFromBeatBar()
+    }
     // 0.7 syncWorkflowSteps: one line on what to do next, verbatim.
     function stepPrompt() {
         if (!gen.hasVideo) return qsTr("Start here: choose a video. Like FunGen2 — no motion path to paint; we find the tip.")
@@ -297,6 +306,7 @@ Item {
             onAddVideos: queueDialog.open()
             onOpenVideo: (p) => { if (!gen.running) gen.openVideo(p) }
             onOpenScript: (p) => edit.open(p)
+            onHandbookRequested: page.handbookRequested()
         }
 
         // ---- main column: video, curves ----
@@ -323,6 +333,13 @@ Item {
                             visible: gen.hasVideo
                             text: gen.videoInfo; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                         }
+                        FlowButton {
+                            objectName: "openHandbookCreate"
+                            visible: !gen.hasVideo
+                            icon: "info"; text: qsTr("User handbook")
+                            onClicked: page.handbookRequested()
+                        }
+                        HelpChip { key: "gen-open-handbook"; visible: !gen.hasVideo }
                         Item { Layout.fillWidth: true }
                         // Step chips: done ✓, current highlighted.
                         Row {
@@ -1564,11 +1581,9 @@ Item {
                             onActivated: gen.vibSource = currentValue
                         }
                     }
+                    // Invert / camera / scene-cuts live under Create → Advanced (G4a).
                     Repeater {
-                        model: [{ text: qsTr("Invert motion direction"), key: "invert", help: "gen-invert" },
-                                { text: qsTr("Camera motion compensation"), key: "cameraCompensation", help: "gen-camcomp" },
-                                { text: qsTr("Scene-cut detection"), key: "sceneCuts", help: "gen-scenecut" },
-                                { text: qsTr("Find the tip by itself"), key: "autoTip", help: "gen-auto-tip" },
+                        model: [{ text: qsTr("Find the tip by itself"), key: "autoTip", help: "gen-auto-tip" },
                                 { text: qsTr("Suggest O-zone automatically"), key: "autoOZone", help: "gen-auto-ozone" },
                                 { text: qsTr("Bridge short tracking gaps"), key: "gapHandling", help: "gen-gaps" },
                                 { text: qsTr("Ignore single-frame jumps"), key: "outlierRejection", help: "gen-outliers" },
@@ -1684,6 +1699,88 @@ Item {
                                         { label: qsTr("Impulse (peaks only, experiment)"), value: "impulse" }]
                                 currentIndex: Math.max(0, ["linear", "soft", "peak", "impulse"].indexOf(gen.contactCurve))
                                 onActivated: gen.contactCurve = currentValue
+                            }
+                        }
+                        // 0.7 Feel probe: synthetic bounce through Sensitivity / Curve.
+                        ColumnLayout {
+                            id: feelProbeBox
+                            objectName: "contactFeelProbe"
+                            Layout.fillWidth: true
+                            spacing: 4
+                            readonly property var probe: gen.contactFeelProbe
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 8
+                                Text {
+                                    textFormat: Text.PlainText
+                                    text: qsTr("Feel probe")
+                                    color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                                }
+                                HelpChip { key: "gen-feel-probe"; Layout.alignment: Qt.AlignVCenter }
+                                Item { Layout.fillWidth: true }
+                                Text {
+                                    objectName: "feelProbeActive"
+                                    textFormat: Text.PlainText
+                                    text: qsTr("%1% active").arg(Math.round(feelProbeBox.probe.activePct || 0))
+                                    color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 12
+                                }
+                                Text {
+                                    objectName: "feelProbePeak"
+                                    textFormat: Text.PlainText
+                                    text: qsTr("peak %1").arg(Math.round(feelProbeBox.probe.peak || 0))
+                                    color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                                }
+                            }
+                            Canvas {
+                                id: feelProbeCanvas
+                                objectName: "feelProbeCanvas"
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 72
+                                property var probe: feelProbeBox.probe
+                                onProbeChanged: requestPaint()
+                                onWidthChanged: requestPaint()
+                                onHeightChanged: requestPaint()
+                                onPaint: {
+                                    const ctx = getContext("2d")
+                                    ctx.reset()
+                                    const w = width, h = height
+                                    ctx.fillStyle = Qt.rgba(1, 1, 1, 0.04)
+                                    ctx.fillRect(0, 0, w, h)
+                                    const stroke = probe.stroke || []
+                                    const vib = probe.vib || []
+                                    const peaks = probe.peaks || []
+                                    function poly(pts, color, width) {
+                                        if (pts.length < 2) return
+                                        ctx.beginPath()
+                                        ctx.strokeStyle = color
+                                        ctx.lineWidth = width
+                                        ctx.lineJoin = "round"
+                                        for (let i = 0; i < pts.length; ++i) {
+                                            const x = pts[i].x * w
+                                            const y = (1 - pts[i].y) * h
+                                            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
+                                        }
+                                        ctx.stroke()
+                                    }
+                                    poly(stroke, Theme.orange, 1.5)
+                                    poly(vib, Theme.cyan, 1.75)
+                                    ctx.fillStyle = Theme.cyan
+                                    for (let i = 0; i < peaks.length; ++i) {
+                                        const x = peaks[i].x * w
+                                        const y = (1 - peaks[i].y) * h
+                                        ctx.beginPath()
+                                        ctx.arc(x, y, 2.5, 0, Math.PI * 2)
+                                        ctx.fill()
+                                    }
+                                }
+                            }
+                            Text {
+                                objectName: "feelProbeHint"
+                                Layout.fillWidth: true
+                                textFormat: Text.PlainText
+                                wrapMode: Text.WordWrap
+                                text: feelProbeBox.probe.hint || ""
+                                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11
                             }
                         }
                         RowLayout {
@@ -1876,6 +1973,256 @@ Item {
                             onActivated: (i) => gen.optimizeTarget = targets[i]
                         }
                         HelpChip { key: "gen-optimize-target"; Layout.alignment: Qt.AlignVCenter }
+                    }
+                    // G4a Advanced shell (closed by default): Tracking, Sliding,
+                    // Adaptive Keyframes, motion axis. Expert sliders = G4b.
+                    ColumnLayout {
+                        id: advancedBox
+                        objectName: "advancedPanel"
+                        Layout.fillWidth: true
+                        spacing: 6
+                        property bool advancedOpen: false
+                        Item {
+                            objectName: "advancedToggle"
+                            Layout.fillWidth: true
+                            implicitHeight: advHead.implicitHeight
+                            RowLayout {
+                                id: advHead
+                                anchors.fill: parent
+                                spacing: 8
+                                Text {
+                                    textFormat: Text.PlainText
+                                    text: qsTr("Advanced")
+                                    color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 13; font.weight: Font.Medium
+                                }
+                                Text {
+                                    textFormat: Text.PlainText
+                                    Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                    text: qsTr("Everyday Create works with this closed")
+                                    color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 11
+                                }
+                                Icon {
+                                    name: "chevronDown"; width: 16; height: 16; color: Theme.textDim
+                                    rotation: advancedBox.advancedOpen ? 180 : 0
+                                    Behavior on rotation { NumberAnimation { duration: Theme.animFast } }
+                                }
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: advancedBox.advancedOpen = !advancedBox.advancedOpen
+                            }
+                        }
+                        ColumnLayout {
+                            visible: advancedBox.advancedOpen
+                            Layout.fillWidth: true
+                            spacing: 6
+                            Text {
+                                textFormat: Text.PlainText
+                                text: qsTr("Tracking")
+                                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                            Repeater {
+                                model: [{ text: qsTr("Invert motion direction"), key: "invert", help: "gen-invert" },
+                                        { text: qsTr("Camera motion compensation"), key: "cameraCompensation", help: "gen-camcomp" },
+                                        { text: qsTr("Scene-cut detection"), key: "sceneCuts", help: "gen-scenecut" }]
+                                delegate: RowLayout {
+                                    required property var modelData
+                                    Layout.fillWidth: true
+                                    Text {
+                                        textFormat: Text.PlainText
+                                        Layout.fillWidth: true
+                                        text: modelData.text; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                                    }
+                                    HelpChip { key: modelData.help; Layout.alignment: Qt.AlignVCenter }
+                                    FlowToggle {
+                                        objectName: "toggle_" + modelData.key
+                                        enabled: !gen.running
+                                        checked: gen[modelData.key]
+                                        onToggled: (c) => gen[modelData.key] = c
+                                    }
+                                }
+                            }
+                            Text {
+                                textFormat: Text.PlainText
+                                text: qsTr("Signal")
+                                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                            Repeater {
+                                model: [{ text: qsTr("Sliding dynamics"), key: "slidingDynamics", help: "gen-dynrange" },
+                                        { text: qsTr("Adaptive Keyframes"), key: "adaptiveKeyframes", help: "gen-adaptive" }]
+                                delegate: RowLayout {
+                                    required property var modelData
+                                    Layout.fillWidth: true
+                                    Text {
+                                        textFormat: Text.PlainText
+                                        Layout.fillWidth: true
+                                        text: modelData.text; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                                    }
+                                    HelpChip { key: modelData.help; Layout.alignment: Qt.AlignVCenter }
+                                    FlowToggle {
+                                        objectName: "toggle_" + modelData.key
+                                        enabled: !gen.running
+                                        checked: gen[modelData.key]
+                                        onToggled: (c) => gen[modelData.key] = c
+                                    }
+                                }
+                            }
+                            RowLayout {
+                                Layout.fillWidth: true; spacing: 8
+                                Text {
+                                    textFormat: Text.PlainText
+                                    text: qsTr("Motion axis")
+                                    color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                                }
+                                FlowCombo {
+                                    objectName: "motionAxisCombo"
+                                    Layout.fillWidth: true
+                                    enabled: !gen.running
+                                    textRole: "label"; valueRole: "value"
+                                    model: [{ label: qsTr("Automatic"), value: "auto" },
+                                            { label: qsTr("Force horizontal"), value: "x" },
+                                            { label: qsTr("Force vertical"), value: "y" }]
+                                    currentIndex: Math.max(0, indexOfValue(gen.motionAxis))
+                                    onActivated: gen.motionAxis = currentValue
+                                }
+                                HelpChip { key: "generator.motion-axis"; Layout.alignment: Qt.AlignVCenter }
+                            }
+                            // G4b Expert (closed by default): post-track knobs + Impulse mirror.
+                            ColumnLayout {
+                                id: expertBox
+                                objectName: "expertPanel"
+                                Layout.fillWidth: true
+                                spacing: 6
+                                property bool expertOpen: false
+                                Item {
+                                    objectName: "expertToggle"
+                                    Layout.fillWidth: true
+                                    implicitHeight: expHead.implicitHeight
+                                    RowLayout {
+                                        id: expHead
+                                        anchors.fill: parent
+                                        spacing: 8
+                                        Text {
+                                            textFormat: Text.PlainText
+                                            text: qsTr("Expert")
+                                            color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 12; font.weight: Font.Medium
+                                        }
+                                        Text {
+                                            textFormat: Text.PlainText
+                                            Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                            text: qsTr("Smoothing, spacing, RDP, max speed — Everyday leaves these alone")
+                                            color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 11
+                                        }
+                                        Icon {
+                                            name: "chevronDown"; width: 14; height: 14; color: Theme.textDim
+                                            rotation: expertBox.expertOpen ? 180 : 0
+                                            Behavior on rotation { NumberAnimation { duration: Theme.animFast } }
+                                        }
+                                    }
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: expertBox.expertOpen = !expertBox.expertOpen
+                                    }
+                                }
+                                ColumnLayout {
+                                    visible: expertBox.expertOpen
+                                    Layout.fillWidth: true
+                                    spacing: 8
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        Text {
+                                            textFormat: Text.PlainText
+                                            Layout.fillWidth: true
+                                            text: qsTr("Impulse contact curve"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                                        }
+                                        HelpChip { key: "gen-contact-impulse"; Layout.alignment: Qt.AlignVCenter }
+                                        FlowToggle {
+                                            objectName: "toggle_impulseMirror"
+                                            enabled: !gen.running
+                                            checked: gen.contactCurve === "impulse"
+                                            onToggled: (c) => gen.contactCurve = c ? "impulse" : "soft"
+                                        }
+                                    }
+                                    component ExpertRow: RowLayout {
+                                        id: er
+                                        property string label
+                                        property string help
+                                        property string valueText
+                                        property alias slider: sl
+                                        Layout.fillWidth: true; spacing: 8
+                                        ColumnLayout {
+                                            Layout.fillWidth: true; spacing: 2
+                                            RowLayout {
+                                                Layout.fillWidth: true
+                                                Text {
+                                                    textFormat: Text.PlainText
+                                                    Layout.fillWidth: true
+                                                    text: er.label; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                                                }
+                                                Text {
+                                                    textFormat: Text.PlainText
+                                                    text: er.valueText; color: Theme.cyan; font.family: Theme.fontSoft; font.pixelSize: 12
+                                                }
+                                                HelpChip { key: er.help; Layout.alignment: Qt.AlignVCenter }
+                                            }
+                                            FlowSlider {
+                                                id: sl
+                                                Layout.fillWidth: true
+                                                enabled: !gen.running
+                                            }
+                                        }
+                                    }
+                                    ExpertRow {
+                                        objectName: "expertSmooth"
+                                        label: qsTr("Smoothing window")
+                                        help: "generator.smoothing-window"
+                                        valueText: gen.smoothWindow === 0 ? qsTr("profile") : String(gen.smoothWindow)
+                                        slider.from: 0; slider.to: 51; slider.value: gen.smoothWindow
+                                        slider.onMoved: (v) => gen.smoothWindow = Math.round(v)
+                                    }
+                                    ExpertRow {
+                                        objectName: "expertMinPeak"
+                                        label: qsTr("Min keyframe spacing (ms)")
+                                        help: "generator.min-keyframe-spacing-ms"
+                                        valueText: gen.minPeakDistanceMs === 0 ? qsTr("profile") : (gen.minPeakDistanceMs + " ms")
+                                        slider.from: 0; slider.to: 500; slider.value: gen.minPeakDistanceMs
+                                        slider.onMoved: (v) => gen.minPeakDistanceMs = Math.round(v)
+                                    }
+                                    ExpertRow {
+                                        objectName: "expertProminence"
+                                        label: qsTr("Peak prominence")
+                                        help: "generator.peak-prominence-0-profile-default"
+                                        valueText: gen.peakProminence === 0 ? qsTr("profile") : gen.peakProminence.toFixed(2)
+                                        slider.from: 0; slider.to: 1; slider.value: gen.peakProminence
+                                        slider.onMoved: (v) => gen.peakProminence = v
+                                    }
+                                    ExpertRow {
+                                        objectName: "expertRdp"
+                                        label: qsTr("RDP tolerance")
+                                        help: "generator.rdp-tolerance-0-off"
+                                        valueText: gen.rdpTolerance === 0 ? qsTr("off") : gen.rdpTolerance.toFixed(1)
+                                        slider.from: 0; slider.to: 20; slider.value: gen.rdpTolerance
+                                        slider.onMoved: (v) => gen.rdpTolerance = v
+                                    }
+                                    ExpertRow {
+                                        objectName: "expertMaxSpeed"
+                                        label: qsTr("Max speed")
+                                        help: "generator.max-speed-0-off"
+                                        valueText: gen.maxSpeed === 0 ? qsTr("off") : String(gen.maxSpeed)
+                                        slider.from: 0; slider.to: 800; slider.value: gen.maxSpeed
+                                        slider.onMoved: (v) => gen.maxSpeed = Math.round(v)
+                                    }
+                                    Text {
+                                        textFormat: Text.PlainText
+                                        Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                        text: qsTr("Tracking method stays CSRT. Live postprocess probe comes next.")
+                                        color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 11
+                                    }
+                                }
+                            }
+                        }
                     }
                     Rectangle {
                         objectName: "progressBar"

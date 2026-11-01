@@ -26,7 +26,7 @@ What remains open in `PARITY.md` for silk/play is mostly **reduced-motion** and 
 
 1. Static empty-CTA text closer to 0.8 `.pb-empty-open`: letter-spacing and a soft cyan glow under **Open…**.
 2. **Play button:** softer silk ring, glyph glow, idle reverse drift (ambient) that quickens while playing; hover bloom.
-3. **Empty Player home:** calm ambient bloom + settle-in; still only Play + Open… (no wordmark clutter).
+3. **Empty Player home:** calm ambient bloom + settle-in; still only Play + Open… (no wordmark clutter). **31 Oct:** the wide oval bloom behind Play is gone (Owner: looked like a dark smear); bloom is a soft circle behind the button only, and the Play face is a lighter navy.
 4. **Transport:** progress trail glow, playhead knob pulse while playing.
 5. **Tabs / drop overlay / glass cards / silk:** quieter hover scale, fade-in drop, glass catch-light, slightly richer silk.
 6. **Training rings:** restored clear gauges (mockup): soft shell, level arc, gentle live halo; silk bridge drifts without opacity pulse.

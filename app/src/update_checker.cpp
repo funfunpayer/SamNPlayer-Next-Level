@@ -21,7 +21,8 @@ constexpr int kTimeoutMs = 10000;  // 0.7: 10 s
 
 QUrl ApiUrl() {
     const QByteArray over = qgetenv("SAMN_UPDATE_URL");
-    return QUrl(over.isEmpty() ? QString::fromStdString(samn::LatestReleaseApiUrl()) : QString::fromLocal8Bit(over));
+    // UTF-8: fromLocal8Bit mangled non-ASCII override paths on Windows.
+    return QUrl(over.isEmpty() ? QString::fromStdString(samn::LatestReleaseApiUrl()) : QString::fromUtf8(over));
 }
 
 }  // namespace

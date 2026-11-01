@@ -2,7 +2,111 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 31 Oct 2026, Cursor, branch `cursor/config-dir-wide-env-635a`: Windows `config_dir` reads env wide (handover below). Before: #141 Player partner overlay; 30 Oct Claude data/device safety (#139, #138).
+**Last update:** 1 Nov 2026, Claude, branch `claude/review-previous-work-jnjttn`: integration of the open green PRs #143–#152 onto `main` plus GAP-12 metric assertions (handover "Integration" below). The Cursor handovers below are in merge order, newest first.
+
+## Handover: Integration `claude/review-previous-work-jnjttn` (1 Nov)
+
+Owner 1 Nov: everything green goes to `main`. All ten open Cursor PRs (#143–#152) were green but based on `main` before #142 and each conflicted in this file, so Claude merged them in number order onto this branch (one merge commit each; the Cursor branches were not touched) and lands them with #153.
+
+- **Code conflict, #145 against #143/#144:** `PathAt` (renamed from `TipPathAt` in #143) plus `SortedExtraPath` (#145); `kTrackCacheVersion` is **4** (#144 and #145 had both taken 3 for different changes; old cache entries are dropped once).
+- **This file:** section-wise merge; the Next list and the Last update line rewritten by hand.
+- **Review notes:** #145 adds an optional `trajectory.extras` to `.samn`, written only when there are extra paths (files without extras stay byte-identical; 0.7 ignores the key). No workflow, binary or skipped-test changes in the ten PRs.
+- **Verified locally:** Linux, Qt 6.4 + OpenCV 4.6 (Ubuntu packages), full build and ctest (result in the PR #153 description).
+
+## Handover: `cursor/beatbar-noscript-635a` (1 Nov)
+
+Player no-script card → **From the beat bar** (0.7 CreateBeatBarScript). Editor writes `<video> (Beat bar).funscript` / `(Beat bar N)` (D-075 never overwrite); status "Reading the beat bar…". Generator `beatBarFor` opens the video and runs `strokeFromBeatBar`.
+
+## Handover: `cursor/g4-expert-sliders-635a` (1 Nov)
+
+G4b Expert tuning under Create → Advanced (smooth / spacing / prominence / RDP / max speed + Impulse mirror). Live postprocess probe still open. Stacks on G4a Advanced shell.
+
+## Handover: `cursor/user-handbook-635a` (1 Nov)
+
+In-app User handbook (0.7 `handbook.js` / PARITY §12).
+
+- **Copy:** `app/qml/HandbookTexts.js` — 11 sections verbatim from 0.7.
+- **UI:** `Handbook.qml` overlay (lilac accent via `Theme.laneSuction`): left section nav, scroll-synced active highlight, body, footer, Close / backdrop / Esc.
+- **Wire:** Settings → General → *Open user handbook*; Create header *User handbook* + Project nav entry; `Main.qml` hosts one instance; Esc closes handbook before Settings; `overlayOpen` covers handbook + Settings.
+- **Test:** `shell_qml_test::userHandbookOpensFromSettingsAndCreate`.
+- **Still open Owner GUI leftovers:** idle ribbon (§11), donation pages (Manifest §2). Parallel open: G4a Advanced (#147), Training coach (#148), GAP-20 (#149), G3 feel probe / extras / polish.
+
+## Handover: `cursor/settings-broken-stamp-635a` (1 Nov) — GAP-20
+
+Corrupt `settings.json` is moved aside as `settings.broken.<UTC YYYYMMDD-HHMMSS>.json` (`.2`… if that second collides). A second corruption no longer overwrites the first aside (LESSONS FF-07 / GAP-20).
+
+- **Code:** `core/src/settings.cpp` `broken_aside_path`; header comment; tests keep-aside + second-corrupt keeps first.
+- **Next:** Owner GUI leftovers (handbook §12, idle Flow graphic §11, donate); Generator G4b after `#147` greens; more GAP rows as small bug-fix PRs.
+
+## Handover: `cursor/training-coach-neo2-635a` (1 Nov)
+
+Owner training overview → only what Training already can use (device sessions). **Ignored:** gym/hip mobility flows, medical study dump, physical Squeeze of the glans, weekly strength calendar.
+
+- **Built-in copy** (`core/src/training.cpp`): Stop-Start / Plateau / Breathing pace / Pelvic floor descriptions teach feedback 5–7, Interrupt at 8, out-breath, fully release (never press down), practice path.
+- **UI** (`TrainingPage.qml`): Feedback card arousal scale rules; Safety stop-on-pain line; About path (Breathing → Stop-Start → Plateau) + 2–3×/week / 15–25 min / start low / lube; program blurb shows up to 5 lines.
+- **Recap hints** (`training_controller.cpp`): many interrupts → Gentle/longer rest; avg feedback ≥8 → start lower; clean/low → raise one variable, keep 2–3/week.
+- **Not changed:** engine timings, new presets, Player Extended-O (Play feature), diary schema (history/CSV already exist).
+- **Next:** back to Generator G4a/G4b or Owner GUI leftovers — this tip is coaching only.
+
+## Handover: `cursor/g4-advanced-shell-635a` (1 Nov) — G4a
+
+Advanced settings shell on Create (closed by default). Engine hooks already existed; this wires the GUI + settings + queue.
+
+- **UI:** Create → Advanced collapsible (`advancedPanel` / `advancedToggle`). Tracking: Invert, Camera compensation, Scene-cut (moved out of Feel). Signal: Sliding dynamics, Adaptive Keyframes. Motion axis combo Auto / Force horizontal / Force vertical.
+- **Controller:** `slidingDynamics` → `dynamic_range_ms` 3000 / **-1** (explicitly off, profiles do not refill); `adaptiveKeyframes` → `adaptive_error` 6 / 0; `motionAxis` auto|x|y → `TrackAxis`. Remembered: `generator.sliding_dynamics`, `generator.adaptive_keyframe`, `generator.axis`. Wired into `create` and `runQueue` (`QueueSettings::axis`).
+- **Tests:** `advancedShellChoicesAreRemembered`, signal_chain keeps `dynamic_range_ms=-1` under weich/autotune/recommended, QML opens Advanced before Invert.
+- **Not in this PR (G4b+):** Expert numeric sliders + `PreviewPostprocess`, Auto-Retry / P3.6, rhythm grid, scene map, MT-Debug trajectory overlay.
+- **Next for Generator:** G4b Expert sliders + live postprocess probe; then FuseTipPartners / MT-Debug; Owner GUI leftovers (handbook, idle ribbon, donate). Owner merges open green PRs (#142–#146 as listed).
+
+## Handover: `cursor/g3-feel-probe-635a` (1 Nov)
+
+Generator G3 Feel probe — live Sensitivity / Curve preview before Create.
+
+- **Core:** `samn::PreviewContactVibration` / `SyntheticContactBounce` (`contact_preview.h`): fixed ~3 s bounce through `ToIntensityCurve` with contact vibration; returns active%, peak, stroke/vib polylines, peak dots (≥15).
+- **UI:** Feel card under Curve — badges, 72 px Canvas (orange stroke, cyan vibe), hint. `GeneratorController::contactFeelProbe`.
+- **Tests:** `preview: span earlier…`, `preview: impulse is quieter…`, `contactFeelProbeFollowsSpanAndCurve`.
+- **Still open:** Player Inspector feel probe / Save to script; G4 advanced; FuseTipPartners; MT-Debug trajectory line; handbook / idle ribbon / donate URLs.
+
+## Handover: `cursor/track-multi-extras-635a` (31 Oct)
+
+Generator extras multi-path (`track_multi`) — magenta contact areas get their own centre paths.
+
+- **Schema:** `TrajectoryData.extras` = `vector<vector<TrajectoryPoint>>` (index matches `contactMarks.extras`); encode/decode/Same/ShiftTrajectory.
+- **Engine:** `TrackOptions::extra_boxes` → CSRT or fixed centres → `TrackResult::extra_xs/ys` → `BuildTrajectory` writes `.samn` `trajectory.extras`. Track cache v3.
+- **Player:** `extraAt(i, ms)`, `hasExtras` hint; overlay follows each extra's own path (falls back to partner for old scripts). Generator status "follows own path" when Stay fixed is off.
+- **Tests:** `track: fixed extra…`, `generate: non-fixed extra path…`, player `hasExtras`/`extraAt`, SortedExtraPath.
+- **Still open:** FuseTipPartners (multi-partner distance stroke); MT-Debug trajectory line overlay; donation pages / handbook / idle ribbon; G4 advanced.
+
+## Handover: `cursor/samn2-gen-fixes-635a` (31 Oct; was `claude/samn2-gen-fixes` / #140)
+
+Takeover of Claude's Generator bug-hunt PR (CI was green; conflicted with #141 on `AGENT_STATE.md` only). Fixes, each with a test that failed before:
+
+- A hand-drawn box started one frame late: `FrameReader::SeekMs` tolerates the half millisecond a rounded frame time carries; the controller floors the preview time. Test `frame reader: a frame's rounded millisecond seeks to that frame` (24/30/60 fps).
+- Auto scene follows the primary area's class (not the default for new marks); `setAreaClass` emits `feelChanged`. Test `theAutoSceneFollowsThePrimaryAreaClass`.
+- `GenerateRunner`: running ends before the terminal event, so its handler can `Start` the next run (a worker restarting itself is parked and joined later). Test `generate: the terminal event's handler may start the next run`.
+- `Coast::Reanchor`: a reacquire jump is no longer a coast velocity. Test `parts: a reacquire jump is not a coast velocity`.
+- Queue: two videos with one script name (`x.mp4`, `x.mkv`) fail the later one with "same script name as …" (`ScriptNameCollision`). Tests in `generate_queue_test.cpp` and `twoVideosWithOneScriptNameDoNotOverwriteEachOther`.
+- Track cache key covers `adaptive_cuts` and the seed; `record_checks` gives no key; `kTrackCacheVersion` 3. Test `spec FR-11: the cache key covers ...`.
+- `PositionsToActions` with `scene_ranges`: samples outside every range stay within 0..100. Test `post: samples outside every scene range stay within 0..100`.
+
+Not done: the `repair.cpp` camera-baseline splice (dev tool only) and `picture_signals` indexing. **Supersedes open PR #140** once this merges.
+
+## Handover: `cursor/code-gui-polish-635a` (31 Oct)
+
+Code clarity + Owner GUI polish (26 Oct: dark oval behind empty Play; Support/donate leftovers).
+
+- **Empty home:** removed the wide stage oval; soft **round** bloom only behind the Play; Play face a lighter navy (less black disc).
+- **Code:** `TipPathAt` → `PathAt` (tip and partner); `SAMN_UPDATE_URL` uses `fromUtf8` (not `fromLocal8Bit`).
+- **Support (Settings → General):** appeal text, GitHub button, "Donation page coming soon." (`supportSection` / `donateComingSoon`); shell test extended.
+- **Still open:** real donate URLs (D-022, Owner), handbook, idle ribbon, `#140` merge, `track_multi`.
+
+## Handover: `claude/review-previous-work-jnjttn` (1 Nov)
+
+GAP-12 leftovers from the quality list of #142.
+
+- **Tests only** (`tests/core/script_quality_test.cpp`): four cases assert `DeviceCompatMetrics` values: slow full strokes (50+ in more than 900 ms; exactly 900 ms and a 49 move do not count), the warning needs more than 25 % of the large moves, the 5-95 count (5 and 95 are usable), average and 95th-percentile intensity (a zero-length step adds no weight), and "too close" stays strictly under 100 ms. Every expected number was checked against 0.7 `funscript.EvaluateDeviceCompat` with a throw-away Go probe; the C++ code needed no change.
+- **Verified:** core build without Qt/OpenCV (Linux, GCC), `core_tests` 434/434 green.
+- **Still open for quality:** Quality Doctor (P3.6), limits enforced on output (not only reported); MT-Debug trajectory line overlay; `track_multi`.
 
 ## Handover: `cursor/config-dir-wide-env-635a` (31 Oct)
 
@@ -10,7 +114,7 @@ Code quality from the data-safety bug hunt's open item: `config_dir()` used narr
 
 - **Fix:** `_wdupenv_s` → `fs::path` for those vars (`core/src/settings.cpp`).
 - **Tests:** Linux non-ASCII `SAMN_CONFIG_DIR`; Windows wide `SAMN_CONFIG_DIR` and `APPDATA` (`settings_test.cpp`).
-- **Still open for quality:** Script Doctor metrics assertions (GAP-12 leftovers); Quality Doctor (P3.6); MT-Debug trajectory line overlay; `track_multi`.
+- **Still open for quality:** ~~Script Doctor metrics assertions (GAP-12 leftovers)~~ (done 1 Nov); Quality Doctor (P3.6); MT-Debug trajectory line overlay; `track_multi`.
 
 ## Handover: `cursor/player-partner-overlay-635a` (31 Oct, merged #141)
 
@@ -46,7 +150,7 @@ Data and file fixes from a read-only bug hunt. Each fix has a test that failed b
 - **Open (not fixed here):** ~~`samn::config_dir()` narrow `_dupenv_s`~~ → fixed on `cursor/config-dir-wide-env-635a` (`_wdupenv_s`).
 
 
-## Handover: `claude/samn2-stop-safety` (30 Oct, device and playback safety)
+## Handover: `claude/samn2-stop-safety` (30 Oct, device and playback safety, merged #138)
 
 - **Stop before close (Sam Neo 2):** a disconnect, a quit and Training's end set `abort_` before the worker's stop ran, and the BLE "with response" write gave up at once, so the device stayed on. `DeviceWorker::Stop` and `DestroySession` now switch the transport to a cancel of their own (`BeginStopWindow`, bounded by `kStopBudgetMs` = 4 s); `abort_` still ends connects and reads. TCode (serial / TCP / UDP) and Intiface sends never waited on the cancel. Tests: `device_controller_test` `samNeo2*` on a stand-in link (`setBleTransportFactory`).
 - **`SamNeo2Device::StopNow`** tries both off writes, remembers both off packets either way (the keepalive repeats "off", never the old "on") and returns the first error; `Disconnect()` uses it. Tests: `device/samneo2: a failed off write ...`, `... disconnect tries both off writes ...`.
@@ -56,6 +160,7 @@ Data and file fixes from a read-only bug hunt. Each fix has a test that failed b
 - **Session per owner:** `DeviceController::setSessionActiveFor(owner, on)`; playback and training each hold their own, `sessionActive` stays true while any holds it (the QML property's writer is a hold of its own). Tests: `device_controller_test::sessionHoldsArePerOwner`, `playback_output_test::sessionStaysActiveWhileAnyUserDrivesTheDevice`.
 - **Extra axes** (twist / roll / pitch ...) ease their first move after a start or a seek in like the stroke, per axis from its last sent position. Test: `playback_output_test::extraAxesEaseInAfterAStartAndASeek`.
 - **Not verified:** on a real Sam Neo 2 (no hardware here); the stop budget is a guess from the write timeout. The speed limit counts from the last *sent* position: a stroker still on its way to that position can move further than that.
+
 
 ## Handover: `claude/samn2-health` (28 Oct, D-162)
 
@@ -207,13 +312,13 @@ Data and file fixes from a read-only bug hunt. Each fix has a test that failed b
 - **Phases** (D-157, #85, #86 and `claude/samn2-phase-feel`): playback shaping per phase (`.samn` `phase_ranges`, `ApplyPhaseShape` in `PlaybackFrames`, Editor *Phases shape playback*); the Training's video stage follows the film's phases (skip intro / empty, climax: pause by default); the phase lane in the label editor; rule-based suggestions (`core/include/samn/phase_rules.h`, `vision/include/samn/vision/picture_signals.h`, *Suggest phases*).
 - **AI Train as a plugin mode** (#82 plan, #84, D-155, `docs/P4_AI_TRAIN.md`): the `Plugins` singleton and Settings switch, the fourth tab, the label editor (`label_track.h`, `LabelController`, `LabelEditor.qml`): classes with several objects, the contact point, *not in the picture* (X), *there but covered* (H), exclusion zones ("not this", `ExcludeZonesAt`), lanes, undo, export as images / YOLO labels / classes.txt.
 
-**Parity (22 Oct, Ignore region on this branch):** recount with `python3 ci/parity_status.py` after merge. Owner GUI order: toasts ✅, help chips ✅, reduced motion ✅ (#113 taken over by Claude), handbook + idle ribbon still open. Generator: G1/G1b ✅, G2a #114, G2b UI #115, **Ignore region this PR**, then G2b engine → G3….
+**Parity (1 Nov):** recount with `python3 ci/parity_status.py` after handbook merges. Owner GUI order: toasts ✅, help chips ✅, reduced motion ✅, handbook ✅ (this PR); idle ribbon + donate still open. Generator: G2/G3/partner on `main` or open PRs; G4a Advanced open (#147).
 
 ## Next (in order; the work list is `LESSONS.md` § Gaps, `TEST_PARITY.md` and `P3_GENERATOR.md`)
 
-0. **Generator:** G2 stack ✅ (#114–#116); Tf/Tj distance stroke ✅ (Cursor #119, finished by Claude); G3 feel ✅; Player partner overlay ✅ (this PR); next G3 feel probe, extras multi (`track_multi`), G4 advanced settings → G8 `.sam`.
+0. **Generator:** G2 stack ✅ (#114–#116); Tf/Tj distance stroke ✅ (#119); G3 feel ✅; Player partner overlay ✅ (#141); extras multi (`track_multi`) ✅ (#145); G3 feel probe ✅ (#146); G4a Advanced shell ✅ (#147); G4b Expert knobs ✅ (#151, live postprocess probe still open); next MT-Debug trajectory line overlay → G8 `.sam`.
 1. **Look polish:** ✅ (#122, Claude takeover of Cursor #117; reduced-motion gates and a window-wide loop test added).
-2. **Owner GUI leftovers:** handbook (§12), idle ribbon (§11), donation pages (Manifest §2). Owner 26 Oct: the glow behind the empty Play button looks odd (dark oval), the GUI still looks makeshift in places: a polish pass after the Generator. Reduced motion ✅ (#120).
+2. **Owner GUI leftovers:** handbook ✅ (#150); idle ribbon (§11), real donation URLs (Manifest §2 / D-022). Empty-Play dark oval ✅ (#143); Support card shows "Donation page coming soon." Reduced motion ✅ (#120). Broader look polish after the Generator still welcome.
 3. **AI Train D-155:** script compare with labels, then golden-clip run (Owner clips).
 4. **Windows CI flakiness** under ctest; diagnostics already run functions alone.
 5. **Self-checking engine** (`docs/P3_SELF_CHECK_ENGINE.md`, merged with #133; **start with the handoff `docs/HANDOFF_2026-10-27_SELF_CHECK.md`**, tool `samn_selfcheck`): SC-1 sample gate, SC-2 checker signals recorded by `TrackBox` (`record_checks`) and SC-3 window verifier are built (`self_check.h`, `track_checks_test.cpp`; 83 engine tests). Measured in design §3.3: synthetic 13/13 bad windows fail, 0 false alarms; on the Owner clip the scene-cut test fires 1992 times and blocks the verifier. `AdaptiveSceneCut` (`adaptive_cuts`, off) takes the Owner clip from 1992 cuts to 2 but tracking gets worse (the false cuts were re-anchoring), design §3.4; on that clip the verdicts do not yet separate good from bad windows, so thresholds wait for the golden clips. SC-5 verified repair is built (`repair.h`, `repair_test.cpp`); on the Owner clip it repairs nothing at the strict setting because the look against the start crop cannot tell right from wrong there (design §3.5). Next in order: an identity check that works on real clips (continuity with the last good window, rhythm cell, detector) → speed (cached flow) → robust axis choice (principal axis) → wire `GateSamples` in front of the P3.2 chain behind a switch → SC-4 fast lane → SC-5 verified repair with YOLO-family re-anchoring → SC-6 golden gate. AI blocks the Owner asked for (YOLO, MediaPipe, OpenCV DL, Whisper, CLIP): roles and licences in §5a of the design.
@@ -227,7 +332,7 @@ Data and file fixes from a read-only bug hunt. Each fix has a test that failed b
 
 ### Handoff note (for the next agent)
 - **Routing:** one theme per agent. Generator Tf/Tj distance on this tip; Look #117 parallel (do not steal Look files for feature work).
-- Next after partner overlay: extras multi-path (`track_multi`); then G4 advanced. Soft masks + partner path + distance stroke + Play overlay follow are on `main` once this merges.
+- Next after the 1 Nov integration: G4b live postprocess probe, MT-Debug trajectory line overlay, Quality Doctor (P3.6), idle ribbon.
 - Do not push to `claude/*`. Push often; update this file every PR.
 
 Owner reminders (16–17 Oct): the Generator is the Editor; detection better than 0.7 but measured against it; curves stay real curves (audio too); every function of 0.7 and all earlier versions and plans comes along, what was removed on purpose stays out (and why is in `VERSIONS_AND_PLANS.md`).

@@ -59,6 +59,8 @@ PostOptions BuildPostOptions(const SignalOptions& o, int smooth, int peak_dist, 
         p.min_interval_ms = o.min_action_interval_ms;
     else if (o.min_action_interval_ms < 0)
         p.min_interval_ms = 0;
+    // Negative dynamic_range_ms means explicitly off (like detrend /
+    // min_action_interval); profiles only fill when the value is still 0.
     p.dynamic_range_ms = o.dynamic_range_ms;
     p.peak_prominence = o.peak_prominence;
     p.detrend_window_ms = o.detrend_window_ms;

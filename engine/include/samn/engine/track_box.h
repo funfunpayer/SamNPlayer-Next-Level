@@ -46,6 +46,14 @@ struct TrackOptions {
     // distance_stroke is set (Tf/Tj).
     std::optional<cv::Rect> partner_box;
     bool partner_fixed = false;  // true = keep the drawn box (no second CSRT)
+    // Magenta extras (0.7 track_multi): each box gets centres in
+    // TrackResult::extra_xs / extra_ys → .samn trajectory.extras. fixed =
+    // keep the drawn box; otherwise a CSRT per extra.
+    struct ExtraBoxOption {
+        cv::Rect box;
+        bool fixed = true;
+    };
+    std::vector<ExtraBoxOption> extra_boxes;
     // When true with partner_box: positions = TipPartnerDistance each frame
     // (GD-08). Tip/partner centres and trajectory still recorded as usual.
     bool distance_stroke = false;
@@ -90,6 +98,9 @@ struct TrackResult {
     std::vector<double> frame_ys;   // box centre y in frame pixels, before compensation (tip path)
     // Partner centres in frame pixels (same length as tip when partner_box set).
     std::vector<double> partner_xs, partner_ys;
+    // Extra centres in frame pixels (one series per TrackOptions::extra_boxes;
+    // each same length as tip when extras are set).
+    std::vector<std::vector<double>> extra_xs, extra_ys;
     bool horizontal = false;        // positions are xs (false when distance_stroke)
     bool distance_stroke = false;   // positions are TipPartnerDistance
     cv::Size size;

@@ -1,5 +1,7 @@
 #include <doctest/doctest.h>
 
+#include <future>
+
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -197,6 +199,64 @@ TEST_CASE("generate: the runner does one run at a time, cancels and waits on shu
     fs::remove_all(dir);
 }
 
+TEST_CASE("generate: the terminal event's handler may start the next run") {
+    const fs::path dir = TempDir("samn_generate_restart");
+    REQUIRE(clips::WriteMoving(dir / "moving.mp4", 2, 80.0, 1.0));
+    std::atomic<uint64_t> next_id{99};
+    std::atomic<int> dones{0};
+    {
+        GenerateRunner* self = nullptr;
+        std::atomic<bool> ready{false};
+        GenerateRunner runner([&](const GenerateEvent& e) {
+            if (e.kind != GenerateEventKind::kDone) return;
+            if (++dones == 1) {
+                while (!ready) std::this_thread::yield();
+                next_id = self->Start(Request(dir, "moving.mp4", "weich"));
+            }
+        });
+        self = &runner;
+        ready = true;
+        REQUIRE(runner.Start(Request(dir, "moving.mp4", "standard")) == 1);
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(60);
+        while (dones < 2 && std::chrono::steady_clock::now() < deadline) std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        runner.Wait();
+    }
+    CHECK(next_id == 2);
+    CHECK(dones == 2);
+    CHECK(fs::exists(dir / "weich.funscript"));
+    fs::remove_all(dir);
+}
+
+// Review of #140: the next run started from another thread (the UI) while
+// the old worker is still in its last step after the terminal event.
+TEST_CASE("generate: a run started from another thread right after the end does not hang") {
+    const fs::path dir = TempDir("samn_generate_restart_ui");
+    REQUIRE(clips::WriteMoving(dir / "moving.mp4", 2, 80.0, 1.0));
+    std::atomic<int> dones{0};
+    {
+        GenerateRunner runner([&](const GenerateEvent& e) {
+            if (e.kind != GenerateEventKind::kDone) return;
+            ++dones;
+            // The worker lingers in its handler while the UI starts the next run.
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        });
+        REQUIRE(runner.Start(Request(dir, "moving.mp4", "standard")) == 1);
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(60);
+        while (dones < 1 && std::chrono::steady_clock::now() < deadline)
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        REQUIRE(dones == 1);
+        auto next = std::async(std::launch::async, [&] { return runner.Start(Request(dir, "moving.mp4", "weich")); });
+        REQUIRE_MESSAGE(next.wait_for(std::chrono::seconds(20)) == std::future_status::ready, "Start hung");
+        CHECK(next.get() == 2);
+        while (dones < 2 && std::chrono::steady_clock::now() < deadline)
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        runner.Wait();
+    }
+    CHECK(dones == 2);
+    CHECK(fs::exists(dir / "weich.funscript"));
+    fs::remove_all(dir);
+}
+
 TEST_CASE("generate: autotune with invert runs through (the Generator page's choice)") {
     const fs::path dir = TempDir("samn_generate_autotune");
     REQUIRE(clips::WriteMoving(dir / "moving.mp4", 8, 80.0, 1.0));
@@ -275,6 +335,12 @@ TEST_CASE("generate: contact vibration stores the recipe, the marks and the tip'
     CHECK(d.trajectory->partner.front().x == doctest::Approx(35.0).epsilon(0.05));
     CHECK(d.trajectory->partner.front().y == doctest::Approx(35.0).epsilon(0.05));
     CHECK(d.trajectory->partner.back().x == doctest::Approx(35.0).epsilon(0.05));
+    // track_multi: fixed extra path centres stay on the magenta box mid.
+    REQUIRE(d.trajectory->extras.size() == 1);
+    REQUIRE(d.trajectory->extras[0].size() == d.trajectory->tip.size());
+    CHECK(d.trajectory->extras[0].front().x == doctest::Approx(5.0).epsilon(0.05));
+    CHECK(d.trajectory->extras[0].front().y == doctest::Approx(5.0).epsilon(0.05));
+    CHECK(d.trajectory->extras[0].back().x == doctest::Approx(5.0).epsilon(0.05));
     // The Player turns tip path into contact vibration (static boxes).
     const samn::MapOptions o = samn::MapOptionsFromScript(d.ToFunscript());
     REQUIRE(o.spatial_contact);
@@ -311,6 +377,34 @@ TEST_CASE("generate: non-fixed partner path follows the second disc (G2b)") {
     }
     // Partner moves horizontally ~±40 px around 200 → range well above a fixed box.
     CHECK(p_hi - p_lo >= 30.0);
+    fs::remove_all(dir);
+}
+
+TEST_CASE("generate: non-fixed extra path follows the third disc (track_multi)") {
+    const fs::path dir = TempDir("samn_generate_extra");
+    REQUIRE(clips::WriteTipPartnerAndExtra(dir / "three.mp4", 3, 60.0, 40.0, 80.0));
+    GenerateRequest req = Request(dir, "three.mp4", "standard");
+    req.box = cv::Rect(65, 85, 70, 70);
+    req.contact_vibration = true;
+    req.contact_area = samn::ContactMarkBox{165, 145, 70, 70, "nipples", true};
+    req.extra_areas = {samn::ContactMarkBox{245, 85, 70, 70, "mouth", false}};
+    req.camera_compensation = false;
+    req.scene_cuts = false;
+    Recorder rec;
+    Generate(req, 1, {}, rec.fn());
+    REQUIRE(rec.take().back().kind == GenerateEventKind::kDone);
+    const samn::Document d = samn::LoadDocument(dir / "standard.samn");
+    REQUIRE(d.trajectory);
+    REQUIRE(d.trajectory->extras.size() == 1);
+    REQUIRE(d.trajectory->extras[0].size() == d.trajectory->tip.size());
+    REQUIRE(d.trajectory->extras[0].size() >= 20);
+    double y_lo = d.trajectory->extras[0].front().y, y_hi = y_lo;
+    for (const auto& p : d.trajectory->extras[0]) {
+        y_lo = std::min(y_lo, p.y);
+        y_hi = std::max(y_hi, p.y);
+    }
+    // Extra moves vertically ~±40 px around 120 → range well above a fixed box.
+    CHECK(y_hi - y_lo >= 30.0);
     fs::remove_all(dir);
 }
 

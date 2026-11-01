@@ -148,16 +148,18 @@ std::vector<Script> make_builtins() {
     std::vector<Script> v;
     v.push_back(script(
         "stop-start", kCategoryControl, 1,
-        "Classic Stop-Start (Semans): ramp to peak, hold, fully to 0, rest, with a lighter suction layer riding "
-        "along. Same method as Custom \xE2\x86\x92 Technique Stop-start; Vibration. Fine-tune timings under Custom.",
+        "Classic Stop-Start: ramp, brief hold, fully to 0, rest (lighter suction rides along). Stay mostly at "
+        "feedback 5\xE2\x80\x93""7; at 8 press Interrupt and breathe out; 9\xE2\x80\x93""10 interrupt for you. "
+        "3\xE2\x80\x93""5 cycles is enough \xE2\x80\x94 control, not max intensity. Same method as Custom \xE2\x86\x92 "
+        "Technique Stop-start.",
         {phase("Stop-Start cycle", curve(0, classic_peak, 0, up, hold, up),
                curve(0, classic_peak * light_suction, 0, up, hold, up), cycles, rest)},
         0.15));
     v.push_back(script(
         "plateau", kCategoryEdge, 1,
-        "Classic Plateau/edging: ramp to peak, hold, down to a high floor (not 0), rest, with a lighter suction "
-        "layer that (unlike vibration) fully releases each cycle. Same method as Custom \xE2\x86\x92 Technique "
-        "Plateau; Vibration. Fine-tune under Custom.",
+        "Classic Plateau / edging: ramp, hold, down to a high floor (not 0), then climb again; suction fully "
+        "releases each cycle. Use Interrupt for a full stop when feedback hits 8. Harder than Stop-Start \xE2\x80\x94 "
+        "same method as Custom \xE2\x86\x92 Technique Plateau.",
         {phase("Plateau cycle", from_current(curve(0, classic_peak, classic_peak * plateau_frac, up, hold, up)),
                curve(0, classic_peak * light_suction, 0, up, hold, up), cycles, rest)},
         0.15));
@@ -214,15 +216,16 @@ std::vector<Script> make_builtins() {
         0.08));
     v.push_back(script(
         "breathing-pace", kCategoryBody, 1,
-        "Breathing pace (about 6 breaths per minute): soft vibration rise on the in-breath, ease on the out-breath, "
-        "light suction alongside. Follow your own breathing; this is a device pattern, not medical advice and not "
-        "biofeedback.",
+        "Breathing pace (~6 breaths/min): soft rise on the in-breath, ease on a longer out-breath (aim ~4 s in, "
+        "~6 s out), light suction alongside. Keep belly and pelvic floor soft; do not hold your breath. Device "
+        "pattern only \xE2\x80\x94 not medical advice or biofeedback. Good warm-up before Stop-Start.",
         {phase("Breathe with the wave", curve(0.05, 0.45, 0.05, 4500, 500, 4500),
                curve(0.05, 0.2, 0.05, 4500, 500, 4500), 10, 500)}));
     v.push_back(script(
         "pelvic-floor", kCategoryBody, 1,
-        "Pelvic-floor style squeeze and release: short suction holds with a light vibration tick. Contract with the "
-        "hold, relax on rest. Device cues only \xE2\x80\x94 not a medical Kegel trainer and not biofeedback.",
+        "Pelvic-floor cue: short suction holds with a light vibration tick. Gently lift with the hold, fully "
+        "release on rest (never press down). If you feel tense or rush to climax from clenching, prefer Breathing "
+        "pace first. Device cues only \xE2\x80\x94 not a medical Kegel trainer.",
         {phase("Squeeze", curve(0, 0.25, 0, 300, 2500, 400), curve(0, 0.55, 0, 300, 2500, 400), 8, 3000),
          phase("Quick pulses", curve(0, 0.2, 0, 150, 200, 150), curve(0, 0.45, 0, 150, 200, 150), 10, 800)}));
     return v;

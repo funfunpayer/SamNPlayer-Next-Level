@@ -218,10 +218,31 @@ private slots:
         combo->setProperty("currentIndex", 3);
         QMetaObject::invokeMethod(combo, "activated", Q_ARG(int, 3));
         QTRY_COMPARE(gen->profile(), QStringLiteral("autotune"));
+        // G4a: Invert / Sliding / Axis live under Create → Advanced (closed).
+        auto* advanced = named(root.get(), "advancedPanel");
+        QVERIFY(advanced);
+        QVERIFY(named(root.get(), "advancedToggle"));
+        QVERIFY(!named(root.get(), "toggle_invert")->isVisible());
+        // Open via the property: Create may be scrolled away, so a click is flaky offscreen.
+        QVERIFY(advanced->setProperty("advancedOpen", true));
+        QTRY_VERIFY(named(root.get(), "toggle_invert")->isVisible());
+        QVERIFY(named(root.get(), "toggle_slidingDynamics")->isVisible());
+        QVERIFY(named(root.get(), "motionAxisCombo")->isVisible());
+        // G4b Expert is nested under Advanced and closed until opened.
+        auto* expert = named(root.get(), "expertPanel");
+        QVERIFY(expert);
+        QVERIFY(!named(root.get(), "expertSmooth")->isVisible());
+        QVERIFY(expert->setProperty("expertOpen", true));
+        QTRY_VERIFY(named(root.get(), "expertSmooth")->isVisible());
+        QVERIFY(named(root.get(), "expertMinPeak"));
+        QVERIFY(named(root.get(), "expertProminence"));
+        QVERIFY(named(root.get(), "expertRdp"));
+        QVERIFY(named(root.get(), "expertMaxSpeed"));
+        QVERIFY(named(root.get(), "toggle_impulseMirror")->isVisible());
+        // Toggle via signal: Advanced lives in a tall Create column and the
+        // invert row can sit below the window (mouseClick then lands outside).
         auto* invert = named(root.get(), "toggle_invert");
-        QVERIFY(invert);
-        QTest::mouseClick(&window, Qt::LeftButton, {},
-                          invert->mapToScene(QPointF(invert->width() / 2, invert->height() / 2)).toPoint());
+        QMetaObject::invokeMethod(invert, "toggled", Q_ARG(bool, true));
         QTRY_VERIFY(gen->invert());
 
         // G3: the feel follows the device. Nothing connected: Sam Neo 2.

@@ -18,6 +18,9 @@ ApplicationWindow {
     readonly property var training: trainingLoader.item
     // Called once by main.cpp after the window is shown: the system check, with a notice only for an important failure.
     function startSystemCheck() { settingsPage.system.startupCheck() }
+    // Settings or the handbook overlays the current mode (Esc closes the top one first).
+    readonly property bool overlayOpen: settingsPage.open || handbookPage.open
+    function openHandbook() { handbookPage.open = true }
     // Everything there: the pages and the background ribbons. Until then the
     // loading screen shows, so the window never appears piece by piece.
     readonly property bool ready: generatorLoader.status === Loader.Ready && trainingLoader.status === Loader.Ready
@@ -116,9 +119,10 @@ ApplicationWindow {
         anchors.margins: 20; anchors.topMargin: 6
         currentIndex: win.mode
         PlayerPage {
-            id: player; overlayOpen: settingsPage.open; device: deviceCtl
+            id: player; overlayOpen: win.overlayOpen; device: deviceCtl
             // 0.7: "Create script" goes to the Generator with this video.
             onCreateRequested: (video, start) => { win.mode = 1; generator.createFor(video, start) }
+            onBeatBarRequested: (video) => { win.mode = 1; generator.beatBarFor(video) }
             // Editing lives in the Generator (D-137): the script, its video, the scenes.
             onEditRequested: (script, video, scenes) => { win.mode = 1; generator.editScript(script, video, scenes) }
         }
@@ -130,25 +134,26 @@ ApplicationWindow {
             objectName: "generatorLoader"
             asynchronous: true
             sourceComponent: GeneratorPage {
-                overlayOpen: settingsPage.open
+                overlayOpen: win.overlayOpen
                 device: deviceCtl
                 playerVideoUrl: player.controller.videoUrl
                 // The result opens in the Generator's Editor; "Play in the Player" hands it over (D-144).
                 onReviewRequested: (path) => { win.mode = 0; player.controller.openPath(path) }
+                onHandbookRequested: win.openHandbook()
             }
         }
         Loader {
             id: trainingLoader
             objectName: "trainingLoader"
             asynchronous: true
-            sourceComponent: TrainingPage { overlayOpen: settingsPage.open; device: deviceCtl; autostart: trainingStart }
+            sourceComponent: TrainingPage { overlayOpen: win.overlayOpen; device: deviceCtl; autostart: trainingStart }
         }
         // Plugin modes (D-155): loaded only while switched on in Settings.
         Loader {
             id: aiTrain
             objectName: "aiTrainLoader"
             active: Plugins.aiTrainEnabled
-            sourceComponent: AiTrainPage { overlayOpen: settingsPage.open }
+            sourceComponent: AiTrainPage { overlayOpen: win.overlayOpen }
         }
     }
     // A plugin mode switched off while it is shown: back to the Player.
@@ -191,7 +196,7 @@ ApplicationWindow {
         }
     }
     // Ctrl+O from every mode opens in the Player (0.7 top-bar Open).
-    Shortcut { sequence: StandardKey.Open; enabled: !settingsPage.open; onActivated: { win.mode = 0; player.openFile() } }
+    Shortcut { sequence: StandardKey.Open; enabled: !win.overlayOpen; onActivated: { win.mode = 0; player.openFile() } }
 
     // 0.7 startup update banner: the new version, its notes, the download
     // page; × hides it until the next start.
@@ -203,7 +208,7 @@ ApplicationWindow {
         width: Math.min(parent.width - 40, 640)
         implicitHeight: bannerRow.implicitHeight + 20
         visible: opacity > 0
-        opacity: updates.bannerVisible && !settingsPage.open ? 1 : 0
+        opacity: updates.bannerVisible && !win.overlayOpen ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: Theme.animNormal } }
         // Opaque under the glass, as the Settings card.
         Rectangle { anchors.fill: parent; radius: Theme.radius; color: Theme.bgBottom; z: -1 }
@@ -268,7 +273,7 @@ ApplicationWindow {
         implicitHeight: supportCol.implicitHeight + 24
         z: 5
         visible: opacity > 0
-        opacity: shown && !settingsPage.open ? 1 : 0
+        opacity: shown && !win.overlayOpen ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: Theme.animNormal } }
         Rectangle { anchors.fill: parent; radius: Theme.radius; color: Theme.bgBottom; z: -1 }
         Timer {
@@ -375,9 +380,17 @@ ApplicationWindow {
         player: player.controller
         device: deviceCtl
         updates: updates
+        onHandbookRequested: win.openHandbook()
+    }
+    Handbook {
+        id: handbookPage
+        anchors.fill: parent
+        z: 30
     }
     Shortcut { sequence: "Ctrl+,"; onActivated: settingsPage.open = !settingsPage.open }
-    Shortcut { sequence: "Esc"; enabled: settingsPage.open; onActivated: settingsPage.open = false }
+    // Esc: handbook first, then Settings (0.7 handbook.js / help.js).
+    Shortcut { sequence: "Esc"; enabled: handbookPage.open; onActivated: handbookPage.open = false }
+    Shortcut { sequence: "Esc"; enabled: settingsPage.open && !handbookPage.open; onActivated: settingsPage.open = false }
 
     // Ctrl+1…3: the modes, as the tabs (D-150; replaces the M deck).
     Repeater {

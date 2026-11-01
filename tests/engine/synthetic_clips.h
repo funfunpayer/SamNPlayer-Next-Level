@@ -84,6 +84,24 @@ inline bool WriteTipAndPartner(const std::filesystem::path& p, int seconds, doub
     return true;
 }
 
+// Tip + partner + a third disc (extra) that moves vertically on the far right.
+// Extra ROI ~ (245, mid-35, 70, 70) at t=0 (centre ~280, 120). Frame is 320×240.
+inline bool WriteTipPartnerAndExtra(const std::filesystem::path& p, int seconds, double tip_amp, double partner_amp,
+                                    double extra_amp) {
+    auto w = Writer(p);
+    if (!w.isOpened()) return false;
+    const cv::Mat bg = Texture(kW, kH, 17, 160);
+    for (int i = 0; i < int(kFps * seconds); ++i) {
+        const double t = i / kFps;
+        cv::Mat f = bg.clone();
+        Disc(f, 100, int(120 + tip_amp / 2 * std::sin(2 * kPi * t)));
+        Disc(f, int(200 + partner_amp / 2 * std::sin(2 * kPi * 0.7 * t)), 180);
+        Disc(f, 280, int(120 + extra_amp / 2 * std::sin(2 * kPi * 0.9 * t)));
+        w.write(f);
+    }
+    return true;
+}
+
 // A hard cut to another, darker background at frame cut_at.
 inline bool WriteHardCut(const std::filesystem::path& p, int seconds, int cut_at, double amp) {
     auto w = Writer(p);

@@ -425,10 +425,17 @@ private slots:
         QTRY_VERIFY_WITH_TIMEOUT(!e.busy(), 30000);
         QVERIFY2(e.status().startsWith("Beat bar:"), qPrintable(e.status()));
         QVERIFY(e.hasScript());
-        QCOMPARE(e.path(), dir_.filePath("hero.funscript"));
+        QCOMPARE(e.path(), dir_.filePath("hero (Beat bar).funscript"));
         const auto first = Actions(e.path());
         QVERIFY(first.size() >= truth.size());  // a stroke per beat
         QCOMPARE(e.progress(), 100);
+        // A second Create never overwrites (D-075): "(Beat bar 2)".
+        e.close();
+        e.setVideoPath(video);
+        QVERIFY(e.strokeFromBeatBar());
+        QTRY_VERIFY_WITH_TIMEOUT(!e.busy(), 30000);
+        QCOMPARE(e.path(), dir_.filePath("hero (Beat bar 2).funscript"));
+        QVERIFY(e.open(dir_.filePath("hero (Beat bar).funscript")));
 
         // With the script open: the stroke is replaced as one undo step.
         e.setMarker(0, 4000);

@@ -15,6 +15,7 @@ GlassCard {
     signal addVideos()
     signal openVideo(string path)
     signal openScript(string path)
+    signal handbookRequested()
     width: collapsed ? 44 : 248
     Behavior on width { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
     clip: true
@@ -178,6 +179,12 @@ GlassCard {
                 model: root.library.edited
                 current: root.currentScript
                 onPicked: (p) => root.openScript(p)
+            }
+            Title { text: qsTr("Help") }
+            Head {
+                objectName: "projectOpenHandbook"
+                text: qsTr("User handbook"); icon: "info"
+                onClicked: root.handbookRequested()
             }
             Item { width: 1; height: 10 }
             Rectangle {

@@ -68,6 +68,16 @@ TEST_CASE("signal: profile recipes fill only what the user left open") {
     CHECK(p.peak_prominence == 0.2);
     o.detrend_window_ms = -1;  // explicitly off stays off
     CHECK(BuildPostOptions(o, 0, 0, 0, 0).detrend_window_ms == -1);
+    o.dynamic_range_ms = -1;  // Sliding dynamics off
+    CHECK(BuildPostOptions(o, 0, 0, 0, 0).dynamic_range_ms == -1);
+
+    o = SignalOptions{};
+    o.profile = "weich";
+    o.dynamic_range_ms = -1;
+    CHECK(BuildPostOptions(o, 0, 0, 0, 0).dynamic_range_ms == -1);
+    o.profile = samn::ProfileRecommended;
+    o.dynamic_range_ms = -1;
+    CHECK(BuildPostOptions(o, 0, 0, 0, 0).dynamic_range_ms == -1);
 
     o = SignalOptions{};
     o.min_action_interval_ms = -1;

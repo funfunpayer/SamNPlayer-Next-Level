@@ -39,6 +39,8 @@ Item {
     // "Create script" for a video without one (0.7 open_media.js): Main.qml
     // opens the Generator with the video; `start` runs it right away.
     signal createRequested(url video, bool start)
+    // "From the beat bar" on the no-script card (Cock Hero / Fap Hero).
+    signal beatBarRequested(url video)
     signal editRequested(string script, url video, bool scenes)
     // The last script that was open, for "Back to the script" (0.7).
     property string lastScript: ""
@@ -440,39 +442,48 @@ Item {
             opacity: page.empty ? 1 : 0
             Behavior on opacity { NumberAnimation { duration: Theme.animSlow; easing.type: Easing.OutCubic } }
 
-            // Ambient stage bloom (static composition + slow breathe).
-            Rectangle {
-                anchors.centerIn: parent
-                width: Math.min(parent.width * 0.72, 520); height: width * 0.62
-                radius: width / 2
-                rotation: 0
-                gradient: Gradient {
-                    GradientStop { position: 0; color: Qt.rgba(0, 180 / 255, 1, 0.10) }
-                    GradientStop { position: 0.55; color: Qt.rgba(1, 138 / 255, 35 / 255, 0.06) }
-                    GradientStop { position: 1; color: "transparent" }
-                }
-                SequentialAnimation on opacity {
-                    running: page.empty && Qt.application.state === Qt.ApplicationActive && !Theme.reducedMotion
-                    loops: Animation.Infinite
-                    NumberAnimation { from: 0.55; to: 1.0; duration: 3800; easing.type: Easing.InOutSine }
-                    NumberAnimation { from: 1.0; to: 0.55; duration: 3800; easing.type: Easing.InOutSine }
-                }
-            }
-
             Column {
                 id: emptyState
                 anchors.centerIn: parent
                 spacing: 18
                 scale: page.empty ? 1 : 0.96
                 Behavior on scale { NumberAnimation { duration: Theme.animSlow; easing.type: Easing.OutCubic } }
-                PlayButton {
-                    objectName: "emptyPlay"
+
+                // Soft round bloom behind the Play only (Owner 26 Oct: the old
+                // wide oval looked like a dark smear behind the button). Layout
+                // size stays the Play; the bloom is larger and does not push Open….
+                Item {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    // Grows with the stage, 96..140 px (Owner 26 Oct: 168 px was
-                    // too big on small windows and at 150 % scaling).
-                    width: Math.round(Math.max(96, Math.min(140, Math.min(emptyHome.width, emptyHome.height) * 0.2)))
-                    height: width
-                    onClicked: page.openFile()
+                    width: emptyPlay.width; height: emptyPlay.height
+                    Rectangle {
+                        id: emptyBloom
+                        property real breathe: 0.85
+                        anchors.centerIn: parent
+                        width: emptyPlay.width * 2.2; height: width; radius: width / 2
+                        opacity: breathe
+                        z: -1
+                        gradient: Gradient {
+                            GradientStop { position: 0; color: Qt.rgba(63 / 255, 208 / 255, 1, 0.14) }
+                            GradientStop { position: 0.5; color: Qt.rgba(1, 138 / 255, 35 / 255, 0.07) }
+                            GradientStop { position: 1; color: "transparent" }
+                        }
+                        SequentialAnimation on breathe {
+                            running: page.empty && Qt.application.state === Qt.ApplicationActive && !Theme.reducedMotion
+                            loops: Animation.Infinite
+                            NumberAnimation { from: 0.65; to: 1.0; duration: 3800; easing.type: Easing.InOutSine }
+                            NumberAnimation { from: 1.0; to: 0.65; duration: 3800; easing.type: Easing.InOutSine }
+                        }
+                    }
+                    PlayButton {
+                        id: emptyPlay
+                        objectName: "emptyPlay"
+                        anchors.centerIn: parent
+                        // Grows with the stage, 96..140 px (Owner 26 Oct: 168 px was
+                        // too big on small windows and at 150 % scaling).
+                        width: Math.round(Math.max(96, Math.min(140, Math.min(emptyHome.width, emptyHome.height) * 0.2)))
+                        height: width
+                        onClicked: page.openFile()
+                    }
                 }
                 // Match 0.8 `.pb-empty-open` (letter-spacing + soft cyan glow).
                 Item {
@@ -579,9 +590,9 @@ Item {
                     }
                 }
                 // The script's contact marks on the picture (0.7 playback.js
-                // contact overlay): tip blue on the tip path; gold / magenta
-                // contact areas stay put when fixed, else follow the partner
-                // path when one was recorded (not the tip — that looked wrong).
+                // contact overlay): tip blue on the tip path; gold stays put
+                // when fixed else follows partner; magenta extras follow their
+                // own path (track_multi), else partner for old scripts.
                 Item {
                     id: marksLayer
                     objectName: "contactMarksLayer"
@@ -603,6 +614,20 @@ Item {
                         }
                         return b
                     }
+                    function followExtra(box, index) {
+                        const b = Object.assign({}, box)
+                        if (b.fixed) return b
+                        const own = m.hasExtras ? ctrl.extraAt(index, ctrl.playheadMs) : ({})
+                        if (own.x !== undefined) {
+                            b.x = own.x - b.w / 2
+                            b.y = own.y - b.h / 2
+                        } else if (partnerNow.x !== undefined) {
+                            // Old scripts: extras followed the partner path.
+                            b.x = partnerNow.x - b.w / 2
+                            b.y = partnerNow.y - b.h / 2
+                        }
+                        return b
+                    }
                     function boxes() {
                         const out = []
                         if (m.tip) {
@@ -614,7 +639,7 @@ Item {
                         if (m.primary)
                             out.push({ b: followPartner(m.primary), color: "#f2b03d", label: m.primary.cls || qsTr("contact") })
                         for (let i = 0; i < (m.extras || []).length; ++i)
-                            out.push({ b: followPartner(m.extras[i]), color: "#e070a0", label: m.extras[i].cls || qsTr("extra %1").arg(i + 1) })
+                            out.push({ b: followExtra(m.extras[i], i), color: "#e070a0", label: m.extras[i].cls || qsTr("extra %1").arg(i + 1) })
                         return out
                     }
                     Repeater {
@@ -738,6 +763,11 @@ Item {
                                 objectName: "noScriptCreate"
                                 primary: true; text: qsTr("Create script")
                                 onClicked: page.createRequested(ctrl.videoUrl, false)
+                            }
+                            FlowButton {
+                                objectName: "noScriptBeatBar"
+                                text: qsTr("From the beat bar")
+                                onClicked: page.beatBarRequested(ctrl.videoUrl)
                             }
                             FlowButton { objectName: "noScriptChoose"; text: qsTr("Choose script…"); onClicked: scriptDialog.open() }
                             FlowButton { objectName: "noScriptOpenOther"; text: qsTr("Open other…"); onClicked: openDialog.open() }

@@ -544,6 +544,12 @@ private slots:
             QTRY_VERIFY_WITH_TIMEOUT(page->isVisible() && page->property("opacity").toDouble() > 0.99, kWait);
             QVERIFY(byName("generalTab")->isVisible());
             QVERIFY(!byName("logTab")->isVisible());
+            // Support card: appeal, GitHub, and the donate placeholder (D-022 / D-153).
+            QVERIFY(byName("supportSection") && byName("supportSection")->isVisible());
+            QVERIFY(byName("supportOpenGithub"));
+            QQuickItem* donate = byName("donateComingSoon");
+            QVERIFY(donate && donate->isVisible());
+            QVERIFY(donate->property("text").toString().contains(QStringLiteral("Donation page coming soon")));
             page->setProperty("tab", 1);
             QTRY_VERIFY_WITH_TIMEOUT(byName("deviceTab")->isVisible(), kWait);
             page->setProperty("tab", 2);
@@ -995,6 +1001,77 @@ private slots:
             QVERIFY(again.window);
             QTRY_COMPARE_WITH_TIMEOUT(again.one("LibraryPanel")->width(), 44.0, kWait);
             QTRY_COMPARE_WITH_TIMEOUT(again.one("InspectorPanel")->width(), 44.0, kWait);
+        }
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
+
+    // In-app user handbook (PARITY §12): Settings and Create open it; Esc /
+    // × / Close / backdrop dismiss; section nav jumps the body.
+    void userHandbookOpensFromSettingsAndCreate() {
+        {
+            Shell s;
+            loadShell(s, 0);
+            QVERIFY(s.window);
+            auto byName = [&](const char* name) -> QQuickItem* {
+                for (QQuickItem* i : descendants(s.root()))
+                    if (i->objectName() == QLatin1String(name) && i->isVisible()) return i;
+                return nullptr;
+            };
+            auto click = [&](QQuickItem* item) {
+                QVERIFY(item);
+                QTest::mouseClick(s.window, Qt::LeftButton, {},
+                                  item->mapToScene(QPointF(item->width() / 2, item->height() / 2)).toPoint());
+            };
+
+            QQuickItem* handbook = s.one("Handbook");
+            QVERIFY(handbook);
+            QVERIFY(!handbook->isVisible());
+
+            // Settings → General → Open user handbook.
+            QQuickItem* settings = s.one("SettingsPage");
+            QVERIFY(settings);
+            settings->setProperty("open", true);
+            QTRY_VERIFY_WITH_TIMEOUT(settings->isVisible(), kWait);
+            QQuickItem* openHb = byName("openHandbook");
+            QVERIFY(openHb);
+            click(openHb);
+            QTRY_VERIFY_WITH_TIMEOUT(handbook->isVisible() && handbook->property("opacity").toDouble() > 0.99, kWait);
+            QCOMPARE(byName("handbookTitle")->property("text").toString(), QStringLiteral("User handbook"));
+            QVERIFY(byName("handbookFooter")->property("text").toString().contains(QStringLiteral("USER_HANDBOOK.md")));
+            QVERIFY(byName("handbookNav"));
+            QVERIFY(byName("handbookBody"));
+            QCOMPARE(handbook->property("activeSection").toInt(), 0);
+
+            // Esc closes the handbook first; Settings stays open underneath.
+            QTest::keyClick(s.window, Qt::Key_Escape);
+            QTRY_VERIFY_WITH_TIMEOUT(!handbook->isVisible(), kWait);
+            QVERIFY(settings->isVisible());
+            QTest::keyClick(s.window, Qt::Key_Escape);
+            QTRY_VERIFY_WITH_TIMEOUT(!settings->isVisible(), kWait);
+
+            // Create header button opens it too.
+            s.window->setProperty("mode", 1);
+            QTRY_COMPARE_WITH_TIMEOUT(s.mode(), 1, kWait);
+            QTRY_VERIFY_WITH_TIMEOUT(byName("openHandbookCreate"), kWait);
+            click(byName("openHandbookCreate"));
+            QTRY_VERIFY_WITH_TIMEOUT(handbook->isVisible(), kWait);
+            click(byName("handbookClose"));
+            QTRY_VERIFY_WITH_TIMEOUT(!handbook->isVisible(), kWait);
+
+            // Project nav entry.
+            QTRY_VERIFY_WITH_TIMEOUT(byName("projectOpenHandbook"), kWait);
+            click(byName("projectOpenHandbook"));
+            QTRY_VERIFY_WITH_TIMEOUT(handbook->isVisible(), kWait);
+            {
+                const QVariant secs = handbook->property("sections");
+                QVERIFY(secs.isValid());
+                // JS arrays arrive as QVariantList or QJSValue; count either way.
+                int n = secs.toList().size();
+                if (n == 0) n = secs.value<QVariantList>().size();
+                QCOMPARE(n, 11);
+            }
+            click(byName("handbookCloseButton"));
+            QTRY_VERIFY_WITH_TIMEOUT(!handbook->isVisible(), kWait);
         }
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }

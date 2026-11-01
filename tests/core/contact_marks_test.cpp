@@ -71,7 +71,7 @@ TEST_CASE("contact proximity: inside the core box is 1, far away 0, the margin f
     CHECK(ProximityToBox(120, 120, Box(100, 100, 0, 40), kSpatialContactMargin) == 0);
 }
 
-TEST_CASE("partner path sorts like the tip path and TipPathAt finds a sample") {
+TEST_CASE("partner path sorts like the tip path and PathAt finds a sample") {
     TrajectoryData path;
     path.partner = {{2000, 80, 40}, {0, 10, 10}, {1000, 50, 20}};
     const auto sorted = SortedPartnerPath(path);
@@ -79,12 +79,27 @@ TEST_CASE("partner path sorts like the tip path and TipPathAt finds a sample") {
     CHECK(sorted[0].at_ms == 0);
     CHECK(sorted[1].at_ms == 1000);
     CHECK(sorted[2].at_ms == 2000);
-    const auto at = TipPathAt(sorted, 1100);
+    const auto at = PathAt(sorted, 1100);
     REQUIRE(at);
     CHECK(at->x == doctest::Approx(50.0));
     CHECK(at->y == doctest::Approx(20.0));
-    CHECK_FALSE(TipPathAt(sorted, 5000));
+    CHECK_FALSE(PathAt(sorted, 5000));
     CHECK(SortedPartnerPath(Path({})).empty());
+}
+
+TEST_CASE("extra path sorts like the tip path and PathAt finds a sample") {
+    TrajectoryData path;
+    path.extras = {{{1500, 9, 9}, {0, 1, 1}, {500, 4, 4}}};
+    const auto sorted = SortedExtraPath(path, 0);
+    REQUIRE(sorted.size() == 3);
+    CHECK(sorted[0].at_ms == 0);
+    CHECK(sorted[1].at_ms == 500);
+    CHECK(sorted[2].at_ms == 1500);
+    const auto at = PathAt(sorted, 600);
+    REQUIRE(at);
+    CHECK(at->x == doctest::Approx(4.0));
+    CHECK(SortedExtraPath(path, 1).empty());
+    CHECK(SortedExtraPath(Path({}), 0).empty());
 }
 
 TEST_CASE("spatial contact follows the tip path through a contact area") {

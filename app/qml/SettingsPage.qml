@@ -19,6 +19,8 @@ Item {
     readonly property alias settings: ctl
     // The health check (D-162); Main.qml starts it once after the window is shown.
     readonly property alias system: sysCtl
+    // Opens the in-app user handbook overlay (Main.qml hosts it).
+    signal handbookRequested()
     visible: opacity > 0
     opacity: open ? 1 : 0
     Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
@@ -84,6 +86,30 @@ Item {
                 ColumnLayout {
                     id: general
                     width: parent.width; spacing: 14
+                    // 0.7 settings.js: primary "Open user handbook" at the top of General.
+                    GlassCard {
+                        Layout.fillWidth: true; implicitHeight: hbCol.implicitHeight + 28
+                        ColumnLayout {
+                            id: hbCol
+                            anchors.fill: parent; anchors.margins: 14; spacing: 10
+                            Text { textFormat: Text.PlainText; text: qsTr("Help"); color: Theme.text; font.family: Theme.font; font.pixelSize: 15 }
+                            RowLayout {
+                                Layout.fillWidth: true; spacing: 10
+                                FlowButton {
+                                    objectName: "openHandbook"
+                                    primary: true; icon: "info"; text: qsTr("Open user handbook")
+                                    onClicked: root.handbookRequested()
+                                }
+                                HelpChip { key: "st-open-handbook" }
+                            }
+                            Text {
+                                textFormat: Text.PlainText
+                                Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                text: qsTr("FAQ + how to use every Everyday control. Also on Create.")
+                                color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                        }
+                    }
                     GlassCard {
                         Layout.fillWidth: true; implicitHeight: playCol.implicitHeight + 28
                         ColumnLayout {
@@ -250,14 +276,22 @@ Item {
                             }
                         }
                     }
-                    // Support the project (D-153): the GitHub page for now.
+                    // Support the project (D-153 / D-022): GitHub now; donation
+                    // buttons appear when URLs are set (still "coming soon").
                     GlassCard {
+                        objectName: "supportSection"
                         Layout.fillWidth: true; implicitHeight: supCol.implicitHeight + 28
                         visible: root.updates !== null
                         ColumnLayout {
                             id: supCol
                             anchors.fill: parent; anchors.margins: 14; spacing: 10
                             Text { textFormat: Text.PlainText; text: qsTr("Support SamNPlayer"); color: Theme.text; font.family: Theme.font; font.pixelSize: 15 }
+                            Text {
+                                textFormat: Text.PlainText
+                                Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                text: qsTr("SamNPlayer is free and open source. A star or an issue on GitHub helps; donation pages follow when they are ready.")
+                                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
                             RowLayout {
                                 Layout.fillWidth: true
                                 Text {
@@ -272,7 +306,18 @@ Item {
                                     onToggled: (c) => root.updates.supportNoteAtStart = c
                                 }
                             }
-                            FlowButton { icon: "heart"; text: qsTr("Open the GitHub page"); onClicked: root.updates.openProjectPage() }
+                            FlowButton {
+                                objectName: "supportOpenGithub"
+                                icon: "heart"; text: qsTr("Open the GitHub page")
+                                onClicked: root.updates.openProjectPage()
+                            }
+                            Text {
+                                objectName: "donateComingSoon"
+                                textFormat: Text.PlainText
+                                Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                text: qsTr("Donation page coming soon.")
+                                color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
                         }
                     }
                     // 0.7 Runtime & updates, check only (D-147).

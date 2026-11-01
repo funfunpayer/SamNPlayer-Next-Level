@@ -278,7 +278,7 @@ private slots:
             QCOMPARE(g.contactAreas().at(1).toMap().value("fixed").toBool(), false);
             g.setMarkExtra(true);
             QVERIFY(g.addContactArea(QRect(150, 80, 30, 30)));
-            QCOMPARE(g.status(), QStringLiteral("Extra contact #2 added, follows partner path."));
+            QCOMPARE(g.status(), QStringLiteral("Extra contact #2 added, follows own path."));
             QCOMPARE(g.contactAreas().at(2).toMap().value("fixed").toBool(), false);
         }
         {
@@ -301,6 +301,29 @@ private slots:
         g.removeContactArea(0);
         QCOMPARE(g.contactAreas().size(), 1);
         QCOMPARE(g.contactAreas().first().toMap().value("cls").toString(), QStringLiteral("nipples"));
+    }
+
+    // 0.7 Feel probe: live PreviewContactVibration for Sensitivity / Curve.
+    void contactFeelProbeFollowsSpanAndCurve() {
+        GeneratorController g;
+        g.setContactSpan(0.40);
+        g.setContactCurve("linear");
+        const QVariantMap early = g.contactFeelProbe();
+        QVERIFY(early.value("stroke").toList().size() >= 20);
+        QVERIFY(early.value("vib").toList().size() == early.value("stroke").toList().size());
+        g.setContactSpan(0.90);
+        const QVariantMap deep = g.contactFeelProbe();
+        QVERIFY(early.value("activePct").toDouble() > deep.value("activePct").toDouble() + 5.0);
+        g.setContactSpan(0.75);
+        g.setContactCurve("soft");
+        const double softActive = g.contactFeelProbe().value("activePct").toDouble();
+        g.setContactCurve("impulse");
+        const double impulseActive = g.contactFeelProbe().value("activePct").toDouble();
+        QVERIFY(impulseActive < softActive);
+        QVERIFY(!g.contactFeelProbe().value("hint").toString().isEmpty());
+        // Restore defaults so later tests that expect soft / 0.75 stay clean.
+        g.setContactSpan(0.75);
+        g.setContactCurve("soft");
     }
 
     // 0.7 Step 3: sensitivity and curve of contact vibration, written into
@@ -360,6 +383,80 @@ private slots:
             g.setContactClass("nipples");
             g.setContactSpan(0.75);
             g.setContactCurve("soft");
+        }
+    }
+
+    // G4a Advanced: Sliding / Adaptive / axis are remembered; defaults on/on/auto.
+    void advancedShellChoicesAreRemembered() {
+        {
+            GeneratorController g;
+            QVERIFY(g.slidingDynamics());
+            QVERIFY(g.adaptiveKeyframes());
+            QCOMPARE(g.motionAxis(), QStringLiteral("auto"));
+            g.setSlidingDynamics(false);
+            g.setAdaptiveKeyframes(false);
+            g.setMotionAxis("x");
+            QCOMPARE(g.motionAxis(), QStringLiteral("x"));
+            g.setMotionAxis("nonsense");  // unknown → auto (like feelDevice)
+            QCOMPARE(g.motionAxis(), QStringLiteral("auto"));
+            g.setMotionAxis("y");
+        }
+        const samn::Settings s;
+        QCOMPARE(s.get("generator.sliding_dynamics").get<bool>(), false);
+        QCOMPARE(s.get("generator.adaptive_keyframe").get<bool>(), false);
+        QCOMPARE(QString::fromStdString(s.get("generator.axis").get<std::string>()), QStringLiteral("y"));
+        {
+            GeneratorController g;
+            QVERIFY(!g.slidingDynamics());
+            QVERIFY(!g.adaptiveKeyframes());
+            QCOMPARE(g.motionAxis(), QStringLiteral("y"));
+            // Restore defaults for later tests that share the settings file.
+            g.setSlidingDynamics(true);
+            g.setAdaptiveKeyframes(true);
+            g.setMotionAxis("auto");
+        }
+    }
+
+    // G4b Expert: smooth / spacing / prominence / RDP / max-speed remembered with steps.
+    void expertKnobChoicesAreRemembered() {
+        {
+            GeneratorController g;
+            QCOMPARE(g.smoothWindow(), 11);
+            QCOMPARE(g.minPeakDistanceMs(), 150);
+            QCOMPARE(g.peakProminence(), 0.0);
+            QCOMPARE(g.rdpTolerance(), 0.0);
+            QCOMPARE(g.maxSpeed(), 0);
+            g.setSmoothWindow(20);  // even → 19
+            QCOMPARE(g.smoothWindow(), 19);
+            g.setMinPeakDistanceMs(157);  // → 150
+            QCOMPARE(g.minPeakDistanceMs(), 150);
+            g.setMinPeakDistanceMs(160);
+            g.setPeakProminence(0.37);  // → 0.35
+            QCOMPARE(g.peakProminence(), 0.35);
+            g.setRdpTolerance(1.2);  // → 1.0
+            QCOMPARE(g.rdpTolerance(), 1.0);
+            g.setMaxSpeed(175);  // → 150
+            QCOMPARE(g.maxSpeed(), 150);
+        }
+        const samn::Settings s;
+        QCOMPARE(s.get("generator.smooth_window").get<int>(), 19);
+        QCOMPARE(s.get("generator.min_peak_distance_ms").get<int>(), 160);
+        QCOMPARE(s.get("generator.peak_prominence").get<double>(), 0.35);
+        QCOMPARE(s.get("generator.rdp_tolerance").get<double>(), 1.0);
+        QCOMPARE(s.get("generator.max_speed").get<int>(), 150);
+        {
+            GeneratorController g;
+            QCOMPARE(g.smoothWindow(), 19);
+            QCOMPARE(g.minPeakDistanceMs(), 160);
+            QCOMPARE(g.peakProminence(), 0.35);
+            QCOMPARE(g.rdpTolerance(), 1.0);
+            QCOMPARE(g.maxSpeed(), 150);
+            // Restore Everyday defaults for later tests.
+            g.setSmoothWindow(11);
+            g.setMinPeakDistanceMs(150);
+            g.setPeakProminence(0);
+            g.setRdpTolerance(0);
+            g.setMaxSpeed(0);
         }
     }
 
@@ -428,6 +525,33 @@ private slots:
         g.setSceneFeel("auto");
         g.setFeelBalance(0);
         g.setVibFollow(false);
+    }
+
+    // The auto scene follows the primary area's class, not the default class
+    // for new marks, and the Feel page hears about a change.
+    void theAutoSceneFollowsThePrimaryAreaClass() {
+        GeneratorController g;
+        g.setSceneFeel("auto");
+        QTemporaryDir own;
+        const QString video = own.filePath("a.mp4");
+        clips::WriteMoving(std::filesystem::path(video.toStdU16String()), 2, 80.0, 1.0);
+        QVERIFY(g.openVideo(video));
+        g.setBox(QRect(100, 40, 120, 160));
+        QCOMPARE(g.contactClass(), QStringLiteral("nipples"));  // the default for new marks
+        g.setMarkContact(true);
+        QVERIFY(g.addContactArea(QRect(130, 90, 60, 60)));
+        QCOMPARE(g.autoScene(), QStringLiteral("breast"));
+        QSignalSpy feel(&g, &GeneratorController::feelChanged);
+        g.setAreaClass(0, "mouth");
+        QVERIFY(feel.count() >= 1);
+        QCOMPARE(g.contactClass(), QStringLiteral("nipples"));
+        QCOMPARE(g.autoScene(), QStringLiteral("oral"));
+
+        QSignalSpy created(&g, &GeneratorController::created);
+        QVERIFY(g.create());
+        QTRY_COMPARE_WITH_TIMEOUT(created.count(), 1, 60000);
+        const samn::Document d = samn::LoadDocument(std::filesystem::path(own.filePath("a.samn").toStdU16String()));
+        QCOMPARE(QString::fromStdString(d.recipe.scene_feel), QStringLiteral("oral"));
     }
 
     void findTipProposesTheBoxAndCandidates() {
@@ -695,6 +819,31 @@ private slots:
         QVERIFY(!QFileInfo::exists(own.filePath("c.funscript")));
         g.removeFromQueue(0);
         QCOMPARE(g.queue().size(), 1);
+    }
+
+    void twoVideosWithOneScriptNameDoNotOverwriteEachOther() {
+        GeneratorController g;
+        QTemporaryDir own;
+        const QString mp4 = own.filePath("x.mp4"), mkv = own.filePath("x.mkv");
+        clips::WriteMoving(std::filesystem::path(mp4.toStdU16String()), 8, 80.0, 1.0);
+        clips::WriteMoving(std::filesystem::path(mkv.toStdU16String()), 8, 80.0, 1.0);
+        QCOMPARE(g.addToQueue({mp4, mkv}), 2);
+        QSignalSpy finished(&g, &GeneratorController::queueFinished);
+        QVERIFY(g.runQueue(true));
+        QTRY_COMPARE_WITH_TIMEOUT(finished.count(), 1, 60000);
+        auto item = [&](int i) { return g.queue().at(i).toMap(); };
+        QCOMPARE(item(0).value("status").toString(), QStringLiteral("done"));
+        QCOMPARE(item(1).value("status").toString(), QStringLiteral("failed"));
+        QCOMPARE(item(1).value("message").toString(), QStringLiteral("same script name as x.mp4"));
+
+        // A later run counts what an earlier one wrote (review of #140).
+        const QString avi = own.filePath("x.avi");
+        clips::WriteMoving(std::filesystem::path(avi.toStdU16String()), 8, 80.0, 1.0);
+        QCOMPARE(g.addToQueue({avi}), 1);
+        QVERIFY(g.runQueue(true));
+        QTRY_COMPARE_WITH_TIMEOUT(finished.count(), 2, 60000);
+        QCOMPARE(item(2).value("status").toString(), QStringLiteral("failed"));
+        QCOMPARE(item(2).value("message").toString(), QStringLiteral("same script name as x.mp4"));
     }
 
     void cancelStopsTheRunAndWritesNothing() {

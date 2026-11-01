@@ -221,6 +221,30 @@ TEST_CASE("track: fixed partner centres stay put; tracked partner moves") {
     CHECK(Ptp(tracked->partner_xs) >= 30);
 }
 
+TEST_CASE("track: fixed extra centres stay put; tracked extra moves") {
+    TempDir dir;
+    const fs::path clip = dir.path / "three.mp4";
+    REQUIRE(clips::WriteTipPartnerAndExtra(clip, 3, 60.0, 40.0, 80.0));
+    TrackOptions o = Plain();
+    o.partner_box = cv::Rect(165, 145, 70, 70);
+    o.partner_fixed = true;
+    o.extra_boxes = {{cv::Rect(245, 85, 70, 70), true}};
+    std::string error;
+    auto fixed = TrackBox(clip, cv::Rect(65, 85, 70, 70), o, &error);
+    REQUIRE_MESSAGE(fixed, error);
+    REQUIRE(fixed->extra_ys.size() == 1);
+    REQUIRE(fixed->extra_ys[0].size() == fixed->times_ms.size());
+    CHECK(std::abs(fixed->extra_xs[0].front() - 280.0) <= 5);
+    CHECK(std::abs(fixed->extra_ys[0].back() - fixed->extra_ys[0].front()) <= 1);
+
+    o.extra_boxes[0].fixed = false;
+    auto tracked = TrackBox(clip, cv::Rect(65, 85, 70, 70), o, &error);
+    REQUIRE_MESSAGE(tracked, error);
+    REQUIRE(tracked->extra_ys.size() == 1);
+    REQUIRE(tracked->extra_ys[0].size() == tracked->times_ms.size());
+    CHECK(Ptp(tracked->extra_ys[0]) >= 30);
+}
+
 // Tf/Tj: tip barely moves on Y; partner swings on X → distance stroke range
 // follows the gap, not tip Y (GD-08 / P3.4).
 TEST_CASE("track: distance stroke follows tip-partner gap not tip Y") {
@@ -325,6 +349,21 @@ TEST_CASE("parts: coast moves on for 8 frames, then gives up") {
     auto held = one.OnLost();
     REQUIRE(held);
     CHECK(held->tl() == cv::Point(5, 5));
+}
+
+TEST_CASE("parts: a reacquire jump is not a coast velocity") {
+    Coast c;
+    c.ObserveOk({10, 10, 20, 20});
+    for (int i = 0; i < Coast::kDefaultFrames + 1; ++i) c.OnLost();
+    c.Reanchor({210, 110, 20, 20});  // found again far away
+    auto r = c.OnLost();
+    REQUIRE(r);
+    CHECK(r->tl() == cv::Point(210, 110));  // held, not 210 + 200
+    // Real motion after the re-anchor is still picked up.
+    c.ObserveOk({213, 110, 20, 20});
+    r = c.OnLost();
+    REQUIRE(r);
+    CHECK(r->x == 216);
 }
 
 TEST_CASE("parts: appearance memory knows the start region and fails closed") {

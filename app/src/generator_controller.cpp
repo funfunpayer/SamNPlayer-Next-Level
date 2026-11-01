@@ -20,6 +20,7 @@
 #include "samn/engine/generate_queue.h"
 #include "samn/engine/tip_find.h"
 #include "samn/contact_marks.h"
+#include "samn/contact_preview.h"
 #include "samn/ozone.h"
 #include "samn/polarity.h"
 #include "samn/samn_file.h"
@@ -81,6 +82,14 @@ void GeneratorController::loadSettings() {
         setProfile(str("generator.profile", profile_));
         camera_ = flag("generator.camera_compensation", camera_);
         scene_cuts_ = flag("generator.scene_cuts", scene_cuts_);
+        sliding_ = flag("generator.sliding_dynamics", sliding_);
+        adaptive_keyframes_ = flag("generator.adaptive_keyframe", adaptive_keyframes_);
+        setMotionAxis(str("generator.axis", motion_axis_));
+        if (const auto v = s.get("generator.smooth_window"); v.is_number()) setSmoothWindow(v.get<int>());
+        if (const auto v = s.get("generator.min_peak_distance_ms"); v.is_number()) setMinPeakDistanceMs(v.get<int>());
+        if (const auto v = s.get("generator.peak_prominence"); v.is_number()) setPeakProminence(v.get<double>());
+        if (const auto v = s.get("generator.rdp_tolerance"); v.is_number()) setRdpTolerance(v.get<double>());
+        if (const auto v = s.get("generator.max_speed"); v.is_number()) setMaxSpeed(v.get<int>());
         auto_ozone_ = flag("generator.auto_ozone", auto_ozone_);
         auto_tip_ = flag("generator.auto_tip", auto_tip_);
         gap_handling_ = flag("generator.gap_handling", gap_handling_);
@@ -114,10 +123,26 @@ void GeneratorController::applySwitches(engine::SignalOptions& signal,
     signal.max_gap_ms = gap_handling_ ? kGapBridgeMs : 0;
     // Off is -1: Recommended would otherwise turn it on by itself.
     signal.outlier_mad_factor = outlier_rejection_ ? kOutlierMadFactor : -1;
+    // G4a: Sliding on → 3000 ms; off → -1 so profile recipes do not refill it.
+    signal.dynamic_range_ms = sliding_ ? 3000 : -1;
+    // G4a: Adaptive Keyframes on → error 6 (0.7); off → 0.
+    signal.adaptive_error = adaptive_keyframes_ ? 6 : 0;
+    // G4b Expert: 0 leaves the profile / PostOptions default (or off for RDP / max speed).
+    signal.smooth_window = smooth_window_;
+    signal.min_peak_distance_ms = min_peak_distance_ms_;
+    signal.peak_prominence = peak_prominence_;
+    signal.rdp_tolerance = rdp_tolerance_;
+    signal.max_speed = max_speed_;
     // D-159 device fit: a stroker keeps 0.7's 100 ms between actions.
     if (profile_ == QLatin1String(samn::ProfileRecommended) && feelKind() == QLatin1String("stroker"))
         signal.min_action_interval_ms = 100;
     track_cache_dir = track_cache_ ? samn::config_dir() / "cache" / "track" : std::filesystem::path();
+}
+
+engine::TrackAxis GeneratorController::trackAxis() const {
+    if (motion_axis_ == QLatin1String("x")) return engine::TrackAxis::kX;
+    if (motion_axis_ == QLatin1String("y")) return engine::TrackAxis::kY;
+    return engine::TrackAxis::kAuto;
 }
 
 void GeneratorController::saveSetting(const char* key, const nlohmann::json& value) {
@@ -154,7 +179,7 @@ bool GeneratorController::findTip() {
         // from the shown frame; any other search ends, and a new one starts
         // from the shown frame once it has.
         find_auto_ = pending_auto_ = false;
-        if (!usable || find_start_ms_ != int64_t(std::llround(preview_ms_))) {
+        if (!usable || find_start_ms_ != int64_t(std::floor(preview_ms_))) {
             refind_ = true;
             if (find_cancel_) *find_cancel_ = true;
         }
@@ -169,9 +194,9 @@ bool GeneratorController::findTip() {
     emit findingChanged();
     setStatus(tr("Looking for the rhythmic motion…"));
     const quint64 edits = box_edits_;
-    find_start_ms_ = int64_t(std::llround(preview_ms_));
+    find_start_ms_ = int64_t(std::floor(preview_ms_));
     QPointer<GeneratorController> self(this);
-    finder_ = std::thread([self, edits, cancel = find_cancel_, forVideo = video_path_, startMs = int64_t(std::llround(preview_ms_)),
+    finder_ = std::thread([self, edits, cancel = find_cancel_, forVideo = video_path_, startMs = int64_t(std::floor(preview_ms_)),
                            video = std::filesystem::path(video_path_.toStdU16String())] {
         samn::engine::TipFindOptions o;
         o.start_ms = startMs;  // 0.7: from the shown frame
@@ -333,6 +358,7 @@ bool GeneratorController::runQueue(bool overwrite) {
     engine::QueueSettings settings;
     settings.signal.profile = profile_.toStdString();
     settings.signal.invert = invert_;
+    settings.axis = trackAxis();
     settings.camera_compensation = camera_;
     settings.scene_cuts = scene_cuts_;
     settings.auto_ozone = auto_ozone_;
@@ -349,8 +375,16 @@ bool GeneratorController::runQueue(bool overwrite) {
     emit queueChanged();
     emit progressChanged();
     setStatus(tr("Creating the queue…"));
+    // Videos whose script this queue wrote, also in an earlier run: one script
+    // name, one video.
+    std::vector<std::filesystem::path> written;
+    for (const QVariant& v : queue_) {
+        const QVariantMap m = v.toMap();
+        if (m.value("status").toString() == QLatin1String("done"))
+            written.emplace_back(m.value("path").toString().toStdU16String());
+    }
     QPointer<GeneratorController> self(this);
-    queue_worker_ = std::thread([self, items, settings, cancel = queue_cancel_] {
+    queue_worker_ = std::thread([self, items, settings, earlier = std::move(written), cancel = queue_cancel_]() mutable {
         auto post = [self](auto fn) {
             QMetaObject::invokeMethod(qApp, [self, fn] { if (self) fn(self.data()); }, Qt::QueuedConnection);
         };
@@ -359,6 +393,12 @@ bool GeneratorController::runQueue(bool overwrite) {
             const auto& [index, video] = items[size_t(n)];
             if (cancel->load()) {
                 post([index](GeneratorController* g) { g->setQueueItem(index, "canceled", {}); });
+                continue;
+            }
+            const std::string clash = engine::ScriptNameCollision(earlier, video);
+            if (!clash.empty()) {
+                const QString message = QString::fromStdString(clash);
+                post([index, message](GeneratorController* g) { g->setQueueItem(index, "failed", message); });
                 continue;
             }
             post([index](GeneratorController* g) { g->setQueueItem(index, "running", {}); });
@@ -375,6 +415,7 @@ bool GeneratorController::runQueue(bool overwrite) {
                 r.status = engine::QueueItemStatus::kFailed;
                 r.message = e.what();
             }
+            if (r.status == engine::QueueItemStatus::kDone) earlier.push_back(video);  // only a written script blocks
             static const char* const names[] = {"done", "skipped", "failed", "canceled"};
             const QString status = QString::fromLatin1(names[int(r.status)]);
             const QString message = QString::fromStdString(r.message);
@@ -528,6 +569,8 @@ void GeneratorController::setProfile(const QString& p) {
 SAMN_SETTER(setInvert, invert_, nullptr)
 SAMN_SETTER(setCameraCompensation, camera_, "generator.camera_compensation")
 SAMN_SETTER(setSceneCuts, scene_cuts_, "generator.scene_cuts")
+SAMN_SETTER(setSlidingDynamics, sliding_, "generator.sliding_dynamics")
+SAMN_SETTER(setAdaptiveKeyframes, adaptive_keyframes_, "generator.adaptive_keyframe")
 SAMN_SETTER(setAutoOZone, auto_ozone_, "generator.auto_ozone")
 SAMN_SETTER(setAutoTip, auto_tip_, "generator.auto_tip")
 SAMN_SETTER(setGapHandling, gap_handling_, "generator.gap_handling")
@@ -535,6 +578,62 @@ SAMN_SETTER(setOutlierRejection, outlier_rejection_, "generator.outlier_rejectio
 SAMN_SETTER(setTrackCache, track_cache_, "generator.track_cache")
 SAMN_SETTER(setContactVibration, contact_vibration_, "generator.contact_vibration")
 #undef SAMN_SETTER
+
+void GeneratorController::setMotionAxis(const QString& axis) {
+    const QString v = axis == QLatin1String("x") || axis == QLatin1String("y") ? axis : QStringLiteral("auto");
+    if (v == motion_axis_) return;
+    motion_axis_ = v;
+    saveSetting("generator.axis", v.toStdString());
+    emit optionsChanged();
+}
+
+void GeneratorController::setSmoothWindow(int v) {
+    // Odd window 0..51 (0 = profile default). Even values round down to odd ≥1 when >0.
+    int n = std::clamp(v, 0, 51);
+    if (n > 0 && n % 2 == 0) --n;
+    if (n == smooth_window_) return;
+    smooth_window_ = n;
+    saveSetting("generator.smooth_window", n);
+    emit optionsChanged();
+}
+
+void GeneratorController::setMinPeakDistanceMs(int v) {
+    // 0..500, step 10 (0 = profile default).
+    const int n = std::clamp(v, 0, 500) / 10 * 10;
+    if (n == min_peak_distance_ms_) return;
+    min_peak_distance_ms_ = n;
+    saveSetting("generator.min_peak_distance_ms", n);
+    emit optionsChanged();
+}
+
+void GeneratorController::setPeakProminence(double v) {
+    // 0..1, step 0.05 (0 = profile default).
+    double n = std::clamp(v, 0.0, 1.0);
+    n = std::round(n / 0.05) * 0.05;
+    if (std::abs(n - peak_prominence_) < 1e-9) return;
+    peak_prominence_ = n;
+    saveSetting("generator.peak_prominence", n);
+    emit optionsChanged();
+}
+
+void GeneratorController::setRdpTolerance(double v) {
+    // 0..20, step 0.5 (0 = off).
+    double n = std::clamp(v, 0.0, 20.0);
+    n = std::round(n * 2.0) / 2.0;
+    if (std::abs(n - rdp_tolerance_) < 1e-9) return;
+    rdp_tolerance_ = n;
+    saveSetting("generator.rdp_tolerance", n);
+    emit optionsChanged();
+}
+
+void GeneratorController::setMaxSpeed(int v) {
+    // 0..800, step 50 (0 = off).
+    const int n = std::clamp(v, 0, 800) / 50 * 50;
+    if (n == max_speed_) return;
+    max_speed_ = n;
+    saveSetting("generator.max_speed", n);
+    emit optionsChanged();
+}
 
 void GeneratorController::setPartnerFixed(bool v) {
     if (v == partner_fixed_) return;
@@ -599,6 +698,24 @@ void GeneratorController::setContactCurve(const QString& curve) {
     contact_curve_ = v;
     saveSetting("generator.contact_vibration_curve", v.toStdString());
     emit optionsChanged();
+}
+
+QVariantMap GeneratorController::contactFeelProbe() const {
+    const samn::ContactVibrationPreview p =
+        samn::PreviewContactVibration(contact_span_, contact_curve_.toStdString());
+    QVariantList stroke, vib, peaks;
+    stroke.reserve(int(p.stroke.size()));
+    vib.reserve(int(p.vib.size()));
+    peaks.reserve(int(p.peaks.size()));
+    for (const auto& pt : p.stroke) stroke << QVariantMap{{"x", pt.x}, {"y", pt.y}};
+    for (const auto& pt : p.vib) vib << QVariantMap{{"x", pt.x}, {"y", pt.y}};
+    for (const auto& pt : p.peaks) peaks << QVariantMap{{"x", pt.x}, {"y", pt.y}};
+    return {{"activePct", p.active_pct},
+            {"peak", p.peak},
+            {"hint", QString::fromStdString(p.hint)},
+            {"stroke", stroke},
+            {"vib", vib},
+            {"peaks", peaks}};
 }
 
 void GeneratorController::setOptimizeTarget(const QString& target) {
@@ -671,12 +788,13 @@ void GeneratorController::setSceneFeel(const QString& sc) {
 }
 
 QString GeneratorController::autoScene() const {
-    // 0.7 sceneFromHints with the contact mark's class (no AI scene type yet),
+    // 0.7 sceneFromHints with the primary area's class (no AI scene type yet),
     // but only when a contact area is marked: the class defaults to nipples,
     // and every plain Create would otherwise get the breast feel.
     if (contact_areas_.empty()) return {};
-    if (contact_class_ == QLatin1String("mouth")) return QStringLiteral("oral");
-    if (contact_class_ == QLatin1String("nipples") || contact_class_ == QLatin1String("breasts")) return QStringLiteral("breast");
+    const QString cls = QString::fromStdString(contact_areas_.front().cls);
+    if (cls == QLatin1String("mouth")) return QStringLiteral("oral");
+    if (cls == QLatin1String("nipples") || cls == QLatin1String("breasts")) return QStringLiteral("breast");
     return {};
 }
 
@@ -812,12 +930,12 @@ bool GeneratorController::addContactArea(const QRect& area) {
         return false;
     }
     if (extra) {
-        // Stay fixed (0.7): keep the magenta box where drawn; off = follow
-        // partner path once extras multi-path records it.
+        // Stay fixed (0.7): keep the magenta box where drawn; off = record
+        // its own centre path (track_multi / trajectory.extras).
         const bool stay = extras_stay_fixed_;
         contact_areas_.push_back({r.x(), r.y(), r.width(), r.height(), extra_class_.toStdString(), stay});
         const int n = static_cast<int>(contact_areas_.size()) - 1;
-        const QString how = stay ? tr("stay fixed") : tr("follows partner path");
+        const QString how = stay ? tr("stay fixed") : tr("follows own path");
         setStatus(extra_class_.isEmpty() ? tr("Extra contact #%1 added, %2.").arg(n).arg(how)
                                          : tr("Extra contact #%1 (%2) added, %3.").arg(n).arg(extra_class_).arg(how));
     } else {
@@ -963,9 +1081,10 @@ bool GeneratorController::create(bool overwrite) {
     engine::GenerateRequest req;
     req.video = std::filesystem::path(video_path_.toStdU16String());
     req.box = cv::Rect(box_.x(), box_.y(), box_.width(), box_.height());
-    req.start_ms = int64_t(std::llround(box_ms_));
+    req.start_ms = int64_t(std::floor(box_ms_));
     req.camera_compensation = camera_;
     req.scene_cuts = scene_cuts_;
+    req.axis = trackAxis();
     req.signal.profile = profile_.toStdString();
     req.signal.invert = invert_;
     req.output = funscriptPath();
