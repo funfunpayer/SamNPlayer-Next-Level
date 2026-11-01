@@ -2,16 +2,20 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 31 Oct 2026, Cursor, branch `cursor/player-partner-overlay-635a`: Player contact overlay follows the recorded partner path (handover below). Before: 30 Oct, Claude `claude/samn2-data-safety` (#139) and `claude/samn2-stop-safety` (#138); 28 Oct `claude/samn2-auto-tip` (#136); #137 health; #135 self-check handoff.
+**Last update:** 1 Nov 2026, Cursor, branch `cursor/settings-broken-stamp-635a`: GAP-20 timestamped broken settings aside (handover below). Parallel open: G4a `#147`, Training coach `#148`. Before: partner overlay on main (#141).
 
-## Handover: `cursor/player-partner-overlay-635a` (31 Oct)
+## Handover: `cursor/settings-broken-stamp-635a` (1 Nov) — GAP-20
 
-Player partner overlay — the missing half of G2b's contact marks on Play (AGENT_STATE "Next after Tf/Tj").
+Corrupt `settings.json` is moved aside as `settings.broken.<UTC YYYYMMDD-HHMMSS>.json` (`.2`… if that second collides). A second corruption no longer overwrites the first aside (LESSONS FF-07 / GAP-20).
 
-- **Core:** `SortedPartnerPath` next to `SortedTipPath`; `TipPathAt` works on either sorted path. Test `partner path sorts like the tip path…`.
-- **Player:** loads `trajectory.partner` into `partnerPath_`; `partnerAt(ms)` for QML; `contactMarks.hasPartner` and the hint adds "partner path" when samples exist.
-- **Overlay:** non-fixed gold / magenta boxes centre on the partner sample at the playhead; fixed boxes and scripts without a partner path stay put (still not following the tip — that looked wrong). Tip stays on the tip path.
-- **Still open from that tip:** extras multi-path (`track_multi`); MT-Debug trajectory line overlay (tip accent + partner teal); donation pages / handbook / idle ribbon (Owner GUI leftovers).
+- **Code:** `core/src/settings.cpp` `broken_aside_path`; header comment; tests keep-aside + second-corrupt keeps first.
+- **Next:** Owner GUI leftovers (handbook §12, idle Flow graphic §11, donate); Generator G4b after `#147` greens; more GAP rows as small bug-fix PRs.
+
+## Handover: `cursor/player-partner-overlay-635a` (31 Oct) — on main as #141
+
+Player partner overlay — the missing half of G2b's contact marks on Play.
+
+- **Still open from that tip:** extras multi-path / MT-Debug / handbook / idle ribbon on other branches.
 
 
 ## Handover: `claude/samn2-data-safety` (30 Oct)

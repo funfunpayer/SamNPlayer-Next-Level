@@ -22,7 +22,8 @@ std::filesystem::path config_dir();
 class Settings {
 public:
     // Empty path: config_dir()/settings.json. A broken file is kept aside as
-    // settings.broken.json and the settings start empty.
+    // settings.broken.<UTC stamp>.json (never overwriting an earlier aside)
+    // and the settings start empty.
     explicit Settings(std::filesystem::path path = {});
     Settings(const Settings&) = delete;
     Settings& operator=(const Settings&) = delete;

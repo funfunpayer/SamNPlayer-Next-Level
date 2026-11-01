@@ -2,7 +2,9 @@
 #include "samn/fileio.h"
 
 #include <chrono>
+#include <cstdio>
 #include <cstdlib>
+#include <ctime>
 #include <fstream>
 #include <random>
 #include <sstream>
@@ -55,6 +57,29 @@ bool replace_file(const fs::path& from, const fs::path& to) {
 #endif
 }
 
+// settings.json → settings.broken.YYYYMMDD-HHMMSS.json; .2, .3… if that name is taken
+// (0.7 / GAP-20: never overwrite an earlier corrupt aside).
+fs::path broken_aside_path(const fs::path& settings_path) {
+    using clock = std::chrono::system_clock;
+    const auto t = clock::to_time_t(clock::now());
+    std::tm tm{};
+#ifdef _WIN32
+    gmtime_s(&tm, &t);
+#else
+    gmtime_r(&t, &tm);
+#endif
+    char stamp[32];
+    std::snprintf(stamp, sizeof stamp, "%04d%02d%02d-%02d%02d%02d", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
+                  tm.tm_hour, tm.tm_min, tm.tm_sec);
+    const fs::path parent = settings_path.parent_path().empty() ? fs::path(".") : settings_path.parent_path();
+    const std::string stem = settings_path.stem().string();
+    fs::path candidate = parent / (stem + ".broken." + stamp + ".json");
+    std::error_code ec;
+    for (int n = 2; fs::exists(candidate, ec); ++n)
+        candidate = parent / (stem + ".broken." + stamp + "." + std::to_string(n) + ".json");
+    return candidate;
+}
+
 }  // namespace
 
 fs::path config_dir() {
@@ -95,9 +120,7 @@ Settings::Settings(fs::path path) : path_(path.empty() ? config_dir() / "setting
     }
     if (broken) {
         // A broken file is kept aside, not silently overwritten.
-        fs::path bad = path_;
-        bad.replace_extension(".broken.json");
-        replace_file(path_, bad);
+        replace_file(path_, broken_aside_path(path_));
         return;
     }
     stamp_ = fs::last_write_time(path_, ec);
