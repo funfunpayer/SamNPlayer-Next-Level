@@ -228,9 +228,10 @@ private slots:
         QTRY_VERIFY(named(root.get(), "toggle_invert")->isVisible());
         QVERIFY(named(root.get(), "toggle_slidingDynamics")->isVisible());
         QVERIFY(named(root.get(), "motionAxisCombo")->isVisible());
+        // Toggle via signal: Advanced lives in a tall Create column and the
+        // invert row can sit below the window (mouseClick then lands outside).
         auto* invert = named(root.get(), "toggle_invert");
-        QTest::mouseClick(&window, Qt::LeftButton, {},
-                          invert->mapToScene(QPointF(invert->width() / 2, invert->height() / 2)).toPoint());
+        QMetaObject::invokeMethod(invert, "toggled", Q_ARG(bool, true));
         QTRY_VERIFY(gen->invert());
 
         // G3: the feel follows the device. Nothing connected: Sam Neo 2.
