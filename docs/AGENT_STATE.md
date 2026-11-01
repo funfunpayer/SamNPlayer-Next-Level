@@ -4,6 +4,16 @@
 
 **Last update:** 1 Nov 2026, Claude, branch `claude/review-previous-work-jnjttn`: Script Doctor metric assertions (GAP-12 leftovers, handover below). Before: #142 Windows `config_dir` wide env; #141 Player partner overlay.
 
+## Handover: `cursor/track-multi-extras-635a` (31 Oct)
+
+Generator extras multi-path (`track_multi`) — magenta contact areas get their own centre paths.
+
+- **Schema:** `TrajectoryData.extras` = `vector<vector<TrajectoryPoint>>` (index matches `contactMarks.extras`); encode/decode/Same/ShiftTrajectory.
+- **Engine:** `TrackOptions::extra_boxes` → CSRT or fixed centres → `TrackResult::extra_xs/ys` → `BuildTrajectory` writes `.samn` `trajectory.extras`. Track cache v3.
+- **Player:** `extraAt(i, ms)`, `hasExtras` hint; overlay follows each extra's own path (falls back to partner for old scripts). Generator status "follows own path" when Stay fixed is off.
+- **Tests:** `track: fixed extra…`, `generate: non-fixed extra path…`, player `hasExtras`/`extraAt`, SortedExtraPath.
+- **Still open:** FuseTipPartners (multi-partner distance stroke); MT-Debug trajectory line overlay; donation pages / handbook / idle ribbon; G4 advanced.
+
 ## Handover: `cursor/samn2-gen-fixes-635a` (31 Oct; was `claude/samn2-gen-fixes` / #140)
 
 Takeover of Claude's Generator bug-hunt PR (CI was green; conflicted with #141 on `AGENT_STATE.md` only). Fixes, each with a test that failed before:

@@ -82,6 +82,10 @@ std::string TrackCacheKey(const std::filesystem::path& video, const cv::Rect& bo
     for (const cv::Rect& m : o.mask_rois) masks.push_back(RectJson(m));
     opts["mask_rois"] = masks;
     opts["partner_box"] = o.partner_box ? RectJson(*o.partner_box) : nlohmann::json();
+    nlohmann::json extras = nlohmann::json::array();
+    for (const TrackOptions::ExtraBoxOption& e : o.extra_boxes)
+        extras.push_back({{"box", RectJson(e.box)}, {"fixed", e.fixed}});
+    opts["extra_boxes"] = extras;
     const std::string text = opts.dump();
     h.Update(text.data(), text.size());
     return h.HexDigest();
@@ -103,6 +107,8 @@ std::optional<TrackResult> LoadTrackCache(const std::filesystem::path& dir, cons
         r.frame_ys = j.at("frame_ys").get<std::vector<double>>();
         r.partner_xs = j.at("partner_xs").get<std::vector<double>>();
         r.partner_ys = j.at("partner_ys").get<std::vector<double>>();
+        r.extra_xs = j.value("extra_xs", std::vector<std::vector<double>>{});
+        r.extra_ys = j.value("extra_ys", std::vector<std::vector<double>>{});
         r.horizontal = j.at("horizontal").get<bool>();
         r.distance_stroke = j.at("distance_stroke").get<bool>();
         r.size = cv::Size(j.at("width").get<int>(), j.at("height").get<int>());
@@ -117,6 +123,10 @@ std::optional<TrackResult> LoadTrackCache(const std::filesystem::path& dir, cons
         r.stats.confidence = s.at("confidence").get<double>();
         r.stats.reason = s.at("reason").get<std::string>();
         if (r.positions.size() != r.times_ms.size() || r.lost.size() != r.times_ms.size()) return std::nullopt;
+        if (r.extra_xs.size() != r.extra_ys.size()) return std::nullopt;
+        for (size_t i = 0; i < r.extra_xs.size(); ++i)
+            if (r.extra_xs[i].size() != r.times_ms.size() || r.extra_ys[i].size() != r.times_ms.size())
+                return std::nullopt;
         return r;
     } catch (const std::exception&) {
         return std::nullopt;
@@ -144,6 +154,8 @@ void SaveTrackCache(const std::filesystem::path& dir, const std::string& key, co
                            {"frame_ys", r.frame_ys},
                            {"partner_xs", r.partner_xs},
                            {"partner_ys", r.partner_ys},
+                           {"extra_xs", r.extra_xs},
+                           {"extra_ys", r.extra_ys},
                            {"horizontal", r.horizontal},
                            {"distance_stroke", r.distance_stroke},
                            {"width", r.size.width},

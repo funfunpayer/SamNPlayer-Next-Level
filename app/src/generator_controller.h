@@ -109,8 +109,8 @@ class GeneratorController : public QObject {
     // G2b / 0.7 "Partner fixed (pixels)" and "Stay fixed" for extras
     // (generator.partner_fixed, generator.extras_stay_fixed). They set the
     // ContactMarkBox.fixed flag written into .samn. Generate records the
-    // gold partner path (fixed centres or second CSRT → trajectory.partner);
-    // extras multi-path still follows; Tf/Tj distance stroke is in the engine.
+    // gold partner path (trajectory.partner) and magenta extras paths
+    // (trajectory.extras / track_multi); Tf/Tj distance stroke is tip↔primary.
     Q_PROPERTY(bool partnerFixed READ partnerFixed WRITE setPartnerFixed NOTIFY optionsChanged)
     Q_PROPERTY(bool extrasStayFixed READ extrasStayFixed WRITE setExtrasStayFixed NOTIFY optionsChanged)
     Q_PROPERTY(QVariantList contactAreas READ contactAreas NOTIFY contactChanged)
@@ -365,7 +365,7 @@ private:
     QString contact_class_ = QStringLiteral("nipples");
     QString extra_class_;
     // 0.7 defaults with Contact vib: Partner fixed off, Stay fixed for extras
-    // follows trajectory capture (we default Stay fixed on until track_multi).
+    // on (fixed centres unless the user turns Stay fixed off).
     bool partner_fixed_ = false;
     bool extras_stay_fixed_ = true;
     bool mark_contact_ = false, mark_extra_ = false, mark_ignore_ = false;

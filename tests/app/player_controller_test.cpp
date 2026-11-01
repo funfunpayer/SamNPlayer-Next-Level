@@ -1028,10 +1028,12 @@ private slots:
         QCOMPARE(m.value("extras").toList().size(), 1);
         QCOMPARE(m.value("width").toInt(), 320);
         QCOMPARE(m.value("hasPartner").toBool(), false);
+        QCOMPARE(m.value("hasExtras").toBool(), false);
         QCOMPARE(m.value("hint").toString(), QString("Tip: glans · 3 marked boxes · feel only (the tip tracker drives the stroke)"));
         QCOMPARE(c.tipAt(1100).value("x").toDouble(), 60.0);
         QVERIFY(c.tipAt(5000).isEmpty());  // past the path
         QVERIFY(c.partnerAt(1000).isEmpty());
+        QVERIFY(c.extraAt(0, 1000).isEmpty());
         QVERIFY(c.showContactMarks());
         c.setShowContactMarks(false);
         QVERIFY(!c.showContactMarks());
@@ -1060,6 +1062,22 @@ private slots:
         QVERIFY(!mp.value("primary").toMap().value("fixed").toBool());
         QVERIFY(mp.value("extras").toList().at(0).toMap().value("fixed").toBool());
 
+        // Extras path (track_multi): non-fixed magenta follows its own series.
+        cm.extras = {samn::ContactMarkBox{150, 10, 20, 20, "mouth", false}};
+        doc.contact_marks = cm;
+        path.extras = {{{0, 10, 10}, {1000, 200, 150}, {2000, 10, 10}, {3000, 10, 10}}};
+        doc.trajectory = path;
+        const QString withExtras = d.filePath("marks-extras.samn");
+        samn::SaveDocument(std::filesystem::u8path(withExtras.toStdString()), doc);
+        QVERIFY(c.openPath(withExtras));
+        const QVariantMap me = c.contactMarks();
+        QVERIFY(me.value("hasExtras").toBool());
+        QVERIFY(me.value("hint").toString().contains(QString("extras path")));
+        QCOMPARE(c.extraAt(0, 1100).value("x").toDouble(), 200.0);
+        QCOMPARE(c.extraAt(0, 1100).value("y").toDouble(), 150.0);
+        QVERIFY(c.extraAt(0, 5000).isEmpty());
+        QVERIFY(c.extraAt(1, 1000).isEmpty());
+
         // A plain script has no marks.
         const QString plain = d.filePath("plain.funscript");
         writeFile(plain, QByteArray(R"({"actions":)") + kRefActions + "}");
@@ -1067,6 +1085,7 @@ private slots:
         QVERIFY(c.contactMarks().isEmpty());
         QVERIFY(c.tipAt(1000).isEmpty());
         QVERIFY(c.partnerAt(1000).isEmpty());
+        QVERIFY(c.extraAt(0, 1000).isEmpty());
     }
 
     // 0.7 Settings → Play "Honor inverted flag" (on by default) and the

@@ -58,6 +58,11 @@ std::vector<TrajectoryPoint> SortedTipPath(const TrajectoryData& path) { return 
 
 std::vector<TrajectoryPoint> SortedPartnerPath(const TrajectoryData& path) { return SortedPoints(path.partner); }
 
+std::vector<TrajectoryPoint> SortedExtraPath(const TrajectoryData& path, size_t index) {
+    if (index >= path.extras.size()) return {};
+    return SortedPoints(path.extras[index]);
+}
+
 std::optional<TrajectoryPoint> PathAt(const std::vector<TrajectoryPoint>& path, int64_t at_ms) {
     if (path.empty()) return std::nullopt;
     // The nearest sample; on a tie the first one (0.7 tipAtMs scanned for

@@ -19,7 +19,8 @@ namespace samn::engine {
 // Bump with every change to TrackBox or its parts that can change a result.
 // 2: TrackResult::lost tells the tracker's loss (1) from the look check (2).
 // 3: the key also covers adaptive_cuts and the seed; record_checks never caches.
-constexpr int kTrackCacheVersion = 3;
+// 4: extras multi-path (TrackOptions::extra_boxes → extra_xs / extra_ys).
+constexpr int kTrackCacheVersion = 4;
 
 // Hex key from the video (size, modification time and the first and last
 // MiB of content), the box and every option that changes the track; empty

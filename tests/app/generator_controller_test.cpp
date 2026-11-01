@@ -278,7 +278,7 @@ private slots:
             QCOMPARE(g.contactAreas().at(1).toMap().value("fixed").toBool(), false);
             g.setMarkExtra(true);
             QVERIFY(g.addContactArea(QRect(150, 80, 30, 30)));
-            QCOMPARE(g.status(), QStringLiteral("Extra contact #2 added, follows partner path."));
+            QCOMPARE(g.status(), QStringLiteral("Extra contact #2 added, follows own path."));
             QCOMPARE(g.contactAreas().at(2).toMap().value("fixed").toBool(), false);
         }
         {
