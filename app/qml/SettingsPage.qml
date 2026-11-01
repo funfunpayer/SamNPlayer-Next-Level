@@ -19,6 +19,8 @@ Item {
     readonly property alias settings: ctl
     // The health check (D-162); Main.qml starts it once after the window is shown.
     readonly property alias system: sysCtl
+    // Opens the in-app user handbook overlay (Main.qml hosts it).
+    signal handbookRequested()
     visible: opacity > 0
     opacity: open ? 1 : 0
     Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
@@ -84,6 +86,30 @@ Item {
                 ColumnLayout {
                     id: general
                     width: parent.width; spacing: 14
+                    // 0.7 settings.js: primary "Open user handbook" at the top of General.
+                    GlassCard {
+                        Layout.fillWidth: true; implicitHeight: hbCol.implicitHeight + 28
+                        ColumnLayout {
+                            id: hbCol
+                            anchors.fill: parent; anchors.margins: 14; spacing: 10
+                            Text { textFormat: Text.PlainText; text: qsTr("Help"); color: Theme.text; font.family: Theme.font; font.pixelSize: 15 }
+                            RowLayout {
+                                Layout.fillWidth: true; spacing: 10
+                                FlowButton {
+                                    objectName: "openHandbook"
+                                    primary: true; icon: "info"; text: qsTr("Open user handbook")
+                                    onClicked: root.handbookRequested()
+                                }
+                                HelpChip { key: "st-open-handbook" }
+                            }
+                            Text {
+                                textFormat: Text.PlainText
+                                Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                text: qsTr("FAQ + how to use every Everyday control. Also on Create.")
+                                color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                        }
+                    }
                     GlassCard {
                         Layout.fillWidth: true; implicitHeight: playCol.implicitHeight + 28
                         ColumnLayout {

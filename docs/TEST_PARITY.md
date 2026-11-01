@@ -691,7 +691,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 | `generator_stroke_preview_steer_test.py` | `main` script, 6 checks | todo-later | P3.3 (Generator page workflow: tip find, queue, cancel, improve, marks, feel for device, contact). |
 | `generator_tftj_test.py` | `main` script, 13 checks | todo-later | P3.3 (Generator page workflow: tip find, queue, cancel, improve, marks, feel for device, contact). |
 | `generator_workflow_test.py` | `main` script, 22 checks | todo-later | P3.3 (Generator page workflow: tip find, queue, cancel, improve, marks, feel for device, contact). |
-| `handbook_gui_test.py` | `main` script, 8 checks | todo-later | P4 (in-app user handbook). |
+| `handbook_gui_test.py` | `main` script, 8 checks | done (shell) | SamN2: `shell_qml_test::userHandbookOpensFromSettingsAndCreate` (Settings + Create + Project nav + Esc). |
 | `offset_test.py` | `main` script, 13 checks | covered | tests/app/player_controller_test.cpp `offsetSavedPerScriptAndPlayhead`, `loopOverMarkedRange`; tests/core/playback_test.cpp "offset saved per script", "loop". Keyboard shortcuts (`,` `.` +/- L 1-9) are QML and untested |
 | `ofs_range_edit_reload_test.py` | `main` script, 12 checks | todo-later | P4 (Editor: Speed-Cap / Delete range reload the edit buffer). |
 | `omarker_test.py` | `main` script, 11 checks | covered | tests/app/player_controller_test.cpp `editMarks`; tests/core/omarker_test.cpp |

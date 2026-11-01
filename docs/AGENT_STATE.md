@@ -4,6 +4,16 @@
 
 **Last update:** 1 Nov 2026, Claude, branch `claude/review-previous-work-jnjttn`: Script Doctor metric assertions (GAP-12 leftovers, handover below). Before: #142 Windows `config_dir` wide env; #141 Player partner overlay.
 
+## Handover: `cursor/user-handbook-635a` (1 Nov)
+
+In-app User handbook (0.7 `handbook.js` / PARITY §12).
+
+- **Copy:** `app/qml/HandbookTexts.js` — 11 sections verbatim from 0.7.
+- **UI:** `Handbook.qml` overlay (lilac accent via `Theme.laneSuction`): left section nav, scroll-synced active highlight, body, footer, Close / backdrop / Esc.
+- **Wire:** Settings → General → *Open user handbook*; Create header *User handbook* + Project nav entry; `Main.qml` hosts one instance; Esc closes handbook before Settings; `overlayOpen` covers handbook + Settings.
+- **Test:** `shell_qml_test::userHandbookOpensFromSettingsAndCreate`.
+- **Still open Owner GUI leftovers:** idle ribbon (§11), donation pages (Manifest §2). Parallel open: G4a Advanced (#147), Training coach (#148), GAP-20 (#149), G3 feel probe / extras / polish.
+
 ## Handover: `cursor/settings-broken-stamp-635a` (1 Nov) — GAP-20
 
 Corrupt `settings.json` is moved aside as `settings.broken.<UTC YYYYMMDD-HHMMSS>.json` (`.2`… if that second collides). A second corruption no longer overwrites the first aside (LESSONS FF-07 / GAP-20).
@@ -285,7 +295,7 @@ Data and file fixes from a read-only bug hunt. Each fix has a test that failed b
 - **Phases** (D-157, #85, #86 and `claude/samn2-phase-feel`): playback shaping per phase (`.samn` `phase_ranges`, `ApplyPhaseShape` in `PlaybackFrames`, Editor *Phases shape playback*); the Training's video stage follows the film's phases (skip intro / empty, climax: pause by default); the phase lane in the label editor; rule-based suggestions (`core/include/samn/phase_rules.h`, `vision/include/samn/vision/picture_signals.h`, *Suggest phases*).
 - **AI Train as a plugin mode** (#82 plan, #84, D-155, `docs/P4_AI_TRAIN.md`): the `Plugins` singleton and Settings switch, the fourth tab, the label editor (`label_track.h`, `LabelController`, `LabelEditor.qml`): classes with several objects, the contact point, *not in the picture* (X), *there but covered* (H), exclusion zones ("not this", `ExcludeZonesAt`), lanes, undo, export as images / YOLO labels / classes.txt.
 
-**Parity (22 Oct, Ignore region on this branch):** recount with `python3 ci/parity_status.py` after merge. Owner GUI order: toasts ✅, help chips ✅, reduced motion ✅ (#113 taken over by Claude), handbook + idle ribbon still open. Generator: G1/G1b ✅, G2a #114, G2b UI #115, **Ignore region this PR**, then G2b engine → G3….
+**Parity (1 Nov):** recount with `python3 ci/parity_status.py` after handbook merges. Owner GUI order: toasts ✅, help chips ✅, reduced motion ✅, handbook ✅ (this PR); idle ribbon + donate still open. Generator: G2/G3/partner on `main` or open PRs; G4a Advanced open (#147).
 
 ## Next (in order; the work list is `LESSONS.md` § Gaps, `TEST_PARITY.md` and `P3_GENERATOR.md`)
 
