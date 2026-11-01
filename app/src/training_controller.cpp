@@ -91,11 +91,11 @@ QString recapHint(const trn::SessionSummary& s) {
             "Average feedback was high — start lower next time; Interrupt earlier and lengthen the out-breath.");
     if (s.arousal_reports_count > 0 && s.mean_arousal_reported <= 6.0 && s.cycles_stopped_early == 0)
         return QStringLiteral(
-            "Solid control — raise only one thing next week (cycles, duration, or intensity), keep 2\xE2\x80\x933 "
+            "Solid control — raise only one thing next week (cycles, duration, or intensity), keep 2–3 "
             "sessions/week.");
     if (s.cycles_stopped_early == 0 && s.cycles_completed >= 3)
         return QStringLiteral(
-            "Clean session — keep 2\xE2\x80\x933 sessions a week; control first, not max intensity.");
+            "Clean session — keep 2–3 sessions a week; control first, not max intensity.");
     return QStringLiteral("Logged under Recent sessions. Export CSV from History when you want a file.");
 }
 
