@@ -2,7 +2,16 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 1 Nov 2026, Claude, branch `claude/review-previous-work-jnjttn`: Script Doctor metric assertions (GAP-12 leftovers, handover below). Before: #142 Windows `config_dir` wide env; #141 Player partner overlay.
+**Last update:** 1 Nov 2026, Claude, branch `claude/review-previous-work-jnjttn`: integration of the open green PRs #143–#152 onto `main` plus GAP-12 metric assertions (handover "Integration" below). The Cursor handovers below are in merge order, newest first.
+
+## Handover: Integration `claude/review-previous-work-jnjttn` (1 Nov)
+
+Owner 1 Nov: everything green goes to `main`. All ten open Cursor PRs (#143–#152) were green but based on `main` before #142 and each conflicted in this file, so Claude merged them in number order onto this branch (one merge commit each; the Cursor branches were not touched) and lands them with #153.
+
+- **Code conflict, #145 against #143/#144:** `PathAt` (renamed from `TipPathAt` in #143) plus `SortedExtraPath` (#145); `kTrackCacheVersion` is **4** (#144 and #145 had both taken 3 for different changes; old cache entries are dropped once).
+- **This file:** section-wise merge; the Next list and the Last update line rewritten by hand.
+- **Review notes:** #145 adds an optional `trajectory.extras` to `.samn`, written only when there are extra paths (files without extras stay byte-identical; 0.7 ignores the key). No workflow, binary or skipped-test changes in the ten PRs.
+- **Verified locally:** Linux, Qt 6.4 + OpenCV 4.6 (Ubuntu packages), full build and ctest (result in the PR #153 description).
 
 ## Handover: `cursor/beatbar-noscript-635a` (1 Nov)
 
@@ -307,9 +316,9 @@ Data and file fixes from a read-only bug hunt. Each fix has a test that failed b
 
 ## Next (in order; the work list is `LESSONS.md` § Gaps, `TEST_PARITY.md` and `P3_GENERATOR.md`)
 
-0. **Generator:** G2 stack ✅ (#114–#116); Tf/Tj distance stroke ✅ (Cursor #119, finished by Claude); G3 feel ✅; Player partner overlay ✅ (this PR); next G3 feel probe, extras multi (`track_multi`), G4 advanced settings → G8 `.sam`.
+0. **Generator:** G2 stack ✅ (#114–#116); Tf/Tj distance stroke ✅ (#119); G3 feel ✅; Player partner overlay ✅ (#141); extras multi (`track_multi`) ✅ (#145); G3 feel probe ✅ (#146); G4a Advanced shell ✅ (#147); G4b Expert knobs ✅ (#151, live postprocess probe still open); next MT-Debug trajectory line overlay → G8 `.sam`.
 1. **Look polish:** ✅ (#122, Claude takeover of Cursor #117; reduced-motion gates and a window-wide loop test added).
-2. **Owner GUI leftovers:** handbook (§12), idle ribbon (§11), real donation URLs (Manifest §2 / D-022). Empty-Play dark oval ✅ (this PR); Support card shows "Donation page coming soon." Reduced motion ✅ (#120). Broader look polish after the Generator still welcome.
+2. **Owner GUI leftovers:** handbook ✅ (#150); idle ribbon (§11), real donation URLs (Manifest §2 / D-022). Empty-Play dark oval ✅ (#143); Support card shows "Donation page coming soon." Reduced motion ✅ (#120). Broader look polish after the Generator still welcome.
 3. **AI Train D-155:** script compare with labels, then golden-clip run (Owner clips).
 4. **Windows CI flakiness** under ctest; diagnostics already run functions alone.
 5. **Self-checking engine** (`docs/P3_SELF_CHECK_ENGINE.md`, merged with #133; **start with the handoff `docs/HANDOFF_2026-10-27_SELF_CHECK.md`**, tool `samn_selfcheck`): SC-1 sample gate, SC-2 checker signals recorded by `TrackBox` (`record_checks`) and SC-3 window verifier are built (`self_check.h`, `track_checks_test.cpp`; 83 engine tests). Measured in design §3.3: synthetic 13/13 bad windows fail, 0 false alarms; on the Owner clip the scene-cut test fires 1992 times and blocks the verifier. `AdaptiveSceneCut` (`adaptive_cuts`, off) takes the Owner clip from 1992 cuts to 2 but tracking gets worse (the false cuts were re-anchoring), design §3.4; on that clip the verdicts do not yet separate good from bad windows, so thresholds wait for the golden clips. SC-5 verified repair is built (`repair.h`, `repair_test.cpp`); on the Owner clip it repairs nothing at the strict setting because the look against the start crop cannot tell right from wrong there (design §3.5). Next in order: an identity check that works on real clips (continuity with the last good window, rhythm cell, detector) → speed (cached flow) → robust axis choice (principal axis) → wire `GateSamples` in front of the P3.2 chain behind a switch → SC-4 fast lane → SC-5 verified repair with YOLO-family re-anchoring → SC-6 golden gate. AI blocks the Owner asked for (YOLO, MediaPipe, OpenCV DL, Whisper, CLIP): roles and licences in §5a of the design.
@@ -323,7 +332,7 @@ Data and file fixes from a read-only bug hunt. Each fix has a test that failed b
 
 ### Handoff note (for the next agent)
 - **Routing:** one theme per agent. Generator Tf/Tj distance on this tip; Look #117 parallel (do not steal Look files for feature work).
-- Next after partner overlay: extras multi-path (`track_multi`); then G4 advanced. Soft masks + partner path + distance stroke + Play overlay follow are on `main` once this merges.
+- Next after the 1 Nov integration: G4b live postprocess probe, MT-Debug trajectory line overlay, Quality Doctor (P3.6), idle ribbon.
 - Do not push to `claude/*`. Push often; update this file every PR.
 
 Owner reminders (16–17 Oct): the Generator is the Editor; detection better than 0.7 but measured against it; curves stay real curves (audio too); every function of 0.7 and all earlier versions and plans comes along, what was removed on purpose stays out (and why is in `VERSIONS_AND_PLANS.md`).
