@@ -20,7 +20,8 @@ namespace samn::engine {
 // 2: TrackResult::lost tells the tracker's loss (1) from the look check (2).
 // 3: the key also covers adaptive_cuts and the seed; record_checks never caches.
 // 4: extras multi-path (TrackOptions::extra_boxes → extra_xs / extra_ys).
-constexpr int kTrackCacheVersion = 4;
+// 5: a Tf/Tj distance stroke takes the smallest gap over partner and extras.
+constexpr int kTrackCacheVersion = 5;
 
 // Hex key from the video (size, modification time and the first and last
 // MiB of content), the box and every option that changes the track; empty

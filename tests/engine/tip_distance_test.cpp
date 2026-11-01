@@ -40,3 +40,15 @@ TEST_CASE("tip_distance: pure horizontal and pure vertical gaps") {
     CHECK(TipPartnerDistance(cv::Rect(0, 0, 20, 20), cv::Rect(80, 0, 20, 20)) == doctest::Approx(70.0));
     CHECK(TipPartnerDistance(cv::Rect(0, 0, 20, 20), cv::Rect(0, 80, 20, 20)) == doctest::Approx(70.0));
 }
+
+TEST_CASE("tip_distance: FuseTipPartners takes the nearest included partner") {
+    const cv::Rect tip(0, 0, 10, 10);
+    const std::vector<cv::Rect> partners{cv::Rect(95, 0, 10, 10), cv::Rect(35, 0, 10, 10)};
+    // Centres at x 100 and 40: gaps 90 and 30 from the tip's right edge.
+    REQUIRE(FuseTipPartners(tip, true, partners, {}));
+    CHECK(*FuseTipPartners(tip, true, partners, {}) == doctest::Approx(30.0));
+    CHECK(*FuseTipPartners(tip, true, partners, {true, false}) == doctest::Approx(90.0));
+    CHECK_FALSE(FuseTipPartners(tip, true, partners, {false, false}));
+    CHECK_FALSE(FuseTipPartners(tip, false, partners, {}));
+    CHECK_FALSE(FuseTipPartners(tip, true, {}, {}));
+}

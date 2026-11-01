@@ -267,6 +267,74 @@ TEST_CASE("track: distance stroke follows tip-partner gap not tip Y") {
     CHECK(Ptp(r->positions) >= 35);
 }
 
+// track_multi (0.7 TrackMultiPoints): a followed extra joins the smallest
+// gap; a fixed one stays where drawn; without extras nothing changes.
+TEST_CASE("track: a followed extra contact drives the distance stroke") {
+    TempDir dir;
+    const fs::path clip = dir.path / "multi.mp4";
+    REQUIRE(clips::WriteStillTipAndNearingExtra(clip, 4, 110.0));
+    TrackOptions o = Plain();
+    o.partner_box = cv::Rect(225, 5, 70, 70);
+    o.partner_fixed = true;
+    o.distance_stroke = true;
+    o.camera_compensation = false;
+    o.scene_cuts = false;
+    const cv::Rect tip(25, 85, 70, 70);
+    std::string error;
+
+    // Gold partner only: tip and partner stand still, the gap does too.
+    auto alone = TrackBox(clip, tip, o, &error);
+    REQUIRE_MESSAGE(alone, error);
+    CHECK(alone->extra_xs.empty());
+    CHECK(Ptp(alone->positions) <= 5);
+
+    // A followed extra: its path swings and the stroke follows it.
+    o.extra_boxes = {{cv::Rect(165, 165, 70, 70), false}};
+    auto followed = TrackBox(clip, tip, o, &error);
+    REQUIRE_MESSAGE(followed, error);
+    REQUIRE(followed->extra_xs.size() == 1);
+    REQUIRE(followed->extra_xs[0].size() == followed->times_ms.size());
+    REQUIRE(followed->extra_ys[0].size() == followed->times_ms.size());
+    REQUIRE(followed->positions.size() == followed->times_ms.size());
+    CHECK(Ptp(followed->extra_xs[0]) >= 70);
+    CHECK(Ptp(followed->positions) >= 50);
+    // Always the smaller gap: never wider than to the gold partner alone.
+    const double gold_gap = alone->positions.front();
+    for (double d : followed->positions) CHECK(d <= gold_gap + 1.0);
+
+    // Stay fixed: the extra box stays put and so does the gap.
+    o.extra_boxes = {{cv::Rect(165, 165, 70, 70), true}};
+    auto fixed = TrackBox(clip, tip, o, &error);
+    REQUIRE_MESSAGE(fixed, error);
+    REQUIRE(fixed->extra_xs.size() == 1);
+    CHECK(Ptp(fixed->extra_xs[0]) <= 1);
+    CHECK(Ptp(fixed->positions) <= 5);
+    CHECK(fixed->positions.front() < gold_gap);
+}
+
+TEST_CASE("track: extras leave the tip stroke alone without a distance profile") {
+    TempDir dir;
+    const fs::path clip = dir.path / "multi_tip.mp4";
+    REQUIRE(clips::WriteStillTipAndNearingExtra(clip, 2, 110.0));
+    TrackOptions o = Plain();
+    o.extra_boxes = {{cv::Rect(165, 165, 70, 70), false}};
+    std::string error;
+    // No gold partner: the extra's path is recorded (Player overlay), the
+    // stroke stays the tip axis.
+    auto r = TrackBox(clip, cv::Rect(25, 85, 70, 70), o, &error);
+    REQUIRE_MESSAGE(r, error);
+    REQUIRE(r->extra_xs.size() == 1);
+    CHECK_FALSE(r->distance_stroke);
+    CHECK(r->positions == (r->horizontal ? r->xs : r->ys));
+    // With the gold partner but no distance profile the stroke is the tip axis.
+    o.partner_box = cv::Rect(225, 5, 70, 70);
+    auto tip_axis = TrackBox(clip, cv::Rect(25, 85, 70, 70), o, &error);
+    REQUIRE_MESSAGE(tip_axis, error);
+    REQUIRE(tip_axis->extra_xs.size() == 1);
+    CHECK_FALSE(tip_axis->distance_stroke);
+    CHECK(tip_axis->positions == (tip_axis->horizontal ? tip_axis->xs : tip_axis->ys));
+}
+
 // ---- building blocks ----
 
 TEST_CASE("parts: savgol keeps a parabola and matches scipy interp at the edges") {

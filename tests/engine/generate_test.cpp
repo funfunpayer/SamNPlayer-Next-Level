@@ -440,6 +440,34 @@ TEST_CASE("generate: distance profile stroke follows tip-partner gap (Tf/Tj)") {
     fs::remove_all(dir);
 }
 
+// track_multi: a followed extra (magenta) reaches the tracker, so with a
+// still tip and a still gold partner the Tj stroke swings with the extra.
+TEST_CASE("generate: a followed extra contact moves the Tf/Tj stroke") {
+    const fs::path dir = TempDir("samn_generate_tj_extra");
+    REQUIRE(clips::WriteStillTipAndNearingExtra(dir / "multi.mp4", 4, 110.0));
+    GenerateRequest req = Request(dir, "multi.mp4", "tj");
+    req.box = cv::Rect(25, 85, 70, 70);
+    req.contact_area = samn::ContactMarkBox{225, 5, 70, 70, "mouth", true};
+    req.extra_areas = {samn::ContactMarkBox{165, 165, 70, 70, "hand", false}};
+    req.camera_compensation = false;
+    req.scene_cuts = false;
+    req.auto_ozone = false;
+    Recorder rec;
+    Generate(req, 1, {}, rec.fn());
+    REQUIRE(rec.take().back().kind == GenerateEventKind::kDone);
+    const samn::Document d = samn::LoadDocument(dir / "tj.samn");
+    REQUIRE(d.contact_marks);
+    CHECK(d.contact_marks->extras.size() == 1);
+    REQUIRE(d.general.size() >= 4);
+    int lo = 100, hi = 0;
+    for (const auto& a : d.general) {
+        lo = std::min(lo, a.pos);
+        hi = std::max(hi, a.pos);
+    }
+    CHECK(hi - lo >= 15);
+    fs::remove_all(dir);
+}
+
 TEST_CASE("generate: without contact vibration only the tip box is stored") {
     const fs::path dir = TempDir("samn_generate_nocontact");
     REQUIRE(clips::WriteMoving(dir / "moving.mp4", 2, 80.0, 1.0));
