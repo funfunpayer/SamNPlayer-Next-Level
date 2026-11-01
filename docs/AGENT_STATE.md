@@ -4,6 +4,13 @@
 
 **Last update:** 1 Nov 2026, Claude, branch `claude/review-previous-work-jnjttn`: Script Doctor metric assertions (GAP-12 leftovers, handover below). Before: #142 Windows `config_dir` wide env; #141 Player partner overlay.
 
+## Handover: `cursor/settings-broken-stamp-635a` (1 Nov) — GAP-20
+
+Corrupt `settings.json` is moved aside as `settings.broken.<UTC YYYYMMDD-HHMMSS>.json` (`.2`… if that second collides). A second corruption no longer overwrites the first aside (LESSONS FF-07 / GAP-20).
+
+- **Code:** `core/src/settings.cpp` `broken_aside_path`; header comment; tests keep-aside + second-corrupt keeps first.
+- **Next:** Owner GUI leftovers (handbook §12, idle Flow graphic §11, donate); Generator G4b after `#147` greens; more GAP rows as small bug-fix PRs.
+
 ## Handover: `cursor/training-coach-neo2-635a` (1 Nov)
 
 Owner training overview → only what Training already can use (device sessions). **Ignored:** gym/hip mobility flows, medical study dump, physical Squeeze of the glans, weekly strength calendar.

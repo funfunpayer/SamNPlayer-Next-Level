@@ -162,7 +162,7 @@ Adult-media rule: this file uses neutral technical terms only ("tip", "partner r
 - **Learned:** an unreadable `settings.json` is renamed to `settings.json.corrupt-<time>` instead of being overwritten; a file containing `null` must not crash the next save; several related keys are saved in one write (`SetMany`) so a failure cannot leave a half-updated file.
 - **Source:** `CL` 0.5.45 "Settings lost after a crash", Unreleased "Stroke filter settings".
 - **Rule:** keep the evidence; one write per logical change.
-- **Status:** covered (`core/src/settings.cpp`: non-object file is moved aside; `set_many`; tests `settings_test.cpp`). The aside name is fixed (`settings.broken.json`), so a second corruption replaces the first; 0.7 uses a timestamp.
+- **Status:** covered (`core/src/settings.cpp`: non-object file is moved aside as `settings.broken.<UTC stamp>.json`, `.2`… when that name is taken; `set_many`; tests `settings_test.cpp`). GAP-20 done.
 
 ### FF-08 Unsorted and duplicate times: look before you sort
 - **Learned:** the Script Doctor "unsorted timestamps" check was dead code because it ran after the sort. It now inspects the original order, and `generator.ScriptQuality` reads file order instead of `Load`/`Parse` so spliced scripts are still flagged. The stroke filter sorts and de-duplicates its input.
@@ -1007,7 +1007,7 @@ Lessons that matter and are not yet covered in SamNPlayer 2, ordered by risk (us
 | GAP-17 | BC-05, BC-06, BC-07 release (P5) | Single version source read by the app, tag = version check, publish allow-list, exact-asset-name updater with visible errors and a "no asset = no update" test. |
 | GAP-18 | BC-04, UI-09 installed layout (P5) | Smoke test on the installed layout (plugins, QML modules, images), not only the build tree. |
 | GAP-19 | UI-08, UI-07 accessibility and motion (P4/P5) | Focus handling and `Accessible` on all `Flow*` controls; a reduced-motion setting and a test switch for animations (D-092). |
-| GAP-20 | FF-07 settings aside name | `settings.broken.json` is overwritten by a second corruption; use a timestamped name as 0.7 does. |
+| GAP-20 | FF-07 settings aside name | `settings.broken.json` is overwritten by a second corruption; use a timestamped name as 0.7 does. **Done:** `settings.broken.<UTC>.json` (+ `.2`…). |
 | GAP-21 | FF-11 unknown `.samn` fields (P4) | `.samn` drops unknown fields like Go; the v2 axes work must keep them. |
 | GAP-22 | DV-14, DV-16 companion axes and mock suites (P2) | Companion axis files into the player; 0/1/2/6-axis mock device suites; state "mock only" in device PRs. **Part done:** `CONTRIBUTING.md` rule 10 says mock-only tests are marked as such. **Left:** the other two. |
 | GAP-23 | DV-06 evidence tags (P2) | Use OFFICIAL / PROTOCOL / COMMUNITY / MEASURED / HYPOTHESIS in device docs and the future device profile. |
