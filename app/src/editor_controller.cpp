@@ -626,7 +626,7 @@ bool EditorController::strokeFromBeatBar() {
     tool_cancel_ = std::make_shared<std::atomic<bool>>(false);
     setBusy(true);
     setProgress(0);
-    setStatus(tr("Looking for a beat bar…"));
+    setStatus(tr("Reading the beat bar… a long video takes a minute or two."));
     QPointer<EditorController> self(this);
     tool_ = std::thread([self, cancel = tool_cancel_, video = FsPath(video_path_), script = script_gen_] {
         samn::engine::BeatBarOptions o;
@@ -674,24 +674,24 @@ void EditorController::onBeats(bool found, const std::vector<double>& beats, dou
         return;
     }
     if (!hasScript()) {
-        // Open the video's script, or write a new one, beside the video.
+        // D-075 / 0.7 CreateBeatBarScript: "<video> (Beat bar).funscript", never overwrite
+        // ("(Beat bar 2)" …). A plain companion .funscript is left alone.
         const QFileInfo v(video_path_);
-        const QString script = v.dir().filePath(v.completeBaseName() + QStringLiteral(".funscript"));
-        if (!QFileInfo::exists(script)) {
-            samn::Script s;
-            s.actions = stroke;
-            try {
-                samn::WriteFileAtomic(FsPath(script), samn::Write(s));
-            } catch (const std::exception& e) {
-                setStatus(tr("Beat bar: cannot write %1: %2").arg(QFileInfo(script).fileName(), QString::fromUtf8(e.what())));
-                return;
-            }
-            open(script);
-            setStatus(tr("Beat bar: %1 beats (about %2 BPM), new script %3.")
-                          .arg(beats.size()).arg(bpm, 0, 'f', 0).arg(QFileInfo(script).fileName()));
+        QString script = v.dir().filePath(v.completeBaseName() + QStringLiteral(" (Beat bar).funscript"));
+        for (int n = 2; QFileInfo::exists(script) && n < 1000; ++n)
+            script = v.dir().filePath(v.completeBaseName() + QStringLiteral(" (Beat bar %1).funscript").arg(n));
+        samn::Script s;
+        s.actions = stroke;
+        try {
+            samn::WriteFileAtomic(FsPath(script), samn::Write(s));
+        } catch (const std::exception& e) {
+            setStatus(tr("Beat bar: cannot write %1: %2").arg(QFileInfo(script).fileName(), QString::fromUtf8(e.what())));
             return;
         }
-        if (!open(script)) return;
+        open(script);
+        setStatus(tr("Beat bar: %1 beats (about %2 BPM), new script %3.")
+                      .arg(beats.size()).arg(bpm, 0, 'f', 0).arg(QFileInfo(script).fileName()));
+        return;
     }
     if (drag_index_ >= 0) release();
     session_.Replace("stroke", std::move(stroke), "stroke from the beat bar");

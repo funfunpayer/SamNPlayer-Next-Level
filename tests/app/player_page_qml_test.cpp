@@ -159,6 +159,7 @@ private:
                 PlayerPage {
                     id: pp; anchors.fill: parent; device: dev
                     onCreateRequested: (video, start) => asked = asked.concat([video.toString() + "|" + start])
+                    onBeatBarRequested: (video) => asked = asked.concat(["beatbar|" + video.toString()])
                 }
             })",
                      QUrl("qrc:/test/Wrapper.qml"));
@@ -208,6 +209,13 @@ private:
         };
         QCOMPARE(asked().size(), 1);
         QVERIFY2(same(asked().at(0), "false"), qPrintable(asked().at(0)));
+
+        // "From the beat bar" asks Main to run CreateBeatBarScript in the Generator.
+        QVERIFY(named(page, "noScriptBeatBar")->isVisible());
+        QMetaObject::invokeMethod(named(page, "noScriptBeatBar"), "clicked");
+        QCOMPARE(asked().size(), 2);
+        QVERIFY2(asked().at(1).startsWith(QStringLiteral("beatbar|")), qPrintable(asked().at(1)));
+        QCOMPARE(QUrl(asked().at(1).mid(QStringLiteral("beatbar|").size())).toLocalFile(), video);
 
         // "Back to the script" opens the last one again.
         QMetaObject::invokeMethod(named(page, "noScriptBack"), "clicked");

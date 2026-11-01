@@ -2,7 +2,11 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 31 Oct 2026, Cursor, branch `cursor/player-partner-overlay-635a`: Player contact overlay follows the recorded partner path (handover below). Before: 30 Oct, Claude `claude/samn2-data-safety` (#139) and `claude/samn2-stop-safety` (#138); 28 Oct `claude/samn2-auto-tip` (#136); #137 health; #135 self-check handoff.
+**Last update:** 1 Nov 2026, Cursor, branch `cursor/beatbar-noscript-635a`: Player no-script "From the beat bar" + D-075 `(Beat bar).funscript` naming.
+
+## Handover: `cursor/beatbar-noscript-635a` (1 Nov)
+
+Player no-script card → **From the beat bar** (0.7 CreateBeatBarScript). Editor writes `<video> (Beat bar).funscript` / `(Beat bar N)` (D-075 never overwrite); status "Reading the beat bar…". Generator `beatBarFor` opens the video and runs `strokeFromBeatBar`.
 
 ## Handover: `cursor/player-partner-overlay-635a` (31 Oct)
 
