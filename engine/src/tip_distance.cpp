@@ -32,4 +32,16 @@ double TipPartnerDistance(const cv::Rect& tip, const cv::Rect& partner) {
     return std::hypot(tip_pt.x - partner_pt.x, tip_pt.y - partner_pt.y);
 }
 
+std::optional<double> FuseTipPartners(const cv::Rect& tip, bool tip_ok, const std::vector<cv::Rect>& partners,
+                                      const std::vector<bool>& include) {
+    if (!tip_ok) return std::nullopt;
+    std::optional<double> best;
+    for (size_t i = 0; i < partners.size(); ++i) {
+        if (i < include.size() && !include[i]) continue;
+        const double d = TipPartnerDistance(tip, partners[i]);
+        if (!best || d < *best) best = d;
+    }
+    return best;
+}
+
 }  // namespace samn::engine

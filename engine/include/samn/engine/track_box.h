@@ -48,7 +48,9 @@ struct TrackOptions {
     bool partner_fixed = false;  // true = keep the drawn box (no second CSRT)
     // Magenta extras (0.7 track_multi): each box gets centres in
     // TrackResult::extra_xs / extra_ys → .samn trajectory.extras. fixed =
-    // keep the drawn box; otherwise a CSRT per extra.
+    // keep the drawn box; otherwise a CSRT per extra. With distance_stroke
+    // the stroke is the smallest gap to the gold partner or any extra that
+    // has a box this frame (0.7 FuseTipPartners).
     struct ExtraBoxOption {
         cv::Rect box;
         bool fixed = true;

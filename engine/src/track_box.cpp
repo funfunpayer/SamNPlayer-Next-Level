@@ -204,6 +204,7 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
     struct ExtraState {
         cv::Rect last;
         bool fixed = true;
+        bool ok = true;  // has a box this frame (fixed, held through a cut, or found)
         std::unique_ptr<vision::Tracker> tracker;
     };
     std::vector<ExtraState> extras;
@@ -220,6 +221,12 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
         }
         extras.push_back(std::move(s));
     }
+    // The gold partner first, then the extras (FuseTipPartners order).
+    auto partner_boxes = [&] {
+        std::vector<cv::Rect> boxes{partner_last};
+        for (const ExtraState& e : extras) boxes.push_back(e.last);
+        return boxes;
+    };
 
     const bool needs_gray = opts.camera_compensation || opts.scene_cuts || opts.appearance_memory;
     cv::Mat prev_gray, gray;
@@ -263,7 +270,7 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
     std::vector<double> distances;
     double last_good_distance = 0;
     if (distance_stroke) {
-        last_good_distance = TipPartnerDistance(box, partner_last);
+        last_good_distance = FuseTipPartners(box, true, partner_boxes(), {}).value_or(0.0);
         distances.push_back(last_good_distance);
     }
     std::vector<double> camera_dy{0.0};
@@ -392,22 +399,24 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
         for (size_t i = 0; i < extras.size(); ++i) {
             ExtraState& e = extras[i];
             if (e.fixed || cut || !e.tracker) {
-                // Fixed (or after a cut): keep the last known centre.
+                e.ok = true;  // fixed (or after a cut): keep the last known centre
             } else if (auto eb = e.tracker->Update(frame.bgr)) {
                 e.last = *eb;
+                e.ok = true;
+            } else {
+                e.ok = false;  // brief miss: hold the box, left out of the gap (0.7 F-006)
             }
             res.extra_xs[i].push_back(Centre(e.last).x);
             res.extra_ys[i].push_back(Centre(e.last).y);
         }
 
         if (distance_stroke) {
-            // GD-08: tip loss or no usable partner holds the last good gap.
-            if (tip_ok && partner_ok) {
-                last_good_distance = TipPartnerDistance(last, partner_last);
-                distances.push_back(last_good_distance);
-            } else {
-                distances.push_back(last_good_distance);
-            }
+            // GD-08: tip loss or no usable partner holds the last good gap;
+            // otherwise the smallest gap to any partner with a box (track_multi).
+            std::vector<bool> include{partner_ok};
+            for (const ExtraState& e : extras) include.push_back(e.ok);
+            if (const auto d = FuseTipPartners(last, tip_ok, partner_boxes(), include)) last_good_distance = *d;
+            distances.push_back(last_good_distance);
         }
 
         double inliers = kNaN;

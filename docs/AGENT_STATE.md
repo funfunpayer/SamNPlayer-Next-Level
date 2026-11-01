@@ -2,7 +2,15 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 1 Nov 2026, Claude, branch `claude/review-previous-work-jnjttn`: integration of the open green PRs #143–#152 onto `main` plus GAP-12 metric assertions (handover "Integration" below). The Cursor handovers below are in merge order, newest first.
+**Last update:** 1 Nov 2026, Claude, branch `claude/review-previous-work-jnjttn`: Tf/Tj smallest gap over partner and extras (`FuseTipPartners`, handover below). Before: #153 integration of #143–#152.
+
+## Handover: `claude/review-previous-work-jnjttn` — FuseTipPartners (1 Nov)
+
+The missing half of `track_multi` (#145 recorded the extras' paths only).
+
+- **Engine:** `FuseTipPartners` (`tip_distance.h`, 0.7 port): the smallest `TipPartnerDistance` to any included partner. `TrackBox` with `distance_stroke` feeds it the gold partner and every extra; an extra whose CSRT misses that frame is left out (0.7 F-006), a fixed one always counts, tip loss or no partner holds the last gap as before. `kTrackCacheVersion` 5.
+- **Tests:** `tip_distance: FuseTipPartners…`, `track: a followed extra contact drives the distance stroke` (fails without the change), `track: extras leave the tip stroke alone without a distance profile`, `generate: a followed extra contact moves the Tf/Tj stroke`; clip `WriteStillTipAndNearingExtra`.
+- **Not changed:** the UI still hides Tf/Tj (D-053), so only scripts with a distance profile see this; extras without a gold partner are recorded (overlay) but drive nothing.
 
 ## Handover: Integration `claude/review-previous-work-jnjttn` (1 Nov)
 

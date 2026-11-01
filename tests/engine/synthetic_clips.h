@@ -102,6 +102,25 @@ inline bool WriteTipPartnerAndExtra(const std::filesystem::path& p, int seconds,
     return true;
 }
 
+// track_multi: a still tip disc at (60, 120), a still gold partner at
+// (260, 40) and an extra disc at y 200 whose x swings 200 +- extra_amp/2
+// (0.5 Hz). Boxes at t=0: tip (25, 85, 70, 70), partner (225, 5, 70, 70),
+// extra (165, 165, 70, 70). The extra comes nearer the tip than the partner.
+inline bool WriteStillTipAndNearingExtra(const std::filesystem::path& p, int seconds, double extra_amp) {
+    auto w = Writer(p);
+    if (!w.isOpened()) return false;
+    const cv::Mat bg = Texture(kW, kH, 23, 160);
+    for (int i = 0; i < int(kFps * seconds); ++i) {
+        const double t = i / kFps;
+        cv::Mat f = bg.clone();
+        Disc(f, 60, 120);
+        Disc(f, 260, 40);
+        Disc(f, int(200 + extra_amp / 2 * std::sin(2 * kPi * 0.5 * t)), 200);
+        w.write(f);
+    }
+    return true;
+}
+
 // A hard cut to another, darker background at frame cut_at.
 inline bool WriteHardCut(const std::filesystem::path& p, int seconds, int cut_at, double amp) {
     auto w = Writer(p);
