@@ -15,8 +15,8 @@
 namespace samn::engine {
 
 // The user's choices. 0 means "the profile's or the default value"; a
-// negative norm_percentile, min_action_interval_ms or detrend_window_ms
-// means explicitly off.
+// negative norm_percentile, min_action_interval_ms, detrend_window_ms or
+// dynamic_range_ms means explicitly off.
 // Profile "recommended" (D-159, the Generator's default): Autotune's recipe
 // with these spec values; a value set in SignalOptions still wins.
 constexpr double kRecommendedMadFactor = 5, kRecommendedMaxSpeed = 500, kRecommendedIntervalMs = 60;

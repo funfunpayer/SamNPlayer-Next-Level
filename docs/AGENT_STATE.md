@@ -4,6 +4,16 @@
 
 **Last update:** 1 Nov 2026, Claude, branch `claude/review-previous-work-jnjttn`: Script Doctor metric assertions (GAP-12 leftovers, handover below). Before: #142 Windows `config_dir` wide env; #141 Player partner overlay.
 
+## Handover: `cursor/g4-advanced-shell-635a` (1 Nov) — G4a
+
+Advanced settings shell on Create (closed by default). Engine hooks already existed; this wires the GUI + settings + queue.
+
+- **UI:** Create → Advanced collapsible (`advancedPanel` / `advancedToggle`). Tracking: Invert, Camera compensation, Scene-cut (moved out of Feel). Signal: Sliding dynamics, Adaptive Keyframes. Motion axis combo Auto / Force horizontal / Force vertical.
+- **Controller:** `slidingDynamics` → `dynamic_range_ms` 3000 / **-1** (explicitly off, profiles do not refill); `adaptiveKeyframes` → `adaptive_error` 6 / 0; `motionAxis` auto|x|y → `TrackAxis`. Remembered: `generator.sliding_dynamics`, `generator.adaptive_keyframe`, `generator.axis`. Wired into `create` and `runQueue` (`QueueSettings::axis`).
+- **Tests:** `advancedShellChoicesAreRemembered`, signal_chain keeps `dynamic_range_ms=-1` under weich/autotune/recommended, QML opens Advanced before Invert.
+- **Not in this PR (G4b+):** Expert numeric sliders + `PreviewPostprocess`, Auto-Retry / P3.6, rhythm grid, scene map, MT-Debug trajectory overlay.
+- **Next for Generator:** G4b Expert sliders + live postprocess probe; then FuseTipPartners / MT-Debug; Owner GUI leftovers (handbook, idle ribbon, donate). Owner merges open green PRs (#142–#146 as listed).
+
 ## Handover: `cursor/g3-feel-probe-635a` (1 Nov)
 
 Generator G3 Feel probe — live Sensitivity / Curve preview before Create.

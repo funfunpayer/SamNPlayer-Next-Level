@@ -46,6 +46,11 @@ class GeneratorController : public QObject {
     Q_PROPERTY(bool invert READ invert WRITE setInvert NOTIFY optionsChanged)
     Q_PROPERTY(bool cameraCompensation READ cameraCompensation WRITE setCameraCompensation NOTIFY optionsChanged)
     Q_PROPERTY(bool sceneCuts READ sceneCuts WRITE setSceneCuts NOTIFY optionsChanged)
+    // G4a Advanced: Sliding dynamics (dynamic_range_ms 3000/-1), Adaptive
+    // Keyframes (adaptive_error 6/0), motion axis auto|x|y.
+    Q_PROPERTY(bool slidingDynamics READ slidingDynamics WRITE setSlidingDynamics NOTIFY optionsChanged)
+    Q_PROPERTY(bool adaptiveKeyframes READ adaptiveKeyframes WRITE setAdaptiveKeyframes NOTIFY optionsChanged)
+    Q_PROPERTY(QString motionAxis READ motionAxis WRITE setMotionAxis NOTIFY optionsChanged)
     Q_PROPERTY(bool autoOZone READ autoOZone WRITE setAutoOZone NOTIFY optionsChanged)
     // Find the tip by itself when a video opens (D-159, on): a sure find
     // becomes the box, an unsure one only shows its candidates, and a box the
@@ -168,6 +173,12 @@ public:
     void setCameraCompensation(bool v);
     bool sceneCuts() const { return scene_cuts_; }
     void setSceneCuts(bool v);
+    bool slidingDynamics() const { return sliding_; }
+    void setSlidingDynamics(bool v);
+    bool adaptiveKeyframes() const { return adaptive_keyframes_; }
+    void setAdaptiveKeyframes(bool v);
+    QString motionAxis() const { return motion_axis_; }
+    void setMotionAxis(const QString& axis);
     bool autoOZone() const { return auto_ozone_; }
     void setAutoOZone(bool v);
     bool autoTip() const { return auto_tip_; }
@@ -342,6 +353,8 @@ private:
     double box_ms_ = 0;  // the video time the box was drawn or found at
     QString profile_ = QStringLiteral("recommended");
     bool invert_ = false, camera_ = true, scene_cuts_ = true, auto_ozone_ = true;
+    bool sliding_ = true, adaptive_keyframes_ = true;
+    QString motion_axis_ = QStringLiteral("auto");
     bool gap_handling_ = true, outlier_rejection_ = true, track_cache_ = false;
     bool auto_tip_ = true;
     bool find_auto_ = false;     // the running search was started by openVideo
@@ -363,8 +376,9 @@ private:
     std::unique_ptr<samn::Settings> settings_;
     void loadSettings();
     void saveSetting(const char* key, const nlohmann::json& value);
-    // The opt-in gap, outlier and cache switches into a run's options.
+    // Gap / outlier / cache / Sliding / Adaptive into a run's signal options.
     void applySwitches(engine::SignalOptions& signal, std::filesystem::path& track_cache_dir) const;
+    engine::TrackAxis trackAxis() const;
     QString tip_class_ = QStringLiteral("glans");
     QString contact_class_ = QStringLiteral("nipples");
     QString extra_class_;

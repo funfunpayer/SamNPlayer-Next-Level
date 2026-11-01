@@ -16,6 +16,7 @@ namespace samn::engine {
 // video, box and output (those come per item).
 struct QueueSettings {
     SignalOptions signal;
+    TrackAxis axis = TrackAxis::kAuto;
     bool camera_compensation = true;
     bool scene_cuts = true;
     bool auto_ozone = true;
