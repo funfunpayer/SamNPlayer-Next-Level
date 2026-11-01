@@ -85,6 +85,11 @@ void GeneratorController::loadSettings() {
         sliding_ = flag("generator.sliding_dynamics", sliding_);
         adaptive_keyframes_ = flag("generator.adaptive_keyframe", adaptive_keyframes_);
         setMotionAxis(str("generator.axis", motion_axis_));
+        if (const auto v = s.get("generator.smooth_window"); v.is_number()) setSmoothWindow(v.get<int>());
+        if (const auto v = s.get("generator.min_peak_distance_ms"); v.is_number()) setMinPeakDistanceMs(v.get<int>());
+        if (const auto v = s.get("generator.peak_prominence"); v.is_number()) setPeakProminence(v.get<double>());
+        if (const auto v = s.get("generator.rdp_tolerance"); v.is_number()) setRdpTolerance(v.get<double>());
+        if (const auto v = s.get("generator.max_speed"); v.is_number()) setMaxSpeed(v.get<int>());
         auto_ozone_ = flag("generator.auto_ozone", auto_ozone_);
         auto_tip_ = flag("generator.auto_tip", auto_tip_);
         gap_handling_ = flag("generator.gap_handling", gap_handling_);
@@ -122,6 +127,12 @@ void GeneratorController::applySwitches(engine::SignalOptions& signal,
     signal.dynamic_range_ms = sliding_ ? 3000 : -1;
     // G4a: Adaptive Keyframes on → error 6 (0.7); off → 0.
     signal.adaptive_error = adaptive_keyframes_ ? 6 : 0;
+    // G4b Expert: 0 leaves the profile / PostOptions default (or off for RDP / max speed).
+    signal.smooth_window = smooth_window_;
+    signal.min_peak_distance_ms = min_peak_distance_ms_;
+    signal.peak_prominence = peak_prominence_;
+    signal.rdp_tolerance = rdp_tolerance_;
+    signal.max_speed = max_speed_;
     // D-159 device fit: a stroker keeps 0.7's 100 ms between actions.
     if (profile_ == QLatin1String(samn::ProfileRecommended) && feelKind() == QLatin1String("stroker"))
         signal.min_action_interval_ms = 100;
@@ -573,6 +584,54 @@ void GeneratorController::setMotionAxis(const QString& axis) {
     if (v == motion_axis_) return;
     motion_axis_ = v;
     saveSetting("generator.axis", v.toStdString());
+    emit optionsChanged();
+}
+
+void GeneratorController::setSmoothWindow(int v) {
+    // Odd window 0..51 (0 = profile default). Even values round down to odd ≥1 when >0.
+    int n = std::clamp(v, 0, 51);
+    if (n > 0 && n % 2 == 0) --n;
+    if (n == smooth_window_) return;
+    smooth_window_ = n;
+    saveSetting("generator.smooth_window", n);
+    emit optionsChanged();
+}
+
+void GeneratorController::setMinPeakDistanceMs(int v) {
+    // 0..500, step 10 (0 = profile default).
+    const int n = std::clamp(v, 0, 500) / 10 * 10;
+    if (n == min_peak_distance_ms_) return;
+    min_peak_distance_ms_ = n;
+    saveSetting("generator.min_peak_distance_ms", n);
+    emit optionsChanged();
+}
+
+void GeneratorController::setPeakProminence(double v) {
+    // 0..1, step 0.05 (0 = profile default).
+    double n = std::clamp(v, 0.0, 1.0);
+    n = std::round(n / 0.05) * 0.05;
+    if (std::abs(n - peak_prominence_) < 1e-9) return;
+    peak_prominence_ = n;
+    saveSetting("generator.peak_prominence", n);
+    emit optionsChanged();
+}
+
+void GeneratorController::setRdpTolerance(double v) {
+    // 0..20, step 0.5 (0 = off).
+    double n = std::clamp(v, 0.0, 20.0);
+    n = std::round(n * 2.0) / 2.0;
+    if (std::abs(n - rdp_tolerance_) < 1e-9) return;
+    rdp_tolerance_ = n;
+    saveSetting("generator.rdp_tolerance", n);
+    emit optionsChanged();
+}
+
+void GeneratorController::setMaxSpeed(int v) {
+    // 0..800, step 50 (0 = off).
+    const int n = std::clamp(v, 0, 800) / 50 * 50;
+    if (n == max_speed_) return;
+    max_speed_ = n;
+    saveSetting("generator.max_speed", n);
     emit optionsChanged();
 }
 

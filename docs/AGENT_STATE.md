@@ -4,6 +4,10 @@
 
 **Last update:** 1 Nov 2026, Claude, branch `claude/review-previous-work-jnjttn`: Script Doctor metric assertions (GAP-12 leftovers, handover below). Before: #142 Windows `config_dir` wide env; #141 Player partner overlay.
 
+## Handover: `cursor/g4-expert-sliders-635a` (1 Nov)
+
+G4b Expert tuning under Create → Advanced (smooth / spacing / prominence / RDP / max speed + Impulse mirror). Live postprocess probe still open. Stacks on G4a Advanced shell.
+
 ## Handover: `cursor/user-handbook-635a` (1 Nov)
 
 In-app User handbook (0.7 `handbook.js` / PARITY §12).

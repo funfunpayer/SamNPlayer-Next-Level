@@ -228,6 +228,17 @@ private slots:
         QTRY_VERIFY(named(root.get(), "toggle_invert")->isVisible());
         QVERIFY(named(root.get(), "toggle_slidingDynamics")->isVisible());
         QVERIFY(named(root.get(), "motionAxisCombo")->isVisible());
+        // G4b Expert is nested under Advanced and closed until opened.
+        auto* expert = named(root.get(), "expertPanel");
+        QVERIFY(expert);
+        QVERIFY(!named(root.get(), "expertSmooth")->isVisible());
+        QVERIFY(expert->setProperty("expertOpen", true));
+        QTRY_VERIFY(named(root.get(), "expertSmooth")->isVisible());
+        QVERIFY(named(root.get(), "expertMinPeak"));
+        QVERIFY(named(root.get(), "expertProminence"));
+        QVERIFY(named(root.get(), "expertRdp"));
+        QVERIFY(named(root.get(), "expertMaxSpeed"));
+        QVERIFY(named(root.get(), "toggle_impulseMirror")->isVisible());
         // Toggle via signal: Advanced lives in a tall Create column and the
         // invert row can sit below the window (mouseClick then lands outside).
         auto* invert = named(root.get(), "toggle_invert");
