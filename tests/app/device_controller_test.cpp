@@ -685,6 +685,76 @@ private slots:
         }
     }
 
+    // The same, step by step: the reconnect has been shown before a level
+    // given for the old toy (an old generation, as a GUI that lags would
+    // send it) arrives. It is dropped; a level for the new toy goes out.
+    void intifaceOldGenerationLevelNeverReachesTheNewToy() {
+        FakeButtplugServer server(FakeButtplug::StandardDeviceMessages());
+        DeviceController c;
+        c.setTickIntervalMs(60000);  // no tick during the test
+        c.connectIntiface(server.url());
+        QTRY_COMPARE_WITH_TIMEOUT(c.state(), QString("connected"), 5000);
+        c.setVibration(0.3);
+        QTRY_VERIFY(server.Count("ScalarCmd") >= 1);
+        const QString before = c.deviceIdentity();
+        const quint64 old_generation = c.generation();
+
+        server.device_name = "Other toy";
+        server.DropClients();  // no level given: the pump finds the dead socket
+        QTRY_COMPARE_WITH_TIMEOUT(server.connections(), 2, 5000);
+        QTRY_VERIFY_WITH_TIMEOUT(c.deviceIdentity() != before, 1500);
+        QVERIFY(c.generation() != old_generation);
+        const int n = server.Count("ScalarCmd");
+
+        c.setVibrationForGeneration(0.6, old_generation);
+        QTest::qWait(200);
+        QCOMPARE(server.Count("ScalarCmd"), n);
+        c.setVibrationForGeneration(0.2, c.generation());
+        QTRY_COMPARE(server.Count("ScalarCmd"), n + 1);
+        const auto scalars = server.Last("ScalarCmd").at("Scalars");
+        QVERIFY(std::abs(scalars.at(0).at("Scalar").get<double>() - 0.2) < 1e-9);
+    }
+
+    // Levels merge newest-wins while the worker is busy; one given for an
+    // earlier device must not take a newer one down with it, nor ride along
+    // with it. Here: the old device's vibration and suction, then the new
+    // device's vibration, all queued before the worker gets to them.
+    void levelsOfAnEarlierGenerationDoNotMergeIntoNewerOnes() {
+        DeviceController c;
+        samn::device::DiagnosticsOptions o;  // a run that holds the worker until cancelled
+        o.update_rate_intervals = {std::chrono::milliseconds(5000)};
+        o.commands_per_rate_step = 50;
+        o.offset_change_delay = std::chrono::milliseconds(5000);
+        o.rapid_switch_delay = std::chrono::milliseconds(5000);
+        c.setDiagnosticsOptions(o);
+        QSignalSpy log(&c, &DeviceController::logMessage);
+        QSignalSpy entries(&c, &DeviceController::diagnosticsEntry);
+        c.connectMock();
+        QTRY_COMPARE(c.state(), QString("connected"));
+        const quint64 now = c.generation();
+        QVERIFY(now > 0);
+        int lines_at_done = -1;
+        connect(&c, &DeviceController::diagnosticsFinished, this,
+                [&] { lines_at_done = static_cast<int>(MockLines(log).size()); });
+        c.runDiagnostics();
+        QTRY_VERIFY(entries.count() >= 1);  // the worker is inside the run
+
+        c.stop();  // queued first (a stop drops the levels queued before it)
+        c.setVibrationForGeneration(0.43, now - 1);  // meant for the device before
+        c.setSuctionForGeneration(0.57, now - 1);
+        c.setVibrationForGeneration(0.71, now);      // meant for this one
+        c.cancelDiagnostics();
+        QTRY_VERIFY_WITH_TIMEOUT(lines_at_done >= 0, 5000);
+        QTRY_VERIFY(MockLines(log).contains("[mock] vibration=0.71"));
+        QTest::qWait(100);
+        const QStringList after = MockLines(log).mid(lines_at_done);
+        QVERIFY2(!after.contains("[mock] vibration=0.43"), qPrintable(after.join(", ")));
+        QVERIFY2(!after.contains("[mock] suction=0.57"), qPrintable(after.join(", ")));
+        // The stop is not touched by any of it, and goes before the level.
+        QVERIFY2(after.contains("[mock] stop"), qPrintable(after.join(", ")));
+        QVERIFY(after.indexOf("[mock] stop") < after.indexOf("[mock] vibration=0.71"));
+    }
+
     // --- Diagnostics ---
     void diagnosticsOnMock() {
         DeviceController c;

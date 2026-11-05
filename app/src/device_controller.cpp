@@ -110,23 +110,27 @@ public:
     // means); levels for an earlier one are dropped (ApplyLevels).
     void QueueVibration(double v, quint64 generation) {
         std::lock_guard<std::mutex> lock(pending_mutex_);
+        ForGenerationLocked(generation);
         pending_.vibration = v;
-        ScheduleFlushLocked(generation);
+        ScheduleFlushLocked();
     }
     void QueueSuction(double v, quint64 generation) {
         std::lock_guard<std::mutex> lock(pending_mutex_);
+        ForGenerationLocked(generation);
         pending_.suction = v;
-        ScheduleFlushLocked(generation);
+        ScheduleFlushLocked();
     }
     void QueuePosition(double pos, int ms, quint64 generation) {
         std::lock_guard<std::mutex> lock(pending_mutex_);
+        ForGenerationLocked(generation);
         pending_.position = {pos, ms};
-        ScheduleFlushLocked(generation);
+        ScheduleFlushLocked();
     }
     void QueueAxis(const std::string& axis, double pos, int ms, quint64 generation) {
         std::lock_guard<std::mutex> lock(pending_mutex_);
+        ForGenerationLocked(generation);
         pending_.axes[axis] = {pos, ms};
-        ScheduleFlushLocked(generation);
+        ScheduleFlushLocked();
     }
     void DropPending() {
         std::lock_guard<std::mutex> lock(pending_mutex_);
@@ -170,12 +174,15 @@ private:
         std::optional<double> vibration, suction;
         std::optional<std::pair<double, int>> position;
         std::map<std::string, std::pair<double, int>> axes;
-        std::optional<quint64> generation;  // the oldest one of the batch
+        std::optional<quint64> generation;  // the one every value of the batch was given for
     };
 
     void EnsureInit();
     void Drain();
-    void ScheduleFlushLocked(quint64 generation);
+    // A value for another generation than the waiting batch's: the batch's
+    // values were meant for an earlier device and go; it is that one's batch now.
+    void ForGenerationLocked(quint64 generation);
+    void ScheduleFlushLocked();
     void Flush();
     void ApplyLevels(const Pending& p);
     dev::Status Move(const std::string& axis, double pos, int ms);
@@ -279,8 +286,19 @@ void DeviceWorker::Drain() {
     draining_ = false;
 }
 
-void DeviceWorker::ScheduleFlushLocked(quint64 generation) {
-    if (!pending_.generation) pending_.generation = generation;
+void DeviceWorker::ForGenerationLocked(quint64 generation) {
+    if (pending_.generation && *pending_.generation != generation) {
+        // Not "newest wins" for the whole batch: an old suction kept beside a
+        // new vibration would reach the device it was not meant for.
+        pending_.vibration.reset();
+        pending_.suction.reset();
+        pending_.position.reset();
+        pending_.axes.clear();
+    }
+    pending_.generation = generation;
+}
+
+void DeviceWorker::ScheduleFlushLocked() {
     if (flush_scheduled_) return;
     flush_scheduled_ = true;
     Post([this] { Flush(); });
@@ -988,6 +1006,13 @@ void DeviceController::setAxes(const QVariantMap& positions, int durationMs) {
     for (auto it = positions.begin(); it != positions.end(); ++it)
         worker_->QueueAxis(it.key().toStdString(), dev::Clamp01(it.value().toDouble()), std::max(0, durationMs),
                            snap_.generation);
+}
+
+void DeviceController::setVibrationForGeneration(double level, quint64 generation) {
+    worker_->QueueVibration(dev::Clamp01(level), generation);
+}
+void DeviceController::setSuctionForGeneration(double level, quint64 generation) {
+    worker_->QueueSuction(dev::Clamp01(level), generation);
 }
 
 void DeviceController::setMotorLevels(const QVariantMap& levels) {

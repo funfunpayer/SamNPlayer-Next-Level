@@ -132,6 +132,12 @@ public:
     // The clock of the Sam Neo 2 and Intiface devices of the next connects
     // (battery cache, keepalive). Called on the device thread; empty = the steady clock.
     void setDeviceClock(std::function<std::chrono::steady_clock::time_point()> clock);
+    // A level as if given while this controller showed snapshot `generation`
+    // (a GUI that has not seen the newest snapshot yet).
+    void setVibrationForGeneration(double level, quint64 generation);
+    void setSuctionForGeneration(double level, quint64 generation);
+    // Counts the changes of deviceIdentity() the GUI has seen.
+    quint64 generation() const { return snap_.generation; }
 
     // --- state (GUI thread) ---
     QString state() const;
