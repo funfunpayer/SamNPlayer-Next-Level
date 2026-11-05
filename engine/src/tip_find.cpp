@@ -170,7 +170,7 @@ std::optional<TipFindResult> FindTip(const std::filesystem::path& video, const T
         if (error) *error = openError;
         return std::nullopt;
     }
-    const double fps = reader->fps() > 0 ? reader->fps() : 30.0;
+    const double fps = reader->fps();  // Open rejects a video without a frame rate
     const int width = reader->size().width, height = reader->size().height;
     if (o.start_ms > 0 && !reader->SeekMs(o.start_ms)) return fail("the video cannot seek");
     const int sampleEvery = std::max(1, o.sample_every);
@@ -239,17 +239,9 @@ std::optional<TipFindResult> FindTip(const std::filesystem::path& video, const T
         res.candidates.push_back({CellsToBox(cells, cellW, cellH, scale, width, height), TipRegionScore(scores, cells)});
     std::stable_sort(res.candidates.begin(), res.candidates.end(),
                      [](const TipCandidate& a, const TipCandidate& b) { return a.score > b.score; });
-    // 0.7 max(): the first region with the highest score.
-    size_t pick = 0;
-    double pickScore = -std::numeric_limits<double>::infinity();
-    for (size_t i = 0; i < regions.size(); ++i) {
-        const double s = TipRegionScore(scores, regions[i]);
-        if (s > pickScore) {
-            pickScore = s;
-            pick = i;
-        }
-    }
-    res.box = ShrinkBox(CellsToBox(regions[pick], cellW, cellH, scale, width, height), width, height);
+    // 0.7 max(): the first region with the highest score, which the stable
+    // sort above has put in front.
+    res.box = ShrinkBox(res.candidates.front().box, width, height);
     return res;
 }
 

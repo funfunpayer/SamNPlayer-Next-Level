@@ -151,10 +151,6 @@ class PlayerController : public QObject {
     Q_PROPERTY(QStringList laneChoices READ laneChoices NOTIFY lanesChanged)
     // Sleep timer: stops playing after this many minutes of play (0 = off).
     Q_PROPERTY(int sleepMinutes READ sleepMinutes WRITE setSleepMinutes NOTIFY sleepChanged)
-    // False: the lane is the device preview from the stroke (mapper), not
-    // a channel the script carries.
-    Q_PROPERTY(bool vibrationFromScript READ vibrationFromScript NOTIFY scriptChanged)
-    Q_PROPERTY(bool suctionFromScript READ suctionFromScript NOTIFY scriptChanged)
     // The time window of the curve and its lanes (script time, 0.7 zoom).
     Q_PROPERTY(double viewStartMs READ viewStartMs NOTIFY viewChanged)
     Q_PROPERTY(double viewEndMs READ viewEndMs NOTIFY viewChanged)
@@ -354,8 +350,6 @@ public:
     int suctionNow() const;
     int sleepMinutes() const { return sleepMinutes_; }
     void setSleepMinutes(int minutes);
-    bool vibrationFromScript() const { return vibrationFromScript_; }
-    bool suctionFromScript() const { return suctionFromScript_; }
     DeviceController* device() const { return device_; }
     void setDevice(DeviceController* device);
     PlaybackOutput* output() { return &output_; }

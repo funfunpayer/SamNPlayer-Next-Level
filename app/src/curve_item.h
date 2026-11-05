@@ -26,13 +26,11 @@ class CurveItem : public QQuickPaintedItem {
     Q_PROPERTY(double viewStartMs READ viewStartMs WRITE setViewStartMs NOTIFY viewChanged)
     Q_PROPERTY(double viewEndMs READ viewEndMs WRITE setViewEndMs NOTIFY viewChanged)
     Q_PROPERTY(QColor lineColor MEMBER lineColor_ NOTIFY styleChanged)
-    Q_PROPERTY(QColor playheadColor MEMBER playheadColor_ NOTIFY styleChanged)
     Q_PROPERTY(bool empty READ empty NOTIFY actionsChanged)
     // Which lane the controller feeds: "stroke" (default), "vibration", "suction".
     Q_PROPERTY(QString lane MEMBER lane_ NOTIFY styleChanged)
     // Shown in the lane's top left corner (thin lanes); empty = none.
     Q_PROPERTY(QString label MEMBER label_ NOTIFY styleChanged)
-    Q_PROPERTY(bool showPlayhead MEMBER showPlayhead_ NOTIFY styleChanged)
     // The 0 / 50 / 100 guide lines (main curve).
     Q_PROPERTY(bool showGrid MEMBER showGrid_ NOTIFY styleChanged)
     // Editing keeps single strokes down to 4 px instead of 14 px.
@@ -42,7 +40,6 @@ class CurveItem : public QQuickPaintedItem {
     Q_PROPERTY(qreal fill MEMBER fill_ NOTIFY styleChanged)
     // 0.7 stroke ghost: a feel lane shows the stroke faintly (alpha 0.3,
     // 1 px) for timing. ghostPoints counts the points it has.
-    Q_PROPERTY(QColor ghostColor MEMBER ghostColor_ NOTIFY styleChanged)
     Q_PROPERTY(int ghostPoints READ ghostPoints NOTIFY actionsChanged)
     Q_PROPERTY(QString mode READ modeName NOTIFY modeChanged)
     // The Editor's grabbed point (drawn large and gold, 0.7); -1 = none.

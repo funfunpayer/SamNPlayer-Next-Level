@@ -21,8 +21,6 @@ class TrainingCurveItem : public QQuickPaintedItem {
     // The part of the plan to show in ms; end <= start = all of it.
     Q_PROPERTY(double viewStartMs MEMBER viewStart_ NOTIFY viewChanged)
     Q_PROPERTY(double viewEndMs MEMBER viewEnd_ NOTIFY viewChanged)
-    Q_PROPERTY(QColor vibrationColor MEMBER vibColor_ NOTIFY viewChanged)
-    Q_PROPERTY(QColor suctionColor MEMBER sucColor_ NOTIFY viewChanged)
 public:
     explicit TrainingCurveItem(QQuickItem* parent = nullptr);
     TrainingController* controller() const { return ctl_; }

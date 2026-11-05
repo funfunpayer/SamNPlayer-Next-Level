@@ -261,7 +261,7 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
     }
     std::optional<AdaptiveSceneCut> adaptive_cut;
     if (opts.scene_cuts && opts.adaptive_cuts)
-        adaptive_cut.emplace(std::max(10, static_cast<int>(std::lround(2.0 * (reader->fps() > 0 ? reader->fps() : 30.0)))));
+        adaptive_cut.emplace(std::max(10, static_cast<int>(std::lround(2.0 * reader->fps()))));
     std::optional<CheckRecorder> recorder;
     if (opts.record_checks) {
         recorder.emplace(res.size);
@@ -282,7 +282,7 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
 
     const int64_t first_index = frame.index;
     int total = ProgressTotal(reader->frameCount(), first_index, opts.max_frames);
-    if (opts.end_ms > 0 && reader->fps() > 0) {
+    if (opts.end_ms > 0) {
         const int64_t first_ms = frame.pts_us / 1000;
         const int span = static_cast<int>(std::max<int64_t>(0, opts.end_ms - first_ms) * reader->fps() / 1000) + 1;
         total = total > 0 ? std::min(total, span) : span;

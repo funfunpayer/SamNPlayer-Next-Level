@@ -2,7 +2,6 @@
 
 #include <charconv>
 #include <cmath>
-#include <cstdio>
 
 namespace samn::device {
 

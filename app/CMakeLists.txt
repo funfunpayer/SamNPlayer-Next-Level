@@ -96,12 +96,8 @@ qt_add_qml_module(samn_app
     qml/assets/bg-top.png
     qml/assets/bg-bottom.png
     qml/assets/empty-video.svg
-    qml/assets/empty-script.svg
     qml/assets/stage-ribbons.svg
-    qml/assets/ambient-grid.svg
     qml/assets/logo.png
-    qml/assets/flow-ribbons.svg
-    qml/assets/flow-mark.svg
     qml/fonts/Sora.ttf
     qml/fonts/Figtree.ttf
 )

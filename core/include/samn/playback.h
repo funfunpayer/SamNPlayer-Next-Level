@@ -1,15 +1,13 @@
 #pragma once
-// Playback session logic without Qt: offset, loop, position on the curve.
+// Playback helpers without Qt: the per-script offset, script time, the video and
+// the axis files that belong to a script.
 // Go reference: cmd/gui-wails/app_playback.go
 // (SetScriptOffset, ReportVideoPosition), app.go (findMatchingVideo).
 #include <cstdint>
 #include <optional>
-#include <utility>
 #include <string>
+#include <utility>
 #include <vector>
-
-#include "samn/funscript.h"
-#include "samn/settings.h"
 
 namespace samn {
 
@@ -24,31 +22,5 @@ std::optional<std::string> find_matching_video(const std::string& script_path);
 // 0.7 companion axis scripts beside a script: <stem>.surge.funscript and
 // so on, in the order surge, sway, twist, roll, pitch; only those that exist.
 std::vector<std::pair<std::string, std::string>> companion_axis_files(const std::string& script_path);
-// Interpolated position (0-100) at t_ms; nullopt without points.
-std::optional<double> position_at(const std::vector<Action>& actions, int64_t t_ms);
-
-struct LoopRange {
-    int64_t start_ms = 0;
-    int64_t end_ms = 0;
-    // Where to seek when video_ms has reached the end; nullopt to keep playing.
-    std::optional<int64_t> jump(int64_t video_ms) const;
-};
-
-struct Session {
-    explicit Session(Settings& s) : settings(s) {}
-
-    Settings& settings;
-    std::string script_path;
-    std::string video_path;
-    int64_t offset_ms = 0;
-    std::optional<LoopRange> loop;
-    std::vector<Action> actions;
-
-    // video: nullopt looks for a matching video beside the script; "" means none.
-    void open_script(const std::string& path, std::vector<Action> acts,
-                     const std::optional<std::string>& video = std::nullopt);
-    int64_t set_offset(int64_t ms);
-    int64_t script_ms(int64_t video_ms) const { return script_time(video_ms, offset_ms); }
-};
 
 }  // namespace samn

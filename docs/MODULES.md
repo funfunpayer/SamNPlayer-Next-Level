@@ -19,7 +19,7 @@ Functions use PascalCase and struct fields use snake_case.
 | `settings.h` | Settings JSON with 0.7 keys, atomic writes | — | ✅ |
 | `text.h` | `FoldCase`: UTF-8 lower case without ICU (Latin, Greek, Cyrillic, full-width); `AsciiLower` (A-Z only) for protocol words, extensions and JSON keys | Go `strings.ToLower` | ✅ |
 | `number.h` | `ParseDoublePrefix` / `StrToDouble` / `FormatFixed`: decimal numbers that ignore the process locale (strtod, stod and `%f` read it; a comma locale made "1.6" read as 1) | — | ✅ incl. comma-locale tests |
-| `playback.h` | Offset, script time, loop, video beside a script, session | Go `app_playback.go` | ✅ |
+| `playback.h` | Offset key and clamp, script time, the video beside a script, companion axis files | Go `app_playback.go` | ✅ |
 | `stroke_filter.h` | Live stroker filter (PCHIP/MAKIMA, speed limit, idle fill) | Go `funscript/stroke_filter.go` | ✅ parity |
 | `output_levels.h` | Reduce peaks, the soft start ramp and the Extended-O scale schedule as functions of time | Go `player/player.go` (ReducePeak, setOutput), `player/sync.go` (softStartWithPositions), `player/extendedo.go` | ✅ parity |
 | `beatbar.h`, `beat_strokes.h` | Cock Hero beat bar → beats → strokes | Go `generator/beatbar.go` | ✅ parity |

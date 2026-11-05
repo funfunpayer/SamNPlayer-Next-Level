@@ -7,13 +7,11 @@
 #include "samn/text.h"
 
 #include <algorithm>
-#include <atomic>
 #include <cerrno>
 #include <charconv>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
-#include <cstring>
 #include <fstream>
 #include <iterator>
 #include <numeric>
