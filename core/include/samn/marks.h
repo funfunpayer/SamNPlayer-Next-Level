@@ -1,6 +1,6 @@
 #pragma once
 // Funscript bookmarks / chapters metadata (OFS-compatible). Port of SamNPlayer
-// funscript/bookmarks.go via samn/formats/marks.py.
+// funscript/bookmarks.go.
 //
 // Reads and writes metadata.bookmarks and metadata.chapters. Saving replaces
 // only metadata.<key>; every other key (top level and inside metadata) is

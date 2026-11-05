@@ -1,6 +1,5 @@
 #pragma once
-// The .samn script container (port of SamNPlayer Go package `samn` via
-// samn/formats/samn_file.py).
+// The .samn script container (port of SamNPlayer Go package `samn`).
 //
 // .samn is SamNPlayer's own script file: a JSON document with the general
 // stroke curve, optional vibration/suction curves, device recipe, chapters,
@@ -16,7 +15,7 @@
 // TrackingGap (mapper.h), Bookmark / Chapter and the OFS-style mark loaders
 // (marks.h). Writes are atomic (temp file in the same folder, fsync, rename).
 //
-// Naming differences to Python/Go where the core already owns the name:
+// Naming differences to Go where the core already owns the name:
 // Parse/Write belong to funscript.h, so the document functions are
 // ParseDocument / LoadDocument / SaveDocument / MarshalDocument, and the typed
 // community-funscript view is `FunscriptView` (samn::Script is the lean
@@ -35,7 +34,7 @@
 
 namespace samn {
 
-// Any error the Go package reports as "samn: ..." (Python: SamnError).
+// Any error the Go package reports as "samn: ...".
 class SamnError : public std::runtime_error {
 public:
     using std::runtime_error::runtime_error;
@@ -50,7 +49,7 @@ inline const char* const SamnExt = ".samn";
 inline const char* const ProfileStandard = "standard";
 inline const char* const ProfileWeich = "weich";
 inline const char* const ProfileAutotune = "autotune";
-// D-159: the Generator's default stroke recipe (Autotune plus the measured
+// D-160: the Generator's default stroke recipe (Autotune plus the measured
 // spec values: outliers, spacing, speed limit).
 inline const char* const ProfileRecommended = "recommended";
 inline const char* const ProfileTf = "tf";

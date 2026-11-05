@@ -1,6 +1,6 @@
 #pragma once
 // Playback session logic without Qt: offset, loop, position on the curve.
-// Port of samn/player/session.py. Go reference: cmd/gui-wails/app_playback.go
+// Go reference: cmd/gui-wails/app_playback.go
 // (SetScriptOffset, ReportVideoPosition), app.go (findMatchingVideo).
 #include <cstdint>
 #include <optional>

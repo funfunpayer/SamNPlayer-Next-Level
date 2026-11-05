@@ -1,4 +1,4 @@
-// .samn script container (port of samn/formats/samn_file.py / Go package samn).
+// .samn script container (port of Go package samn).
 #include "samn/samn_file.h"
 
 #include "samn/contact_marks.h"

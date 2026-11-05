@@ -299,7 +299,7 @@ The Generator's default is the profile `recommended`: Autotune's recipe with FR-
 |---|---|---|
 | E7/T5/U7: no motion gives 2 points at 50 | An error: "no discernible motion … check the box" | A flat script hides a wrong box (LESSONS GD-11) |
 | FR-17/U5: speed limit centred on the midpoint | Moves from the previous point | 0.7 parity (D-135) |
-| FR-15 min amplitude, FR-16 min stroke in units | Prominence as a fraction of the span (`peak_prominence`) | Same effect, 0.7's unit |
+| FR-15 min amplitude, FR-16 min stroke in units | Prominence as a fraction of the span (`peak_prominence`); plus a travel check in `generate.cpp`: a track whose 2nd-98th percentile travel is under 2 % of the box size is an error (the no-motion row above) | Same effect, 0.7's unit |
 
 **Not covered yet**
 
@@ -307,5 +307,6 @@ The Generator's default is the profile `recommended`: Autotune's recipe with FR-
 |---|---|
 | T4 as a real variable-frame-rate file | OpenCV's writer cannot mux variable frame rate; the test drops 30 % of the track instead |
 | X3 audio-only file, X10 rotation metadata | The test cannot mux such files without FFmpeg's command-line tool |
+| E4 backward timestamp | Not implemented: a frame whose timestamp goes backwards is not dropped or logged; the track keeps every decoded frame |
 | E5/X4 minimum box size | Not checked in the engine |
 | FR-28/29 GPU decode | Decoding is OpenCV's FFmpeg backend on the CPU |

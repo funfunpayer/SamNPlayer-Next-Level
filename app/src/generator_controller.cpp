@@ -133,7 +133,7 @@ void GeneratorController::applySwitches(engine::SignalOptions& signal,
     signal.peak_prominence = peak_prominence_;
     signal.rdp_tolerance = rdp_tolerance_;
     signal.max_speed = max_speed_;
-    // D-159 device fit: a stroker keeps 0.7's 100 ms between actions.
+    // D-160 device fit: a stroker keeps 0.7's 100 ms between actions.
     if (profile_ == QLatin1String(samn::ProfileRecommended) && feelKind() == QLatin1String("stroker"))
         signal.min_action_interval_ms = 100;
     track_cache_dir = track_cache_ ? samn::config_dir() / "cache" / "track" : std::filesystem::path();

@@ -1,8 +1,8 @@
 #pragma once
-// Funscript -> device-intensity mapper (port of SamNPlayer funscript/mapper.go
-// via samn/formats/mapper.py). Not ported: recipe/metadata plumbing
-// (MapOptionsFromScript) and the geometry behind SpatialContactIntensity; the
-// latter is injectable via MapOptions::spatial_contact (at_ms -> 0..1).
+// Funscript -> device-intensity mapper (port of SamNPlayer funscript/mapper.go).
+// Not here: recipe/metadata plumbing
+// (MapOptionsFromScript is in samn_file.h) and the geometry behind
+// SpatialContactIntensity; the latter is injectable via MapOptions::spatial_contact (at_ms -> 0..1).
 #include <cstdint>
 #include <functional>
 #include <optional>
