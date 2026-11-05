@@ -924,6 +924,29 @@ GlassCard {
                         text: root.ctrl.contactMarks.hint !== undefined ? root.ctrl.contactMarks.hint : ""
                         color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 11
                     }
+                    // MT-Debug tip/partner path (0.7 Show tip path).
+                    Row {
+                        spacing: 8
+                        FlowButton {
+                            objectName: "showTrajectory"
+                            visible: root.ctrl.hasTrajectory
+                            text: qsTr("Show tip path"); checked: root.ctrl.trajectoryOverlay
+                            onClicked: root.ctrl.trajectoryOverlay = !root.ctrl.trajectoryOverlay
+                        }
+                        HelpChip {
+                            visible: root.ctrl.hasTrajectory
+                            anchors.verticalCenter: parent.verticalCenter
+                            key: "pb-trajectory-toggle"
+                        }
+                    }
+                    Text {
+                        objectName: "trajectoryHint"
+                        textFormat: Text.PlainText
+                        visible: root.ctrl.hasScript && !root.ctrl.hasTrajectory
+                        width: parent.width; wrapMode: Text.WordWrap
+                        text: qsTr("This script has no recorded trajectory — regenerate with contact marks (Record tip path).")
+                        color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 11
+                    }
                     // Speed highlights (0.7 pb-speed-hl): red bands over too fast strokes.
                     Row {
                         spacing: 10

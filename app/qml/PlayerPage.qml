@@ -593,6 +593,63 @@ Item {
                         }
                     }
                 }
+                // MT-Debug trajectory lines (0.7 playback.js): tip accent +
+                // partner teal + moving tip dot, aligned to the letterboxed video.
+                Item {
+                    id: trajLayer
+                    objectName: "trajectoryLayer"
+                    readonly property rect area: videoOut.contentRect
+                    readonly property var m: ctrl.contactMarks
+                    readonly property size res: media.metaData.value(MediaMetaData.Resolution) || Qt.size(0, 0)
+                    readonly property real srcW: res.width > 0 ? res.width : (m.width || 0)
+                    readonly property real srcH: res.height > 0 ? res.height : (m.height || 0)
+                    readonly property var tipNow: ctrl.tipAt(ctrl.playheadMs)
+                    visible: ctrl.trajectoryOverlay && ctrl.hasTrajectory && ctrl.videoName !== "" && srcW > 0 && srcH > 0
+                    x: area.x; y: area.y; width: area.width; height: area.height
+                    Canvas {
+                        id: trajCanvas
+                        anchors.fill: parent
+                        onPaint: {
+                            const ctx = getContext("2d")
+                            ctx.reset()
+                            ctx.clearRect(0, 0, width, height)
+                            if (!trajLayer.visible) return
+                            function drawPath(pts, color, widthPx) {
+                                if (!pts || pts.length < 2) return
+                                ctx.beginPath()
+                                ctx.strokeStyle = color
+                                ctx.lineWidth = widthPx
+                                ctx.lineJoin = "round"
+                                ctx.lineCap = "round"
+                                for (let i = 0; i < pts.length; ++i) {
+                                    const x = pts[i].x / trajLayer.srcW * width
+                                    const y = pts[i].y / trajLayer.srcH * height
+                                    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
+                                }
+                                ctx.stroke()
+                            }
+                            drawPath(ctrl.partnerPathPoints(), "#3dccc0", 2.0)
+                            drawPath(ctrl.tipPathPoints(), Theme.orange, 2.2)
+                        }
+                        Connections {
+                            target: ctrl
+                            function onScriptChanged() { trajCanvas.requestPaint() }
+                            function onViewOptionsChanged() { trajCanvas.requestPaint() }
+                        }
+                        onWidthChanged: requestPaint()
+                        onHeightChanged: requestPaint()
+                        Component.onCompleted: requestPaint()
+                    }
+                    Rectangle {
+                        objectName: "trajectoryTipDot"
+                        visible: trajLayer.tipNow.x !== undefined
+                        width: 10; height: 10; radius: 5
+                        x: (trajLayer.tipNow.x || 0) / trajLayer.srcW * trajLayer.width - width / 2
+                        y: (trajLayer.tipNow.y || 0) / trajLayer.srcH * trajLayer.height - height / 2
+                        color: Theme.orange
+                        border.color: "white"; border.width: 1.5
+                    }
+                }
                 // The script's contact marks on the picture (0.7 playback.js
                 // contact overlay): tip blue on the tip path; gold stays put
                 // when fixed else follows partner; magenta extras follow their

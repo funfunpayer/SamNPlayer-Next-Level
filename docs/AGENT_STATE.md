@@ -2,7 +2,15 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 5 Nov 2026, Claude, branch `claude/samn2-driver-registry`: devices are built-in drivers in a Qt-free registry in core (D-163, first slice of "the core is the kernel"; handover below). Before: `claude/samn2-tidy` (behaviour-neutral tidy-up from three code reviews).
+**Last update:** 5 Nov 2026, Cursor, branch `cursor/mt-debug-trajectory-635a`: Player MT-Debug tip/partner trajectory line overlay. Before: Claude `claude/samn2-driver-registry` (#161, D-163).
+
+## Handover: `cursor/mt-debug-trajectory-635a` (5 Nov)
+
+Player MT-Debug trajectory overlay (PARITY tip/partner path lines).
+
+- **Controller:** `hasTrajectory`, `trajectoryOverlay` (`player.trajectoryOverlay`, default off), `tipPathPoints()` / `partnerPathPoints()`.
+- **UI:** Inspector → View → *Show tip path* (+ hint when the script has no path); stage `trajectoryLayer` Canvas (tip orange, partner teal) + moving tip dot.
+- **Still open:** live postprocess probe (G4b leftover); idle ribbon (open #162); real donate URLs (Owner); Quality Doctor.
 
 ## Handover: `claude/samn2-driver-registry` (5 Nov, D-163 first slice: device drivers)
 
@@ -15,6 +23,7 @@ Owner: the core is the kernel, Player / Generator / Training are modules, device
 - **Tests:** new `tests/core/device_driver_test.cpp` (12 cases: registry order, unknown id, duplicate id, TCode Resolve for plain / udp / tcp / bad addresses and serial, the other Resolves, hints, mock / Sam Neo 2 / TCode sessions over `MockTransport`, Intiface over the fake Buttplug server incl. the reconnect-to-another-toy refusal and the pump / tick reconnect). No existing test was changed.
 - **Behaves differently (slightly):** the device choice's names and help texts come from C++ and are no longer wrapped in `qsTr` (there are no translations yet; when they come, `DriverInfo` needs translatable keys). `pickSavedPort` uses the saved target of the driver that picks a serial port instead of the literal "tcode-serial". A driver whose transport kind the app cannot build fails the connect with "no transport for the device kind" (unreachable with the five built-ins).
 - **Not verified:** real hardware (Sam Neo 2, OSR / SR6, Intiface Central) and Windows / MSVC (built and run on Linux, GCC, Qt 6.4 only).
+
 
 ## Handover: `claude/samn2-tidy` (5 Nov, behaviour-neutral tidy-up)
 
@@ -394,7 +403,7 @@ Data and file fixes from a read-only bug hunt. Each fix has a test that failed b
 
 **Kernel (D-163), one theme per PR, after the driver registry:** a ModeRegistry with a `Repeater` in `Main.qml`; a narrow `DeviceService` interface instead of `DeviceController*` in Player, Training and `PlaybackOutput`; `DeviceWorker` into its own file; registries for detectors and teachers.
 
-0. **Generator:** G2 stack ✅ (#114–#116); Tf/Tj distance stroke ✅ (#119); G3 feel ✅; Player partner overlay ✅ (#141); extras multi (`track_multi`) ✅ (#145); G3 feel probe ✅ (#146); G4a Advanced shell ✅ (#147); G4b Expert knobs ✅ (#151, live postprocess probe still open); next MT-Debug trajectory line overlay → G8 `.sam`.
+0. **Generator:** G2 stack ✅ (#114–#116); Tf/Tj distance stroke ✅ (#119); G3 feel ✅; Player partner overlay ✅ (#141); extras multi (`track_multi`) ✅ (#145); G3 feel probe ✅ (#146); G4a Advanced shell ✅ (#147); G4b Expert knobs ✅ (#151, live postprocess probe still open); MT-Debug trajectory overlay ✅ (this PR); next G8 `.sam` / live probe / Quality Doctor.
 1. **Look polish:** ✅ (#122, Claude takeover of Cursor #117; reduced-motion gates and a window-wide loop test added).
 2. **Owner GUI leftovers:** handbook ✅ (#150); idle ribbon (§11), real donation URLs (Manifest §2 / D-022). Empty-Play dark oval ✅ (#143); Support card shows "Donation page coming soon." Reduced motion ✅ (#120). Broader look polish after the Generator still welcome.
 3. **AI Train D-155:** script compare with labels, then golden-clip run (Owner clips).
