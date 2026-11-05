@@ -12,6 +12,8 @@
 
 #include "audio_level.h"
 #include "curve_item.h"
+#include "qt_paths.h"
+#include "samn/vision/canceled.h"
 #include "samn/curve_geometry.h"
 #include "samn/funscript.h"
 #include "samn/improve.h"
@@ -27,8 +29,6 @@
 
 namespace samn::ui {
 namespace {
-
-std::filesystem::path FsPath(const QString& p) { return std::filesystem::path(p.toStdU16String()); }
 
 QString LaneTitle(const std::string& lane) {
     if (lane == "vibration") return QObject::tr("Vibration");
@@ -162,16 +162,14 @@ bool EditorController::open(const QString& pathIn) {
     std::optional<samn::ContactMarks> contact_marks;
     bool inverted = false;
     try {
-        std::ifstream in(FsPath(funscript), std::ios::binary);
-        if (!in) throw std::runtime_error("cannot read the file");
-        std::stringstream ss;
-        ss << in.rdbuf();
-        const samn::Script parsed = samn::Parse(ss.str());
+        const auto text = samn::ReadFileToString(FsPath(funscript));
+        if (!text) throw std::runtime_error("cannot read the file");
+        const samn::Script parsed = samn::Parse(*text);
         axes["stroke"] = parsed.actions;
         inverted = parsed.inverted;
         try {
             // Scene feels and the contact mark, for the scenes' suggestions.
-            const samn::FunscriptView view = samn::ParseFunscript(ss.str());
+            const samn::FunscriptView view = samn::ParseFunscript(*text);
             contact_marks = view.metadata.contact_marks;
             if (view.metadata.device_recipe) scene_ranges = view.metadata.device_recipe->scene_ranges;
         } catch (const std::exception&) {
@@ -661,7 +659,7 @@ void EditorController::onBeats(bool found, const std::vector<double>& beats, dou
     }
     setProgress(found ? 100 : 0);
     if (!error.isEmpty()) {
-        setStatus(error == QLatin1String("canceled") ? tr("Beat bar: canceled.") : tr("Beat bar: %1").arg(error));
+        setStatus(error == QLatin1String(samn::kCanceled) ? tr("Beat bar: canceled.") : tr("Beat bar: %1").arg(error));
         return;
     }
     if (!found || beats.size() < 2) {

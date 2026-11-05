@@ -8,6 +8,8 @@
 #include <sstream>
 #include <stdexcept>
 
+#include "samn/fileio.h"
+
 namespace samn {
 namespace {
 
@@ -178,11 +180,9 @@ ScriptQualityResult EvaluateScriptQuality(const std::vector<Action>& actions) {
 }
 
 ScriptQualityResult ScriptQualityOfFile(const std::filesystem::path& path) {
-    std::ifstream in(path, std::ios::binary);
-    if (!in) throw std::runtime_error("script could not be read: " + path.u8string());
-    std::stringstream ss;
-    ss << in.rdbuf();
-    nlohmann::json doc = nlohmann::json::parse(ss.str(), nullptr, false);
+    const auto text = ReadFileToString(path);
+    if (!text) throw std::runtime_error("script could not be read: " + path.u8string());
+    nlohmann::json doc = nlohmann::json::parse(*text, nullptr, false);
     if (doc.is_discarded() || !doc.is_object()) throw std::runtime_error("invalid JSON");
     auto read = [&](const char* key) {
         std::vector<Action> out;

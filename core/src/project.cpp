@@ -7,6 +7,7 @@
 #include <nlohmann/json.hpp>
 
 #include "samn/fileio.h"
+#include "samn/text.h"
 
 namespace samn {
 
@@ -14,17 +15,12 @@ namespace {
 
 using nlohmann::ordered_json;
 
-std::string Lower(std::string s) {
-    for (char& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    return s;
-}
-
 // Go decodes into a struct: keys match case-insensitively, the last one wins,
 // null leaves the field alone, a wrong type is an error.
 const ordered_json* Field(const ordered_json& obj, const char* name) {
     const ordered_json* found = nullptr;
     for (auto it = obj.begin(); it != obj.end(); ++it) {
-        if (Lower(it.key()) == Lower(name) && !it.value().is_null()) found = &it.value();
+        if (AsciiLower(it.key()) == AsciiLower(name) && !it.value().is_null()) found = &it.value();
     }
     return found;
 }
@@ -118,14 +114,12 @@ void SaveProject(const std::filesystem::path& path, const Project& p) {
 }
 
 Project LoadProject(const std::filesystem::path& path) {
-    std::ifstream in(path, std::ios::binary);
-    if (!in) throw ProjectError("open " + path.u8string() + ": cannot read file");
-    std::stringstream ss;
-    ss << in.rdbuf();
+    const auto text = ReadFileToString(path);
+    if (!text) throw ProjectError("open " + path.u8string() + ": cannot read file");
 
     Project p;
     try {
-        const ordered_json root = ordered_json::parse(ss.str());
+        const ordered_json root = ordered_json::parse(*text);
         if (!root.is_null()) {  // Go: JSON null leaves the zero value
             AsObject(root, "project");
             if (auto* v = Field(root, "version")) p.version = static_cast<int>(AsInt(*v, "version"));

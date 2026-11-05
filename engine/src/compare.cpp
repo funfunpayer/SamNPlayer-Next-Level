@@ -6,7 +6,9 @@
 #include <fstream>
 #include <sstream>
 
+#include "samn/vision/canceled.h"
 #include "samn/engine/track_box.h"
+#include "samn/fileio.h"
 #include "samn/funscript.h"
 #include "samn/sha256.h"
 #include "samn/vision/tracker.h"
@@ -20,15 +22,13 @@ bool Pinned(const LagCorrelation& c, const CompareSettings& s) {
 }
 
 std::optional<std::vector<Action>> LoadActions(const std::filesystem::path& p, std::string* error) {
-    std::ifstream in(p, std::ios::binary);
-    if (!in) {
+    const auto text = samn::ReadFileToString(p);
+    if (!text) {
         *error = "cannot read " + p.filename().u8string();
         return std::nullopt;
     }
-    std::stringstream ss;
-    ss << in.rdbuf();
     try {
-        return Parse(ss.str()).actions;
+        return Parse(*text).actions;
     } catch (const std::exception& e) {
         *error = p.filename().u8string() + ": " + e.what();
         return std::nullopt;
@@ -124,7 +124,7 @@ ClipReport RunClip(const CompareClip& clip, const CompareSettings& s, const std:
     auto tr = TrackBox(clip.video, clip.box, to, &r.error);
     if (!tr) return r;
     if (tr->canceled) {
-        r.error = "canceled";
+        r.error = kCanceled;
         return r;
     }
     r.frames = tr->stats.total_frames;

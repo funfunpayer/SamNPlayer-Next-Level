@@ -47,7 +47,6 @@ Item {
     readonly property bool custom: ctl.scriptName === ""
     readonly property int total: ctl.planTotalMs
     readonly property real progress: total > 0 ? Math.min(1, ctl.elapsedSec * 1000 / total) : 0
-    readonly property var heroTexts: ({ idle: qsTr("Ready"), connecting: qsTr("Connecting..."), running: qsTr("Running"), paused: qsTr("Paused") })
 
     Shortcut {
         sequence: "Esc"

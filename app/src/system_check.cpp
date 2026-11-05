@@ -27,9 +27,10 @@
 #endif
 
 #include "app_log.h"
+#include "ai_paths.h"
+#include "qt_paths.h"
 #include "samn/settings.h"
 #include "samn/vision/onnx_detector.h"
-#include "train_controller.h"
 
 namespace samn::ui {
 
@@ -38,7 +39,6 @@ constexpr qint64 kMiB = 1024 * 1024;
 constexpr qint64 kDiskFail = 300 * kMiB;
 constexpr qint64 kDiskWarn = 2048 * kMiB;
 
-QString FromFs(const std::filesystem::path& p) { return QString::fromStdU16String(p.u16string()); }
 QString T(const char* s) { return QCoreApplication::translate("SystemCheck", s); }
 
 QString Memory(quint64 mb) {
@@ -162,7 +162,7 @@ CheckInputs GatherInputs(const QList<GpuInfo>& gpus) {
     in.decodes_av1 = codecs.contains(QMediaFormat::VideoCodec::AV1);
     in.onnx_available = samn::vision::OnnxDetector::Available();
     // The marker the setup writes when it is done; a folder without it is a setup that stopped half way.
-    const QString env = TrainController::aiDir() + QStringLiteral("/train-env");
+    const QString env = AiDir() + QStringLiteral("/train-env");
     in.train_env = QFileInfo::exists(env + QStringLiteral("/samn-ready.json")) ? TrainEnvState::kReady
                    : QFileInfo::exists(env)                                     ? TrainEnvState::kFailed
                                                                                 : TrainEnvState::kNotSetUp;

@@ -84,7 +84,7 @@ PostOptions BuildPostOptions(const SignalOptions& o, int smooth, int peak_dist, 
         if (p.dynamic_range_ms == 0) p.dynamic_range_ms = 3000;
         if (p.peak_prominence == 0) p.peak_prominence = 0.2;
     }
-    // D-159 measured on 9 synthetic tracks with known strokes and the
+    // D-160 measured on 9 synthetic tracks with known strokes and the
     // Owner's clip (27 Oct): the spec's 60 ms spacing and 2nd/98th
     // percentile are neutral there and kept; its 120 ms smoothing and 4 s
     // detrend lost against Autotune's, so those stay as Autotune has them.
@@ -132,7 +132,7 @@ std::optional<SignalResult> RunSignal(const std::vector<double>& t, const std::v
     const std::string profile = NormalizeProfile(o.profile);
     const PostOptions po =
         BuildPostOptions(o, o.smooth_window, o.min_peak_distance_ms, o.adaptive_error, o.norm_percentile);
-    // Recommended (D-159): single-frame jumps are lost samples (synthetic
+    // Recommended (D-160): single-frame jumps are lost samples (synthetic
     // window r 0.957 -> 0.968; the Owner's clip unchanged).
     const double mad_factor = o.outlier_mad_factor > 0                     ? o.outlier_mad_factor
                               : o.outlier_mad_factor == 0 && profile == ProfileRecommended ? kRecommendedMadFactor

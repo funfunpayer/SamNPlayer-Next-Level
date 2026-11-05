@@ -1,5 +1,5 @@
 #pragma once
-// App settings: one JSON file in the user's config folder. Port of samn/settings.py.
+// App settings: one JSON file in the user's config folder.
 // Same keys as SamNPlayer 0.7 where a setting exists there (for example
 // "playback.offset.<script path>"). Writes are atomic (temp file + replace).
 // Several Settings objects (one per controller) may share one file: a write

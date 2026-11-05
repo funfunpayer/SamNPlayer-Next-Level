@@ -15,6 +15,7 @@
 #include <QRegularExpression>
 #include <QUrl>
 
+#include "qt_paths.h"
 #include "samn/clip_prep.h"
 #include "samn/funscript.h"
 #include "samn/settings.h"
@@ -22,11 +23,6 @@
 namespace samn::ui {
 
 namespace {
-QString FromFs(const std::filesystem::path& p) { return QString::fromStdU16String(p.u16string()); }
-QString LocalPath(const QString& pathOrUrl) {
-    const QUrl url(pathOrUrl);
-    return url.isLocalFile() ? url.toLocalFile() : pathOrUrl;
-}
 QString LastLine(const QByteArray& out) {
     const QList<QByteArray> lines = out.trimmed().split('\n');
     return lines.isEmpty() ? QString() : QString::fromUtf8(lines.last()).trimmed();

@@ -87,4 +87,10 @@ std::string FoldCase(const std::string& s) {
     return out;
 }
 
+std::string AsciiLower(std::string s) {
+    for (char& c : s)
+        if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+    return s;
+}
+
 }  // namespace samn

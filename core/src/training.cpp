@@ -1,7 +1,6 @@
 #include "samn/training.h"
 
 #include <algorithm>
-#include <cmath>
 #include <random>
 
 namespace samn::training {

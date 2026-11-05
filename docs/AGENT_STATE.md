@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 5 Nov 2026, Claude, branch `claude/samn2-timing-audit`: the device path's end-to-end timing measured for the first time (`docs/TIMING.md`, bench `tests/app/timing_bench.cpp`); no behaviour changed (handover below). Before: `claude/samn2-device-leftovers` (Training ends on a device change, Intiface battery).
+**Last update:** 5 Nov 2026, Claude, branch `claude/samn2-timing-audit`: the device path's end-to-end timing measured for the first time (`docs/TIMING.md`, bench `tests/app/timing_bench.cpp`); no behaviour changed (handover below). Before: `claude/samn2-tidy` (behaviour-neutral tidy-up, #158).
 
 ## Handover: `claude/samn2-timing-audit` (5 Nov, timing audit, measurement only)
 
@@ -14,6 +14,17 @@ Owner question: is the Player as exact and fast as the Go version? Nothing had b
 - **Findings worth knowing:** `Qt::PreciseTimer` would change nothing (Qt already treats coarse timers of 20 ms or less as precise, on Windows with the multimedia timer); 0.7 sampled the video every ~250 ms, so SamN2 is at least as exact in every mode. Rare single gaps (one report interval up to 112 ms, one `update` call of 105 ms) were seen about once per 60 s run, cause not identified.
 - **Recommended next (not done):** 1. extrapolate the video playhead between media reports (gain: video lag 0-100 ms to 0-16 ms); 2. send the next stroke at its start time with a precise timer; 3. levels at their due time (low value); 4. `LowDelayOption` on the TCode TCP socket (cheap, no evidence of a problem yet); 5. measure the Bluetooth round trip on the device before any BLE change. Details, risks and protecting tests: `TIMING.md` § 6.
 - **Not measured:** a real device, the Bluetooth radio, Windows, the GStreamer backend, the GUI thread with QML rendering and video frames, the QML hop.
+
+## Handover: `claude/samn2-tidy` (5 Nov, behaviour-neutral tidy-up)
+
+Four commits, one per group. Nothing the program does changed; every existing test is unchanged except where a test moved with the code it tests (`playback_test.cpp`, one comment in `shell_qml_test.cpp`) and the six engine tests whose temp folder names got a per-process suffix (`TempPath`).
+
+- **Docs:** `MODULES.md` lists every header of core, vision and engine and every app file. The stop budget is 6.5 s (`kStopBudgetMs`), D-160 (not D-159) is cited for the Recommended recipe, stale "port of the Python player" header comments are gone, `script_finder.h` says it folds with `FoldCase`, `tracker.h` says nothing calls `VisionSelfCheck()` at start-up (tests do; not wired), `GENERATOR_SPEC.md` § 10 lists E4 as not implemented and the 2 % travel check next to FR-15.
+- **Shared helpers:** `AsciiLower` (`text.h`), `ReadFileToString` (`fileio.h`; nullopt on open failure or a read error), `TimeToTm` (`time_util.h`), app `qt_paths.h` (`LocalPath`, `FsPath`, `FromFs`, `PathUtf8`, `U8`, `FromU8`) and `ai_paths.h` (`AiDir()`, so `system_check.cpp` no longer includes `train_controller.h`), `kNoMotionError` (`post_track.h`), `samn::kCanceled` (`vision/canceled.h`: vision cannot see core, so it lives there). `generator_controller.cpp` passes `PathUtf8(f)` where it passed `f.u8string()`, which does not build in C++20.
+- **Dead code:** unused includes; `samn::Session`, `LoopRange` and `position_at` (tests retargeted to `PositionAt`, `RangeMarker::Valid` and `offset_key` / `clamp_offset` with `Settings`; the `LoopRange::jump` assertions have no surviving function and went with it); Find tip takes `candidates.front()` (the stable sort puts the first highest score there); fps fallbacks and `searched`; unused QML and `Q_PROPERTY` members; four never-loaded SVGs.
+- **Tests:** engine tests that made fixed temp folders get a per-process random suffix (`testclips::TempPath`).
+- **Left as it was, on purpose:** the `<optional>` of `funscript.h` and `<stdexcept>` of `mapper.h` (headers: other files may rely on them on MSVC), `device_controller.h` in `mapping_settings.cpp` (`playback_output.h` needs the full type), `bg-top.svg` / `bg-bottom.svg` (the sources of the bundled PNGs), the Generator recent-scripts write (skipping it would not restore a settings file deleted while the app runs, and `changed()` would not fire), `training_controller.cpp` and `device_controller.cpp` (out of scope), `marks.cpp` `ReadDoc` (its errno message and directory check).
+- **Not run:** the Windows / MSVC paths (`_WIN32` branches of `time_util.cpp`, `settings.cpp`) were only read, not built.
 
 ## Handover: `claude/samn2-device-leftovers` (5 Nov, device bug hunt leftovers)
 
@@ -216,7 +227,7 @@ Data and file fixes from a read-only bug hunt. Each fix has a test that failed b
 
 ## Handover: `claude/samn2-stop-safety` (30 Oct, device and playback safety, merged #138)
 
-- **Stop before close (Sam Neo 2):** a disconnect, a quit and Training's end set `abort_` before the worker's stop ran, and the BLE "with response" write gave up at once, so the device stayed on. `DeviceWorker::Stop` and `DestroySession` now switch the transport to a cancel of their own (`BeginStopWindow`, bounded by `kStopBudgetMs` = 4 s); `abort_` still ends connects and reads. TCode (serial / TCP / UDP) and Intiface sends never waited on the cancel. Tests: `device_controller_test` `samNeo2*` on a stand-in link (`setBleTransportFactory`).
+- **Stop before close (Sam Neo 2):** a disconnect, a quit and Training's end set `abort_` before the worker's stop ran, and the BLE "with response" write gave up at once, so the device stayed on. `DeviceWorker::Stop` and `DestroySession` now switch the transport to a cancel of their own (`BeginStopWindow`, bounded by `kStopBudgetMs` = 6.5 s); `abort_` still ends connects and reads. TCode (serial / TCP / UDP) and Intiface sends never waited on the cancel. Tests: `device_controller_test` `samNeo2*` on a stand-in link (`setBleTransportFactory`).
 - **`SamNeo2Device::StopNow`** tries both off writes, remembers both off packets either way (the keepalive repeats "off", never the old "on") and returns the first error; `Disconnect()` uses it. Tests: `device/samneo2: a failed off write ...`, `... disconnect tries both off writes ...`.
 - **Stroke speed limit:** with a limit, a move takes at least the way from the last sent position at that speed (real ms, after the play-speed division); the home move counts the whole range. Test: `playback_output_test::speedLimitHoldsForLateReports` (1x, 2x).
 - **Intiface battery:** a failed read (no reading, or the server's `Error` for the request, which now ends the wait) is cached `kBatteryCacheTtl` like a reading; before, every 2 s tick blocked the worker 3 s and a Stop queued behind it. Tests: `device/intiface: a failed battery read is cached too`, `device_controller_test::intifaceMuteBatteryDoesNotBlockTheStop`, `intifaceBatteryErrorEndsTheWait`.

@@ -11,7 +11,6 @@ Rectangle {
     // A red call for stopping things (Emergency stop, All off).
     property bool danger: false
     property bool checked: false
-    property bool enabledLook: enabled
     signal clicked()
     implicitWidth: label.implicitWidth + 32 + (icon !== "" ? 22 : 0)
     implicitHeight: 36

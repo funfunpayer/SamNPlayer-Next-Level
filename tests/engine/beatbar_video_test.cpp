@@ -18,7 +18,7 @@ namespace clips = samn::engine::testclips;
 namespace {
 
 fs::path Dir(const char* name) {
-    const fs::path d = fs::temp_directory_path() / name;
+    const fs::path d = samn::engine::testclips::TempPath(name);
     fs::remove_all(d);
     fs::create_directories(d);
     return d;

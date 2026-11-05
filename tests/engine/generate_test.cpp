@@ -25,7 +25,7 @@ namespace fs = std::filesystem;
 namespace {
 
 fs::path TempDir(const char* name) {
-    const fs::path p = fs::temp_directory_path() / name;
+    const fs::path p = samn::engine::testclips::TempPath(name);
     fs::remove_all(p);
     fs::create_directories(p);
     return p;

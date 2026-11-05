@@ -2,7 +2,6 @@
 #include <algorithm>
 #include <cmath>
 #include <map>
-#include <numeric>
 #include <vector>
 
 namespace samn {

@@ -6,6 +6,7 @@
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
 
+#include "samn/vision/canceled.h"
 #include "samn/vision/frame_reader.h"
 
 namespace samn::engine {
@@ -65,7 +66,7 @@ bool StreamGray(const std::filesystem::path& video, bool vertical, double startS
 double DurationSec(const std::filesystem::path& video) {
     std::string ignored;
     auto reader = vision::FrameReader::Open(video, &ignored);
-    if (!reader || reader->fps() <= 0) return 0;
+    if (!reader) return 0;
     return double(reader->frameCount()) / reader->fps();
 }
 
@@ -86,14 +87,12 @@ std::optional<BeatBarResult> DetectBeatBarBeats(const std::filesystem::path& vid
             starts.push_back(duration * 0.6);
         }
         // Most bars run along the bottom or top; some down a side edge.
-        bool searched = false;
         for (const bool vertical : {false, true}) {
             for (const double ss : starts) {
                 std::vector<GrayFrame> frames;
                 if (!StreamGray(video, vertical, ss, kBeatBarFindSec, 0, kBeatBarH, o,
                                 [&](const GrayFrame& g, double) { frames.push_back(g); }, error))
                     return std::nullopt;
-                searched = true;
                 if (const auto bar = FindBeatBar(frames)) {
                     res.found = true;
                     res.bar = *bar;
@@ -104,7 +103,7 @@ std::optional<BeatBarResult> DetectBeatBarBeats(const std::filesystem::path& vid
             if (res.found) break;
         }
         progress(10);
-        if (!searched || !res.found) return res;
+        if (!res.found) return res;
         BeatTimer timer(res.bar, kBeatBarFps);
         if (!StreamGray(video, res.vertical, 0, 0, res.bar.y0, res.bar.y1, o,
                         [&](const GrayFrame& g, double sec) {
@@ -116,7 +115,7 @@ std::optional<BeatBarResult> DetectBeatBarBeats(const std::filesystem::path& vid
         res.beats_ms = timer.Beats();
         res.bpm = MedianBpm(res.beats_ms);
     } catch (const Canceled&) {
-        if (error) *error = "canceled";
+        if (error) *error = kCanceled;
         return std::nullopt;
     }
     return res;

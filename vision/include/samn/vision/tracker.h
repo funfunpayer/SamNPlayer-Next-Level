@@ -2,8 +2,8 @@
 
 // One place that creates trackers (LESSONS GD-02): 0.7 fell back to a
 // weaker tracker on systems without OpenCV contrib and nobody noticed.
-// Here a missing tracker is an error, and the self-check proves at start-up
-// and in CI that CSRT runs on this build.
+// Here a missing tracker is an error, and VisionSelfCheck() proves that CSRT
+// runs on this build; the tests and CI call it, the app does not at start-up.
 
 #include <memory>
 #include <optional>
@@ -28,7 +28,7 @@ public:
 std::unique_ptr<Tracker> CreateTracker(TrackerKind kind, std::string* error);
 
 // Runs CSRT on a generated moving pattern. "" when it tracks within 3 px,
-// else the reason. Cheap enough for app start-up.
+// else the reason. Cheap, but nothing in the app calls it; the tests do.
 std::string VisionSelfCheck();
 
 // "OpenCV 4.6.0" for the log (GD-02: the log names tracker and version).

@@ -2,6 +2,7 @@
 #include "samn/marks.h"
 #include "samn/fileio.h"
 #include "samn/number.h"
+#include "samn/text.h"
 
 #include <algorithm>
 #include <cerrno>
@@ -314,12 +315,6 @@ RawMap MetadataOf(const Doc& doc) {
 std::string ReprForError(const json& v) {
     if (v.is_string()) return "'" + v.get<std::string>() + "'";
     return v.dump();
-}
-
-std::string AsciiLower(std::string s) {
-    for (auto& c : s)
-        if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
-    return s;
 }
 
 // Go struct decoding: null -> zero value, object -> case-insensitive field

@@ -16,6 +16,8 @@
 
 #include <opencv2/imgproc.hpp>
 
+#include "qt_paths.h"
+#include "samn/vision/canceled.h"
 #include "samn/video_info.h"
 #include "samn/engine/generate_queue.h"
 #include "samn/engine/tip_find.h"
@@ -31,11 +33,6 @@
 namespace samn::ui {
 
 namespace {
-
-QString LocalPath(const QString& pathOrUrl) {
-    const QUrl url(pathOrUrl);
-    return url.isLocalFile() ? url.toLocalFile() : pathOrUrl;
-}
 
 QString Clock(double ms) {
     const int s = int(ms / 1000);
@@ -133,7 +130,7 @@ void GeneratorController::applySwitches(engine::SignalOptions& signal,
     signal.peak_prominence = peak_prominence_;
     signal.rdp_tolerance = rdp_tolerance_;
     signal.max_speed = max_speed_;
-    // D-159 device fit: a stroker keeps 0.7's 100 ms between actions.
+    // D-160 device fit: a stroker keeps 0.7's 100 ms between actions.
     if (profile_ == QLatin1String(samn::ProfileRecommended) && feelKind() == QLatin1String("stroker"))
         signal.min_action_interval_ms = 100;
     track_cache_dir = track_cache_ ? samn::config_dir() / "cache" / "track" : std::filesystem::path();
@@ -242,12 +239,12 @@ bool GeneratorController::findTip() {
                     self->setStatus(tr("Drag a box around the moving tip on the frame."));
                     return;
                 }
-                if (thenCreate && error != "canceled") {
+                if (thenCreate && error != samn::kCanceled) {
                     self->setStatus(tr("Find tip failed: %1.").arg(QString::fromStdString(error)));
                     AppLog::instance().reportError(self->status_);  // 0.7 uiError
                 }
                 else
-                    self->setStatus(error == "canceled" ? tr("Find tip: canceled.")
+                    self->setStatus(error == samn::kCanceled ? tr("Find tip: canceled.")
                                                         : tr("Find tip: %1").arg(QString::fromStdString(error)));
                 return;
             }
@@ -1049,7 +1046,7 @@ bool GeneratorController::scriptExists() const {
     const std::filesystem::path f = funscriptPath();
     std::error_code ec;
     return std::filesystem::exists(f, ec) ||
-           std::filesystem::exists(std::filesystem::u8path(samn::CompanionSamnPath(f.u8string())), ec);
+           std::filesystem::exists(std::filesystem::u8path(samn::CompanionSamnPath(PathUtf8(f))), ec);
 }
 
 int GeneratorController::step() const {
@@ -1165,7 +1162,7 @@ void GeneratorController::onEvent(const engine::GenerateEvent& e) {
             return;
         case engine::GenerateEventKind::kDone: {
             const std::filesystem::path f = funscriptPath();
-            output_path_ = QString::fromStdString(samn::CompanionSamnPath(f.u8string()));
+            output_path_ = QString::fromStdString(samn::CompanionSamnPath(PathUtf8(f)));
             percent_ = 100;
             progress_text_ = QStringLiteral("100 %");
             appendLog(tr("Wrote %1 (%2 actions)").arg(msg).arg(e.actions));

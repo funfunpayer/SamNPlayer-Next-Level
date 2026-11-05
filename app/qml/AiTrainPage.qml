@@ -17,7 +17,6 @@ Item {
 
     LabelController { id: labelCtl }
     TrainController { id: trainCtl }
-    property alias trainer: trainCtl
     ClipPrepController { id: clipCtl }
     property alias clipPrep: clipCtl
     property string clipSource
