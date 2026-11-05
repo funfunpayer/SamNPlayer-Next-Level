@@ -19,6 +19,20 @@ private slots:
         qputenv("SAMN_CONFIG_DIR", cfg_->path().toUtf8());
     }
 
+    // Review A1: `changed` only fires on the instance that wrote. Two pages with
+    // a controller each go stale; the app hands one shared instance to both.
+    void changedFiresOnTheWritingInstanceOnly() {
+        QTemporaryDir d;
+        const QString a = d.filePath("a.funscript");
+        QFile(a).open(QIODevice::WriteOnly);
+        LibraryController writer, other;
+        QSignalSpy writerSpy(&writer, &LibraryController::changed);
+        QSignalSpy otherSpy(&other, &LibraryController::changed);
+        writer.noteScriptGenerated(a);
+        QCOMPARE(writerSpy.count(), 1);
+        QCOMPARE(otherSpy.count(), 0);  // the other page's bindings never re-read: why one instance is shared
+    }
+
     void recentFavoritesAndScripts() {
         QTemporaryDir d;
         const QString a = d.filePath("a.funscript"), b = d.filePath("b.funscript");

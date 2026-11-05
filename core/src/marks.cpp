@@ -1,6 +1,7 @@
 #include <system_error>
 #include "samn/marks.h"
 #include "samn/fileio.h"
+#include "samn/number.h"
 
 #include <algorithm>
 #include <cerrno>
@@ -40,7 +41,7 @@ std::optional<double> ParseFloat(const std::string& s) {
         auto r = std::from_chars(b, e, v);
         if (r.ec == std::errc()) return v;
         // out of range: overflow is an error (Go), underflow rounds to 0/denormal.
-        double sv = std::strtod(s.c_str(), nullptr);
+        double sv = StrToDouble(s);
         if (std::isinf(sv)) return std::nullopt;
         return sv;
     }

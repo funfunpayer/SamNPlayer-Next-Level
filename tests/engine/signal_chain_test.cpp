@@ -179,3 +179,38 @@ TEST_CASE("signal: look-check losses make gaps only when asked") {
     REQUIRE_MESSAGE(both, error);
     CHECK(both->split_gaps == 2);
 }
+
+// Review E6: profile names were compared raw while the metadata normalises
+// (lower case, trimmed), so "Autotune" wrote "autotune" without its filters.
+TEST_CASE("signal: profile names are compared normalised") {
+    for (const char* name : {"Autotune", " AUTOTUNE "}) {
+        SignalOptions o;
+        o.profile = name;
+        const PostOptions p = BuildPostOptions(o, 0, 0, 0, 0);
+        INFO(name);
+        CHECK(p.detrend_window_ms == 3000);
+        CHECK(p.bandpass_low_hz == 0.5);
+        CHECK(p.dynamic_range_ms == 3000);
+    }
+    SignalOptions weich;
+    weich.profile = "Weich";
+    CHECK(BuildPostOptions(weich, 0, 0, 0, 0).peak_prominence == 0.35);
+    SignalOptions rec;
+    rec.profile = "Recommended";
+    CHECK(BuildPostOptions(rec, 0, 0, 0, 0).detrend_window_ms == 3000);
+
+    std::vector<double> t, y;
+    for (int i = 0; i < 300; ++i) {
+        t.push_back(i * 33.0);
+        y.push_back(200 + 100 * std::sin(i / 1.5));
+    }
+    SignalOptions o;
+    o.profile = "Autotune";
+    std::string error;
+    const auto r = RunSignal(t, y, o, &error);
+    REQUIRE_MESSAGE(r, error);
+    for (size_t i = 1; i < r->actions.size(); ++i) {
+        const double dt = double(r->actions[i].at - r->actions[i - 1].at);
+        CHECK(std::abs(r->actions[i].pos - r->actions[i - 1].pos) <= 400 * dt / 1000 + 0.5);  // as above: integer rounding
+    }
+}

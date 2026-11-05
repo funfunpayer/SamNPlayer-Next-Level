@@ -107,8 +107,17 @@ std::string delete_custom_script(const std::string& name, const fs::path& dir) {
     if (builtin_script(name)) return "\"" + name + "\" is a built-in script and cannot be deleted";
     const auto slug = script_file_slug(name);
     if (!slug) return "script name must contain at least one letter or number";
+    // Two names can share one file name ("Edge A", "edge-a"): only the script
+    // that carries this name goes.
+    const fs::path path = dir / (*slug + ".json");
+    const auto existing = read_script(path);
+    // A file that cannot be read has no name to compare; it carries this
+    // name's file name, so a corrupt script can still be deleted.
+    std::error_code exists_ec;
+    const bool unreadable = !existing && fs::is_regular_file(path, exists_ec);
+    if (!unreadable && (!existing || existing->name != trim(name))) return "no custom script named \"" + name + "\"";
     std::error_code ec;
-    if (!fs::remove(dir / (*slug + ".json"), ec)) return "no custom script named \"" + name + "\"";
+    if (!fs::remove(path, ec)) return "no custom script named \"" + name + "\"";
     return {};
 }
 
@@ -214,20 +223,37 @@ std::optional<SessionSummary> summarize_session_log(const fs::path& file) {
             continue;
         }
         if (!j.is_object()) continue;
+        // A field of the wrong type ({"timestamp":1}) skips the line like a
+        // line that is no JSON: read everything first, count after.
+        std::string timestamp, technique, channel;
+        bool stopped = false;
+        double peak = 0;
+        int reached = 0, arousal = 0;
+        try {
+            timestamp = j.value("timestamp", std::string());
+            technique = j.value("technique", std::string());
+            channel = j.value("channel", std::string());
+            stopped = j.value("stoppedByUser", false);
+            peak = j.value("peakIntensity", 0.0);
+            reached = j.value("reachedPeakAfterMs", 0);
+            arousal = j.value("arousalBefore", 0);
+        } catch (const std::exception&) {
+            continue;
+        }
         if (count == 0) {
-            s.started_at = j.value("timestamp", std::string());
-            s.technique = j.value("technique", std::string());
-            s.channel = j.value("channel", std::string());
+            s.started_at = timestamp;
+            s.technique = technique;
+            s.channel = channel;
         }
         ++count;
-        if (j.value("stoppedByUser", false)) ++s.cycles_stopped_early;
-        sum_peak += j.value("peakIntensity", 0.0);
-        if (const int r = j.value("reachedPeakAfterMs", 0); r > 0) {
-            sum_reached += r;
+        if (stopped) ++s.cycles_stopped_early;
+        sum_peak += peak;
+        if (reached > 0) {
+            sum_reached += reached;
             ++reached_count;
         }
-        if (const int a = j.value("arousalBefore", 0); a > 0) {
-            sum_arousal += a;
+        if (arousal > 0) {
+            sum_arousal += arousal;
             ++s.arousal_reports_count;
         }
     }

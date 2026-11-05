@@ -3,6 +3,7 @@
 
 #include "samn/contact_marks.h"
 #include "samn/fileio.h"
+#include "samn/number.h"
 
 #include <algorithm>
 #include <atomic>
@@ -172,7 +173,10 @@ public:
         JV n;
         n.k = JV::K::Num;
         n.s = text;
-        n.is_int = text.find_first_of(".eE") == std::string::npos;
+        // nlohmann's lexer writes the locale's decimal point into the token
+        // text (a comma under a German locale); JSON numbers have no comma.
+        std::replace(n.s.begin(), n.s.end(), ',', '.');
+        n.is_int = n.s.find_first_of(".eE") == std::string::npos;
         if (n.is_int && n.s == "-0") n.s = "0";  // Python int("-0") == 0
         return Add(std::move(n));
     }
@@ -816,7 +820,7 @@ void DecodeValue(const JV& v, int64_t& out) {
 
 void DecodeValue(const JV& v, double& out) {
     if (v.k != JV::K::Num) Fail("cannot unmarshal non-number into float");
-    out = std::strtod(v.s.c_str(), nullptr);
+    out = StrToDouble(v.s);
 }
 
 void DecodeValue(const JV& v, std::string& out) {
@@ -838,7 +842,7 @@ int64_t RoundNumber(const JV* v, const char* what) {
         const long long x = std::strtoll(v->s.c_str(), nullptr, 10);
         if (errno != ERANGE) return x;
     }
-    const double f = std::strtod(v->s.c_str(), nullptr);
+    const double f = StrToDouble(v->s);
     return GoRound(std::max(-1e15, std::min(1e15, f)));
 }
 
@@ -1046,7 +1050,7 @@ nlohmann::json ToScalarJson(const JV& v) {
                 const long long x = std::strtoll(v.s.c_str(), nullptr, 10);
                 if (errno != ERANGE) return static_cast<int64_t>(x);
             }
-            return std::strtod(v.s.c_str(), nullptr);
+            return StrToDouble(v.s);
         case JV::K::Float: return v.f;
         case JV::K::Str: return v.s;
         case JV::K::Arr: return nlohmann::json::array();
@@ -1510,7 +1514,7 @@ std::vector<OMarker> LoadOMarkers(const fs::path& path) {
         if (!exact) return {};
         const JV& m = *exact;
         const bool falsy = m.k == JV::K::Null || (m.k == JV::K::Bool && !m.b) ||
-                           (m.k == JV::K::Num && std::strtod(m.s.c_str(), nullptr) == 0) ||
+                           (m.k == JV::K::Num && StrToDouble(m.s) == 0) ||
                            (m.k == JV::K::Str && m.s.empty()) || (m.k == JV::K::Arr && m.a.empty()) ||
                            (m.k == JV::K::Obj && m.keys.empty());
         if (falsy) return {};

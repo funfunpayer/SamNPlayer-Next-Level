@@ -213,3 +213,23 @@ TEST_CASE("settings: two objects on one file never lose each other's keys") {
     CHECK(library.get("playback.offset.b") == 200);
     fs::remove_all(dir);
 }
+
+// Review C3: set_many changed the values before the write; a failed write on
+// a machine without a settings file yet left the bad value in memory.
+TEST_CASE("settings: a failed write leaves the values as they were") {
+    TempDir t;
+    std::ofstream(t.path / "blocker") << "x";  // a file where the folder belongs: the write fails
+    Settings s(t.path / "blocker" / "settings.json");
+    CHECK_THROWS_WITH_AS(s.set("a", 1), doctest::Contains("cannot write settings file"), std::runtime_error);
+    CHECK(s.get("a", -1) == -1);
+}
+
+TEST_CASE("settings: a key that is no UTF-8 is stored, and later sets work") {
+    TempDir t;
+    Settings s(t.path / "settings.json");
+    CHECK_NOTHROW(s.set("playback.offset./v/\xe9.funscript", 10));
+    CHECK_NOTHROW(s.set("other", 1));
+    CHECK(s.get("other", 0) == 1);
+    Settings again(t.path / "settings.json");
+    CHECK(again.get("other", 0) == 1);
+}

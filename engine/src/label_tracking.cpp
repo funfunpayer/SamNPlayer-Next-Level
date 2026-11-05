@@ -29,6 +29,11 @@ std::optional<BetweenKeysResult> TrackBetweenKeys(const std::filesystem::path& v
         if (error) *error = "the second key is not after the first";
         return std::nullopt;
     }
+    // The sample loop below advances by the step: zero or less never ends.
+    if (o.step_ms <= 0) {
+        if (error) *error = "the sample step must be positive";
+        return std::nullopt;
+    }
     auto reader = vision::FrameReader::Open(video, error);
     if (!reader || !reader->SeekMs(from_ms)) {
         if (error && error->empty()) *error = "cannot seek in the video";

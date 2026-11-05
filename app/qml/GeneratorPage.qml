@@ -25,6 +25,10 @@ Item {
     property alias editor: edit
     // The connected device: "How it feels" follows it (0.7 gen_feel.js).
     property DeviceController device: null
+    // The lists of the left column, shared with the Player's Library: Main.qml
+    // hands in the one instance (a copy per page would go stale, `changed`
+    // only fires where something was written). Standalone, the page has its own.
+    property LibraryController library: ownLibrary
     // "Play in the Player": the Player plays, it does not edit (D-144).
     signal reviewRequested(string path)
     // Opens the in-app user handbook (Main.qml hosts it).
@@ -34,7 +38,7 @@ Item {
         id: gen
         // 0.8 "Optimize after Create" (D-156): the new script is optimized right away.
         onCreated: (path) => {
-            library.noteScriptGenerated(path)
+            page.library.noteScriptGenerated(path)
             if (!edit.open(path)) return
             if (gen.optimizeTarget !== "") edit.optimizeFor(gen.optimizeTarget)
             // 0.7 Step 3: a vibrator gets its vibration from the video's sound.
@@ -44,18 +48,17 @@ Item {
                        : page.device.capSuction ? "neo2"
                        : page.device.capLinear ? "stroker"
                        : page.device.capVibration ? "vibrator" : ""
-        onVideoChanged: if (gen.hasVideo) library.noteVideoOpened(gen.videoPath)
+        onVideoChanged: if (gen.hasVideo) page.library.noteVideoOpened(gen.videoPath)
     }
     EditorController {
         id: edit
         durationMs: gen.durationMs
         videoPath: gen.videoPath
     }
-    // The lists of the left column, shared with the Player's Library.
-    LibraryController { id: library }
+    LibraryController { id: ownLibrary }
     Connections {
         target: edit
-        function onHistoryChanged() { if (edit.hasScript && edit.canUndo) library.noteScriptEdited(edit.path) }
+        function onHistoryChanged() { if (edit.hasScript && edit.canUndo) page.library.noteScriptEdited(edit.path) }
     }
 
     // Playback (D-154). Paused, the playhead is the decoded preview frame;
@@ -299,7 +302,7 @@ Item {
             objectName: "projectPanel"
             Layout.fillHeight: true
             Layout.preferredWidth: width
-            library: library
+            library: page.library
             generator: gen
             currentScript: edit.hasScript ? edit.path : ""
             onChooseVideo: videoDialog.open()

@@ -1,5 +1,7 @@
 #include "samn/clip_prep.h"
 
+#include "samn/number.h"
+
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -20,11 +22,9 @@ std::optional<double> Number(const std::string& s) {
     for (char c : s)
         if (!(std::isdigit(static_cast<unsigned char>(c)) || c == '.')) return std::nullopt;
     if (std::count(s.begin(), s.end(), '.') > 1) return std::nullopt;
-    try {
-        return std::stod(s);
-    } catch (...) {
-        return std::nullopt;
-    }
+    const ParsedDouble n = ParseDoublePrefix(s);  // not stod: it reads the process locale
+    if (!n.ok || n.out_of_range) return std::nullopt;
+    return n.value;
 }
 }  // namespace
 
@@ -52,9 +52,7 @@ std::string FormatClipSeconds(double seconds) {
     seconds = std::max(0.0, seconds);
     const double rounded = std::round(seconds);
     if (std::abs(seconds - rounded) < 1e-6) return std::to_string(int64_t(rounded));
-    char buf[32];
-    std::snprintf(buf, sizeof buf, "%.3f", seconds);
-    std::string s = buf;
+    std::string s = FormatFixed(seconds, 3);  // not "%.3f": the point must stay a point
     while (!s.empty() && s.back() == '0') s.pop_back();
     if (!s.empty() && s.back() == '.') s.pop_back();
     return s;

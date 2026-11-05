@@ -105,19 +105,36 @@ std::vector<double> FiltFilt(const std::vector<double>& x, double alpha, bool hi
     return y;
 }
 
-double PeakProminence(const std::vector<double>& y, int peak) {
+// Lowest value between each sample and the nearest sample strictly above it
+// on one side (the sample itself counts; no taller sample: to the edge), for
+// every index in one pass. A monotonic stack keeps (index, lowest value of
+// the stretch it covers): a taller sample swallows the stretches it pops.
+std::vector<double> BaseToTaller(const std::vector<double>& y, bool from_left) {
     const int n = static_cast<int>(y.size());
-    if (peak <= 0 || peak >= n - 1) return 0;
-    double left = y[peak], right = y[peak];
-    for (int i = peak; i >= 0; --i) {
-        left = std::min(left, y[i]);
-        if (y[i] > y[peak]) break;
+    std::vector<double> base(n);
+    std::vector<std::pair<int, double>> stack;
+    for (int k = 0; k < n; ++k) {
+        const int i = from_left ? k : n - 1 - k;
+        double low = y[i];
+        while (!stack.empty() && y[stack.back().first] <= y[i]) {
+            low = std::min(low, stack.back().second);
+            stack.pop_back();
+        }
+        base[i] = low;
+        stack.emplace_back(i, low);
     }
-    for (int i = peak; i < n; ++i) {
-        right = std::min(right, y[i]);
-        if (y[i] > y[peak]) break;
-    }
-    return y[peak] - std::max(left, right);  // the higher of the two bases
+    return base;
+}
+
+// Prominence of every sample as a peak (0 at the ends): the height over the
+// higher of the two bases.
+std::vector<double> PeakProminences(const std::vector<double>& y) {
+    const int n = static_cast<int>(y.size());
+    std::vector<double> out(n, 0.0);
+    if (n < 3) return out;
+    const std::vector<double> left = BaseToTaller(y, true), right = BaseToTaller(y, false);
+    for (int i = 1; i < n - 1; ++i) out[i] = y[i] - std::max(left[i], right[i]);
+    return out;
 }
 
 std::vector<int> LocalMaxima(const std::vector<double>& y) {
@@ -269,10 +286,11 @@ std::vector<int> FindPeaks(const std::vector<double>& y, int distance, double pr
     if (n < 3) return {};
     distance = std::max(1, distance);
     std::vector<int> cands = LocalMaxima(y);
-    if (prominence > 0)
-        cands.erase(std::remove_if(cands.begin(), cands.end(),
-                                   [&](int i) { return PeakProminence(y, i) < prominence; }),
+    if (prominence > 0) {
+        const std::vector<double> prom = PeakProminences(y);
+        cands.erase(std::remove_if(cands.begin(), cands.end(), [&](int i) { return prom[i] < prominence; }),
                     cands.end());
+    }
     if (distance <= 1 || cands.empty()) return cands;
     // Taller peaks first, then keep each one far enough from those kept (scipy).
     std::sort(cands.begin(), cands.end(), [&](int a, int b) { return y[a] != y[b] ? y[a] > y[b] : a < b; });
@@ -384,7 +402,7 @@ std::optional<PostResult> PositionsToActions(const std::vector<double>& t_in, co
     if (!o.invert)
         for (double& p : pos) p = 100.0 - p;
 
-    const double fps = n > 1 ? 1000.0 / MedianDiff(t) : 30.0;
+    const double fps = n > 1 ? sample_hz : 30.0;
     const int min_dist = std::max(1, static_cast<int>(o.min_peak_distance_ms / 1000.0 * fps));
     double prominence = 0;
     if (o.peak_prominence > 0 && Ptp(pos) > 1e-9) prominence = Ptp(pos) * o.peak_prominence;
