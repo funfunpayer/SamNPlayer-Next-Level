@@ -408,13 +408,19 @@ private:
 
         QVERIFY(ctrl->openPath(QStringLiteral(SAMN_TEST_DATA "/testpattern_4s.mp4")));
         QTRY_VERIFY_WITH_TIMEOUT(media->mediaStatus() != QMediaPlayer::LoadingMedia, 10000);
-        if (media->mediaStatus() == QMediaPlayer::InvalidMedia || media->mediaStatus() == QMediaPlayer::NoMedia)
+        if (media->mediaStatus() == QMediaPlayer::InvalidMedia || media->mediaStatus() == QMediaPlayer::NoMedia) {
+            // A skip with exit 0 would hide a broken backend in CI.
+            if (qEnvironmentVariableIsSet("CI")) QFAIL("no media backend can decode the test clip in CI");
             QSKIP("no media backend can decode the test clip here");
+        }
         auto* card = page->findChild<QQuickItem*>(QStringLiteral("noPictureCard"));
         QVERIFY(card);
         media->play();
         QTRY_VERIFY_WITH_TIMEOUT(media->position() >= 2000, 10000);
-        if (!page->property("frameSeen").toBool()) QSKIP("no frames reach the video sink in this environment");
+        if (!page->property("frameSeen").toBool()) {
+            if (qEnvironmentVariableIsSet("CI")) QFAIL("no frames reach the video sink in CI");
+            QSKIP("no frames reach the video sink in this environment");
+        }
         QVERIFY(!page->property("noPicture").toBool());  // frames came: no alarm
         QVERIFY(!card->isVisible());
         media->pause();
@@ -491,8 +497,11 @@ private:
         // fails without the queue. Here the end state must be right.)
         QMetaObject::invokeMethod(page, "seekTo", Q_ARG(QVariant, 2500));
         QTRY_VERIFY_WITH_TIMEOUT(media->mediaStatus() != QMediaPlayer::LoadingMedia, 10000);
-        if (media->mediaStatus() == QMediaPlayer::InvalidMedia || media->mediaStatus() == QMediaPlayer::NoMedia)
+        if (media->mediaStatus() == QMediaPlayer::InvalidMedia || media->mediaStatus() == QMediaPlayer::NoMedia) {
+            // A skip with exit 0 would hide a broken backend in CI.
+            if (qEnvironmentVariableIsSet("CI")) QFAIL("no media backend can decode the test clip in CI");
             QSKIP("no media backend can decode the test clip here");
+        }
         QTRY_VERIFY_WITH_TIMEOUT(std::abs(media->position() - 2500) <= 150, 5000);
         QCOMPARE(media->property("pendingSeekMs").toDouble(), -1.0);
 

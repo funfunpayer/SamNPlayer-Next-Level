@@ -36,6 +36,10 @@ Item {
 
     // The device connection of the app (Main.qml); the Player drives it.
     required property DeviceController device
+    // The Library lists, shared with the Generator: Main.qml hands in the one
+    // instance (`changed` only fires where something was written). Standalone,
+    // the page has its own.
+    property LibraryController library: ownLibrary
     // "Create script" for a video without one (0.7 open_media.js): Main.qml
     // opens the Generator with the video; `start` runs it right away.
     signal createRequested(url video, bool start)
@@ -284,19 +288,19 @@ Item {
     }
 
     // Library (left) · player (centre) · Inspector (right), as 0.7 v1.
-    LibraryController { id: library }
+    LibraryController { id: ownLibrary }
     Connections {
         target: ctrl
-        function onScriptOpened(path) { library.noteScriptOpened(path) }
-        function onVideoLinked(path) { library.noteVideoOpened(path) }
-        function onScriptEdited(path) { library.noteScriptEdited(path) }
+        function onScriptOpened(path) { page.library.noteScriptOpened(path) }
+        function onVideoLinked(path) { page.library.noteVideoOpened(path) }
+        function onScriptEdited(path) { page.library.noteScriptEdited(path) }
     }
     LibraryPanel {
         id: libraryPanel
         objectName: "libraryPanel"
         visible: !page.bare
         anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom
-        library: library
+        library: page.library
         currentPath: ctrl.scriptPath
         collapsed: ctrl.uiValue("player.libraryCollapsed", false)
         onCollapsedChanged: ctrl.setUiValue("player.libraryCollapsed", collapsed)

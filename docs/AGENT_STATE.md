@@ -2,7 +2,16 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 1 Nov 2026, Claude, branch `claude/review-previous-work-jnjttn`: Tf/Tj smallest gap over partner and extras (`FuseTipPartners`, handover below). Before: #153 integration of #143–#152.
+**Last update:** 5 Nov 2026, Claude, branch `claude/samn2-review-fixes`: fixes from three read-only code reviews (engine E1-E8, core C1-C6, app A1-A2; handover below). Before: 1 Nov FuseTipPartners.
+
+## Handover: `claude/samn2-review-fixes` (5 Nov)
+
+Three code reviews found real bugs; each fix has a regression test that failed before it (E8 is a refactor: the old O(n x peaks) prominence is the reference in the test).
+
+- **Engine:** E1 peak spacing from the guarded `sample_hz` (a zero median step made `1000 / 0` an int cast); E2 `TrackBetweenKeys` refuses `step_ms <= 0` (was an endless loop); E3 `GenerateRunner::closing_` (set under the mutex first in the destructor, `Start()` gives 0) plus the timing test now measures the destructor and a restart-from-handler test; E4 the `.samn` is written first, the `.funscript` second, O-markers last (they live in the `.funscript`), and both are removed again if a later write throws; E5 a throwing callback never ends the worker and adds no second terminal event; E6 `SignalOptions::profile` is normalised once (`ProfileAutotune` next to `ProfileWeich`); E7 `OnnxDetector::Detect` builds the blob inside the try and catches `std::exception`; E8 `FindPeaks` prominence by a monotonic stack.
+- **Core:** C1 `number.h` (`ParseDoublePrefix`, `StrToDouble`, `FormatFixed`, from_chars/to_chars) replaces strtod/stod/`%.3f` in `.samn`, marks, funscript and clip prep; nlohmann's lexer writes the locale's point into the token text, so `samn_file.cpp` maps ',' back to '.'; `main.cpp` resets `LC_NUMERIC` after Qt; display-only `%.2f` in `device_mock`/`self_check` left alone. The locale tests (`tests/core/comma_locale.h`) look for a comma locale and else build `de_DE` with `localedef`; without one they skip with a message outside CI and fail in CI, so the CI Linux job installs `locales`. C2 a history line with a wrong-typed field is skipped; C3 `Settings::set_many` writes a copy and assigns after the write, invalid UTF-8 is replaced, the error names the reason; C4 `delete_custom_script` checks the script's name, not only the slug; C5 `funscript.cpp` uses `FlexTimeMs` (marks.h), a duration that is no time or beyond 48 h counts as not set; C6 no offset-change pauses after a cancel.
+- **App:** A1 one `LibraryController` in `Main.qml`, passed as `library:` to both pages (standalone each keeps its own); A2 the three `QSKIP`s in `player_page_qml_test.cpp` fail in CI (`CI` set).
+- **Not touched:** device/training controllers, fileio umask, Editor dirty-guard, FlowSlider, Intiface URL.
 
 ## Handover: `claude/review-previous-work-jnjttn` — FuseTipPartners (1 Nov)
 
