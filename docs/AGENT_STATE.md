@@ -2,7 +2,19 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 5 Nov 2026, Claude, branch `claude/samn2-timing-audit`: the device path's end-to-end timing measured for the first time (`docs/TIMING.md`, bench `tests/app/timing_bench.cpp`); no behaviour changed (handover below). Before: `claude/samn2-tidy` (behaviour-neutral tidy-up, #158).
+**Last update:** 6 Nov 2026, Cursor, branch `cursor/gen-curve-layout-635a`: Generator video/curves SplitView + FR-7 analysis-rate Expert control (handover below). Claude is on `claude/samn2-playhead` (#163 playhead extrapolator) — stay off playhead/playback_output. Before: timing audit #159, trajectory #160, drivers #161; idle Flow #162 open.
+
+## Handover: `cursor/gen-curve-layout-635a` (6 Nov, Generator stage + CPU)
+
+Million-dollar Generator layout chunk + a legal FunGen-beat CPU lever (no ONNX copy).
+
+- **GUI:** `GeneratorPage` centre column is a vertical `SplitView` (`stageSplit`): video fills, curves pane has a remembered share (`generator.editor_share`, 0.18–0.65, default 0.40). Compact height while no script is open.
+- **CPU / recognition:** Expert *Tracking analysis rate* wires `GenerateRequest.max_analysis_fps` / queue (`generator.max_analysis_fps`, 0 = every frame, else 5–60 step 5). Engine already had FR-7; compare manifest kept. Help `gen-analysis-fps`.
+- **Docs:** VERSIONS track-cache row marked covered; new plan row for confidence-gated hybrid track (light every frame, AI only on loss / low confidence). GENERATOR_SPEC note updated.
+- **Tests:** `generator_controller_test` remembers analysis fps + editor share; `generator_qml_test` finds `stageSplit`.
+- **Owner asks (Training algorithms — not in this PR):** which to add first among (a) multi-phase custom builder beyond Stop-Start/Plateau, (b) Endurance/Control/Edge categories + skip phase, (c) per-channel caps / Auto Cool Down / Pause on Limit, (d) something else? Classic Stop-Start + Plateau + wave/massage presets already ship.
+- **Next recognition beat (not this PR):** confidence-gated hybrid re-acquire — CSRT/light path every frame, wake student ONNX only when CSRT confidence drops / appearance fails / periodic semantic check; keep *Reuse the tracking* for post-feel re-runs.
+- **Stay off:** Claude #163 playhead files.
 
 ## Handover: `claude/samn2-timing-audit` (5 Nov, timing audit, measurement only)
 

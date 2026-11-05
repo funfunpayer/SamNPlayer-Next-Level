@@ -312,15 +312,31 @@ Item {
             onHandbookRequested: page.handbookRequested()
         }
 
-        // ---- main column: video, curves ----
-        ColumnLayout {
-            Layout.fillWidth: true; Layout.fillHeight: true
-            spacing: 12
+        // ---- main stage: video above, curves below (resizable, remembered) ----
+        C.SplitView {
+            id: stageSplit
+            objectName: "stageSplit"
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            orientation: Qt.Vertical
+            handle: Item {
+                implicitWidth: 1
+                implicitHeight: 10
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: 40; height: 3; radius: 1.5
+                    color: Qt.rgba(1, 1, 1, 0.18)
+                }
+            }
+            onResizingChanged: {
+                if (!resizing && edit.hasScript && height > 80)
+                    gen.editorShare = Math.min(0.65, Math.max(0.18, editorCard.height / height))
+            }
 
             // Video with the tip box (2 Tip) and the frame seek row.
             GlassCard {
-                Layout.fillWidth: true; Layout.fillHeight: true
-                Layout.minimumHeight: 220
+                C.SplitView.fillHeight: true
+                C.SplitView.minimumHeight: 160
                 ColumnLayout {
                     anchors.fill: parent; anchors.margins: 14; spacing: 8
                     RowLayout {
@@ -853,9 +869,18 @@ Item {
 
             // The curves: edit points, mark a range, range tools, undo.
             GlassCard {
+                id: editorCard
                 objectName: "editorCard"
-                Layout.fillWidth: true
-                Layout.preferredHeight: (edit.hasScript ? 344 : 96) + (gen.hasVideo ? 62 : 0) + (audioLane.visible ? 36 : 0)
+                C.SplitView.minimumHeight: edit.hasScript ? 140 : 88
+                C.SplitView.preferredHeight: {
+                    const h = stageSplit.height
+                    if (h <= 0) return edit.hasScript ? 320 : 100
+                    if (!edit.hasScript) {
+                        const compact = 96 + (gen.hasVideo ? 62 : 0) + (audioLane.visible ? 36 : 0)
+                        return Math.min(compact, Math.round(h * 0.28))
+                    }
+                    return Math.round(h * gen.editorShare)
+                }
                 ColumnLayout {
                     anchors.fill: parent; anchors.margins: 12; spacing: 6
                     RowLayout {
@@ -2216,6 +2241,14 @@ Item {
                                         valueText: gen.maxSpeed === 0 ? qsTr("off") : String(gen.maxSpeed)
                                         slider.from: 0; slider.to: 800; slider.value: gen.maxSpeed
                                         slider.onMoved: (v) => gen.maxSpeed = Math.round(v)
+                                    }
+                                    ExpertRow {
+                                        objectName: "expertAnalysisFps"
+                                        label: qsTr("Tracking analysis rate")
+                                        help: "gen-analysis-fps"
+                                        valueText: gen.maxAnalysisFps === 0 ? qsTr("every frame") : (gen.maxAnalysisFps + " fps")
+                                        slider.from: 0; slider.to: 60; slider.value: gen.maxAnalysisFps
+                                        slider.onMoved: (v) => gen.maxAnalysisFps = Math.round(v)
                                     }
                                     Text {
                                         textFormat: Text.PlainText

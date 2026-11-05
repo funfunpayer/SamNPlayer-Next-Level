@@ -83,6 +83,12 @@ private slots:
         QVERIFY(gen);
         QVERIFY(!named(root.get(), "createButton")->isEnabled());
         QVERIFY(!named(root.get(), "usePlayerVideo")->isVisible());
+        // Video / curves stage is a vertical SplitView; share is remembered.
+        QVERIFY(named(root.get(), "stageSplit"));
+        QVERIFY(named(root.get(), "editorCard"));
+        QCOMPARE(gen->editorShare(), 0.40);
+        gen->setEditorShare(0.52);
+        QCOMPARE(gen->editorShare(), 0.52);
         // 0.7's lede and step prompt, verbatim.
         QVERIFY(named(root.get(), "createLede")->isVisible());
         QVERIFY(named(root.get(), "stepPrompt")->property("text").toString().startsWith("Start here: choose a video."));
