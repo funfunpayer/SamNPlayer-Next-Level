@@ -5,6 +5,7 @@
 // a camera pan or a hard cut. Generated in the test; no media in the repo.
 
 #include <cmath>
+#include <cstdio>
 #include <filesystem>
 #include <random>
 #include <vector>
@@ -18,6 +19,22 @@ namespace samn::engine::testclips {
 constexpr int kW = 320, kH = 240;
 constexpr double kFps = 25.0;
 constexpr double kPi = 3.14159265358979323846;
+
+// One random text per test process, so that two runs on the same host (CI
+// jobs, a developer's second terminal) never share or wipe a folder.
+inline const std::string& RunSuffix() {
+    static const std::string suffix = [] {
+        char buf[16];
+        std::snprintf(buf, sizeof buf, "%08x", std::random_device{}());
+        return std::string(buf);
+    }();
+    return suffix;
+}
+
+// A folder name in the temp directory that belongs to this process alone.
+inline std::filesystem::path TempPath(const std::string& name) {
+    return std::filesystem::temp_directory_path() / (name + "_" + RunSuffix());
+}
 
 inline cv::Mat Texture(int w, int h, unsigned seed, int boxes) {
     cv::Mat m(h, w, CV_8UC3, cv::Scalar(40, 40, 40));

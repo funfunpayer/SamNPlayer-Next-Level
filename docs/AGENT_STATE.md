@@ -2,7 +2,18 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 5 Nov 2026, Claude, branch `claude/samn2-device-leftovers`: Training ends on a device change, the Intiface battery is never an old reading, plus the PR #156 review follow-ups (handover below). Before: `FuseTipPartners` (#154).
+**Last update:** 5 Nov 2026, Claude, branch `claude/samn2-tidy`: a behaviour-neutral tidy-up from three code reviews (docs match the tree, shared helpers, dead code, test temp folders; handover below). Before: `claude/samn2-device-leftovers` (Training ends on a device change, the Intiface battery is never an old reading).
+
+## Handover: `claude/samn2-tidy` (5 Nov, behaviour-neutral tidy-up)
+
+Four commits, one per group. Nothing the program does changed; every existing test is unchanged except where a test moved with the code it tests (`playback_test.cpp`, one comment in `shell_qml_test.cpp`).
+
+- **Docs:** `MODULES.md` lists every header of core, vision and engine and every app file. The stop budget is 6.5 s (`kStopBudgetMs`), D-160 (not D-159) is cited for the Recommended recipe, stale "port of the Python player" header comments are gone, `script_finder.h` says it folds with `FoldCase`, `tracker.h` says nothing calls `VisionSelfCheck()` at start-up (tests do; not wired), `GENERATOR_SPEC.md` § 10 lists E4 as not implemented and the 2 % travel check next to FR-15.
+- **Shared helpers:** `AsciiLower` (`text.h`), `ReadFileToString` (`fileio.h`; nullopt on open failure or a read error), `TimeToTm` (`time_util.h`), app `qt_paths.h` (`LocalPath`, `FsPath`, `FromFs`, `PathUtf8`, `U8`, `FromU8`) and `ai_paths.h` (`AiDir()`, so `system_check.cpp` no longer includes `train_controller.h`), `kNoMotionError` (`post_track.h`), `samn::kCanceled` (`vision/canceled.h`: vision cannot see core, so it lives there). `generator_controller.cpp` passes `PathUtf8(f)` where it passed `f.u8string()`, which does not build in C++20.
+- **Dead code:** unused includes; `samn::Session`, `LoopRange` and `position_at` (tests retargeted to `PositionAt`, `RangeMarker::Valid` and `offset_key` / `clamp_offset` with `Settings`; the `LoopRange::jump` assertions have no surviving function and went with it); Find tip takes `candidates.front()` (the stable sort puts the first highest score there); fps fallbacks and `searched`; unused QML and `Q_PROPERTY` members; four never-loaded SVGs.
+- **Tests:** engine tests that made fixed temp folders get a per-process random suffix (`testclips::TempPath`).
+- **Left as it was, on purpose:** the `<optional>` of `funscript.h` and `<stdexcept>` of `mapper.h` (headers: other files may rely on them on MSVC), `device_controller.h` in `mapping_settings.cpp` (`playback_output.h` needs the full type), `bg-top.svg` / `bg-bottom.svg` (the sources of the bundled PNGs), the Generator recent-scripts write (skipping it would not restore a settings file deleted while the app runs, and `changed()` would not fire), `training_controller.cpp` and `device_controller.cpp` (out of scope), `marks.cpp` `ReadDoc` (its errno message and directory check).
+- **Not run:** the Windows / MSVC paths (`_WIN32` branches of `time_util.cpp`, `settings.cpp`) were only read, not built.
 
 ## Handover: `claude/samn2-device-leftovers` (5 Nov, device bug hunt leftovers)
 

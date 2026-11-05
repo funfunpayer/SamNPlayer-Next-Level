@@ -26,7 +26,7 @@ fs::path Dir(const char* name) {
         fs::create_directories(keep);
         return keep;
     }
-    const fs::path d = fs::temp_directory_path() / name;
+    const fs::path d = samn::engine::testclips::TempPath(name);
     fs::remove_all(d);
     fs::create_directories(d);
     return d;
