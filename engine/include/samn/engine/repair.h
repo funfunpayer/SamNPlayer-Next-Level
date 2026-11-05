@@ -51,4 +51,10 @@ struct RepairResult {
 std::optional<RepairResult> RepairTrack(const std::filesystem::path& video, const TrackResult& first,
                                         const RepairOptions& options, std::string* error);
 
+// Turns the part of the window [first, end) that a splice did not verify into
+// a gap: samples before `verified_end` (the retry's verified reach) keep their
+// spliced values, the rest become NaN. Indices past the end of `positions` are
+// ignored.
+void BlankUnverified(std::vector<double>& positions, int first, int end, int verified_end);
+
 }  // namespace samn::engine
