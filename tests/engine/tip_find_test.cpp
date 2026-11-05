@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
+#include <system_error>
 #include <vector>
 
 #include "samn/engine/tip_find.h"
@@ -21,14 +22,26 @@ namespace clips = samn::engine::testclips;
 
 namespace {
 
+// The folders made by Dir() go when the test process ends (a run leaves nothing
+// behind; SAMN_TIP_KEEP_DIR keeps its folder on purpose).
+struct DirCleanup {
+    std::vector<fs::path> dirs;
+    ~DirCleanup() {
+        std::error_code ec;
+        for (const auto& d : dirs) fs::remove_all(d, ec);
+    }
+};
+
 fs::path Dir(const char* name) {
     if (const char* keep = std::getenv("SAMN_TIP_KEEP_DIR")) {
         fs::create_directories(keep);
         return keep;
     }
+    static DirCleanup cleanup;
     const fs::path d = samn::engine::testclips::TempPath(name);
     fs::remove_all(d);
     fs::create_directories(d);
+    cleanup.dirs.push_back(d);
     return d;
 }
 

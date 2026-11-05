@@ -6,7 +6,7 @@
 
 ## Handover: `claude/samn2-tidy` (5 Nov, behaviour-neutral tidy-up)
 
-Four commits, one per group. Nothing the program does changed; every existing test is unchanged except where a test moved with the code it tests (`playback_test.cpp`, one comment in `shell_qml_test.cpp`).
+Four commits, one per group. Nothing the program does changed; every existing test is unchanged except where a test moved with the code it tests (`playback_test.cpp`, one comment in `shell_qml_test.cpp`) and the six engine tests whose temp folder names got a per-process suffix (`TempPath`).
 
 - **Docs:** `MODULES.md` lists every header of core, vision and engine and every app file. The stop budget is 6.5 s (`kStopBudgetMs`), D-160 (not D-159) is cited for the Recommended recipe, stale "port of the Python player" header comments are gone, `script_finder.h` says it folds with `FoldCase`, `tracker.h` says nothing calls `VisionSelfCheck()` at start-up (tests do; not wired), `GENERATOR_SPEC.md` § 10 lists E4 as not implemented and the 2 % travel check next to FR-15.
 - **Shared helpers:** `AsciiLower` (`text.h`), `ReadFileToString` (`fileio.h`; nullopt on open failure or a read error), `TimeToTm` (`time_util.h`), app `qt_paths.h` (`LocalPath`, `FsPath`, `FromFs`, `PathUtf8`, `U8`, `FromU8`) and `ai_paths.h` (`AiDir()`, so `system_check.cpp` no longer includes `train_controller.h`), `kNoMotionError` (`post_track.h`), `samn::kCanceled` (`vision/canceled.h`: vision cannot see core, so it lives there). `generator_controller.cpp` passes `PathUtf8(f)` where it passed `f.u8string()`, which does not build in C++20.

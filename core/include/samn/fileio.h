@@ -17,7 +17,7 @@ namespace samn {
 void WriteFileAtomic(const std::filesystem::path& path, const std::string& data);
 
 // The whole file as bytes (binary mode, no newline translation). nullopt when
-// it cannot be opened or a read fails; the callers word their own errors.
+// it cannot be opened or a read fails (badbit); the callers word their own errors.
 std::optional<std::string> ReadFileToString(const std::filesystem::path& path);
 
 }  // namespace samn
