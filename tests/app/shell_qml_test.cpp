@@ -189,7 +189,7 @@ private slots:
     // --- item 52: flow_assets_test ---
     void bundledVectorAssetsAreSafe() {
         const auto svgs = bundledSvgs();
-        QVERIFY2(svgs.size() >= 70, qPrintable(QString::number(svgs.size())));  // 71 icons and 9 assets at the time of writing
+        QVERIFY2(svgs.size() >= 70, qPrintable(QString::number(svgs.size())));  // 72 icons and 4 assets at the time of writing
         for (auto it = svgs.cbegin(); it != svgs.cend(); ++it) {
             const QString problem = svgProblem(it.value());
             QVERIFY2(problem.isEmpty(), qPrintable(it.key() + ": " + problem));

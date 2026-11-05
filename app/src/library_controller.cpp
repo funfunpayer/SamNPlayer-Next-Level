@@ -2,14 +2,10 @@
 
 #include <QFileInfo>
 
+#include "qt_paths.h"
 #include "samn/library.h"
 
 namespace samn::ui {
-
-namespace {
-std::string u8(const QString& s) { return s.toUtf8().toStdString(); }
-QString q(const std::string& s) { return QString::fromUtf8(s.c_str(), static_cast<int>(s.size())); }
-}  // namespace
 
 LibraryController::LibraryController(QObject* parent) : QObject(parent) {}
 LibraryController::~LibraryController() = default;
@@ -25,7 +21,7 @@ QStringList LibraryController::list(const char* key) const {
         const auto v = settings().get(key, nlohmann::json::array());
         if (v.is_array())
             for (const auto& e : v)
-                if (e.is_string() && !e.get<std::string>().empty()) out << q(e.get<std::string>());
+                if (e.is_string() && !e.get<std::string>().empty()) out << FromU8(e.get<std::string>());
     } catch (const std::exception&) {
     }
     return out;
@@ -33,7 +29,7 @@ QStringList LibraryController::list(const char* key) const {
 
 void LibraryController::store(const char* key, const QStringList& list) {
     nlohmann::json arr = nlohmann::json::array();
-    for (const auto& p : list) arr.push_back(u8(p));
+    for (const auto& p : list) arr.push_back(U8(p));
     try {
         settings().set(key, arr);
     } catch (const std::exception&) {
@@ -45,10 +41,10 @@ void LibraryController::store(const char* key, const QStringList& list) {
 void LibraryController::push(const char* key, const QString& path, size_t max) {
     if (path.isEmpty()) return;
     std::vector<std::string> v;
-    for (const auto& p : list(key)) v.push_back(u8(p));
-    v = samn::PushFront(std::move(v), u8(QFileInfo(path).absoluteFilePath()), max);
+    for (const auto& p : list(key)) v.push_back(U8(p));
+    v = samn::PushFront(std::move(v), U8(QFileInfo(path).absoluteFilePath()), max);
     QStringList out;
-    for (const auto& p : v) out << q(p);
+    for (const auto& p : v) out << FromU8(p);
     store(key, out);
 }
 
@@ -63,11 +59,11 @@ void LibraryController::noteScriptGenerated(const QString& path) { push(samn::kG
 
 bool LibraryController::toggleFavorite(const QString& path) {
     std::vector<std::string> v;
-    for (const auto& p : list(samn::kFavoritesKey)) v.push_back(u8(p));
+    for (const auto& p : list(samn::kFavoritesKey)) v.push_back(U8(p));
     bool on = false;
-    v = samn::ToggleFavorite(std::move(v), u8(QFileInfo(path).absoluteFilePath()), &on);
+    v = samn::ToggleFavorite(std::move(v), U8(QFileInfo(path).absoluteFilePath()), &on);
     QStringList out;
-    for (const auto& p : v) out << q(p);
+    for (const auto& p : v) out << FromU8(p);
     store(samn::kFavoritesKey, out);
     return on;
 }

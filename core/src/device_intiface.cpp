@@ -6,6 +6,7 @@
 
 #include "samn/device/go_json.h"
 #include "samn/device/protocol.h"
+#include "samn/text.h"
 
 namespace samn::device {
 
@@ -19,11 +20,6 @@ std::string Trim(const std::string& s) {
     if (b == std::string::npos) return "";
     const std::size_t e = s.find_last_not_of(ws);
     return s.substr(b, e - b + 1);
-}
-
-std::string Lower(std::string s) {
-    for (char& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    return s;
 }
 
 bool Contains(const std::string& s, const char* needle) { return s.find(needle) != std::string::npos; }
@@ -67,7 +63,7 @@ std::string NormalizeIntifaceUrl(const std::string& input) {
 
 std::string IntifaceHint(const std::string& url, const std::string& error_text) {
     const bool local = Contains(url, "127.0.0.1") || Contains(url, "localhost");
-    const std::string text = Lower(error_text);
+    const std::string text = AsciiLower(error_text);
 
     if (Contains(text, "refused")) {
         if (local)

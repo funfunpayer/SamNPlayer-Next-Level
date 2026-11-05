@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <chrono>
-#include <cstdio>
 #include <ctime>
 #include <fstream>
 #include <iomanip>
@@ -10,6 +9,7 @@
 
 #include "samn/fileio.h"
 #include "samn/settings.h"
+#include "samn/time_util.h"
 
 namespace samn::training {
 
@@ -191,12 +191,7 @@ std::string session_log_name(const std::string& key, const std::string& stamp) {
 namespace {
 std::string format_time(const char* fmt, bool utc) {
     const std::time_t t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-    std::tm tm{};
-#ifdef _WIN32
-    if (utc) gmtime_s(&tm, &t); else localtime_s(&tm, &t);
-#else
-    if (utc) gmtime_r(&t, &tm); else localtime_r(&t, &tm);
-#endif
+    const std::tm tm = TimeToTm(t, utc);
     char buf[64];
     std::strftime(buf, sizeof buf, fmt, &tm);
     return buf;

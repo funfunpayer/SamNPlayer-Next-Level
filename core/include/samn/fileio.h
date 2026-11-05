@@ -1,8 +1,9 @@
 #pragma once
 
-// File writing shared by every module that saves user data.
+// File reading and writing shared by every module that loads or saves user data.
 
 #include <filesystem>
+#include <optional>
 #include <string>
 
 namespace samn {
@@ -14,5 +15,9 @@ namespace samn {
 // std::runtime_error naming the path on failure; the temp file is removed.
 // (Go writeFileAtomic; before, marks, .samn and settings each had a copy.)
 void WriteFileAtomic(const std::filesystem::path& path, const std::string& data);
+
+// The whole file as bytes (binary mode, no newline translation). nullopt when
+// it cannot be opened or a read fails (badbit); the callers word their own errors.
+std::optional<std::string> ReadFileToString(const std::filesystem::path& path);
 
 }  // namespace samn

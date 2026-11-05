@@ -6,7 +6,10 @@
 #include <fstream>
 #include <random>
 
+#include "samn/curve_geometry.h"
+#include "samn/marks.h"
 #include "samn/playback.h"
+#include "samn/settings.h"
 
 namespace fs = std::filesystem;
 using namespace samn;
@@ -42,20 +45,19 @@ TEST_CASE("script_time and clamp") {
     CHECK(clamp_offset(-99999) == -10000);
 }
 
-TEST_CASE("position_at") {
+TEST_CASE("position on the curve") {
     std::vector<Action> a = {{0, 0}, {1000, 100}, {2000, 0}};
-    CHECK(position_at(a, -5) == 0);
-    CHECK(position_at(a, 500) == 50);
-    CHECK(position_at(a, 1500) == 50);
-    CHECK(position_at(a, 9999) == 0);
-    CHECK_FALSE(position_at({}, 10).has_value());
+    CHECK(PositionAt(a, -5) == 0);
+    CHECK(PositionAt(a, 500) == 50);
+    CHECK(PositionAt(a, 1500) == 50);
+    CHECK(PositionAt(a, 9999) == 0);
+    CHECK_FALSE(PositionAt({}, 10).has_value());
 }
 
-TEST_CASE("loop") {
-    LoopRange loop{1000, 3000};
-    CHECK_FALSE(loop.jump(2999).has_value());
-    CHECK(loop.jump(3000) == 1000);
-    CHECK_FALSE(LoopRange{3000, 1000}.jump(5000).has_value());
+TEST_CASE("loop range") {
+    // The Player loops over the marked range; an inverted one is no loop.
+    CHECK(RangeMarker{1000, 3000}.Valid());
+    CHECK_FALSE(RangeMarker{3000, 1000}.Valid());
 }
 
 TEST_CASE("matching video") {
@@ -91,15 +93,15 @@ TEST_CASE("companion axis scripts beside a script, in 0.7's order") {
 TEST_CASE("offset saved per script") {
     TempDir t;
     fs::path p = t.path / "settings.json";
+    auto saved = [](Settings& st, const std::string& script) {
+        const nlohmann::json v = st.get(offset_key(script), 0);
+        return clamp_offset(v.is_number() ? v.get<int64_t>() : 0);
+    };
     Settings st(p);
-    Session s(st);
-    s.open_script("/a.funscript", {{0, 0}}, std::string(""));
-    CHECK(s.set_offset(25000) == 10000);
+    st.set(offset_key("/a.funscript"), clamp_offset(25000));
+    CHECK(saved(st, "/a.funscript") == 10000);
     // Reopened later (new settings object, same file): the offset is back.
     Settings st2(p);
-    Session s2(st2);
-    s2.open_script("/a.funscript", {{0, 0}}, std::string(""));
-    CHECK(s2.offset_ms == 10000);
-    s2.open_script("/b.funscript", {{0, 0}}, std::string(""));
-    CHECK(s2.offset_ms == 0);
+    CHECK(saved(st2, "/a.funscript") == 10000);
+    CHECK(saved(st2, "/b.funscript") == 0);
 }

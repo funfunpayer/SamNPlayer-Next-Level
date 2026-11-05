@@ -17,6 +17,12 @@
 
 namespace samn::engine {
 
+// The error of a track that does not move (GD-11: a flat script would hide a
+// wrong box). Shown to the user by the Generator.
+inline constexpr const char* kNoMotionError =
+    "no discernible motion in the tracked region: check the box size and place (avoid near-full-frame "
+    "boxes); the filters need visible stroke motion";
+
 struct PostOptions {
     bool invert = false;
     int smooth_window = 11;

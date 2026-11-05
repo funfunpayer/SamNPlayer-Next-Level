@@ -20,6 +20,7 @@
 #include "app_log.h"
 #include "curve_item.h"
 #include "device_controller.h"
+#include "qt_paths.h"
 #include "samn/fileio.h"
 #include "samn/heatmap_image.h"
 #include "samn/project.h"
@@ -46,9 +47,6 @@ bool isScript(const QString& path) {
     const std::string suffix = "." + QFileInfo(path).suffix().toLower().toStdString();
     return std::find(samn::SCRIPT_EXTS.begin(), samn::SCRIPT_EXTS.end(), suffix) != samn::SCRIPT_EXTS.end();
 }
-
-std::string u8(const QString& s) { return s.toUtf8().toStdString(); }
-QString q(const std::string& s) { return QString::fromUtf8(s.c_str(), static_cast<int>(s.size())); }
 
 // Frames (0-1) as a 0-100 lane for the timeline.
 std::vector<samn::Action> laneFrom(const std::vector<samn::Frame>& frames, bool suction) {
@@ -159,17 +157,14 @@ samn::Settings& PlayerController::settings() {
     return *settings_;
 }
 
-QString PlayerController::toLocalPath(const QString& pathOrUrl) {
-    const QUrl url(pathOrUrl);
-    return url.isLocalFile() ? url.toLocalFile() : pathOrUrl;
-}
+QString PlayerController::toLocalPath(const QString& pathOrUrl) { return LocalPath(pathOrUrl); }
 
 QStringList PlayerController::scriptFolders() const {
     QStringList out;
     if (!settings_) const_cast<PlayerController*>(this)->settings();
     const auto v = settings_->get(kScriptFoldersKey, "");
     for (const auto& f : samn::split_folders(v.is_string() ? v.get<std::string>() : std::string()))
-        out << q(f);
+        out << FromU8(f);
     return out;
 }
 
@@ -181,29 +176,29 @@ bool PlayerController::openPath(const QString& pathOrUrl) {
         emit variantsChanged();
         if (!openScript(path)) return false;
         // Open… makes a fresh one-item list (0.7).
-        playlist_.Replace({u8(scriptPath_)});
+        playlist_.Replace({U8(scriptPath_)});
         emit playlistChanged();
         return true;
     }
     // Video first: beside it, in the script folders, tolerant names, variants.
     std::vector<std::string> folders;
-    for (const auto& f : scriptFolders()) folders.push_back(u8(f));
-    const auto match = samn::find_script_for_video(u8(path), folders);
+    for (const auto& f : scriptFolders()) folders.push_back(U8(f));
+    const auto match = samn::find_script_for_video(U8(path), folders);
     variants_.clear();
     variantIndex_ = -1;
     for (size_t i = 0; i < match.variants.size(); ++i) {
         const auto& v = match.variants[i];
         // 0.7 #pb-variant: "Soft", "By someone" or "Main script", and where it lies.
-        QString name = q(v.label);
+        QString name = FromU8(v.label);
         name = name.isEmpty() ? tr("Main script") : name.left(1).toUpper() + name.mid(1);
         if (!v.beside) name += tr(" · script folder");
-        variants_.append(QVariantMap{{"path", q(v.path)}, {"label", q(v.label)}, {"display", name}, {"beside", v.beside}});
+        variants_.append(QVariantMap{{"path", FromU8(v.path)}, {"label", FromU8(v.label)}, {"display", name}, {"beside", v.beside}});
         if (v.path == match.script_path) variantIndex_ = static_cast<int>(i);
     }
     emit variantsChanged();
     if (match.found && !match.script_path.empty()) {
-        if (!openScript(q(match.script_path), path)) return false;
-        playlist_.Replace({u8(scriptPath_)});
+        if (!openScript(FromU8(match.script_path), path)) return false;
+        playlist_.Replace({U8(scriptPath_)});
         emit playlistChanged();
         return true;
     }
@@ -226,7 +221,7 @@ bool PlayerController::openPaths(const QStringList& pathsOrUrls) {
             else
                 ++extraVideos;
         } else if (isScript(local)) {
-            scripts.push_back(u8(local));
+            scripts.push_back(U8(local));
         } else {
             unsupported << QFileInfo(local).fileName();
         }
@@ -240,7 +235,7 @@ bool PlayerController::openPaths(const QStringList& pathsOrUrls) {
     if (scripts.empty()) {
         ok = openPath(video);
     } else if (scripts.size() == 1 && video.isEmpty()) {
-        ok = openPath(q(scripts.front()));
+        ok = openPath(FromU8(scripts.front()));
     } else {
         // A video and a script dropped together open that script with that
         // video; several scripts become the play list.
@@ -249,7 +244,7 @@ bool PlayerController::openPaths(const QStringList& pathsOrUrls) {
         variants_.clear();
         variantIndex_ = -1;
         emit variantsChanged();
-        ok = openScript(q(playlist_.Current()->path), video);
+        ok = openScript(FromU8(playlist_.Current()->path), video);
     }
     if (!ok) return false;
     // Say what was left out (0.7 PS-10); the Player opens one video.
@@ -268,7 +263,7 @@ QVariantList PlayerController::playlist() const {
     QVariantList out;
     const auto& items = playlist_.Items();
     for (size_t i = 0; i < items.size(); ++i)
-        out.append(QVariantMap{{"name", q(items[i].name)}, {"path", q(items[i].path)}, {"active", i == playlist_.Index()}});
+        out.append(QVariantMap{{"name", FromU8(items[i].name)}, {"path", FromU8(items[i].path)}, {"active", i == playlist_.Index()}});
     return out;
 }
 
@@ -279,12 +274,12 @@ bool PlayerController::loadPlaylistCurrent() {
     variants_.clear();
     variantIndex_ = -1;
     emit variantsChanged();
-    return openScript(q(cur->path));
+    return openScript(FromU8(cur->path));
 }
 
 bool PlayerController::addToPlaylist(const QString& pathOrUrl) {
     const QString path = toLocalPath(pathOrUrl);
-    if (!playlist_.Append(u8(path), u8(scriptPath_))) {
+    if (!playlist_.Append(U8(path), U8(scriptPath_))) {
         setError(tr("Already in list: %1").arg(QFileInfo(path).completeBaseName()));
         return false;
     }
@@ -356,9 +351,9 @@ void PlayerController::removeScriptFolder(const QString& path) {
     QStringList folders = scriptFolders();
     if (!folders.removeAll(toLocalPath(path))) return;
     try {
-        settings().set(kScriptFoldersKey, u8(folders.join('\n')));
+        settings().set(kScriptFoldersKey, U8(folders.join('\n')));
     } catch (const std::exception& e) {
-        setFailure(tr("Could not save the script folders: %1").arg(q(e.what())));
+        setFailure(tr("Could not save the script folders: %1").arg(FromU8(e.what())));
         return;
     }
     emit scriptFoldersChanged();
@@ -380,7 +375,7 @@ void PlayerController::setAutoCreate(bool on) {
     try {
         settings().set(kAutoCreateKey, on);
     } catch (const std::exception& e) {
-        setFailure(tr("Could not save the setting: %1").arg(q(e.what())));
+        setFailure(tr("Could not save the setting: %1").arg(FromU8(e.what())));
         return;
     }
     emit autoCreateChanged();
@@ -392,9 +387,9 @@ void PlayerController::addScriptFolder(const QString& pathOrUrl) {
     if (!folders.contains(dir)) {
         folders << dir;
         try {
-            settings().set(kScriptFoldersKey, u8(folders.join('\n')));
+            settings().set(kScriptFoldersKey, U8(folders.join('\n')));
         } catch (const std::exception& e) {
-            setFailure(tr("Could not save the script folders: %1").arg(q(e.what())));
+            setFailure(tr("Could not save the script folders: %1").arg(FromU8(e.what())));
             return;
         }
         emit scriptFoldersChanged();
@@ -471,8 +466,8 @@ bool PlayerController::bakeOffset() {
         actions = std::move(moved);
     };
     namespace fs = std::filesystem;
-    const fs::path path = fs::u8path(u8(scriptPath_));
-    const bool samnScript = samn::IsSamnPath(u8(scriptPath_));
+    const fs::path path = fs::u8path(U8(scriptPath_));
+    const bool samnScript = samn::IsSamnPath(U8(scriptPath_));
     // Everything is read and moved first, the files are written last: one
     // that cannot be read (a broken .samn) leaves every file as it was. A
     // write that fails puts back the files written before it.
@@ -505,7 +500,7 @@ bool PlayerController::bakeOffset() {
             });
         }
         // 0.7 companion axis files (<stem>.surge.funscript …).
-        for (const auto& axisFile : samn::companion_axis_files(u8(scriptPath_))) {
+        for (const auto& axisFile : samn::companion_axis_files(U8(scriptPath_))) {
             const fs::path file = fs::u8path(axisFile.second);
             std::vector<samn::Action> actions;
             try {
@@ -560,7 +555,7 @@ bool PlayerController::bakeOffset() {
             throw;
         }
     } catch (const std::exception& e) {
-        setFailure(tr("Offset not baked: %1").arg(q(e.what())));
+        setFailure(tr("Offset not baked: %1").arg(FromU8(e.what())));
         return false;
     }
     setOffsetMs(0);
@@ -582,18 +577,18 @@ bool PlayerController::reloadScript() {
 
 bool PlayerController::openScript(const QString& pathIn, const QString& videoIn) {
     // A .samn beside a .funscript of the same name wins (as in 0.7).
-    const QString path = q(samn::PreferSamnCompanion(u8(toLocalPath(pathIn))));
+    const QString path = FromU8(samn::PreferSamnCompanion(U8(toLocalPath(pathIn))));
     samn::Document doc;
     try {
-        doc = samn::IsSamnPath(u8(path)) ? samn::LoadDocument(std::filesystem::u8path(u8(path)))
-                                         : samn::LoadFunscriptFile(std::filesystem::u8path(u8(path)));
+        doc = samn::IsSamnPath(U8(path)) ? samn::LoadDocument(std::filesystem::u8path(U8(path)))
+                                         : samn::LoadFunscriptFile(std::filesystem::u8path(U8(path)));
     } catch (const std::exception& e) {
-        setFailure(tr("Could not open %1: %2").arg(QFileInfo(path).fileName(), q(e.what())));
+        setFailure(tr("Could not open %1: %2").arg(QFileInfo(path).fileName(), FromU8(e.what())));
         return false;
     }
     // 0.7 "Honor inverted flag" (playback.honor_inverted, on by default): off
     // plays a funscript's "inverted": true script as written.
-    if (!samn::IsSamnPath(u8(path))) {
+    if (!samn::IsSamnPath(U8(path))) {
         bool honor = true;
         try {
             const auto v = settings().get("playback.honor_inverted");
@@ -602,7 +597,7 @@ bool PlayerController::openScript(const QString& pathIn, const QString& videoIn)
         }
         if (!honor) {
             try {
-                const samn::FunscriptView view = samn::LoadFunscript(std::filesystem::u8path(u8(path)));
+                const samn::FunscriptView view = samn::LoadFunscript(std::filesystem::u8path(U8(path)));
                 if (view.inverted) doc.general = view.actions;
             } catch (const std::exception&) {
             }
@@ -638,8 +633,8 @@ bool PlayerController::openScript(const QString& pathIn, const QString& videoIn)
     // 0.7 showContact: contact in the recipe, Neo axes, or tf / tj.
     contactControls_ = recipeHasContact_ || !doc.vibration.empty() || !doc.suction.empty() ||
                        samn::IsDistanceProfile(doc.profile);
-    strength_ = samn::IsSamnPath(u8(path)) ? doc.strength_presets : std::vector<samn::StrengthPreset>{};
-    activeStrength_ = samn::IsSamnPath(u8(path)) ? doc.active_strength : std::string();
+    strength_ = samn::IsSamnPath(U8(path)) ? doc.strength_presets : std::vector<samn::StrengthPreset>{};
+    activeStrength_ = samn::IsSamnPath(U8(path)) ? doc.active_strength : std::string();
     opening_ = true;  // the knobs follow the new script; remap(true) below maps it
     mapping_.resetContactKnobs(doc.recipe.contact_vibration_span, doc.recipe.contact_vibration_curve);
     opening_ = false;
@@ -654,7 +649,7 @@ bool PlayerController::openScript(const QString& pathIn, const QString& videoIn)
     }
     // 0.7 companion axis files (multi-axis devices); an unreadable one is left out.
     axisActions_.clear();
-    for (const auto& [axis, file] : samn::companion_axis_files(u8(path))) {
+    for (const auto& [axis, file] : samn::companion_axis_files(U8(path))) {
         try {
             auto actions = samn::LoadFunscript(std::filesystem::u8path(file)).actions;
             if (!actions.empty()) axisActions_[axis] = std::move(actions);
@@ -686,18 +681,18 @@ bool PlayerController::openScript(const QString& pathIn, const QString& videoIn)
         emit speedHighlightChanged();
     }
     pendingStart_.reset();
-    marker_ = samn::LoadMarker(std::filesystem::u8path(u8(path))).value_or(samn::RangeMarker{});
+    marker_ = samn::LoadMarker(std::filesystem::u8path(U8(path))).value_or(samn::RangeMarker{});
     emit markerChanged();
     emit loopChanged();
     // Offset saved per script (0.7 key playback.offset.<path>).
-    const auto saved = settings().get(samn::offset_key(u8(path)), 0);
+    const auto saved = settings().get(samn::offset_key(U8(path)), 0);
     offsetMs_ = static_cast<int>(samn::clamp_offset(saved.is_number() ? saved.get<int64_t>() : 0));
     emit offsetMsChanged();
     setError({});
 
     QString video = toLocalPath(videoIn);
     if (video.isEmpty()) {
-        if (const auto m = samn::find_matching_video(u8(path))) video = q(*m);
+        if (const auto m = samn::find_matching_video(U8(path))) video = FromU8(*m);
     }
     pushToViews();
     emit scriptChanged();
@@ -719,7 +714,7 @@ void PlayerController::remap(bool fresh) {
         plan = samn::PlanPlayback(scriptMap_, profile_, mapping_.choices(recipeHasContact_), preset);
         frames = samn::PlaybackFrames(stroke_, plan);
     } catch (const std::exception& e) {
-        setFailure(tr("Could not map the script: %1").arg(q(e.what())));
+        setFailure(tr("Could not map the script: %1").arg(FromU8(e.what())));
         return;
     }
     // The vibration and suction lanes are what the device gets (0.7 sent
@@ -743,21 +738,21 @@ void PlayerController::remap(bool fresh) {
 
 QStringList PlayerController::strengthPresets() const {
     QStringList out;
-    for (const auto& p : strength_) out << q(p.name);
+    for (const auto& p : strength_) out << FromU8(p.name);
     return out;
 }
 
 void PlayerController::setActiveStrength(const QString& nameIn) {
-    const std::string name = u8(nameIn.trimmed());
-    if (name == activeStrength_ || !samn::IsSamnPath(u8(scriptPath_))) return;
+    const std::string name = U8(nameIn.trimmed());
+    if (name == activeStrength_ || !samn::IsSamnPath(U8(scriptPath_))) return;
     // 0.7 SetActiveStrength: written into the .samn, so it stays with the script.
     try {
-        const auto file = std::filesystem::u8path(u8(scriptPath_));
+        const auto file = std::filesystem::u8path(U8(scriptPath_));
         samn::Document doc = samn::LoadDocument(file);
         doc.active_strength = name;
         samn::SaveDocument(file, doc);
     } catch (const std::exception& e) {
-        setFailure(tr("Could not save the strength: %1").arg(q(e.what())));
+        setFailure(tr("Could not save the strength: %1").arg(FromU8(e.what())));
         emit mappedChanged();  // the choice shows the one still in use
         return;
     }
@@ -767,7 +762,7 @@ void PlayerController::setActiveStrength(const QString& nameIn) {
 
 void PlayerController::loadMarks(const QString& path) {
     try {
-        marks_ = samn::LoadScriptMarks(std::filesystem::u8path(u8(path)));
+        marks_ = samn::LoadScriptMarks(std::filesystem::u8path(U8(path)));
     } catch (const std::exception&) {
         marks_ = {};  // broken marks must not block playing
     }
@@ -788,7 +783,7 @@ QString CleanName(const QString& name, const QString& fallback) {
 QVariantList PlayerController::chapters() const {
     QVariantList out;
     for (const auto& c : marks_.chapters) {
-        const QString name = c.name.empty() ? tr("Chapter at %1").arg(formatTime(c.start_ms)) : q(c.name);
+        const QString name = c.name.empty() ? tr("Chapter at %1").arg(formatTime(c.start_ms)) : FromU8(c.name);
         const QString span = c.end_ms > c.start_ms ? Secs(c.start_ms) + QStringLiteral(" - ") + Secs(c.end_ms)
                                                    : Secs(c.start_ms) + QStringLiteral(" → end");
         out.append(QVariantMap{{"name", name},
@@ -802,7 +797,7 @@ QVariantList PlayerController::chapters() const {
 QVariantList PlayerController::chapterBands() const {
     QVariantList out;
     for (const auto& r : samn::ChapterRanges(marks_.chapters, scriptDurationMs())) {
-        const QString name = q(r.name);
+        const QString name = FromU8(r.name);
         out.append(QVariantMap{{"name", name},
                                {"startMs", qint64(r.start_ms)},
                                {"endMs", qint64(r.end_ms)},
@@ -815,9 +810,9 @@ QVariantList PlayerController::chapterBands() const {
 QVariantList PlayerController::bookmarks() const {
     QVariantList out;
     for (const auto& b : marks_.bookmarks)
-        out.append(QVariantMap{{"name", q(b.name)},
+        out.append(QVariantMap{{"name", FromU8(b.name)},
                                {"timeMs", qint64(b.time_ms)},
-                               {"label", q(b.name) + QStringLiteral(" · ") + Secs(b.time_ms)}});
+                               {"label", FromU8(b.name) + QStringLiteral(" · ") + Secs(b.time_ms)}});
     return out;
 }
 
@@ -828,7 +823,7 @@ QVariantList PlayerController::oMarkers() const {
         QString label = (primary ? tr("Primary") : tr("Secondary")) + QStringLiteral(": ") + Secs(m.start_ms) +
                         QStringLiteral(" - ") + Secs(m.end_ms);
         if (!primary) label += QStringLiteral(" · %1%").arg(std::lround(m.intensity * 100));
-        out.append(QVariantMap{{"kind", q(m.kind)},
+        out.append(QVariantMap{{"kind", FromU8(m.kind)},
                                {"startMs", qint64(m.start_ms)},
                                {"endMs", qint64(m.end_ms)},
                                {"intensity", m.intensity},
@@ -844,9 +839,9 @@ bool PlayerController::commitMarks(std::vector<T>& list, std::vector<T> next, Sa
         return false;
     }
     try {
-        save(std::filesystem::u8path(u8(scriptPath_)), next);
+        save(std::filesystem::u8path(U8(scriptPath_)), next);
     } catch (const std::exception& e) {
-        setFailure(tr("Could not save: %1").arg(q(e.what())));
+        setFailure(tr("Could not save: %1").arg(FromU8(e.what())));
         return false;  // the old list stays (0.7: rollback)
     }
     list = std::move(next);
@@ -858,7 +853,7 @@ bool PlayerController::commitMarks(std::vector<T>& list, std::vector<T> next, Sa
 
 bool PlayerController::addBookmark(const QString& name, qint64 videoMs) {
     auto next = marks_.bookmarks;
-    next.push_back({u8(CleanName(name, tr("Bookmark"))), std::max<int64_t>(0, samn::script_time(videoMs, offsetMs_))});
+    next.push_back({U8(CleanName(name, tr("Bookmark"))), std::max<int64_t>(0, samn::script_time(videoMs, offsetMs_))});
     std::stable_sort(next.begin(), next.end(), [](const auto& a, const auto& b) { return a.time_ms < b.time_ms; });
     return commitMarks(marks_.bookmarks, std::move(next), samn::SaveScriptBookmarks);
 }
@@ -866,7 +861,7 @@ bool PlayerController::addBookmark(const QString& name, qint64 videoMs) {
 bool PlayerController::renameBookmark(int index, const QString& name) {
     if (index < 0 || index >= int(marks_.bookmarks.size())) return false;
     auto next = marks_.bookmarks;
-    next[size_t(index)].name = u8(CleanName(name, tr("Bookmark")));
+    next[size_t(index)].name = U8(CleanName(name, tr("Bookmark")));
     return commitMarks(marks_.bookmarks, std::move(next), samn::SaveScriptBookmarks);
 }
 
@@ -888,7 +883,7 @@ bool PlayerController::addChapterFromSelection(const QString& name) {
         return false;
     }
     auto next = marks_.chapters;
-    next.push_back({u8(CleanName(name, tr("Chapter"))), marker_.start_ms, marker_.end_ms});
+    next.push_back({U8(CleanName(name, tr("Chapter"))), marker_.start_ms, marker_.end_ms});
     std::stable_sort(next.begin(), next.end(), [](const auto& a, const auto& b) { return a.start_ms < b.start_ms; });
     return commitMarks(marks_.chapters, std::move(next), samn::SaveScriptChapters);
 }
@@ -909,7 +904,7 @@ bool PlayerController::addSceneMarker(qint64 videoMs) {
 bool PlayerController::renameChapter(int index, const QString& name) {
     if (index < 0 || index >= int(marks_.chapters.size())) return false;
     auto next = marks_.chapters;
-    next[size_t(index)].name = u8(CleanName(name, tr("Chapter")));
+    next[size_t(index)].name = U8(CleanName(name, tr("Chapter")));
     return commitMarks(marks_.chapters, std::move(next), samn::SaveScriptChapters);
 }
 
@@ -1053,8 +1048,8 @@ bool PlayerController::saveSnapshot(QObject* videoSink, const QString& pathOrUrl
 
 QVariant PlayerController::uiValue(const QString& key, const QVariant& fallback) {
     try {
-        const auto v = settings().get("ui." + u8(key), nlohmann::json());
-        if (v.is_string()) return q(v.get<std::string>());
+        const auto v = settings().get("ui." + U8(key), nlohmann::json());
+        if (v.is_string()) return FromU8(v.get<std::string>());
         if (v.is_boolean()) return v.get<bool>();
         if (v.is_number_integer()) return qint64(v.get<int64_t>());
         if (v.is_number()) return v.get<double>();
@@ -1070,10 +1065,10 @@ void PlayerController::setUiValue(const QString& key, const QVariant& value) {
     case QMetaType::Int:
     case QMetaType::LongLong: j = value.toLongLong(); break;
     case QMetaType::Double: j = value.toDouble(); break;
-    default: j = u8(value.toString());
+    default: j = U8(value.toString());
     }
     try {
-        settings().set("ui." + u8(key), j);
+        settings().set("ui." + U8(key), j);
     } catch (const std::exception&) {
         // A remembered tab is a convenience; never an error for the user.
     }
@@ -1143,9 +1138,9 @@ void PlayerController::setOffsetMs(int ms) {
     setView(wasZoomed ? view_ : samn::FullView(timelineMs()));
     if (!scriptPath_.isEmpty()) {
         try {
-            settings().set(samn::offset_key(u8(scriptPath_)), offsetMs_);
+            settings().set(samn::offset_key(U8(scriptPath_)), offsetMs_);
         } catch (const std::exception& e) {
-            setFailure(tr("Could not save the offset: %1").arg(q(e.what())));
+            setFailure(tr("Could not save the offset: %1").arg(FromU8(e.what())));
         }
     }
     emit offsetMsChanged();
@@ -1221,9 +1216,9 @@ void PlayerController::setMarker(double startMs, double endMs) {
     marker_ = m;
     if (!scriptPath_.isEmpty()) {
         try {
-            samn::SaveMarker(std::filesystem::u8path(u8(scriptPath_)), marker_);
+            samn::SaveMarker(std::filesystem::u8path(U8(scriptPath_)), marker_);
         } catch (const std::exception& e) {
-            setFailure(tr("Could not save the marked range: %1").arg(q(e.what())));
+            setFailure(tr("Could not save the marked range: %1").arg(FromU8(e.what())));
         }
     }
     emit markerChanged();
@@ -1329,7 +1324,7 @@ QString PlayerController::heatTooltip(double ms) const {
     const double span = std::max<double>(1, double(scriptDurationMs()));
     const auto i = std::clamp<long long>(std::llround(ms / span * double(heat_.size() - 1)), 0,
                                          (long long)heat_.size() - 1);
-    return q(samn::FormatTooltipTime(int64_t(ms))) + QStringLiteral(" · %1%").arg(std::lround(heat_[size_t(i)] * 100));
+    return FromU8(samn::FormatTooltipTime(int64_t(ms))) + QStringLiteral(" · %1%").arg(std::lround(heat_[size_t(i)] * 100));
 }
 
 void PlayerController::setSleepMinutes(int minutes) {
@@ -1479,12 +1474,12 @@ void PlayerController::pushMarks() {
 QVariantMap PlayerController::scriptQuality() {
     if (scriptPath_.isEmpty()) return {{"error", tr("no script loaded")}};
     try {
-        const auto r = samn::ScriptQualityOfFile(std::filesystem::u8path(u8(scriptPath_)));
+        const auto r = samn::ScriptQualityOfFile(std::filesystem::u8path(U8(scriptPath_)));
         QStringList warnings;
-        for (const auto& w : r.warnings) warnings << q(w);
+        for (const auto& w : r.warnings) warnings << FromU8(w);
         return {{"score", r.score}, {"passed", r.passed}, {"warnings", warnings}, {"error", QString()}};
     } catch (const std::exception& e) {
-        return {{"error", q(e.what())}};
+        return {{"error", FromU8(e.what())}};
     }
 }
 
@@ -1508,15 +1503,15 @@ QString PlayerController::exportHeatmapPng() {
         }
         return path;
     } catch (const std::exception& e) {
-        setFailure(tr("Heatmap: %1").arg(q(e.what())));
+        setFailure(tr("Heatmap: %1").arg(FromU8(e.what())));
         return {};
     }
 }
 
 QString PlayerController::saveProject(qint64 videoMs) {
     samn::Project p;
-    p.video_path = u8(videoPath_);
-    p.script_path = u8(scriptPath_);
+    p.video_path = U8(videoPath_);
+    p.script_path = U8(scriptPath_);
     const QString media = !videoPath_.isEmpty() ? videoPath_ : scriptPath_;
     if (media.isEmpty()) {
         setError(tr("Project: no video/script for project"));
@@ -1526,30 +1521,30 @@ QString PlayerController::saveProject(qint64 videoMs) {
     p.seek_ms = std::max<qint64>(0, videoMs);
     if (marker_.Valid()) p.loop_marker = marker_;
     p.last_opened_ms = QDateTime::currentMSecsSinceEpoch();
-    const auto path = samn::ProjectPathFor(std::filesystem::u8path(u8(media)));
+    const auto path = samn::ProjectPathFor(std::filesystem::u8path(U8(media)));
     try {
         samn::SaveProject(path, p);
     } catch (const std::exception& e) {
-        setFailure(tr("Project: %1").arg(q(e.what())));
+        setFailure(tr("Project: %1").arg(FromU8(e.what())));
         return {};
     }
-    return q(path.u8string());
+    return FromU8(path.u8string());
 }
 
 qint64 PlayerController::loadProject(const QString& pathOrUrl) {
     samn::Project p;
     try {
-        p = samn::LoadProject(std::filesystem::u8path(u8(toLocalPath(pathOrUrl))));
+        p = samn::LoadProject(std::filesystem::u8path(U8(toLocalPath(pathOrUrl))));
     } catch (const std::exception& e) {
-        setFailure(tr("Load project: %1").arg(q(e.what())));
+        setFailure(tr("Load project: %1").arg(FromU8(e.what())));
         return -1;
     }
     if (p.script_path.empty()) {
         setError(tr("Project has no script path"));
         return -1;
     }
-    if (!openScript(q(p.script_path), q(p.video_path))) return -1;
-    if (!p.video_path.empty() && videoPath_ != q(p.video_path)) attachVideo(q(p.video_path));
+    if (!openScript(FromU8(p.script_path), FromU8(p.video_path))) return -1;
+    if (!p.video_path.empty() && videoPath_ != FromU8(p.video_path)) attachVideo(FromU8(p.video_path));
     setOffsetMs(int(p.offset_ms));
     if (p.loop_marker && p.loop_marker->Valid()) setMarker(double(p.loop_marker->start_ms), double(p.loop_marker->end_ms));
     return std::max<qint64>(0, p.seek_ms);

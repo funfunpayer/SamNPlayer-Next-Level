@@ -58,43 +58,4 @@ std::vector<std::pair<std::string, std::string>> companion_axis_files(const std:
     return out;
 }
 
-std::optional<double> position_at(const std::vector<Action>& actions, int64_t t_ms) {
-    if (actions.empty()) return std::nullopt;
-    auto it = std::upper_bound(actions.begin(), actions.end(), t_ms,
-                               [](int64_t t, const Action& a) { return t < a.at; });
-    if (it == actions.begin()) return static_cast<double>(actions.front().pos);
-    if (it == actions.end()) return static_cast<double>(actions.back().pos);
-    const Action& a0 = *(it - 1);
-    const Action& a1 = *it;
-    if (a1.at == a0.at) return static_cast<double>(a1.pos);
-    return a0.pos + static_cast<double>(static_cast<int64_t>(a1.pos - a0.pos) * (t_ms - a0.at)) /
-                        static_cast<double>(a1.at - a0.at);
-}
-
-std::optional<int64_t> LoopRange::jump(int64_t video_ms) const {
-    if (end_ms > start_ms && video_ms >= end_ms) return start_ms;
-    return std::nullopt;
-}
-
-void Session::open_script(const std::string& path, std::vector<Action> acts,
-                          const std::optional<std::string>& video) {
-    script_path = path;
-    actions = std::move(acts);
-    video_path = video ? *video : find_matching_video(path).value_or("");
-    nlohmann::json v = settings.get(offset_key(path), 0);
-    int64_t ms = 0;
-    if (v.is_number_integer())
-        ms = v.get<int64_t>();
-    else if (v.is_number_float())
-        ms = static_cast<int64_t>(v.get<double>());
-    offset_ms = clamp_offset(ms);
-    loop.reset();
-}
-
-int64_t Session::set_offset(int64_t ms) {
-    offset_ms = clamp_offset(ms);
-    if (!script_path.empty()) settings.set(offset_key(script_path), offset_ms);
-    return offset_ms;
-}
-
 }  // namespace samn

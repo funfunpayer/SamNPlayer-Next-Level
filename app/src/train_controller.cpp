@@ -16,6 +16,8 @@
 #include <QNetworkRequest>
 #include <QSaveFile>
 
+#include "ai_paths.h"
+#include "qt_paths.h"
 #include "samn/settings.h"
 #include "system_check.h"
 
@@ -24,7 +26,6 @@ namespace samn::ui {
 namespace {
 constexpr const char* kRfdetr = "rfdetr[train,onnx]==1.11.2";
 constexpr const char* kPython = "3.12";
-QString FromFs(const std::filesystem::path& p) { return QString::fromStdU16String(p.u16string()); }
 
 // The last line of what a process said, for the status.
 QString LastLine(const QByteArray& out) {
@@ -89,7 +90,7 @@ samn::Settings& TrainController::settings() {
     return *settings_;
 }
 
-QString TrainController::aiDir() { return FromFs(samn::config_dir() / "ai"); }
+QString TrainController::aiDir() { return AiDir(); }
 QString TrainController::datasetsDir() { return aiDir() + "/datasets"; }
 QString TrainController::studentDir() { return FromFs(samn::config_dir() / "models" / "student"); }
 

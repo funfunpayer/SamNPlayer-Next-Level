@@ -4,6 +4,7 @@
 #include <cmath>
 #include <opencv2/imgproc.hpp>
 
+#include "samn/vision/canceled.h"
 #include "samn/vision/frame_reader.h"
 #include "samn/vision/tracker.h"
 
@@ -48,7 +49,7 @@ std::optional<BetweenKeysResult> TrackBetweenKeys(const std::filesystem::path& v
     const int64_t span = to_ms - from_ms;
     while (reader->Read(f)) {
         if (o.cancel && o.cancel()) {
-            if (error) *error = "canceled";
+            if (error) *error = kCanceled;
             return std::nullopt;
         }
         const int64_t ms = f.pts_us / 1000;
@@ -95,7 +96,7 @@ std::optional<BetweenKeysResult> TrackBetweenKeys(const std::filesystem::path& v
         bool lost = false;
         for (size_t k = 1; k < n; ++k) {
             if (o.cancel && o.cancel()) {
-                if (error) *error = "canceled";
+                if (error) *error = kCanceled;
                 return false;
             }
             const size_t i = forward ? k : n - 1 - k;

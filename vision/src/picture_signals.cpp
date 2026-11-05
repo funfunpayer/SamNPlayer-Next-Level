@@ -4,6 +4,7 @@
 
 #include <opencv2/imgproc.hpp>
 
+#include "samn/vision/canceled.h"
 #include "samn/vision/frame_reader.h"
 
 namespace samn::vision {
@@ -21,7 +22,7 @@ PictureSignals MeasurePictureSignals(const std::filesystem::path& video, const P
     int last_progress = -1;
     while (reader->Read(frame)) {
         if (o.cancel && o.cancel()) {
-            if (error) *error = "canceled";
+            if (error) *error = kCanceled;
             return {};
         }
         const int64_t ms = frame.pts_us / 1000;

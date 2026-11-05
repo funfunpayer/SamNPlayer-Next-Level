@@ -41,7 +41,7 @@ class GeneratorController : public QObject {
     Q_PROPERTY(QRect box READ box WRITE setBox NOTIFY boxChanged)
     Q_PROPERTY(bool hasBox READ hasBox NOTIFY boxChanged)
     Q_PROPERTY(QString boxLabel READ boxLabel NOTIFY boxChanged)
-    // Feel: "recommended" (default, D-159) | "standard" (Normal) | "weich" (Soft) | "autotune".
+    // Feel: "recommended" (default, D-160) | "standard" (Normal) | "weich" (Soft) | "autotune".
     Q_PROPERTY(QString profile READ profile WRITE setProfile NOTIFY optionsChanged)
     Q_PROPERTY(bool invert READ invert WRITE setInvert NOTIFY optionsChanged)
     Q_PROPERTY(bool cameraCompensation READ cameraCompensation WRITE setCameraCompensation NOTIFY optionsChanged)

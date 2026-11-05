@@ -1,4 +1,5 @@
 #include "samn/scenes.h"
+#include "samn/text.h"
 
 #include <algorithm>
 #include <cctype>
@@ -23,12 +24,6 @@ T Field(const nlohmann::json& o, const char* key, T fallback) {
     } else {
         return it->is_number() ? it->template get<T>() : fallback;
     }
-}
-
-std::string Lower(std::string s) {
-    for (char& c : s)
-        if (c >= 'A' && c <= 'Z') c = char(c - 'A' + 'a');
-    return s;
 }
 
 }  // namespace
@@ -87,7 +82,7 @@ std::optional<std::vector<SceneProposal>> LoadSceneProposals(const std::filesyst
 }
 
 std::string ContactClassScene(const std::string& cls) {
-    const std::string c = Lower(cls);
+    const std::string c = AsciiLower(cls);
     auto has = [&](const char* s) { return c.find(s) != std::string::npos; };
     if (has("mouth") || has("lips")) return SceneFeelOral;
     if (has("nipple") || has("breast")) return SceneFeelBreast;

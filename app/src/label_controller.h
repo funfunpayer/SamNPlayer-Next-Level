@@ -48,7 +48,6 @@ class LabelController : public QObject {
     Q_PROPERTY(bool hasVideo READ hasVideo NOTIFY videoChanged)
     Q_PROPERTY(double durationMs READ durationMs NOTIFY videoChanged)
     Q_PROPERTY(QSize videoSize READ videoSize NOTIFY videoChanged)
-    Q_PROPERTY(double frameMs READ frameMs NOTIFY videoChanged)  // one frame
     Q_PROPERTY(double previewMs READ previewMs NOTIFY previewChanged)
     Q_PROPERTY(QImage frame READ frame NOTIFY previewChanged)
     Q_PROPERTY(QStringList labels READ labels NOTIFY tracksChanged)
@@ -112,7 +111,6 @@ public:
     bool hasVideo() const { return !video_path_.isEmpty(); }
     double durationMs() const { return duration_ms_; }
     QSize videoSize() const { return video_size_; }
-    double frameMs() const { return frame_ms_; }
     double previewMs() const { return preview_ms_; }
     QImage frame() const { return frame_; }
     QStringList labels() const;

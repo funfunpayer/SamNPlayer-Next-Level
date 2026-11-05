@@ -1,7 +1,7 @@
 #pragma once
-// Find the script(s) that belong to a video. Exact port of samn/library/script_finder.py
-// (itself a port of cmd/gui-wails/app_open_media.go). Paths are UTF-8 std::string;
-// case folding is ASCII only (like the ASCII regexes).
+// Find the script(s) that belong to a video. Port of Go
+// cmd/gui-wails/app_open_media.go. Paths are UTF-8 std::string; names are
+// compared with FoldCase (UTF-8 lower case, see text.h), not ASCII only.
 #include <functional>
 #include <string>
 #include <utility>

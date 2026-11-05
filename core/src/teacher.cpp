@@ -1,4 +1,5 @@
 #include "samn/teacher.h"
+#include "samn/text.h"
 
 #include <algorithm>
 #include <cctype>
@@ -9,11 +10,6 @@
 namespace samn {
 
 namespace {
-
-std::string Lower(std::string s) {
-    for (auto& c : s) c = char(std::tolower(static_cast<unsigned char>(c)));
-    return s;
-}
 
 // Every top-level {...} block in the text that parses as JSON, in order.
 std::vector<nlohmann::json> JsonBlocks(const std::string& text) {
@@ -160,7 +156,7 @@ std::vector<std::string> ParseModelList(const std::string& response_json) {
 std::vector<TeacherBox> ParseTeacherBoxes(const std::string& text, double frame_w, double frame_h,
                                           const std::vector<std::string>& classes) {
     std::set<std::string> known;
-    for (const auto& c : classes) known.insert(Lower(c));
+    for (const auto& c : classes) known.insert(AsciiLower(c));
     std::vector<TeacherBox> out;
     for (const auto& block : JsonBlocks(text)) {
         nlohmann::json list = block;
@@ -171,7 +167,7 @@ std::vector<TeacherBox> ParseTeacherBoxes(const std::string& text, double frame_
             std::string cls;
             for (const char* key : {"label", "class", "name"})
                 if (cls.empty() && o.contains(key) && o[key].is_string()) cls = o[key].get<std::string>();
-            cls = LabelClassOf(Lower(cls));
+            cls = LabelClassOf(AsciiLower(cls));
             if (!known.count(cls)) continue;
             if (auto box = BoxOf(o, frame_w, frame_h)) out.push_back({cls, *box});
         }

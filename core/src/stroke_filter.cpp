@@ -1,7 +1,6 @@
 #include "samn/stroke_filter.h"
 #include <algorithm>
 #include <cmath>
-#include <numeric>
 
 namespace samn {
 

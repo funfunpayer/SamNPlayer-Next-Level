@@ -1,7 +1,6 @@
 #include "samn/beat_strokes.h"
 #include <algorithm>
 #include <cmath>
-#include <functional>
 
 namespace samn {
 

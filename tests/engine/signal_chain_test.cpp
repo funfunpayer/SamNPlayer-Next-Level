@@ -111,7 +111,7 @@ TEST_CASE("signal: autotune caps the speed, distance profiles clamp 20-90") {
     CHECK(r->post.dense_pos.size() == t.size());
 }
 
-// D-159: the Generator's default recipe is Autotune plus the measured spec
+// D-160: the Generator's default recipe is Autotune plus the measured spec
 // values; anything the caller sets still wins.
 TEST_CASE("signal: recommended is autotune with outliers, 60 ms and 500/s") {
     SignalOptions o;

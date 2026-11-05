@@ -1,4 +1,5 @@
 #include "samn/video_info.h"
+#include "samn/text.h"
 
 #include <cctype>
 #include <map>
@@ -15,8 +16,7 @@ std::string CodecName(uint32_t fourcc) {
     }
     while (!tag.empty() && tag.back() == ' ') tag.pop_back();
     if (tag.empty()) return "";
-    std::string key = tag;
-    for (auto& c : key) c = char(std::tolower(static_cast<unsigned char>(c)));
+    const std::string key = AsciiLower(tag);
     static const std::map<std::string, std::string> kNames{
         {"avc1", "H.264"}, {"avc3", "H.264"}, {"h264", "H.264"}, {"x264", "H.264"},
         {"hvc1", "H.265"}, {"hev1", "H.265"}, {"hevc", "H.265"}, {"h265", "H.265"},

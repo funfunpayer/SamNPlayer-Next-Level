@@ -24,6 +24,8 @@
 
 #include "audio_level.h"
 #include "frame_cache.h"
+#include "qt_paths.h"
+#include "samn/vision/canceled.h"
 #include "samn/engine/label_tracking.h"
 #include "samn/phase_rules.h"
 #include "samn/settings.h"
@@ -50,13 +52,8 @@ std::filesystem::path BrokenLabelsPath(const std::filesystem::path& labels) {
     }
 }
 
-QString LocalPath(const QString& pathOrUrl) {
-    const QUrl url(pathOrUrl);
-    return url.isLocalFile() ? url.toLocalFile() : pathOrUrl;
-}
 constexpr int kSoundGraceMs = 4000;
 
-std::filesystem::path Fs(const QString& p) { return std::filesystem::path(p.toStdU16String()); }
 constexpr size_t kUndoMax = 200;
 }  // namespace
 
@@ -212,7 +209,7 @@ bool LabelController::startLocal(const QImage& frame, const std::vector<std::str
         return false;
     }
     if (!detector_) detector_ = std::make_shared<samn::vision::OnnxDetector>();
-    return startLocalJobs(frame, classes, {{detector_, Fs(path), {}, true, done}});
+    return startLocalJobs(frame, classes, {{detector_, FsPath(path), {}, true, done}});
 }
 
 bool LabelController::startStudent(const QImage& frame, const std::vector<std::string>& classes, BoxesDone done) {
@@ -238,7 +235,7 @@ LabelController::LocalJob LabelController::studentJob(BoxesDone done) {
     }
     std::vector<std::string> names;
     for (const QString& c : studentClasses()) names.push_back(c.toStdString());
-    return {student_detector_, Fs(path), names, false, done};
+    return {student_detector_, FsPath(path), names, false, done};
 }
 
 bool LabelController::startLocalJobs(const QImage& frame, const std::vector<std::string>& classes, std::vector<LocalJob> jobs) {
@@ -380,7 +377,7 @@ bool LabelController::startVote(const QImage& frame, VoteDone done, bool skipSer
     std::vector<LocalJob> jobs;
     if (local) {
         if (!detector_) detector_ = std::make_shared<samn::vision::OnnxDetector>();
-        jobs.push_back({detector_, Fs(nudenetPath()), {}, true, answer("nudenet", localClasses(classes))});
+        jobs.push_back({detector_, FsPath(nudenetPath()), {}, true, answer("nudenet", localClasses(classes))});
     }
     if (student) {
         std::vector<std::string> sees;
@@ -586,7 +583,7 @@ bool LabelController::chooseNudeNet(const QString& pathOrUrl) {
     const QString path = LocalPath(pathOrUrl);
     auto det = std::make_shared<samn::vision::OnnxDetector>();
     std::string why;
-    if (!det->Load(Fs(path), &why)) {
+    if (!det->Load(FsPath(path), &why)) {
         setTeacherStatus(tr("That model does not load: %1").arg(QString::fromStdString(why)));
         return false;
     }
@@ -665,7 +662,7 @@ bool LabelController::openVideo(const QString& pathOrUrl) {
         frame_ms_ = 40;
     } else {
         std::string error;
-        auto reader = vision::FrameReader::Open(Fs(path), &error);
+        auto reader = vision::FrameReader::Open(FsPath(path), &error);
         if (!reader) {
             setStatus(tr("Cannot open the video: %1").arg(QString::fromStdString(error)));
             return false;
@@ -678,7 +675,7 @@ bool LabelController::openVideo(const QString& pathOrUrl) {
     }
     samn::LabelProject loaded;
     QString warning;
-    const auto file = samn::LabelProjectPath(Fs(path));
+    const auto file = samn::LabelProjectPath(FsPath(path));
     std::error_code ec;
     if (std::filesystem::exists(file, ec)) {
         // A file that cannot be opened (no permission, a cloud placeholder,
@@ -915,7 +912,7 @@ bool LabelController::startTracking(const QString& label, const std::vector<Gap>
     const int run = ++track_run_;
     setStatus(automatic ? tr("Tracking %1 to follow your box…").arg(label) : tr("Tracking %1…").arg(label));
     QPointer<LabelController> self(this);
-    track_worker_ = std::thread([self, gaps, label, run, cancel = track_cancel_, video = Fs(video_path_)] {
+    track_worker_ = std::thread([self, gaps, label, run, cancel = track_cancel_, video = FsPath(video_path_)] {
         std::vector<std::vector<samn::LabelKey>> keys;
         QString error;
         for (size_t g = 0; g < gaps.size() && error.isEmpty(); ++g) {
@@ -962,7 +959,7 @@ void LabelController::onTracked(const QString& label, const std::vector<Gap>& ga
     track_progress_ = 100;
     emit trackingChanged();
     if (!error.isEmpty() && keys.empty()) {
-        setStatus(error == QLatin1String("canceled") ? tr("Tracking canceled.") : tr("Tracking: %1").arg(error));
+        setStatus(error == QLatin1String(samn::kCanceled) ? tr("Tracking canceled.") : tr("Tracking: %1").arg(error));
         return;
     }
     int added = 0, unsure = 0;
@@ -1041,7 +1038,7 @@ bool LabelController::suggestPhases() {
     // The picture: brightness and change per step, on a worker.
     QPointer<LabelController> self(this);
     const int run = ++suggest_run_;
-    suggest_worker_ = std::thread([self, run, cancel = suggest_cancel_, video = Fs(video_path_)] {
+    suggest_worker_ = std::thread([self, run, cancel = suggest_cancel_, video = FsPath(video_path_)] {
         samn::vision::PictureSignalOptions o;
         o.cancel = [cancel] { return cancel->load(); };
         o.progress = [self, run](int p) {
@@ -1178,7 +1175,7 @@ bool LabelController::redo() {
 void LabelController::save() {
     if (video_path_.isEmpty()) return;
     try {
-        samn::SaveLabelProject(samn::LabelProjectPath(Fs(video_path_)), project_);
+        samn::SaveLabelProject(samn::LabelProjectPath(FsPath(video_path_)), project_);
     } catch (const std::exception& e) {
         setStatus(tr("Not saved: %1").arg(QString::fromUtf8(e.what())));
     }
@@ -1288,11 +1285,11 @@ int LabelController::exportDataset(const QString& dirOrUrl, double everyMs) {
         if (img.isNull()) continue;
         const QString name = QStringLiteral("%1_%2").arg(stem).arg(s.ms, 8, 10, QLatin1Char('0'));
         if (!img.save(dir + "/images/" + name + ".jpg", "JPG", 92)) continue;
-        std::ofstream(Fs(dir + "/labels/" + name + ".txt"), std::ios::binary)
+        std::ofstream(FsPath(dir + "/labels/" + name + ".txt"), std::ios::binary)
             << samn::YoloLines(s, img.width(), img.height());
         ++written;
     }
-    std::ofstream classesOut(Fs(dir + "/classes.txt"), std::ios::binary);
+    std::ofstream classesOut(FsPath(dir + "/classes.txt"), std::ios::binary);
     for (const auto& c : classes) classesOut << c << '\n';
     // The confirmed phases for the scene model (D-157); clips exported into
     // the same folder add their lines. Binary: "\n" on every system, as
