@@ -31,6 +31,24 @@ Two device bugs, each with tests that failed before the fix.
 - **Not changed:** the stop budget (`kStopBudgetMs` / `kStopGraceMs`) and the Sam Neo 2 battery code (a failed GATT read already drops the value and is read at every tick). The Player keeps its hold while playing through a lost link (0.7 rule: pause first), and `PlaybackOutput::setDevice` moves the hold without stopping the old device. That is noted here, not changed.
 - **Not verified:** on real hardware or a real Intiface Central (no hardware here). That the server echoes the request Id in `BatteryLevelReading` follows the Buttplug v3 spec and the fakes. A server that leaves the Id out would show no battery.
 
+## Handover: `claude/samn2-review-fixes` (5 Nov)
+
+Three code reviews found real bugs; each fix has a regression test that failed before it (E8 is a refactor: the old O(n x peaks) prominence is the reference in the test).
+
+- **Engine:** E1 peak spacing from the guarded `sample_hz` (a zero median step made `1000 / 0` an int cast); E2 `TrackBetweenKeys` refuses `step_ms <= 0` (was an endless loop); E3 `GenerateRunner::closing_` (set under the mutex first in the destructor, `Start()` gives 0) plus the timing test now measures the destructor and a restart-from-handler test; E4 the `.samn` is written first, the `.funscript` second, O-markers last (they live in the `.funscript`), and both are removed again if a later write throws; E5 a throwing callback never ends the worker and adds no second terminal event; E6 `SignalOptions::profile` is normalised once (`ProfileAutotune` next to `ProfileWeich`); E7 `OnnxDetector::Detect` builds the blob inside the try and catches `std::exception`; E8 `FindPeaks` prominence by a monotonic stack.
+- **Core:** C1 `number.h` (`ParseDoublePrefix`, `StrToDouble`, `FormatFixed`, from_chars/to_chars) replaces strtod/stod/`%.3f` in `.samn`, marks, funscript and clip prep; nlohmann's lexer writes the locale's point into the token text, so `samn_file.cpp` maps ',' back to '.'; `main.cpp` resets `LC_NUMERIC` after Qt; display-only `%.2f` in `device_mock`/`self_check` left alone. The locale tests (`tests/core/comma_locale.h`) look for a comma locale and else build `de_DE` with `localedef`; without one they skip with a message outside CI and fail in CI, so the CI Linux job installs `locales`. C2 a history line with a wrong-typed field is skipped; C3 `Settings::set_many` writes a copy and assigns after the write, invalid UTF-8 is replaced, the error names the reason; C4 `delete_custom_script` checks the script's name, not only the slug; C5 `funscript.cpp` uses `FlexTimeMs` (marks.h), a duration that is no time or beyond 48 h counts as not set; C6 no offset-change pauses after a cancel.
+- **App:** A1 one `LibraryController` in `Main.qml`, passed as `library:` to both pages (standalone each keeps its own); A2 the three `QSKIP`s in `player_page_qml_test.cpp` fail in CI (`CI` set).
+- **Follow-up (review of #157):** `number.cpp` `IsHuge` uses the sign of an exponent too long for a `long` ("1e-99999999999999999999" is 0, not inf); `delete_custom_script` may delete an unreadable script file whose slug matches the typed name (readable scripts keep the name check).
+- **Not touched:** device/training controllers, fileio umask, Editor dirty-guard, FlowSlider, Intiface URL.
+
+## Handover: `claude/samn2-hunt-leftovers` (5 Nov)
+
+The last two open items of the data-safety bug hunt. The wide-env `config_dir()` item was already fixed on main (`cursor/config-dir-wide-env-635a`).
+
+- **`picture_signals`:** one entry was pushed per decoded frame that crossed a step, so a clip slower than the step (or a gap or start offset) made `luma[i]` not the picture at `i * step_ms`. Now the sample sits at index `ms / step_ms`; skipped steps hold the last picture with motion 0. Test `a clip slower than the step keeps one sample per step on the time axis`.
+- **`repair.cpp` splice:** a failed window only partly verified by the retry was blanked in full, wiping the samples just spliced in, against the "verified part is kept" comment. New `BlankUnverified` blanks only from the verified reach. Test `a window the splice only partly verified keeps its verified samples`.
+- **Not verified:** no end-to-end clip that ends a retry mid-window; the helper is unit-tested only. `run_starts` still has no consumer.
+
 ## Handover: `claude/review-previous-work-jnjttn` — FuseTipPartners (1 Nov)
 
 The missing half of `track_multi` (#145 recorded the extras' paths only).
@@ -124,7 +142,7 @@ Takeover of Claude's Generator bug-hunt PR (CI was green; conflicted with #141 o
 - Track cache key covers `adaptive_cuts` and the seed; `record_checks` gives no key; `kTrackCacheVersion` 3. Test `spec FR-11: the cache key covers ...`.
 - `PositionsToActions` with `scene_ranges`: samples outside every range stay within 0..100. Test `post: samples outside every scene range stay within 0..100`.
 
-Not done: the `repair.cpp` camera-baseline splice (dev tool only) and `picture_signals` indexing. **Supersedes open PR #140** once this merges.
+**Supersedes open PR #140** once this merges.
 
 ## Handover: `cursor/code-gui-polish-635a` (31 Oct)
 

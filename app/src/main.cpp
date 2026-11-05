@@ -1,3 +1,5 @@
+#include <clocale>
+
 #include <QElapsedTimer>
 #include <QFile>
 #include <QFontDatabase>
@@ -61,6 +63,10 @@ qint64 MsSinceProcessStart() {
 
 int main(int argc, char** argv) {
     QGuiApplication app(argc, argv);
+    // Qt on Unix has just called setlocale(LC_ALL, ""): under a comma-decimal
+    // locale the C library would read "1.6" as 1. The core parses and writes
+    // numbers locale-free; this keeps any remaining strtod/printf honest too.
+    std::setlocale(LC_NUMERIC, "C");
     QGuiApplication::setApplicationName("SamNPlayer2");
     // Shown in the top bar; "-dev" unless a release build (0.7 "dev" label).
     QGuiApplication::setApplicationVersion(QStringLiteral(SAMN_VERSION));

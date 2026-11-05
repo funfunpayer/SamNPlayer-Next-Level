@@ -94,6 +94,23 @@ TEST_CASE("device/diagnostics: stops on a cancelled run") {  // Go: TestRunDiagn
     CHECK(report.log.back().phase == "stop");  // always ends with Stop
 }
 
+// Review C6: after a cancel the offset-change loop still slept its delay up
+// to four times.
+TEST_CASE("device/diagnostics: a cancel in the offset change stops the pauses") {
+    MockDevice dev(false);
+    DiagnosticsOptions o = Fast();
+    o.offset_change_delay = 7ms;  // told apart from the other pauses (1 ms)
+    int offset_pauses = 0;
+    o.sleep = [&](std::chrono::milliseconds d) {
+        if (d == 7ms) ++offset_pauses;
+    };
+    o.cancelled = [&] { return offset_pauses >= 1; };  // cancel after the first offset pause
+    DiagnosticsReport report = RunDiagnostics(dev, 0, o);
+    CHECK(report.interrupted);
+    CHECK(offset_pauses == 1);
+    CHECK(report.log.back().phase == "stop");
+}
+
 TEST_CASE("device/diagnostics: sweep values, durations, JSON") {  // new (Go rawSweepValues, Duration.String, json tags)
     const auto v = RawSweepValues();
     CHECK(v.size() == 33);

@@ -198,8 +198,10 @@ DiagnosticsReport RunDiagnostics(Device& dev, double connect_latency_ms, const D
         }
         for (double v : {0.5, 0.0}) {
             run_setter("offset_change", "vibration", vib, v);
+            if (report.interrupted) break;
             sleep(opt.offset_change_delay);
             run_setter("offset_change", "suction", suc, v);
+            if (report.interrupted) break;
             sleep(opt.offset_change_delay);
         }
         for (int i = 0; i < 10 && !report.interrupted; ++i) {

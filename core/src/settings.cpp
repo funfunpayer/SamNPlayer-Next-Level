@@ -159,16 +159,22 @@ void Settings::set(const std::string& key, const nlohmann::json& value) {
 void Settings::set_many(const std::map<std::string, nlohmann::json>& values) {
     std::lock_guard<std::mutex> lk(mutex_);
     RefreshLocked(true);  // keep what other Settings objects wrote
-    for (const auto& [k, v] : values) data_[k] = v;
+    // Change a copy: when the write fails the values in memory stay as they
+    // are on disk, and the next set() does not carry the bad one along.
+    nlohmann::json next = data_;
+    for (const auto& [k, v] : values) next[k] = v;
     fs::path dir = path_.parent_path();
     if (dir.empty()) dir = ".";
     std::error_code ec;
     fs::create_directories(dir, ec);
     try {
-        WriteFileAtomic(path_, data_.dump(2, ' ', true));
-    } catch (const std::exception&) {
-        throw std::runtime_error("cannot write settings file: " + path_.u8string());
+        // Invalid UTF-8 in a key or value (a file name from an old encoding)
+        // becomes U+FFFD instead of an exception.
+        WriteFileAtomic(path_, next.dump(2, ' ', true, nlohmann::json::error_handler_t::replace));
+    } catch (const std::exception& e) {
+        throw std::runtime_error("cannot write settings file: " + path_.u8string() + ": " + e.what());
     }
+    data_ = std::move(next);
     stamp_ = fs::last_write_time(path_, ec);
     size_ = fs::file_size(path_, ec);
 }

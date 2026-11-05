@@ -862,6 +862,35 @@ private slots:
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }
 
+    // Review A1: each page built its own LibraryController and `changed` only
+    // fires on the instance that wrote, so a script the Generator created never
+    // reached the Player's Generated list. Main.qml hands one instance to both.
+    void thePlayerAndTheGeneratorShareOneLibrary() {
+        {
+            Shell s;
+            loadShell(s);
+            QVERIFY(s.window);
+            QQuickItem* player = s.one("PlayerPage");
+            QQuickItem* generator = s.one("GeneratorPage");
+            QVERIFY(player && generator);
+            auto* playerLib = player->property("library").value<QObject*>();
+            auto* generatorLib = generator->property("library").value<QObject*>();
+            QVERIFY(playerLib && generatorLib);
+            QCOMPARE(playerLib, generatorLib);
+            QTemporaryDir dir;
+            const QString script = dir.filePath("made.funscript");
+            QVERIFY(QFile(script).open(QIODevice::WriteOnly));
+            QSignalSpy changed(playerLib, SIGNAL(changed()));
+            QVERIFY(QMetaObject::invokeMethod(generatorLib, "noteScriptGenerated", Q_ARG(QString, script)));
+            QVERIFY(changed.count() >= 1);
+            bool listed = false;
+            for (const QVariant& v : playerLib->property("generated").toList())
+                listed = listed || v.toMap().value("name").toString() == QStringLiteral("made.funscript");
+            QVERIFY(listed);
+        }
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
+
     void createScriptOpensTheGenerator() {
         {
             Shell s;

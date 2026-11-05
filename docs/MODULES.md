@@ -18,6 +18,7 @@ Functions use PascalCase and struct fields use snake_case.
 | `script_finder.h` | Script for a video: beside it, folders, tolerant names, variants | Go `app_open_media.go` | ✅ |
 | `settings.h` | Settings JSON with 0.7 keys, atomic writes | — | ✅ |
 | `text.h` | `FoldCase`: UTF-8 lower case without ICU (Latin, Greek, Cyrillic, full-width) | Go `strings.ToLower` | ✅ |
+| `number.h` | `ParseDoublePrefix` / `StrToDouble` / `FormatFixed`: decimal numbers that ignore the process locale (strtod, stod and `%f` read it; a comma locale made "1.6" read as 1) | — | ✅ incl. comma-locale tests |
 | `playback.h` | Offset, script time, loop, video beside a script, session | Go `app_playback.go` | ✅ |
 | `stroke_filter.h` | Live stroker filter (PCHIP/MAKIMA, speed limit, idle fill) | Go `funscript/stroke_filter.go` | ✅ parity |
 | `output_levels.h` | Reduce peaks, the soft start ramp and the Extended-O scale schedule as functions of time | Go `player/player.go` (ReducePeak, setOutput), `player/sync.go` (softStartWithPositions), `player/extendedo.go` | ✅ parity |

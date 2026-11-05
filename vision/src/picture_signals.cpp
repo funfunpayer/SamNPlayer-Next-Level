@@ -1,5 +1,7 @@
 #include "samn/vision/picture_signals.h"
 
+#include <algorithm>
+
 #include <opencv2/imgproc.hpp>
 
 #include "samn/vision/frame_reader.h"
@@ -24,17 +26,25 @@ PictureSignals MeasurePictureSignals(const std::filesystem::path& video, const P
         }
         const int64_t ms = frame.pts_us / 1000;
         if (ms < next_ms) continue;
-        // One sample per step; a gap in the stream repeats nothing.
-        next_ms = (ms / out.step_ms + 1) * out.step_ms;
+        // One sample per step, at index ms / step: a clip slower than the step
+        // or a gap in the stream holds the last picture (no change) so that
+        // the index stays the time axis the phase rules read it on.
+        const int64_t bin = std::max<int64_t>(0, ms) / out.step_ms;
+        next_ms = (bin + 1) * out.step_ms;
         cv::resize(frame.bgr, small, cv::Size(64, 36), 0, 0, cv::INTER_AREA);
         cv::cvtColor(small, grey, cv::COLOR_BGR2GRAY);
-        out.luma.push_back(cv::mean(grey)[0] / 255.0);
-        if (previous.empty()) {
-            out.motion.push_back(0);
-        } else {
+        const double luma = cv::mean(grey)[0] / 255.0;
+        double motion = 0;
+        if (!previous.empty()) {
             cv::absdiff(grey, previous, diff);
-            out.motion.push_back(cv::mean(diff)[0] / 255.0);
+            motion = cv::mean(diff)[0] / 255.0;
         }
+        while (int64_t(out.luma.size()) < bin) {
+            out.luma.push_back(out.luma.empty() ? luma : out.luma.back());
+            out.motion.push_back(0);
+        }
+        out.luma.push_back(luma);
+        out.motion.push_back(motion);
         grey.copyTo(previous);
         if (o.progress && total > 0) {
             const int p = int(std::min<int64_t>(99, frame.index * 100 / total));

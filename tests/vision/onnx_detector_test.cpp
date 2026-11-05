@@ -170,3 +170,21 @@ TEST_CASE("an RF-DETR-shaped model runs with ONNX Runtime") {
     CHECK(det.Load(std::string(SAMN_VISION_TESTDATA) + "/tiny_yolo.onnx", &error));  // YOLO still loads
     CHECK_FALSE(det.isDetr());
 }
+
+// Review E7: the blob was built outside the try and only Ort::Exception was
+// caught, so a frame OpenCV refuses ended in an exception instead of "empty
+// with *error". A 3-D matrix passes the type check and fails in the blob.
+TEST_CASE("Detect answers a frame OpenCV refuses with an error, not an exception") {
+    if (!samn::vision::OnnxDetector::Available()) return;
+    const cv::Mat cube(std::vector<int>{4, 4, 4}, CV_8UC3, cv::Scalar(0, 0, 255));
+    for (const char* model : {"/tiny_yolo.onnx", "/tiny_detr.onnx"}) {
+        samn::vision::OnnxDetector det;
+        std::string error;
+        REQUIRE_MESSAGE(det.Load(std::string(SAMN_VISION_TESTDATA) + model, &error), error);
+        error.clear();
+        std::vector<samn::vision::Detection> d;
+        CHECK_NOTHROW(d = det.Detect(cube, 0.25f, &error));
+        CHECK(d.empty());
+        CHECK_FALSE(error.empty());
+    }
+}

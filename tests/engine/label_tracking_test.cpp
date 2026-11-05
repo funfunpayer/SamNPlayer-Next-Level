@@ -53,3 +53,16 @@ TEST_CASE("tracking between keys follows the disc both ways and blends") {
     CHECK(error.find("too long") != std::string::npos);
     fs::remove(p);
 }
+
+// Review E2: a step of zero (or less) made the sample loop run forever. It is
+// refused before the video is even opened.
+TEST_CASE("tracking between keys refuses a step of zero or less") {
+    for (const int64_t step : {int64_t(0), int64_t(-200)}) {
+        samn::engine::BetweenKeysOptions o;
+        o.step_ms = step;
+        std::string error;
+        CHECK_FALSE(samn::engine::TrackBetweenKeys("no-such-clip.mp4", 0, DiscAt(0, 60, 0.5), 2000,
+                                                   DiscAt(2000, 60, 0.5), o, &error));
+        CHECK(error.find("step") != std::string::npos);
+    }
+}

@@ -98,6 +98,9 @@ ApplicationWindow {
     // The one connection to the toy / stroker, shared by every mode (0.7: one
     // device connection for the whole app).
     DeviceController { id: deviceCtl }
+    // The one Library (recent, favorites, generated, edited) behind the
+    // Player's panel and the Generator's project panel.
+    LibraryController { id: libraryCtl }
     // Check for updates, check only (D-147); the startup check is quiet.
     UpdateChecker { id: updates }
 
@@ -119,7 +122,7 @@ ApplicationWindow {
         anchors.margins: 20; anchors.topMargin: 6
         currentIndex: win.mode
         PlayerPage {
-            id: player; overlayOpen: win.overlayOpen; device: deviceCtl
+            id: player; overlayOpen: win.overlayOpen; device: deviceCtl; library: libraryCtl
             // 0.7: "Create script" goes to the Generator with this video.
             onCreateRequested: (video, start) => { win.mode = 1; generator.createFor(video, start) }
             onBeatBarRequested: (video) => { win.mode = 1; generator.beatBarFor(video) }
@@ -136,6 +139,7 @@ ApplicationWindow {
             sourceComponent: GeneratorPage {
                 overlayOpen: win.overlayOpen
                 device: deviceCtl
+                library: libraryCtl
                 playerVideoUrl: player.controller.videoUrl
                 // The result opens in the Generator's Editor; "Play in the Player" hands it over (D-144).
                 onReviewRequested: (path) => { win.mode = 0; player.controller.openPath(path) }

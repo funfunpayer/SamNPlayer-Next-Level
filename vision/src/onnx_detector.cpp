@@ -206,10 +206,12 @@ std::vector<Detection> OnnxDetector::Detect(const cv::Mat& bgr, float min_score,
         if (error) *error = "the frame is empty or not a colour picture";
         return {};
     }
-    double scale = 1;
-    cv::Mat blob = impl_->detr ? DetrBlob(bgr, impl_->size) : YoloBlob(bgr, impl_->size, &scale);
-    const std::array<int64_t, 4> shape{1, 3, impl_->size, impl_->size};
+    // The contract is "empty with *error": the blob (OpenCV throws on a frame
+    // it cannot resize) and the run both answer that way.
     try {
+        double scale = 1;
+        cv::Mat blob = impl_->detr ? DetrBlob(bgr, impl_->size) : YoloBlob(bgr, impl_->size, &scale);
+        const std::array<int64_t, 4> shape{1, 3, impl_->size, impl_->size};
         const auto memory = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
         Ort::Value input = Ort::Value::CreateTensor<float>(memory, blob.ptr<float>(), blob.total(), shape.data(),
                                                            shape.size());
@@ -236,7 +238,7 @@ std::vector<Detection> OnnxDetector::Detect(const cv::Mat& bgr, float min_score,
         }
         return DecodeYoloV8(outputs[0].GetTensorData<float>(), int(dims[1]), int(dims[2]), scale, bgr.size(),
                             min_score);
-    } catch (const Ort::Exception& e) {
+    } catch (const std::exception& e) {  // Ort::Exception and cv::Exception derive from it
         if (error) *error = e.what();
         return {};
     }

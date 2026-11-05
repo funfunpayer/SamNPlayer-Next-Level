@@ -37,6 +37,12 @@ int Align(const std::vector<int64_t>& first_times, int64_t t) {
 
 }  // namespace
 
+void BlankUnverified(std::vector<double>& positions, int first, int end, int verified_end) {
+    const int from = std::max({first, verified_end, 0});
+    const int to = std::min(end, static_cast<int>(positions.size()));
+    for (int i = from; i < to; ++i) positions[size_t(i)] = kNaN;
+}
+
 std::optional<RepairResult> RepairTrack(const std::filesystem::path& video, const TrackResult& first,
                                         const RepairOptions& o, std::string* error) {
     RepairResult res;
@@ -141,7 +147,8 @@ std::optional<RepairResult> RepairTrack(const std::filesystem::path& video, cons
                 rw.box = boxes[size_t(best)];
                 ++res.repaired;
             } else {
-                for (int i = rw.first; i < rw.end && i < n; ++i) res.positions[size_t(i)] = kNaN;
+                // The verified part of this window stays spliced; only the rest is a gap.
+                BlankUnverified(res.positions, rw.first, rw.end, best >= 0 ? best_reach : rw.first);
                 ++res.gaps;
             }
             res.windows.push_back(rw);
