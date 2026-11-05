@@ -608,6 +608,42 @@ private slots:
         QCOMPARE(server.Count("BatteryLevelCmd"), 1);
     }
 
+    // The battery shown is the current session's and current: a refresh that
+    // fails after the cache time hides the old value, a later one shows the
+    // new value, and a new session after a dropped link starts from nothing.
+    void intifaceBatteryIsNeverAnOldReading() {
+        FakeButtplugServer server(FakeButtplug::MessagesWithBattery());
+        auto offset = std::make_shared<std::atomic<long long>>(0);  // seconds the devices' clock is ahead
+        DeviceController c;
+        c.setDeviceClock([offset] { return std::chrono::steady_clock::now() + std::chrono::seconds(offset->load()); });
+        c.setTickIntervalMs(50);
+        c.connectIntiface(server.url());
+        QTRY_COMPARE_WITH_TIMEOUT(c.state(), QString("connected"), 5000);
+        QTRY_COMPARE(c.batteryPercent(), 73);
+
+        server.battery = FakeButtplugServer::Battery::kError;
+        *offset += 31;  // past kBatteryCacheTtl: the next tick asks again and is refused
+        QTRY_VERIFY(!c.batteryOk());
+        QCOMPARE(c.batteryPercent(), -1);
+        QCOMPARE(server.Count("BatteryLevelCmd"), 2);
+
+        server.battery = FakeButtplugServer::Battery::kReading;
+        server.battery_level = 0.41;
+        *offset += 31;  // the failure's cache time is over too
+        QTRY_COMPARE(c.batteryPercent(), 41);
+        QVERIFY(c.batteryOk());
+
+        // The link drops; the one-shot reconnect is a new session whose
+        // battery cannot be read: the 41 % of the old one is not shown.
+        server.battery = FakeButtplugServer::Battery::kError;
+        server.DropClients();
+        QTRY_COMPARE_WITH_TIMEOUT(server.connections(), 2, 5000);
+        QTRY_VERIFY(server.Count("BatteryLevelCmd") >= 4);
+        QCOMPARE(c.state(), QString("connected"));
+        QTRY_VERIFY(!c.batteryOk());
+        QCOMPARE(c.batteryPercent(), -1);
+    }
+
     // --- Diagnostics ---
     void diagnosticsOnMock() {
         DeviceController c;

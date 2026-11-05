@@ -149,6 +149,7 @@ public:
     void SetBleTransportFactory(std::function<std::unique_ptr<QtTransport>()> factory) {
         ble_factory_ = std::move(factory);
     }
+    void SetDeviceClock(dev::SteadyClock clock) { device_clock_ = std::move(clock); }
     void Shutdown();
 
 private:
@@ -225,6 +226,7 @@ private:
     std::string last_command_error_;
     dev::DiagnosticsOptions diag_options_;
     std::function<std::unique_ptr<QtTransport>()> ble_factory_;
+    dev::SteadyClock device_clock_;  // empty: the devices' own steady clock
     std::unique_ptr<samn::Settings> settings_;
 };
 
@@ -346,8 +348,10 @@ DeviceController::Snapshot DeviceWorker::MakeSnapshot(bool read_battery) {
     s.name = Q(info.name);
     s.address = Q(info.address);
     s.rssi = info.rssi;
-    s.battery_ok = info.battery_ok;
-    s.battery = info.battery_ok ? info.battery_pct : -1;
+    // A reading belongs to the live link: none while the device says it is
+    // not connected (the devices also drop it themselves, and age it out).
+    s.battery_ok = info.connected && info.battery_ok;
+    s.battery = s.battery_ok ? info.battery_pct : -1;
     s.caps = dev::CapabilitiesOf(*se.device);
     return s;
 }
@@ -511,7 +515,7 @@ void DeviceWorker::Connect(QString kind, QString target) {
     } else if (intiface) {
         se->url = dev::NormalizeIntifaceUrl(text);
         se->transport = std::make_unique<WebSocketTransport>(se->url, dial_ms_);
-        auto device = std::make_unique<dev::IntifaceDevice>(*se->transport, se->url);
+        auto device = std::make_unique<dev::IntifaceDevice>(*se->transport, se->url, device_clock_);
         device->SetLogSink(LogSink());
         se->intiface = device.get();
         se->device = std::move(device);
@@ -537,7 +541,7 @@ void DeviceWorker::Connect(QString kind, QString target) {
         options.characteristic_uuid = protocol.CharacteristicUuid();
         options.scan_timeout_ms = ble_scan_ms_;
         se->transport = ble_factory_ ? ble_factory_() : std::make_unique<BleTransport>(options);
-        auto device = std::make_unique<dev::SamNeo2Device>(*se->transport);
+        auto device = std::make_unique<dev::SamNeo2Device>(*se->transport, nullptr, device_clock_);
         device->SetLogSink(LogSink());
         se->neo = device.get();
         se->device = std::move(device);
@@ -1008,6 +1012,10 @@ void DeviceController::setDiagnosticsOptions(const samn::device::DiagnosticsOpti
 
 void DeviceController::setBleTransportFactory(std::function<std::unique_ptr<QtTransport>()> factory) {
     worker_->Post([w = worker_, factory = std::move(factory)] { w->SetBleTransportFactory(factory); });
+}
+
+void DeviceController::setDeviceClock(std::function<std::chrono::steady_clock::time_point()> clock) {
+    worker_->Post([w = worker_, clock = std::move(clock)] { w->SetDeviceClock(clock); });
 }
 
 }  // namespace samn::ui

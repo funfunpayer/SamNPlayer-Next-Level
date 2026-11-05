@@ -8,6 +8,7 @@
 #include <QVariantMap>
 #include <QtQml/qqmlregistration.h>
 #include <atomic>
+#include <chrono>
 #include <functional>
 #include <memory>
 #include <set>
@@ -128,6 +129,9 @@ public:
     // Builds the link of the "ble" kind instead of the Bluetooth one (a
     // stand-in Sam Neo 2). Called on the device thread; empty = Bluetooth.
     void setBleTransportFactory(std::function<std::unique_ptr<QtTransport>()> factory);
+    // The clock of the Sam Neo 2 and Intiface devices of the next connects
+    // (battery cache, keepalive). Called on the device thread; empty = the steady clock.
+    void setDeviceClock(std::function<std::chrono::steady_clock::time_point()> clock);
 
     // --- state (GUI thread) ---
     QString state() const;

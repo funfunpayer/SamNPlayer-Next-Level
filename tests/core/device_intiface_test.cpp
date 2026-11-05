@@ -297,6 +297,100 @@ TEST_CASE("device/intiface: a failed battery read is cached too") {  // new
     CHECK(refusing.transport.sent.size() == sent);  // cached
 }
 
+// A reading is good for one device session and a bounded time: a failed
+// refresh drops the old value instead of leaving it on show.
+TEST_CASE("device/intiface: a failed battery refresh drops the old reading") {  // new
+    auto now = std::chrono::steady_clock::time_point{};
+    FakeButtplug fake(FakeButtplug::MessagesWithBattery());
+    IntifaceDevice dev(fake.transport, "ws://x", [&now] { return now; });
+    REQUIRE(dev.Connect());
+    REQUIRE(dev.BatteryLevel().percent == 73);
+    REQUIRE(dev.Info().battery_ok);
+    fake.transport.on_send = nullptr;  // the server stops answering
+    now += 31s;
+    CHECK_FALSE(dev.BatteryLevel().ok);
+    CHECK_FALSE(dev.Info().battery_ok);  // not the 73 of half a minute ago
+    CHECK(dev.Info().battery_pct == 0);
+    now += 10s;
+    CHECK_FALSE(dev.BatteryLevel().ok);  // the failure is cached, the old value stays gone
+    CHECK_FALSE(dev.Info().battery_ok);
+}
+
+// Info shows a reading only while it is younger than kBatteryMaxAge, also
+// when nobody asked for a new one in between.
+TEST_CASE("device/intiface: a battery reading ages out of Info") {  // new
+    auto now = std::chrono::steady_clock::time_point{};
+    FakeButtplug fake(FakeButtplug::MessagesWithBattery());
+    IntifaceDevice dev(fake.transport, "ws://x", [&now] { return now; });
+    REQUIRE(dev.Connect());
+    REQUIRE(dev.BatteryLevel().ok);
+    now += kBatteryMaxAge - 1s;
+    CHECK(dev.Info().battery_ok);
+    CHECK(dev.Info().battery_pct == 73);
+    now += 1s;
+    CHECK_FALSE(dev.Info().battery_ok);
+    CHECK(dev.Info().battery_pct == 0);
+    REQUIRE(dev.BatteryLevel().ok);  // a new reading shows again
+    CHECK(dev.Info().battery_ok);
+}
+
+// The reading belongs to the session it was taken in: a disconnect, a lost
+// socket, a reconnect and the device's removal on the server all drop it.
+TEST_CASE("device/intiface: the battery reading ends with the device session") {  // new
+    Rig r(FakeButtplug::MessagesWithBattery());
+    r.Up();
+    REQUIRE(r.dev.BatteryLevel().ok);
+    REQUIRE(r.dev.Disconnect());
+    CHECK_FALSE(r.dev.Info().battery_ok);
+
+    r.Up();
+    REQUIRE(r.dev.BatteryLevel().ok);
+    r.fake.transport.Drop();
+    r.fake.transport.connect_error = "connection refused";  // the reconnect fails
+    CHECK_FALSE(r.dev.PumpIncoming());
+    CHECK_FALSE(r.dev.TryReconnectOnce());
+    CHECK_FALSE(r.dev.Info().battery_ok);
+
+    r.fake.transport.connect_error.clear();
+    r.Up();
+    REQUIRE(r.dev.BatteryLevel().ok);
+    // Another device's removal changes nothing.
+    r.fake.transport.PushText(R"([{"DeviceRemoved":{"Id":0,"DeviceIndex":3}}])");
+    CHECK(r.dev.PumpIncoming());
+    CHECK(r.dev.Info().battery_ok);
+    // Intiface Central drops the adopted device (switched off, or another
+    // toy chosen there): its reading goes with it, and the gone device is
+    // not asked again at once.
+    r.fake.transport.PushText(R"([{"DeviceRemoved":{"Id":0,"DeviceIndex":7}}])");
+    CHECK(r.dev.PumpIncoming());
+    CHECK_FALSE(r.dev.Info().battery_ok);
+    const std::size_t asked = r.fake.Commands("BatteryLevelCmd").size();
+    CHECK_FALSE(r.dev.BatteryLevel().ok);
+    CHECK(r.fake.Commands("BatteryLevelCmd").size() == asked);
+}
+
+// A reading answers its own request only: the late reply to a request that
+// timed out is not taken for the next one.
+TEST_CASE("device/intiface: a late battery reply is not a fresh reading") {  // new
+    auto now = std::chrono::steady_clock::time_point{};
+    FakeButtplug fake(FakeButtplug::MessagesWithBattery());
+    IntifaceDevice dev(fake.transport, "ws://x", [&now] { return now; });
+    REQUIRE(dev.Connect());
+    fake.transport.on_send = nullptr;  // no answer within the wait
+    CHECK_FALSE(dev.BatteryLevel().ok);
+    const json first = json::parse(fake.transport.SentText(fake.transport.sent.size() - 1));
+    const int first_id = first.at(0).at("BatteryLevelCmd").at("Id").get<int>();
+    // Its answer comes late and is still queued when the next read is due.
+    fake.transport.PushText(json::array({json{{"BatteryLevelReading",
+                                               {{"Id", first_id}, {"DeviceIndex", 7}, {"BatteryLevel", 0.2}}}}})
+                                .dump());
+    now += 31s;
+    const BatteryReading b = dev.BatteryLevel();
+    CHECK_FALSE(b.ok);
+    CHECK(b.percent == 0);
+    CHECK_FALSE(dev.Info().battery_ok);
+}
+
 // Go: TestIntifaceDrainsServerReplies tests that a goroutine keeps reading so
 // the socket buffer never fills. Adapted: PumpIncoming drains any number of
 // unsolicited replies and the device keeps working.

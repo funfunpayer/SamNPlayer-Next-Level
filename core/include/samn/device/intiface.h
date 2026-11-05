@@ -75,8 +75,12 @@ public:
     Status SetPosition(double pos, std::chrono::milliseconds duration) override;
     void SetMotorLevel(const std::string& channel, double level) override;
     // Asks BatteryLevelCmd (cached kBatteryCacheTtl) and waits up to
-    // kIntifaceBatteryWait for the reading; the server's Error reply ends the
-    // wait. A failed read is cached as long as a reading.
+    // kIntifaceBatteryWait for the reading of that request (a late reply to
+    // an earlier one does not count); the server's Error reply ends the wait.
+    // A failed read is cached as long as a reading and drops the old one.
+    // A reading belongs to one device session: Connect, Disconnect, a lost
+    // socket and the server's DeviceRemoved for the adopted device drop it,
+    // and Info() shows it for kBatteryMaxAge at most.
     BatteryReading BatteryLevel() override;
     Capabilities DeviceCapabilities() const override;
     ConnectionInfo Info() const;
@@ -107,8 +111,13 @@ private:
     Status ReadUntil(const std::string& want, std::chrono::steady_clock::time_point deadline,
                      nlohmann::json* body);
     void AdoptDevice(const nlohmann::json& body);
-    // Handles one received message batch; sets *battery when a reading came.
-    bool HandleBatch(const nlohmann::json& batch, double* battery, bool* got_battery);
+    // Handles one received message batch; sets *battery when the reading for
+    // the request `battery_id` came (0: no request waits, readings are dropped).
+    bool HandleBatch(const nlohmann::json& batch, int battery_id, double* battery, bool* got_battery);
+    // The reading is gone (session over, device removed) / the read failed.
+    void ForgetBattery();
+    void BatteryFailed();
+    bool BatteryShown() const;
     Status Command(const std::function<bool(std::string*, nlohmann::json*)>& build);
     Status EnsureConnected();
     nlohmann::json ScalarsFor(const std::string& curve, double value) const;
@@ -142,7 +151,6 @@ private:
     // When the last read failed (no reading, or the server refused it).
     std::optional<std::chrono::steady_clock::time_point> battery_failed_at_;
     bool reconnect_used_ = false;
-    std::optional<double> pending_battery_;  // reading received, not yet taken
 };
 
 }  // namespace samn::device

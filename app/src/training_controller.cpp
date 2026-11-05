@@ -321,6 +321,15 @@ void TrainingController::chooseVideo(const QString& pathOrUrl) {
 
 void TrainingController::setDevice(DeviceController* d) {
     if (d == device_) return;
+    // A session belongs to the device it started on: it ends there (that
+    // device stops, gets its hold and a connection Training made back)
+    // before the new one is used. The new one is driven from the next Start.
+    if (state_ == State::Connecting) {
+        if (device_) device_->disconnectDevice();
+        failStart(QStringLiteral("the device changed"));
+    } else if (state_ != State::Idle) {
+        finishSession("The device changed \xE2\x80\x94 training ended.");
+    }
     if (device_) disconnect(device_, nullptr, this, nullptr);
     device_ = d;
     if (device_) {
@@ -661,8 +670,27 @@ bool TrainingController::start() {
     return true;
 }
 
+QString TrainingController::deviceIdentity() const {
+    if (!device_) return {};
+    return device_->kind() + QLatin1Char('\n') + device_->name() + QLatin1Char('\n') + device_->address();
+}
+
 void TrainingController::onDeviceStatus() {
-    if (state_ != State::Connecting || !device_) return;
+    if (!device_) return;
+    if (state_ == State::Running || state_ == State::Paused) {
+        // The device the session drives is gone or is another one now (the
+        // Intiface reconnect adopts whatever the server lists): the session
+        // ends, so its hold no longer blocks a new connection and nothing
+        // drives a device it was not started for. Only a new Start goes on.
+        if (!device_->connected()) {
+            we_connected_ = false;  // nothing left to close
+            finishSession("Device connection lost \xE2\x80\x94 training ended.");
+        } else if (deviceIdentity() != run_device_) {
+            finishSession("The device changed \xE2\x80\x94 training ended.");
+        }
+        return;
+    }
+    if (state_ != State::Connecting) return;
     if (device_->connected()) {
         connect_timeout_.stop();
         if (blocked_) {
@@ -717,6 +745,7 @@ void TrainingController::beginSession() {
     sample_ms_ = std::clamp(plan_.total_ms / 1000, 100, 2000);
     next_sample_ms_ = 0;
     vib_ = suc_ = 0;
+    run_device_ = deviceIdentity();
     device_->setSessionActiveFor(this, true);
     setState(State::Running);
     log("Training starting...");
