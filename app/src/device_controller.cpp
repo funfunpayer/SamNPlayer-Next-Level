@@ -21,11 +21,7 @@
 #include "device_io/websocket_transport.h"
 #include "samn/device/capabilities.h"
 #include "samn/device/diagnostics.h"
-#include "samn/device/intiface.h"
-#include "samn/device/mock.h"
-#include "samn/device/protocol.h"
-#include "samn/device/samneo2.h"
-#include "samn/device/tcode.h"
+#include "samn/device/driver.h"
 #include "samn/settings.h"
 
 namespace samn::ui {
@@ -34,16 +30,10 @@ namespace dev = samn::device;
 
 namespace {
 
-// Settings keys of 0.7 (app_settings.go).
+// Settings keys of 0.7 (app_settings.go). The key of each kind's last
+// target is its driver's (DriverInfo::target_setting).
 constexpr const char* kPrefTransport = "device.transport";
-constexpr const char* kPrefIntifaceUrl = "device.intifaceUrl";
-constexpr const char* kPrefTCodeAddress = "device.tcodeAddress";
-constexpr const char* kPrefTCodeSerialPort = "device.tcodeSerialPort";
 constexpr const char* kPrefConnectTest = "device.connect_test";
-
-// 0.7 testConnectTimeout (20 s; Intiface 30 s, the server may still be scanning).
-constexpr int kConnectTimeoutMs = 20000;
-constexpr int kIntifaceConnectTimeoutMs = 30000;
 
 // How long stops that follow each other (a stop, the close after it, the
 // quit) may wait together for a link that stopped answering: two off packets
@@ -58,27 +48,9 @@ constexpr const char* kNoDevice = "no device connected \xE2\x80\x94 connect in S
 
 QString Q(const std::string& s) { return QString::fromStdString(s); }
 
-std::string Lower(std::string s) {
-    for (char& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    return s;
-}
-bool Contains(const std::string& text, const char* word) { return text.find(word) != std::string::npos; }
-
-// The likely cause of a failed connect (Intiface: the 0.7 texts).
-std::string HintFor(const QString& kind, const std::string& url, const std::string& raw) {
-    if (kind == "intiface") return dev::IntifaceHint(url, raw);
-    if (kind == "tcode") {
-        const std::string t = Lower(raw);
-        if (Contains(t, "refused"))
-            return "the device is reachable but nothing is listening on this port. Check the port "
-                   "(default 8000) and that the TCode server of the firmware is running";
-        if (Contains(t, "timeout") || Contains(t, "unreachable") || Contains(t, "no route"))
-            return "no response. Are the device and the computer on the same network? "
-                   "Is the IP address correct? Is a firewall blocking the port?";
-        if (Contains(t, "no such host"))
-            return "hostname could not be resolved \xE2\x80\x94 enter the IP address directly";
-    }
-    return {};
+// The likely cause of a failed connect or a lost link, from the kind's driver.
+std::string HintFor(const dev::Driver* driver, const std::string& target, const std::string& raw) {
+    return driver ? driver->Hint(target, raw) : std::string();
 }
 
 dev::Status Err(const std::string& m) { return dev::Status::Error(m); }
@@ -87,7 +59,9 @@ dev::Status Err(const std::string& m) { return dev::Status::Error(m); }
 
 // ---------------------------------------------------------------------------
 // The worker: lives on the device thread. Every device and transport is
-// created, used and destroyed in its tasks, one at a time.
+// created, used and destroyed in its tasks, one at a time. The drivers say
+// what a kind needs; the worker builds the transport and keeps its cancel,
+// the connect and Stop deadlines and the generation counter.
 // ---------------------------------------------------------------------------
 class DeviceWorker : public QObject {
 public:
@@ -160,14 +134,11 @@ public:
 
 private:
     struct Session {
-        QString kind;
-        std::string url;  // Intiface: the normalised URL
         std::unique_ptr<QtTransport> transport;  // declared first: destroyed last
-        std::unique_ptr<dev::Device> device;
-        dev::SamNeo2Device* neo = nullptr;
-        dev::TCodeDevice* tcode = nullptr;
-        dev::IntifaceDevice* intiface = nullptr;
-        dev::MockDevice* mock = nullptr;
+        QString kind;
+        std::string target;  // as typed (trimmed); the driver's hints read it
+        const dev::Driver* driver = nullptr;
+        std::unique_ptr<dev::DeviceSession> device;  // owns the device
         double connect_latency_ms = 0;
     };
     struct Pending {
@@ -179,6 +150,9 @@ private:
 
     void EnsureInit();
     void Drain();
+    // The app's transport for a driver's request; null for kNone (and for a
+    // kind this app has no transport for).
+    std::unique_ptr<QtTransport> MakeTransport(const dev::TransportRequest& request) const;
     // A value for another generation than the waiting batch's: the batch's
     // values were meant for an earlier device and go; it is that one's batch now.
     void ForGenerationLocked(quint64 generation);
@@ -352,28 +326,12 @@ void DeviceWorker::CommandError(const std::string& message) {
     EmitError(Q(message));
 }
 
-dev::ConnectionInfo DeviceWorker::SessionInfo(bool read_battery) {
-    Session& se = *session_;
-    dev::ConnectionInfo info;
-    info.connected = true;
-    if (se.neo) {
-        if (read_battery) se.neo->BatteryLevel();
-        info = se.neo->Info();
-    } else if (se.intiface) {
-        if (read_battery) se.intiface->BatteryLevel();
-        info = se.intiface->Info();
-    } else if (se.tcode) {
-        info = se.tcode->Info();
-    } else {
-        info.name = "Mock device (no real hardware)";
-    }
-    return info;
-}
+dev::ConnectionInfo DeviceWorker::SessionInfo(bool read_battery) { return session_->device->Info(read_battery); }
 
-// The Intiface index tells two toys of one name apart.
+// The Intiface index tells two toys of one name apart (AdoptedId).
 QString DeviceWorker::IdentityOf(const dev::ConnectionInfo& info) const {
     const Session& se = *session_;
-    const QString adopted = se.intiface ? QString::number(se.intiface->AdoptedIndex()) : QString();
+    const QString adopted = Q(se.device->AdoptedId());
     return se.kind + QLatin1Char('\n') + Q(info.name) + QLatin1Char('\n') + Q(info.address) +
            QLatin1Char('\n') + adopted;
 }
@@ -386,8 +344,8 @@ DeviceController::Snapshot DeviceWorker::MakeSnapshot(bool read_battery) {
     if (!session_) return s;
     Session& se = *session_;
     s.kind = se.kind;
-    s.mock = se.mock != nullptr;
-    s.raw = se.neo != nullptr || se.mock != nullptr;
+    s.mock = se.driver->Info().simulated;
+    s.raw = se.device->HasRawValues();
     const dev::ConnectionInfo info = SessionInfo(read_battery);
     s.connected = info.connected;
     s.name = Q(info.name);
@@ -397,7 +355,7 @@ DeviceController::Snapshot DeviceWorker::MakeSnapshot(bool read_battery) {
     // not connected (the devices also drop it themselves, and age it out).
     s.battery_ok = info.connected && info.battery_ok;
     s.battery = s.battery_ok ? info.battery_pct : -1;
-    s.caps = dev::CapabilitiesOf(*se.device);
+    s.caps = dev::CapabilitiesOf(se.device->GetDevice());
     s.identity = IdentityOf(info);
     return s;
 }
@@ -416,15 +374,8 @@ void DeviceWorker::EmitSnapshot(bool read_battery) {
 bool DeviceWorker::Alive(std::string* why) {
     if (!session_) return false;
     Session& se = *session_;
-    if (se.mock) return true;
+    if (se.device->Alive()) return true;
     const std::string transport_error = se.transport ? se.transport->LastError() : std::string();
-    if (se.neo) {
-        if (se.neo->Connected() && se.transport->IsConnected()) return true;
-    } else if (se.tcode) {
-        if (se.tcode->Info().connected && se.transport->IsConnected()) return true;
-    } else if (se.intiface) {
-        if (se.intiface->Connected()) return true;
-    }
     *why = transport_error.empty() ? "the link was closed" : transport_error;
     return false;
 }
@@ -440,10 +391,10 @@ void DeviceWorker::CheckAlive() {
 }
 
 void DeviceWorker::HandleLost(const std::string& why) {
-    const QString kind = session_ ? session_->kind : QString();
-    const std::string url = session_ ? session_->url : std::string();
+    const dev::Driver* driver = session_ ? session_->driver : nullptr;
+    const std::string target = session_ ? session_->target : std::string();
     DestroySession(false);
-    EmitError("connection lost: " + Q(why), Q(HintFor(kind, url, why)));
+    EmitError("connection lost: " + Q(why), Q(HintFor(driver, target, why)));
     EmitSnapshot(false);
 }
 
@@ -473,17 +424,17 @@ void DeviceWorker::DestroySession(bool stop_first) {
     if (stop_first) {
         // Always switch off before closing, or a device that just got a test
         // pulse keeps running (0.7).
-        const dev::Status s = session_->device->Stop();
+        const dev::Status s = session_->device->GetDevice().Stop();
         if (!s) EmitLog(dev::LogLevel::kWarn, "device: stop before disconnect failed: " + s.message);
     }
-    session_->device->Disconnect();
+    session_->device->GetDevice().Disconnect();
     session_.reset();
     last_command_error_.clear();
 }
 
 void DeviceWorker::ApplyMotorLevels() {
     if (!session_) return;
-    auto* setter = dynamic_cast<dev::MotorLevelSetter*>(session_->device.get());
+    auto* setter = dynamic_cast<dev::MotorLevelSetter*>(&session_->device->GetDevice());
     if (!setter) return;
     for (const auto& [channel, level] : motor_levels_) setter->SetMotorLevel(channel, level);
 }
@@ -510,25 +461,39 @@ void DeviceWorker::SchedulePump() {
 // Read what the peer sent so it never piles up, and notice a dead link.
 void DeviceWorker::Pump() {
     if (!session_) return;
-    Session& se = *session_;
-    if (se.intiface) {
-        if (!se.intiface->PumpIncoming()) {
-            dev::Status why;
-            if (!se.intiface->TryReconnectOnce(&why)) {
-                HandleLost(why.message.empty() ? "the Buttplug server closed the connection" : why.message);
-                return;
-            }
-            EmitSnapshot(false);
-        }
+    dev::PumpOutcome outcome = dev::PumpOutcome::kCheck;
+    const dev::Status s = session_->device->Pump(&outcome);
+    if (!s) {
+        HandleLost(s.message);
         return;
     }
-    if (se.transport) {
-        // TCode devices may talk back; nothing needs it.
-        while (se.transport->IsConnected() &&
-               se.transport->Receive(std::chrono::milliseconds(0)).kind == dev::ReceiveResult::Kind::kMessage) {
-        }
+    if (outcome == dev::PumpOutcome::kReconnected)
+        EmitSnapshot(false);
+    else if (outcome == dev::PumpOutcome::kCheck)
+        CheckAlive();
+}
+
+std::unique_ptr<QtTransport> DeviceWorker::MakeTransport(const dev::TransportRequest& request) const {
+    switch (request.kind) {
+    case dev::TransportKind::kNone:
+        return nullptr;
+    case dev::TransportKind::kBle: {
+        if (ble_factory_) return ble_factory_();
+        BleTransport::Options options;
+        options.name_prefix = request.ble_name_prefix;
+        options.service_uuid = request.service_uuid;
+        options.characteristic_uuid = request.characteristic_uuid;
+        options.scan_timeout_ms = ble_scan_ms_;
+        return std::make_unique<BleTransport>(options);
     }
-    CheckAlive();
+    case dev::TransportKind::kSerialLine:
+        return std::make_unique<SerialLineTransport>(request.target);
+    case dev::TransportKind::kSocketLine:
+        return std::make_unique<SocketLineTransport>(request.network, request.target, dial_ms_);
+    case dev::TransportKind::kWebSocket:
+        return std::make_unique<WebSocketTransport>(request.target, dial_ms_);
+    }
+    return nullptr;
 }
 
 void DeviceWorker::Connect(QString kind, QString target) {
@@ -543,8 +508,8 @@ void DeviceWorker::Connect(QString kind, QString target) {
     connecting_ = true;
     EmitSnapshot(false);
 
-    const bool intiface = kind == "intiface";
-    const int deadline_ms = intiface ? kIntifaceConnectTimeoutMs : kConnectTimeoutMs;
+    const dev::Driver* driver = ctl->drivers_->Find(kind.toStdString());
+    const int deadline_ms = driver ? driver->Info().connect_timeout_ms : dev::kDefaultConnectTimeoutMs;
     QElapsedTimer clock;
     clock.start();
     bool deadline_hit = false;
@@ -559,50 +524,21 @@ void DeviceWorker::Connect(QString kind, QString target) {
 
     auto se = std::make_unique<Session>();
     se->kind = kind;
+    se->driver = driver;
     const std::string text = target.trimmed().toStdString();
+    se->target = text;
     dev::Status setup = dev::Status::Ok();
 
-    if (kind == "mock") {
-        auto mock = std::make_unique<dev::MockDevice>(true, [this](const std::string& line) {
-            EmitLog(dev::LogLevel::kInfo, line);
-        });
-        se->mock = mock.get();
-        se->device = std::move(mock);
-    } else if (intiface) {
-        se->url = dev::NormalizeIntifaceUrl(text);
-        se->transport = std::make_unique<WebSocketTransport>(se->url, dial_ms_);
-        auto device = std::make_unique<dev::IntifaceDevice>(*se->transport, se->url, device_clock_);
-        device->SetLogSink(LogSink());
-        se->intiface = device.get();
-        se->device = std::move(device);
-    } else if (kind == "tcode") {
-        dev::TCodeAddress addr;
-        setup = dev::ParseTCodeAddress(text, &addr);
-        if (setup) {
-            se->transport = std::make_unique<SocketLineTransport>(addr.network, addr.hostport, dial_ms_);
-            auto device = std::make_unique<dev::TCodeDevice>(dev::TCodeDevice::OverNetwork(*se->transport, text));
-            se->tcode = device.get();
-            se->device = std::move(device);
-        }
-    } else if (kind == "tcode-serial") {
-        se->transport = std::make_unique<SerialLineTransport>(text);
-        auto device = std::make_unique<dev::TCodeDevice>(dev::TCodeDevice::OverSerial(*se->transport, text));
-        se->tcode = device.get();
-        se->device = std::move(device);
-    } else if (kind == "ble") {
-        dev::SamNeo2Protocol protocol;
-        BleTransport::Options options;
-        options.name_prefix = dev::kSamNeo2NamePrefix;
-        options.service_uuid = protocol.ServiceUuid();
-        options.characteristic_uuid = protocol.CharacteristicUuid();
-        options.scan_timeout_ms = ble_scan_ms_;
-        se->transport = ble_factory_ ? ble_factory_() : std::make_unique<BleTransport>(options);
-        auto device = std::make_unique<dev::SamNeo2Device>(*se->transport, nullptr, device_clock_);
-        device->SetLogSink(LogSink());
-        se->neo = device.get();
-        se->device = std::move(device);
-    } else {
+    // The driver says what the kind needs; the transport is the app's.
+    dev::TransportRequest request;
+    if (!driver)
         setup = Err("unknown device kind \"" + kind.toStdString() + "\"");
+    else
+        setup = driver->Resolve(text, &request);
+    if (setup) {
+        se->transport = MakeTransport(request);
+        se->device = driver->Create(se->transport.get(), text, dev::SessionOptions{LogSink(), device_clock_});
+        if (!se->device) setup = Err("no transport for the device kind \"" + kind.toStdString() + "\"");
     }
 
     dev::Status result = setup;
@@ -614,7 +550,7 @@ void DeviceWorker::Connect(QString kind, QString target) {
         }
         QElapsedTimer latency;
         latency.start();
-        result = se->device->Connect();
+        result = se->device->GetDevice().Connect();
         se->connect_latency_ms = latency.nsecsElapsed() / 1e6;
         if (se->transport) se->transport->SetCancel(SessionCancel());
     }
@@ -626,7 +562,7 @@ void DeviceWorker::Connect(QString kind, QString target) {
             message += " (timeout: no connection within " + std::to_string(deadline_ms / 1000) + " s)";
         const std::string raw = se->transport && !se->transport->LastError().empty() ? se->transport->LastError() : message;
         EmitLog(dev::LogLevel::kWarn, "device: connection failed: " + message);
-        EmitError(Q(message), Q(HintFor(kind, se->url, raw)));
+        EmitError(Q(message), Q(HintFor(driver, text, raw)));
         se.reset();  // device first, then its transport
         EmitSnapshot(false);
         return;
@@ -637,9 +573,8 @@ void DeviceWorker::Connect(QString kind, QString target) {
     try {
         // Remember the successful choice: preselected next time (0.7).
         Settings().set(kPrefTransport, kind.toStdString());
-        if (intiface) Settings().set(kPrefIntifaceUrl, text);
-        if (kind == "tcode") Settings().set(kPrefTCodeAddress, text);
-        if (kind == "tcode-serial") Settings().set(kPrefTCodeSerialPort, text);
+        const std::string& key = driver->Info().target_setting;
+        if (!key.empty()) Settings().set(key, text);
     } catch (const std::exception& e) {
         EmitLog(dev::LogLevel::kWarn, std::string("device: choice not saved: ") + e.what());
     }
@@ -654,12 +589,13 @@ void DeviceWorker::Connect(QString kind, QString target) {
     } catch (const std::exception&) {
     }
     if (connect_test) {
-        (void)session_->device->SetVibration(0.3);
+        dev::Device& device = session_->device->GetDevice();
+        (void)device.SetVibration(0.3);
         waiter_->Sleep(150);
-        (void)session_->device->SetSuction(0.3);
+        (void)device.SetSuction(0.3);
         waiter_->Sleep(150);
         BeginStopWindow();
-        const dev::Status s = session_->device->Stop();
+        const dev::Status s = device.Stop();
         EndStopWindow();
         if (!s) EmitLog(dev::LogLevel::kWarn, "device: post-connect stop failed: " + s.message);
     }
@@ -681,7 +617,7 @@ void DeviceWorker::Stop(bool silent) {
         return;
     }
     BeginStopWindow();
-    const dev::Status s = session_->device->Stop();
+    const dev::Status s = session_->device->GetDevice().Stop();
     EndStopWindow();
     if (!s)
         CommandError(s.message);
@@ -692,7 +628,7 @@ void DeviceWorker::Stop(bool silent) {
 
 dev::Status DeviceWorker::Move(const std::string& axis, double pos, int ms) {
     const auto duration = std::chrono::milliseconds(std::max(0, ms));
-    dev::Device* d = session_->device.get();
+    dev::Device* d = &session_->device->GetDevice();
     if (axis.empty() || axis == dev::kChStroke) {
         auto* lin = dynamic_cast<dev::LinearDevice*>(d);
         if (!lin || !lin->HasLinear()) return Err("this device has no linear axis");
@@ -715,7 +651,7 @@ void DeviceWorker::ApplyLevels(const Pending& p) {
         EmitLog(dev::LogLevel::kDebug, "device: levels for the previous device dropped");
         return;
     }
-    dev::Device& d = *session_->device;
+    dev::Device& d = session_->device->GetDevice();
     const QString meant = last_identity_;
     dev::Status first_error = dev::Status::Ok();
     auto note = [&](const dev::Status& s) {
@@ -741,7 +677,7 @@ void DeviceWorker::TestRaw(QString channel, int value) {
         CommandError(kNoDevice);
         return;
     }
-    auto* raw = dynamic_cast<dev::RawCapable*>(session_->device.get());
+    auto* raw = dynamic_cast<dev::RawCapable*>(&session_->device->GetDevice());
     if (!raw) {
         CommandError("this device does not support raw values");
         return;
@@ -773,22 +709,11 @@ void DeviceWorker::ListSerialPorts() {
 
 void DeviceWorker::Tick(bool read_battery) {
     if (!session_) return;
-    Session& se = *session_;
-    if (se.neo) {
-        se.neo->TickKeepalive();
-    } else if (se.intiface) {
-        if (!se.intiface->PumpIncoming()) {
-            dev::Status why;
-            if (!se.intiface->TryReconnectOnce(&why)) {
-                HandleLost(why.message.empty() ? "the Buttplug server closed the connection" : why.message);
-                return;
-            }
-        }
-        const dev::Status s = se.intiface->Ping();
-        if (!s && !se.intiface->Connected()) {
-            HandleLost(s.message);
-            return;
-        }
+    // Sam Neo 2 keepalive; Intiface: pump, the one-shot reconnect and the ping.
+    const dev::Status s = session_->device->Tick();
+    if (!s) {
+        HandleLost(s.message);
+        return;
     }
     std::string why;
     if (!Alive(&why)) {
@@ -820,7 +745,7 @@ void DeviceWorker::RunDiagnostics() {
         QMetaObject::invokeMethod(ctl, [ctl, json] { emit ctl->diagnosticsEntry(json); }, Qt::QueuedConnection);
     };
     const dev::DiagnosticsReport report =
-        dev::RunDiagnostics(*session_->device, session_->connect_latency_ms, options);
+        dev::RunDiagnostics(session_->device->GetDevice(), session_->connect_latency_ms, options);
     const QString json = Q(dev::ToJson(report));
     QMetaObject::invokeMethod(ctl, [ctl, json] { emit ctl->diagnosticsFinished(json); }, Qt::QueuedConnection);
     finish(false);
@@ -846,7 +771,9 @@ bool DeviceController::Snapshot::operator==(const Snapshot& o) const {
            dev::ToJson(caps) == dev::ToJson(o.caps);
 }
 
-DeviceController::DeviceController(QObject* parent) : QObject(parent) {
+DeviceController::DeviceController(QObject* parent)
+    : QObject(parent), drivers_(std::make_unique<dev::DriverRegistry>()) {
+    dev::RegisterBuiltinDrivers(*drivers_);
     worker_ = new DeviceWorker(this);
     worker_->moveToThread(&thread_);
     thread_.setObjectName("samn-device");
@@ -903,6 +830,22 @@ bool DeviceController::capSuction() const { return snap_.connected && snap_.caps
 bool DeviceController::capLinear() const { return snap_.connected && snap_.caps.Has(dev::kChStroke); }
 bool DeviceController::capBattery() const { return snap_.connected && (snap_.caps.battery || snap_.battery_ok); }
 bool DeviceController::capRaw() const { return snap_.connected && snap_.raw; }
+
+QVariantList DeviceController::drivers() const {
+    QVariantList out;
+    for (const dev::DriverInfo& d : drivers_->List()) {
+        QVariantMap m;
+        m["id"] = Q(d.id);
+        m["name"] = Q(d.name);
+        m["help"] = Q(d.help);
+        m["needsAddress"] = d.needs_address;
+        m["addressExample"] = Q(d.address_example);
+        m["serialPort"] = d.transport == dev::TransportKind::kSerialLine;
+        m["simulated"] = d.simulated;
+        out << m;
+    }
+    return out;
+}
 
 void DeviceController::applySnapshot(const Snapshot& snap) {
     if (snap == snap_) return;
@@ -981,11 +924,9 @@ QString DeviceController::savedKind() const {
 }
 
 QString DeviceController::savedTarget(const QString& kind) const {
-    const char* key = kind == "intiface" ? kPrefIntifaceUrl
-                      : kind == "tcode"  ? kPrefTCodeAddress
-                      : kind == "tcode-serial" ? kPrefTCodeSerialPort
-                                               : nullptr;
-    if (!key) return {};
+    const dev::Driver* driver = drivers_->Find(kind.toStdString());
+    const std::string key = driver ? driver->Info().target_setting : std::string();
+    if (key.empty()) return {};
     try {
         samn::Settings settings;
         return Q(settings.get(key, "").get<std::string>());

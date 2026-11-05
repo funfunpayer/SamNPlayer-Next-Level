@@ -15,6 +15,26 @@ Owner question: is the Player as exact and fast as the Go version? Nothing had b
 - **Recommended next (not done):** 1. extrapolate the video playhead between media reports (gain: video lag 0-100 ms to 0-16 ms); 2. send the next stroke at its start time with a precise timer; 3. levels at their due time (low value); 4. `LowDelayOption` on the TCode TCP socket (cheap, no evidence of a problem yet); 5. measure the Bluetooth round trip on the device before any BLE change. Details, risks and protecting tests: `TIMING.md` § 6.
 - **Not measured:** a real device, the Bluetooth radio, Windows, the GStreamer backend, the GUI thread with QML rendering and video frames, the QML hop.
 
+## Handover: `cursor/mt-debug-trajectory-635a` (5 Nov)
+
+Player MT-Debug trajectory overlay (PARITY tip/partner path lines).
+
+- **Controller:** `hasTrajectory`, `trajectoryOverlay` (`player.trajectoryOverlay`, default off), `tipPathPoints()` / `partnerPathPoints()`.
+- **UI:** Inspector → View → *Show tip path* (+ hint when the script has no path); stage `trajectoryLayer` Canvas (tip orange, partner teal) + moving tip dot.
+- **Still open:** live postprocess probe (G4b leftover); idle ribbon (open #162); real donate URLs (Owner); Quality Doctor.
+
+## Handover: `claude/samn2-driver-registry` (5 Nov, D-163 first slice: device drivers)
+
+Owner: the core is the kernel, Player / Generator / Training are modules, device connections are kernel-internal and extensible. Chosen after an architecture review: drivers are compiled in and registered by explicit calls (no DLL plugins, no plugin ABI, no self-registering static objects, which the MSVC linker drops from a static library).
+
+- **Core** (`core/include/samn/device/driver.h`, `core/src/device_driver.cpp`, no Qt): `TransportKind` (none, BLE, serial line, socket line, WebSocket), `DriverInfo` (id = the kind string, name, help, transport, address field and its example, the settings key of the last target, simulated, connect timeout), `TransportRequest`, `SessionOptions` (log sink, clock), `DeviceSession` (`GetDevice`, `Info(read_battery)`, `AdoptedId`, `Alive`, `Tick`, `Pump` with a `PumpOutcome`, `HasRawValues`), `Driver` (`Info`, `Resolve`, `Create`, `Hint`), `DriverRegistry` (`Add` refuses a null driver, an empty id and a listed id; `Find`; `List` in the order added) and `RegisterBuiltinDrivers` (ble, tcode, tcode-serial, intiface, mock, the order of the device choice).
+- **What moved out of `DeviceWorker`:** the kind switch of `Connect`, the typed pointers of `Session` (neo / tcode / intiface / mock) and their branches in `SessionInfo`, `IdentityOf`, `MakeSnapshot`, `Alive`, `Pump`, `Tick` and `HintFor` (the TCode texts and `IntifaceHint`), the 20 s / 30 s connect timeouts and the target settings keys (`savedTarget` and the save after a connect now read `DriverInfo::target_setting`; keys unchanged). Intiface's pump / one-shot reconnect / ping is its session's `Tick`; its `Pump` reports a reconnect (`kReconnected`: the worker sends a snapshot at once) or that it watched the link itself (`kDone`: no `CheckAlive`, as before). The reconnect refusal, battery cache and identity semantics stay in `IntifaceDevice` unchanged; the identity's adopted index is `AdoptedId()`.
+- **Stays with the worker (app):** `MakeTransport` (BLE through `ble_factory_` when set), the transport's cancel (`SetCancel` only on `QtTransport`), the connect deadline, `BeginStopWindow` / `kStopBudgetMs` / `kStopGraceMs`, the per-owner holds, the generation counter, the emergency stop. `Session` declares the transport first (destroyed last) and owns a `DeviceSession`.
+- **QML:** `DeviceController::drivers` (`CONSTANT`, from `List()`); `InspectorPanel.qml` builds the choice, the address field, the serial port row and the help note from it.
+- **Tests:** new `tests/core/device_driver_test.cpp` (12 cases: registry order, unknown id, duplicate id, TCode Resolve for plain / udp / tcp / bad addresses and serial, the other Resolves, hints, mock / Sam Neo 2 / TCode sessions over `MockTransport`, Intiface over the fake Buttplug server incl. the reconnect-to-another-toy refusal and the pump / tick reconnect). No existing test was changed.
+- **Behaves differently (slightly):** the device choice's names and help texts come from C++ and are no longer wrapped in `qsTr` (there are no translations yet; when they come, `DriverInfo` needs translatable keys). `pickSavedPort` uses the saved target of the driver that picks a serial port instead of the literal "tcode-serial". A driver whose transport kind the app cannot build fails the connect with "no transport for the device kind" (unreachable with the five built-ins).
+- **Not verified:** real hardware (Sam Neo 2, OSR / SR6, Intiface Central) and Windows / MSVC (built and run on Linux, GCC, Qt 6.4 only).
+
 ## Handover: `claude/samn2-tidy` (5 Nov, behaviour-neutral tidy-up)
 
 Four commits, one per group. Nothing the program does changed; every existing test is unchanged except where a test moved with the code it tests (`playback_test.cpp`, one comment in `shell_qml_test.cpp`) and the six engine tests whose temp folder names got a per-process suffix (`TempPath`).
@@ -391,7 +411,9 @@ Data and file fixes from a read-only bug hunt. Each fix has a test that failed b
 
 ## Next (in order; the work list is `LESSONS.md` § Gaps, `TEST_PARITY.md` and `P3_GENERATOR.md`)
 
-0. **Generator:** G2 stack ✅ (#114–#116); Tf/Tj distance stroke ✅ (#119); G3 feel ✅; Player partner overlay ✅ (#141); extras multi (`track_multi`) ✅ (#145); G3 feel probe ✅ (#146); G4a Advanced shell ✅ (#147); G4b Expert knobs ✅ (#151, live postprocess probe still open); next MT-Debug trajectory line overlay → G8 `.sam`.
+**Kernel (D-163), one theme per PR, after the driver registry:** a ModeRegistry with a `Repeater` in `Main.qml`; a narrow `DeviceService` interface instead of `DeviceController*` in Player, Training and `PlaybackOutput`; `DeviceWorker` into its own file; registries for detectors and teachers.
+
+0. **Generator:** G2 stack ✅ (#114–#116); Tf/Tj distance stroke ✅ (#119); G3 feel ✅; Player partner overlay ✅ (#141); extras multi (`track_multi`) ✅ (#145); G3 feel probe ✅ (#146); G4a Advanced shell ✅ (#147); G4b Expert knobs ✅ (#151, live postprocess probe still open); MT-Debug trajectory overlay ✅ (this PR); next G8 `.sam` / live probe / Quality Doctor.
 1. **Look polish:** ✅ (#122, Claude takeover of Cursor #117; reduced-motion gates and a window-wide loop test added).
 2. **Owner GUI leftovers:** handbook ✅ (#150); idle ribbon (§11), real donation URLs (Manifest §2 / D-022). Empty-Play dark oval ✅ (#143); Support card shows "Donation page coming soon." Reduced motion ✅ (#120). Broader look polish after the Generator still welcome.
 3. **AI Train D-155:** script compare with labels, then golden-clip run (Owner clips).

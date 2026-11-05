@@ -1034,6 +1034,13 @@ private slots:
         QVERIFY(c.tipAt(5000).isEmpty());  // past the path
         QVERIFY(c.partnerAt(1000).isEmpty());
         QVERIFY(c.extraAt(0, 1000).isEmpty());
+        QVERIFY(c.hasTrajectory());
+        QCOMPARE(c.tipPathPoints().size(), 4);
+        QVERIFY(c.partnerPathPoints().isEmpty());
+        QVERIFY(!c.trajectoryOverlay());  // MT-Debug off by default
+        c.setTrajectoryOverlay(true);
+        QVERIFY(c.trajectoryOverlay());
+        c.setTrajectoryOverlay(false);
         QVERIFY(c.showContactMarks());
         c.setShowContactMarks(false);
         QVERIFY(!c.showContactMarks());
@@ -1059,6 +1066,8 @@ private slots:
         QCOMPARE(c.partnerAt(1100).value("x").toDouble(), 180.0);
         QCOMPARE(c.partnerAt(1100).value("y").toDouble(), 120.0);
         QVERIFY(c.partnerAt(5000).isEmpty());
+        QCOMPARE(c.partnerPathPoints().size(), 4);
+        QCOMPARE(c.partnerPathPoints().at(1).toMap().value("x").toDouble(), 180.0);
         QVERIFY(!mp.value("primary").toMap().value("fixed").toBool());
         QVERIFY(mp.value("extras").toList().at(0).toMap().value("fixed").toBool());
 
