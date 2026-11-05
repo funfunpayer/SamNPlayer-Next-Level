@@ -135,3 +135,16 @@ TEST_CASE("repair: fails closed when no retry looks like the original") {
     CHECK(r->repaired == 0);
     CHECK(r->gaps == r->failed);
 }
+
+TEST_CASE("repair: a window the splice only partly verified keeps its verified samples") {
+    std::vector<double> p(10, 5.0);
+    BlankUnverified(p, 4, 8, 6);  // spliced up to sample 6
+    for (int i = 0; i < 6; ++i) CHECK(p[size_t(i)] == 5.0);
+    CHECK(std::isnan(p[6]));
+    CHECK(std::isnan(p[7]));
+    CHECK(p[8] == 5.0);
+    CHECK(p[9] == 5.0);
+    BlankUnverified(p, 8, 20, 0);  // no splice: the whole window, clipped to the track
+    CHECK(std::isnan(p[8]));
+    CHECK(std::isnan(p[9]));
+}

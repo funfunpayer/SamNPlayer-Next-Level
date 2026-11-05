@@ -2,7 +2,15 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 1 Nov 2026, Claude, branch `claude/review-previous-work-jnjttn`: Tf/Tj smallest gap over partner and extras (`FuseTipPartners`, handover below). Before: #153 integration of #143–#152.
+**Last update:** 5 Nov 2026, Claude, branch `claude/samn2-hunt-leftovers`: `picture_signals` time axis and the `repair.cpp` partial-splice gap (handover below). Before: Tf/Tj smallest gap (`FuseTipPartners`).
+
+## Handover: `claude/samn2-hunt-leftovers` (5 Nov)
+
+The last two open items of the data-safety bug hunt. The wide-env `config_dir()` item was already fixed on main (`cursor/config-dir-wide-env-635a`).
+
+- **`picture_signals`:** one entry was pushed per decoded frame that crossed a step, so a clip slower than the step (or a gap or start offset) made `luma[i]` not the picture at `i * step_ms`. Now the sample sits at index `ms / step_ms`; skipped steps hold the last picture with motion 0. Test `a clip slower than the step keeps one sample per step on the time axis`.
+- **`repair.cpp` splice:** a failed window only partly verified by the retry was blanked in full, wiping the samples just spliced in, against the "verified part is kept" comment. New `BlankUnverified` blanks only from the verified reach. Test `a window the splice only partly verified keeps its verified samples`.
+- **Not verified:** no end-to-end clip that ends a retry mid-window; the helper is unit-tested only. `run_starts` still has no consumer.
 
 ## Handover: `claude/review-previous-work-jnjttn` — FuseTipPartners (1 Nov)
 
@@ -97,7 +105,7 @@ Takeover of Claude's Generator bug-hunt PR (CI was green; conflicted with #141 o
 - Track cache key covers `adaptive_cuts` and the seed; `record_checks` gives no key; `kTrackCacheVersion` 3. Test `spec FR-11: the cache key covers ...`.
 - `PositionsToActions` with `scene_ranges`: samples outside every range stay within 0..100. Test `post: samples outside every scene range stay within 0..100`.
 
-Not done: the `repair.cpp` camera-baseline splice (dev tool only) and `picture_signals` indexing. **Supersedes open PR #140** once this merges.
+**Supersedes open PR #140** once this merges.
 
 ## Handover: `cursor/code-gui-polish-635a` (31 Oct)
 

@@ -50,3 +50,26 @@ TEST_CASE("picture signals: black is dark, a still picture is calm, a moving one
     CHECK(samn::vision::MeasurePictureSignals("/nonexistent/clip.mp4", {}, &error).luma.empty());
     CHECK_FALSE(error.empty());
 }
+
+TEST_CASE("picture signals: a clip slower than the step keeps one sample per step on the time axis") {
+    const fs::path p = fs::temp_directory_path() / ("samn_signals_slow_" + std::to_string(std::random_device{}()) + ".avi");
+    {
+        cv::VideoWriter w(p.u8string(), cv::CAP_OPENCV_MJPEG, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'), 2,
+                          cv::Size(128, 72));
+        REQUIRE(w.isOpened());
+        for (int i = 0; i < 8; ++i)  // 4 s at 2 fps: black for 2 s, then grey
+            w.write(cv::Mat(72, 128, CV_8UC3, i < 4 ? cv::Scalar(0, 0, 0) : cv::Scalar(200, 200, 200)));
+    }
+    samn::vision::PictureSignalOptions o;
+    o.step_ms = 250;
+    std::string error;
+    const auto s = samn::vision::MeasurePictureSignals(p, o, &error);
+    fs::remove(p);
+    INFO(error);
+    REQUIRE(s.luma.size() >= 15);  // 4 s / 250 ms, not one entry per frame
+    CHECK(s.luma.size() == s.motion.size());
+    CHECK(s.luma[3] < 0.05);   // 0.75 s: still black
+    CHECK(s.luma[10] > 0.5);   // 2.5 s: grey
+    CHECK(s.motion[3] == 0);   // a held picture does not change
+    CHECK(s.motion[8] > 0.3);  // the cut at 2 s lands on its own step
+}
