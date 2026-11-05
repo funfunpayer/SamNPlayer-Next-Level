@@ -1,4 +1,5 @@
 #include "samn/device/tcode.h"
+#include "samn/text.h"
 
 #include <algorithm>
 #include <cctype>
@@ -23,11 +24,6 @@ std::string Trim(const std::string& s) {
     if (b == std::string::npos) return "";
     const std::size_t e = s.find_last_not_of(ws);
     return s.substr(b, e - b + 1);
-}
-
-std::string Lower(std::string s) {
-    for (char& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    return s;
 }
 
 // Go net.SplitHostPort. Returns false on its errors.
@@ -129,7 +125,7 @@ Status ParseTCodeAddress(const std::string& address, TCodeAddress* out) {
         std::string host;
         if (!scheme_ok || !ParseUrlHost(a.substr(sep + 3), &host) || host.empty())
             return Status::Error(invalid);
-        const std::string scheme = Lower(a.substr(0, sep));
+        const std::string scheme = AsciiLower(a.substr(0, sep));
         if (scheme != "udp" && scheme != "tcp")
             return Status::Error("tcode: use udp:// or tcp:// (got \"" + scheme + "\")");
         network = scheme;

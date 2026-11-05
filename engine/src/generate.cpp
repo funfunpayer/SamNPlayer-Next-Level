@@ -6,7 +6,9 @@
 
 #include <nlohmann/json.hpp>
 
+#include "samn/vision/canceled.h"
 #include "samn/contact_marks.h"
+#include "samn/engine/post_track.h"
 #include "samn/fileio.h"
 #include "samn/ozone.h"
 #include "samn/samn_file.h"
@@ -187,7 +189,7 @@ void GenerateUnguarded(const GenerateRequest& req, uint64_t run_id, const std::f
             return;
         }
         if (tr->canceled) {
-            emit(GenerateEventKind::kCanceled, "canceled");
+            emit(GenerateEventKind::kCanceled, kCanceled);
             return;
         }
         if (!cache_key.empty()) {
@@ -206,9 +208,7 @@ void GenerateUnguarded(const GenerateRequest& req, uint64_t run_id, const std::f
         const double travel = Percentile(tr->positions, 98) - Percentile(tr->positions, 2);
         const double size = tr->horizontal ? req.box.width : req.box.height;
         if (size > 0 && travel < kMinTravelShare * size) {
-            emit(GenerateEventKind::kError,
-                 "no discernible motion in the tracked region: check the box size and place (avoid near-full-frame "
-                 "boxes); the filters need visible stroke motion");
+            emit(GenerateEventKind::kError, kNoMotionError);
             return;
         }
     }
@@ -229,7 +229,7 @@ void GenerateUnguarded(const GenerateRequest& req, uint64_t run_id, const std::f
         emit(GenerateEventKind::kNote, buf);
     }
     if (cancel && cancel()) {
-        emit(GenerateEventKind::kCanceled, "canceled");
+        emit(GenerateEventKind::kCanceled, kCanceled);
         return;
     }
     const std::vector<OMarker> markers = req.auto_ozone ? AutoOZoneMarkers(sig->actions) : std::vector<OMarker>{};

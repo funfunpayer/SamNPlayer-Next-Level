@@ -17,14 +17,14 @@ Functions use PascalCase and struct fields use snake_case.
 | `marks.h` | Bookmarks and chapters, OFS times; the marked range (`<script>.marker.json`) | Go `funscript/bookmarks.go` | ✅ files byte-identical |
 | `script_finder.h` | Script for a video: beside it, folders, tolerant names, variants | Go `app_open_media.go` | ✅ |
 | `settings.h` | Settings JSON with 0.7 keys, atomic writes | — | ✅ |
-| `text.h` | `FoldCase`: UTF-8 lower case without ICU (Latin, Greek, Cyrillic, full-width) | Go `strings.ToLower` | ✅ |
+| `text.h` | `FoldCase`: UTF-8 lower case without ICU (Latin, Greek, Cyrillic, full-width); `AsciiLower` (A-Z only) for protocol words, extensions and JSON keys | Go `strings.ToLower` | ✅ |
 | `number.h` | `ParseDoublePrefix` / `StrToDouble` / `FormatFixed`: decimal numbers that ignore the process locale (strtod, stod and `%f` read it; a comma locale made "1.6" read as 1) | — | ✅ incl. comma-locale tests |
 | `playback.h` | Offset, script time, loop, video beside a script, session | Go `app_playback.go` | ✅ |
 | `stroke_filter.h` | Live stroker filter (PCHIP/MAKIMA, speed limit, idle fill) | Go `funscript/stroke_filter.go` | ✅ parity |
 | `output_levels.h` | Reduce peaks, the soft start ramp and the Extended-O scale schedule as functions of time | Go `player/player.go` (ReducePeak, setOutput), `player/sync.go` (softStartWithPositions), `player/extendedo.go` | ✅ parity |
 | `beatbar.h`, `beat_strokes.h` | Cock Hero beat bar → beats → strokes | Go `generator/beatbar.go` | ✅ parity |
 | `curve_geometry.h` | Curve as 0.7 draws it: Catmull-Rom (control points clamped to 0-100), tempo wave, density switch, zoom window. Binary search instead of 0.7's full scans. | 0.7 `playback.js` (smoothCurvePath, drawSpeedWave, zoomByFactor) | ✅ tempo wave equals 0.7 (node reference) |
-| `fileio.h` | `WriteFileAtomic`: temp file, flush, rename. The one writer for marks, `.samn`, settings and the range marker. | Go `writeFileAtomic` | ✅ |
+| `fileio.h` | `WriteFileAtomic`: temp file, flush, rename. The one writer for marks, `.samn`, settings and the range marker. `ReadFileToString`: the whole file or nullopt. | Go `writeFileAtomic` | ✅ |
 | `library.h` | Library lists (recent 8, favorites 50, scripts 50), settings keys `library.*` | 0.7 `player_layout.js` | ✅ |
 | `audio_envelope.h` | Loudness envelope 0..1 per 50 ms (Audio Level lane, vibration from sound). No ffmpeg: the app decodes. | Go `generator/audio_vibration.go` | ✅ Go tests ported |
 | `device/device.h`, `device/transport.h` | `Device` + optional interfaces (linear, multi-axis, motor level, raw, battery), `Status`; `Transport` = the I/O seam (BLE GATT write / line writer / WebSocket text) the app implements | Go `device/device.go` | ✅ |
@@ -57,6 +57,7 @@ Functions use PascalCase and struct fields use snake_case.
 | `teacher_votes.h` | Votes between several teachers: plain or uncertain proposals | D-155 step 4 | ✅ |
 | `log_buffer.h` | The app's log: ring buffer, level filter, one line format | 0.7 `logging/`, `log.js` | ✅ |
 | `lru_cache.h` | `LruCache`: a cache with a hard size budget, least recently used dropped first; not thread-safe | D-142 | ✅ |
+| `time_util.h` | `TimeToTm`: UTC or local broken-down time without the `gmtime_r` / `gmtime_s` split | — | ✅ (through the log and settings tests) |
 | `sha256.h` | `Sha256`: dependency-free content hash for benchmark manifests | GD-05 | ✅ |
 | `update_check.h` | Update check: release URLs, tag parsing, newer-than compare, release-notes preview; check only | 0.7 `update/update.go`, D-147 | ✅ |
 | `video_info.h` | What a video's header says: codec name from a FourCC, never a guessed default | issue #4 (MEDIA-01) | ✅ |
@@ -73,6 +74,7 @@ Frames, tracking and detection for the Generator and AI Train (P3, D-133). Built
 | `include/samn/vision/frame_reader.h` | `FrameReader`: FFmpeg backend only, every frame with `index` and `pts_us` (video time), frame-exact `SeekMs`. |
 | `include/samn/vision/tracker.h` | `CreateTracker(kCsrt)`, the one tracker factory (no fallback, GD-02); `VisionSelfCheck()`, `OpenCvVersion()`. |
 | `include/samn/vision/onnx_detector.h` | `OnnxDetector`: an ONNX object detector run with ONNX Runtime; YOLOv8 (NudeNet) and DETR (RF-DETR student) outputs, told apart by the model's outputs (D-155 steps 4, 5). |
+| `include/samn/vision/canceled.h` | `samn::kCanceled`: the error text of a stopped run, set by the frame loops here and in the engine and compared by the app. |
 | `include/samn/vision/picture_signals.h` | Mean brightness and mean change per step over a clip (small grey frames), the picture input of the phase rules (D-157). |
 
 Tests: `tests/vision/*_test.cpp` (`vision_tests`, doctest; generated test-pattern clips, no media).
@@ -85,7 +87,7 @@ The Generator's engine (P3, D-140, D-142): tracking, signal chain, runs, self-ch
 |---|---|
 | `track_box.h` | `TrackBox`: CSRT single-box tracking with scene cuts, camera compensation, appearance memory, jump guard and velocity coast; the raw box-centre track. |
 | `track_cache.h` | Cache of raw tracks keyed by video content, algorithm version and tracking options (FR-11), so a post-processing change skips decode and tracking. |
-| `post_track.h` | Raw track to funscript actions: Savitzky-Golay, detrend, bandpass, normalisation, peaks with prominence, keyframes, minimum interval, RDP. |
+| `post_track.h` | Raw track to funscript actions: Savitzky-Golay, detrend, bandpass, normalisation, peaks with prominence, keyframes, minimum interval, RDP; `kNoMotionError`. |
 | `signal_chain.h` | Profile recipes, the default detrend (GD-12), post-processing, speed limit and the distance-profile clamp. |
 | `tip_distance.h` | Tip to partner gap for the Tf/Tj distance profiles. |
 | `tip_find.h` | Find tip: proposes the tip box from the video's rhythmic motion (optical flow, camera compensation, FFT score). |
@@ -105,6 +107,7 @@ Controllers are `QObject`s registered for QML; their tests are `tests/app/<name>
 
 | File | What |
 |---|---|
+| `src/qt_paths.h`, `src/ai_paths.h` | Qt string to path / UTF-8 conversions and the file: URL helper shared by the controllers; `AiDir()` (the AI Train folder, shared by the trainer and the health check). |
 | `src/theme.h` | All colours and sizes of the Flow look (QML singleton `Theme`). |
 | `src/player_controller.*` | Player logic for QML: video first (folders, variants), `.samn`, lanes, heatmap, chapters, bookmarks, offset, loop, zoom window, errors. |
 | `src/curve_item.*` | One curve lane in the 0.7 look (soft line, glow, fill, dots, live dot, tempo wave). The static layer is cached; playing only moves the playhead. |

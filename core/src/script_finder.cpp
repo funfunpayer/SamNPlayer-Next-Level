@@ -27,12 +27,6 @@ bool is_sep(char c) {
 #endif
 }
 
-std::string ascii_lower(std::string s) {
-    for (auto& c : s)
-        if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
-    return s;
-}
-
 bool ends_with(const std::string& s, const std::string& suf) {
     return s.size() >= suf.size() && s.compare(s.size() - suf.size(), suf.size(), suf) == 0;
 }
@@ -251,7 +245,7 @@ VideoScriptMatch find_script_for_video(const std::string& video_path_in,
     std::set<std::string> seen;
 
     auto consider = [&](const std::string& path, bool beside) {
-        std::string ext = ascii_lower(go_ext(path));
+        std::string ext = AsciiLower(go_ext(path));
         if (!has_script_ext(ext)) return;
         std::string key = FoldCase(normpath(path));
         if (seen.count(key)) return;
@@ -312,7 +306,7 @@ void walk_script_folder(const std::string& root_in,
     auto visit_file = [&](const std::string& p) {
         ++files;
         if (files > max_files) return false;  // limit reached: stop the whole walk
-        if (has_script_ext(ascii_lower(go_ext(p)))) fn(p);
+        if (has_script_ext(AsciiLower(go_ext(p)))) fn(p);
         return true;
     };
 

@@ -394,9 +394,7 @@ std::optional<PostResult> PositionsToActions(const std::vector<double>& t_in, co
         auto [lo, hi] = range_of(s);
         if (hi - lo < 1e-6) std::tie(lo, hi) = MinMax(s);
         if (hi - lo < 1e-6)
-            return fail(
-                "no discernible motion in the tracked region: check the box size and place (avoid near-full-frame "
-                "boxes); the filters need visible stroke motion");
+            return fail(kNoMotionError);
         for (int i = 0; i < n; ++i) pos[i] = Clip01((s[i] - lo) / (hi - lo)) * 100.0;
     }
     if (!o.invert)

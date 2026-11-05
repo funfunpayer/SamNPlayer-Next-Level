@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <atomic>
 #include <cerrno>
+#include <fstream>
+#include <sstream>
 #include <stdexcept>
 #include <vector>
 
@@ -74,6 +76,15 @@ void WriteFileAtomic(const fs::path& target, const std::string& data) {
         throw std::runtime_error("cannot write " + target.u8string());
     }
 #endif
+}
+
+std::optional<std::string> ReadFileToString(const std::filesystem::path& path) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in) return std::nullopt;
+    std::ostringstream ss;
+    ss << in.rdbuf();
+    if (in.bad()) return std::nullopt;
+    return ss.str();
 }
 
 }  // namespace samn

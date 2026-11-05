@@ -9,6 +9,7 @@
 #include <opencv2/imgproc.hpp>
 #include <opencv2/video/tracking.hpp>
 
+#include "samn/vision/canceled.h"
 #include "samn/vision/frame_reader.h"
 #include "track_parts.h"
 
@@ -188,7 +189,7 @@ std::optional<TipFindResult> FindTip(const std::filesystem::path& video, const T
     std::vector<std::vector<double>> series(size_t(kGridRows) * kGridCols);
     int frameIdx = 0, analysed = 0;
     while (frameIdx < maxFrames) {
-        if (o.cancel && o.cancel()) return fail("canceled");
+        if (o.cancel && o.cancel()) return fail(kCanceled);
         if (o.progress) o.progress(std::min(99, frameIdx * 100 / maxFrames));
         bool ok = true;
         for (int i = 0; i < sampleEvery; ++i) {

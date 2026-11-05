@@ -6,6 +6,7 @@
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
 
+#include "samn/vision/canceled.h"
 #include "samn/vision/frame_reader.h"
 
 namespace samn::engine {
@@ -116,7 +117,7 @@ std::optional<BeatBarResult> DetectBeatBarBeats(const std::filesystem::path& vid
         res.beats_ms = timer.Beats();
         res.bpm = MedianBpm(res.beats_ms);
     } catch (const Canceled&) {
-        if (error) *error = "canceled";
+        if (error) *error = kCanceled;
         return std::nullopt;
     }
     return res;

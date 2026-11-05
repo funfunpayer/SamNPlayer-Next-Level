@@ -11,4 +11,9 @@ namespace samn {
 // compare equal. Other characters and invalid bytes pass through unchanged.
 std::string FoldCase(const std::string& utf8);
 
+// Only A-Z become a-z; every other byte is kept. For protocol words, file
+// extensions and JSON keys, which are ASCII. Not for user-visible text: use
+// FoldCase there.
+std::string AsciiLower(std::string s);
+
 }  // namespace samn

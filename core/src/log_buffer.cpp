@@ -1,4 +1,6 @@
 #include "samn/log_buffer.h"
+#include "samn/text.h"
+#include "samn/time_util.h"
 
 #include <cctype>
 #include <cstdio>
@@ -9,7 +11,8 @@ namespace samn {
 std::optional<LogSeverity> ParseLogLevel(const std::string& name) {
     std::string n;
     for (char c : name)
-        if (!std::isspace(static_cast<unsigned char>(c))) n += char(std::tolower(static_cast<unsigned char>(c)));
+        if (!std::isspace(static_cast<unsigned char>(c))) n += c;
+    n = AsciiLower(n);
     if (n == "debug") return LogSeverity::kDebug;
     if (n == "info") return LogSeverity::kInfo;
     if (n == "warn" || n == "warning") return LogSeverity::kWarn;
@@ -29,12 +32,7 @@ const char* LogLevelName(LogSeverity level) {
 
 std::string FormatLogLine(const LogEntry& e) {
     const std::time_t secs = static_cast<std::time_t>(e.ms / 1000);
-    std::tm tm{};
-#ifdef _WIN32
-    localtime_s(&tm, &secs);
-#else
-    localtime_r(&secs, &tm);
-#endif
+    const std::tm tm = TimeToTm(secs, false);
     const char* names[] = {"DEBUG", "INFO", "WARN", "ERROR"};
     char head[48];
     std::snprintf(head, sizeof head, "%02d:%02d:%02d.%03d  %-5s  ", tm.tm_hour, tm.tm_min, tm.tm_sec,

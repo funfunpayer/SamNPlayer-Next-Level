@@ -4,6 +4,7 @@
 #include <cwctype>
 #include <system_error>
 
+#include "samn/vision/canceled.h"
 #include "samn/engine/tip_find.h"
 #include "samn/samn_file.h"
 
@@ -58,7 +59,7 @@ QueueItemOutcome GenerateQueueItem(const std::filesystem::path& video, const Que
     std::string error;
     const auto tip = FindTip(video, to, &error);
     if (!tip) {
-        out.status = error == "canceled" ? QueueItemStatus::kCanceled : QueueItemStatus::kFailed;
+        out.status = error == kCanceled ? QueueItemStatus::kCanceled : QueueItemStatus::kFailed;
         out.message = error;
         return out;
     }

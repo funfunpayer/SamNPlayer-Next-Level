@@ -1,5 +1,6 @@
 #include "samn/settings.h"
 #include "samn/fileio.h"
+#include "samn/time_util.h"
 
 #include <chrono>
 #include <cstdio>
@@ -68,12 +69,7 @@ bool replace_file(const fs::path& from, const fs::path& to) {
 fs::path broken_aside_path(const fs::path& settings_path) {
     using clock = std::chrono::system_clock;
     const auto t = clock::to_time_t(clock::now());
-    std::tm tm{};
-#ifdef _WIN32
-    gmtime_s(&tm, &t);
-#else
-    gmtime_r(&t, &tm);
-#endif
+    const std::tm tm = TimeToTm(t, true);
     char stamp[32];
     std::snprintf(stamp, sizeof stamp, "%04d%02d%02d-%02d%02d%02d", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
                   tm.tm_hour, tm.tm_min, tm.tm_sec);
@@ -105,13 +101,11 @@ Settings::Settings(fs::path path) : path_(path.empty() ? config_dir() / "setting
     if (!fs::exists(path_, ec) && !ec) return;  // not found: start empty
     bool broken = false;
     {
-        std::ifstream in(path_, std::ios::binary);
-        if (!in) {
+        const auto text = ReadFileToString(path_);
+        if (!text) {
             broken = true;
         } else {
-            std::ostringstream ss;
-            ss << in.rdbuf();
-            auto parsed = nlohmann::json::parse(ss.str(), nullptr, false);
+            auto parsed = nlohmann::json::parse(*text, nullptr, false);
             if (parsed.is_object())
                 data_ = std::move(parsed);
             else if (!parsed.is_null())
@@ -134,11 +128,9 @@ void Settings::RefreshLocked(bool force) const {
     if (ec) return;  // no file (yet): keep what we have
     const auto size = fs::file_size(path_, ec);
     if (ec || (!force && stamp == stamp_ && size == size_)) return;
-    std::ifstream in(path_, std::ios::binary);
-    if (!in) return;
-    std::ostringstream ss;
-    ss << in.rdbuf();
-    auto parsed = nlohmann::json::parse(ss.str(), nullptr, false);
+    const auto text = ReadFileToString(path_);
+    if (!text) return;
+    auto parsed = nlohmann::json::parse(*text, nullptr, false);
     if (!parsed.is_object()) return;  // a half-broken file never wipes our values
     data_ = std::move(parsed);
     stamp_ = stamp;

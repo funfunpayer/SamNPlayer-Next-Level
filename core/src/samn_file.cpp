@@ -4,6 +4,7 @@
 #include "samn/contact_marks.h"
 #include "samn/fileio.h"
 #include "samn/number.h"
+#include "samn/text.h"
 
 #include <algorithm>
 #include <atomic>
@@ -714,12 +715,6 @@ JV Enc(const Document& d) {
 
 [[noreturn]] void Fail(const std::string& msg) { throw SamnError(msg); }
 
-std::string AsciiLower(std::string s) {
-    for (char& c : s)
-        if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
-    return s;
-}
-
 struct ObjView {
     const JV& o;
     const JV* Find(const char* name) const {
@@ -1094,12 +1089,9 @@ void DecodeValue(const JV& v, FunscriptView& r) {
 // ---------------------------------------------------------------------------
 
 bool ReadAll(const fs::path& path, std::string& out) {
-    std::ifstream in(path, std::ios::binary);
-    if (!in) return false;
-    std::ostringstream ss;
-    ss << in.rdbuf();
-    if (in.bad()) return false;
-    out = ss.str();
+    auto text = ReadFileToString(path);
+    if (!text) return false;
+    out = std::move(*text);
     return true;
 }
 
