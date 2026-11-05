@@ -182,7 +182,7 @@ The numbers show one real problem: the video path's stroke start (and level) lag
 
 ## 7. Video playhead extrapolation (measured)
 
-**Owner decision (5 Nov 2026):** recommendation 1 is implemented. Only the video path of the Player changed; the script clock, the Editor, Training and the Generator (its own `MediaPlayer`, no device output) are untouched.
+**Owner decision (5 Nov 2026, D-164):** recommendation 1 is implemented. Only the video path of the Player changed; the script clock, the Editor, Training and the Generator (its own `MediaPlayer`, no device output) are untouched.
 
 ### 7.1 What the Player does now
 

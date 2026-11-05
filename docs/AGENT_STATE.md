@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 5 Nov 2026, Claude, branch `claude/samn2-playhead`: the video playhead is extrapolated between the media position reports (Owner decision D-163, recommendation 1 of `TIMING.md`; handover below). It carries the timing bench and `TIMING.md` of `claude/samn2-timing-audit` (PR #159, not merged yet). Before: `claude/samn2-tidy` (a behaviour-neutral tidy-up).
+**Last update:** 5 Nov 2026, Claude, branch `claude/samn2-playhead`: the video playhead is extrapolated between the media position reports (Owner decision D-164, recommendation 1 of `TIMING.md`; handover below), merged with `main` after #159 (timing audit), #160 and #161. Before: `claude/samn2-timing-audit` (the device path's end-to-end timing measured, no behaviour changed, #159).
 
 ## Handover: `claude/samn2-playhead` (5 Nov, video playhead extrapolation)
 
@@ -14,8 +14,38 @@ With a video, `QMediaPlayer` reports its position every 100 ms (Qt 6.4 FFmpeg; 5
 - **Unchanged:** the script clock path (`setPlaying` / `setVideoPositionMs`), Editor, Training, the Generator page (its own player, no device output), soft seek, soft start, speed limit, offset (PS-01).
 - **Tests:** `tests/core/playhead_test.cpp` (13 cases), `playback_output_test` (8 new `video*` / `scriptClock*` cases; the new ones failed against a stub with the old behaviour). No existing assertion changed.
 - **Measured** (`TIMING.md` § 7, `benchmarks/TIMING_PLAYHEAD_2026-11-05.md`): stroke start 42 -> 4.6 ms p50, 90 -> 12.7 ms p99, max 15.7; at most 3.7 % shorter than scripted (was 20.4 %); the sent duration equals the formula in every move. The bench got the scenarios `media raw` (reports only) beside `media`, and a "move shorter than scripted" row.
-- **Brought in:** `tests/app/timing_bench.cpp`, `tests/app/CMakeLists.txt`, `docs/TIMING.md` and `docs/benchmarks/TIMING_2026-11-05.md` from `claude/samn2-timing-audit` (PR #159). Merging after #159 will conflict in `TIMING.md` (this branch only appends § 7 and changes the § 6 heading), `VERSIONS_AND_PLANS.md` (the G2.5 row) and this file.
+- **Timing audit:** `tests/app/timing_bench.cpp` and `docs/TIMING.md` came from `claude/samn2-timing-audit` (#159, now in `main`); this branch adds the `media raw` scenarios and the squeeze row to the bench, § 7 to `TIMING.md` and changes its § 6 heading.
 - **Not verified:** Windows with Qt 6.7.3 (50 ms reports, cap 60 ms), a real device, the GStreamer backend, a GUI thread that also renders.
+## Handover: `claude/samn2-timing-audit` (5 Nov, timing audit, measurement only)
+
+Owner question: is the Player as exact and fast as the Go version? Nothing had been measured. **No behaviour was changed.**
+
+- **`docs/TIMING.md`:** the timing path with file/line references (script clock, media player reports, `PlaybackOutput`, the worker queue, every transport, worst case per stage), the Go 0.7 comparison (read from the 0.7 repository, not in this repo), the results, caveats, findings and a ranked recommendation. All rows: `docs/benchmarks/TIMING_2026-11-05.md`.
+- **Bench:** `tests/app/timing_bench.cpp`, target `timing_bench`, built with the tests and **not** registered with ctest (as `clip_prep_real_check`). The real `ScriptClock` / `QMediaPlayer`, `PlaybackOutput`, `DeviceController` + worker and the real TCode UDP/TCP and Intiface transports into stand-ins on their own threads that stamp each write with the steady clock; a Sam Neo 2 stand-in transport (optional ack model). About 15 min for all scenarios; `--seconds`, `--only`, `--load`.
+- **Key numbers** (Linux, Qt 6.4.2, offscreen, 4 cores, 3 repetitions at loadavg below 1.4): report -> wire 0.3-0.7 ms p50, 1.6-5 ms p99 on every transport, also with 3 busy threads; levels and stroke starts late by the sampling lag, 8-9 ms p50 / 17 ms p99 with the 16 ms clock and **42 ms p50 / 90 ms p95 with a video** (Qt 6.4.2 FFmpeg reports every 100 ms; Qt 6.7.3, the release, every 50 ms per its source); stroke ends 1 ms p50 / 4 ms p99 after due on every path; sent durations equal the formula in every move (also 0.5x / 2x and the speed limit); offset +/-200 shifts the wire by exactly +/-200.
+- **Findings worth knowing:** `Qt::PreciseTimer` would change nothing (Qt already treats coarse timers of 20 ms or less as precise, on Windows with the multimedia timer); 0.7 sampled the video every ~250 ms, so SamN2 is at least as exact in every mode. Rare single gaps (one report interval up to 112 ms, one `update` call of 105 ms) were seen about once per 60 s run, cause not identified.
+- **Recommended next (not done):** 1. extrapolate the video playhead between media reports (gain: video lag 0-100 ms to 0-16 ms); 2. send the next stroke at its start time with a precise timer; 3. levels at their due time (low value); 4. `LowDelayOption` on the TCode TCP socket (cheap, no evidence of a problem yet); 5. measure the Bluetooth round trip on the device before any BLE change. Details, risks and protecting tests: `TIMING.md` § 6.
+- **Not measured:** a real device, the Bluetooth radio, Windows, the GStreamer backend, the GUI thread with QML rendering and video frames, the QML hop.
+
+## Handover: `cursor/mt-debug-trajectory-635a` (5 Nov)
+
+Player MT-Debug trajectory overlay (PARITY tip/partner path lines).
+
+- **Controller:** `hasTrajectory`, `trajectoryOverlay` (`player.trajectoryOverlay`, default off), `tipPathPoints()` / `partnerPathPoints()`.
+- **UI:** Inspector → View → *Show tip path* (+ hint when the script has no path); stage `trajectoryLayer` Canvas (tip orange, partner teal) + moving tip dot.
+- **Still open:** live postprocess probe (G4b leftover); idle ribbon (open #162); real donate URLs (Owner); Quality Doctor.
+
+## Handover: `claude/samn2-driver-registry` (5 Nov, D-163 first slice: device drivers)
+
+Owner: the core is the kernel, Player / Generator / Training are modules, device connections are kernel-internal and extensible. Chosen after an architecture review: drivers are compiled in and registered by explicit calls (no DLL plugins, no plugin ABI, no self-registering static objects, which the MSVC linker drops from a static library).
+
+- **Core** (`core/include/samn/device/driver.h`, `core/src/device_driver.cpp`, no Qt): `TransportKind` (none, BLE, serial line, socket line, WebSocket), `DriverInfo` (id = the kind string, name, help, transport, address field and its example, the settings key of the last target, simulated, connect timeout), `TransportRequest`, `SessionOptions` (log sink, clock), `DeviceSession` (`GetDevice`, `Info(read_battery)`, `AdoptedId`, `Alive`, `Tick`, `Pump` with a `PumpOutcome`, `HasRawValues`), `Driver` (`Info`, `Resolve`, `Create`, `Hint`), `DriverRegistry` (`Add` refuses a null driver, an empty id and a listed id; `Find`; `List` in the order added) and `RegisterBuiltinDrivers` (ble, tcode, tcode-serial, intiface, mock, the order of the device choice).
+- **What moved out of `DeviceWorker`:** the kind switch of `Connect`, the typed pointers of `Session` (neo / tcode / intiface / mock) and their branches in `SessionInfo`, `IdentityOf`, `MakeSnapshot`, `Alive`, `Pump`, `Tick` and `HintFor` (the TCode texts and `IntifaceHint`), the 20 s / 30 s connect timeouts and the target settings keys (`savedTarget` and the save after a connect now read `DriverInfo::target_setting`; keys unchanged). Intiface's pump / one-shot reconnect / ping is its session's `Tick`; its `Pump` reports a reconnect (`kReconnected`: the worker sends a snapshot at once) or that it watched the link itself (`kDone`: no `CheckAlive`, as before). The reconnect refusal, battery cache and identity semantics stay in `IntifaceDevice` unchanged; the identity's adopted index is `AdoptedId()`.
+- **Stays with the worker (app):** `MakeTransport` (BLE through `ble_factory_` when set), the transport's cancel (`SetCancel` only on `QtTransport`), the connect deadline, `BeginStopWindow` / `kStopBudgetMs` / `kStopGraceMs`, the per-owner holds, the generation counter, the emergency stop. `Session` declares the transport first (destroyed last) and owns a `DeviceSession`.
+- **QML:** `DeviceController::drivers` (`CONSTANT`, from `List()`); `InspectorPanel.qml` builds the choice, the address field, the serial port row and the help note from it.
+- **Tests:** new `tests/core/device_driver_test.cpp` (12 cases: registry order, unknown id, duplicate id, TCode Resolve for plain / udp / tcp / bad addresses and serial, the other Resolves, hints, mock / Sam Neo 2 / TCode sessions over `MockTransport`, Intiface over the fake Buttplug server incl. the reconnect-to-another-toy refusal and the pump / tick reconnect). No existing test was changed.
+- **Behaves differently (slightly):** the device choice's names and help texts come from C++ and are no longer wrapped in `qsTr` (there are no translations yet; when they come, `DriverInfo` needs translatable keys). `pickSavedPort` uses the saved target of the driver that picks a serial port instead of the literal "tcode-serial". A driver whose transport kind the app cannot build fails the connect with "no transport for the device kind" (unreachable with the five built-ins).
+- **Not verified:** real hardware (Sam Neo 2, OSR / SR6, Intiface Central) and Windows / MSVC (built and run on Linux, GCC, Qt 6.4 only).
 
 ## Handover: `claude/samn2-tidy` (5 Nov, behaviour-neutral tidy-up)
 
@@ -393,7 +423,9 @@ Data and file fixes from a read-only bug hunt. Each fix has a test that failed b
 
 ## Next (in order; the work list is `LESSONS.md` § Gaps, `TEST_PARITY.md` and `P3_GENERATOR.md`)
 
-0. **Generator:** G2 stack ✅ (#114–#116); Tf/Tj distance stroke ✅ (#119); G3 feel ✅; Player partner overlay ✅ (#141); extras multi (`track_multi`) ✅ (#145); G3 feel probe ✅ (#146); G4a Advanced shell ✅ (#147); G4b Expert knobs ✅ (#151, live postprocess probe still open); next MT-Debug trajectory line overlay → G8 `.sam`.
+**Kernel (D-163), one theme per PR, after the driver registry:** a ModeRegistry with a `Repeater` in `Main.qml`; a narrow `DeviceService` interface instead of `DeviceController*` in Player, Training and `PlaybackOutput`; `DeviceWorker` into its own file; registries for detectors and teachers.
+
+0. **Generator:** G2 stack ✅ (#114–#116); Tf/Tj distance stroke ✅ (#119); G3 feel ✅; Player partner overlay ✅ (#141); extras multi (`track_multi`) ✅ (#145); G3 feel probe ✅ (#146); G4a Advanced shell ✅ (#147); G4b Expert knobs ✅ (#151, live postprocess probe still open); MT-Debug trajectory overlay ✅ (this PR); next G8 `.sam` / live probe / Quality Doctor.
 1. **Look polish:** ✅ (#122, Claude takeover of Cursor #117; reduced-motion gates and a window-wide loop test added).
 2. **Owner GUI leftovers:** handbook ✅ (#150); idle ribbon (§11), real donation URLs (Manifest §2 / D-022). Empty-Play dark oval ✅ (#143); Support card shows "Donation page coming soon." Reduced motion ✅ (#120). Broader look polish after the Generator still welcome.
 3. **AI Train D-155:** script compare with labels, then golden-clip run (Owner clips).

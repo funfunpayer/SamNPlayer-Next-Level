@@ -1304,6 +1304,27 @@ void PlayerController::setShowContactMarks(bool on) {
     emit viewOptionsChanged();
 }
 
+bool PlayerController::trajectoryOverlay() const {
+    return const_cast<PlayerController*>(this)->uiValue(QStringLiteral("player.trajectoryOverlay"), false).toBool();
+}
+
+void PlayerController::setTrajectoryOverlay(bool on) {
+    if (on == trajectoryOverlay()) return;
+    setUiValue(QStringLiteral("player.trajectoryOverlay"), on);
+    emit viewOptionsChanged();
+}
+
+namespace {
+
+QVariantList PathPoints(const std::vector<samn::TrajectoryPoint>& path) {
+    QVariantList out;
+    out.reserve(int(path.size()));
+    for (const auto& p : path) out.append(QVariantMap{{"x", p.x}, {"y", p.y}});
+    return out;
+}
+
+}  // namespace
+
 QVariantMap PlayerController::tipAt(double scriptMs) const {
     const auto p = samn::PathAt(tipPath_, int64_t(std::llround(scriptMs)));
     if (!p) return {};
@@ -1322,6 +1343,10 @@ QVariantMap PlayerController::extraAt(int index, double scriptMs) const {
     if (!p) return {};
     return {{"x", p->x}, {"y", p->y}};
 }
+
+QVariantList PlayerController::tipPathPoints() const { return PathPoints(tipPath_); }
+
+QVariantList PlayerController::partnerPathPoints() const { return PathPoints(partnerPath_); }
 
 
 bool PlayerController::posOverlay() const {

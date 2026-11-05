@@ -116,6 +116,10 @@ class PlayerController : public QObject {
     // Empty when the script has no marks.
     Q_PROPERTY(QVariantMap contactMarks READ contactMarks NOTIFY scriptChanged)
     Q_PROPERTY(bool showContactMarks READ showContactMarks WRITE setShowContactMarks NOTIFY viewOptionsChanged)
+    // MT-Debug trajectory line overlay (0.7 playback.trajectory_overlay): tip +
+    // partner polylines when the script recorded a path. Off by default.
+    Q_PROPERTY(bool hasTrajectory READ hasTrajectory NOTIFY scriptChanged)
+    Q_PROPERTY(bool trajectoryOverlay READ trajectoryOverlay WRITE setTrajectoryOverlay NOTIFY viewOptionsChanged)
     Q_PROPERTY(int suctionNow READ suctionNow NOTIFY playheadMsChanged)
     // The device the script plays on (one DeviceController for the app) and
     // what goes to it while playing (the stroke filter, safety range ...).
@@ -354,11 +358,17 @@ public:
     QVariantMap contactMarks() const { return contactMarks_; }
     bool showContactMarks() const;
     void setShowContactMarks(bool on);
+    bool hasTrajectory() const { return !tipPath_.empty() || !partnerPath_.empty(); }
+    bool trajectoryOverlay() const;
+    void setTrajectoryOverlay(bool on);
     // Tip / partner / extra place at a script time (the playhead) from the
     // recorded paths ({x, y} in video pixels), empty when no sample is near.
     Q_INVOKABLE QVariantMap tipAt(double scriptMs) const;
     Q_INVOKABLE QVariantMap partnerAt(double scriptMs) const;
     Q_INVOKABLE QVariantMap extraAt(int index, double scriptMs) const;
+    // Full polylines for the MT-Debug overlay ({x, y} in video pixels).
+    Q_INVOKABLE QVariantList tipPathPoints() const;
+    Q_INVOKABLE QVariantList partnerPathPoints() const;
     int suctionNow() const;
     int sleepMinutes() const { return sleepMinutes_; }
     void setSleepMinutes(int minutes);
