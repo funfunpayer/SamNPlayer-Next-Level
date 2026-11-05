@@ -173,6 +173,7 @@ TEST_CASE("generate: the runner does one run at a time, cancels and waits on shu
     const fs::path dir = TempDir("samn_generate_runner");
     REQUIRE(clips::WriteMoving(dir / "long.mp4", 30, 80.0, 1.0));
     Recorder rec;
+    std::chrono::steady_clock::time_point t0;  // taken as the scope closes
     {
         GenerateRunner runner(rec.fn());
         const uint64_t a = runner.Start(Request(dir, "long.mp4", "standard"));
@@ -189,12 +190,13 @@ TEST_CASE("generate: the runner does one run at a time, cancels and waits on shu
 
         // A new run gets a new id; leaving the scope cancels and joins it.
         CHECK(runner.Start(Request(dir, "long.mp4", "standard")) == 2);
+        t0 = std::chrono::steady_clock::now();
     }
-    const auto t0 = std::chrono::steady_clock::now();
+    const auto closed_in = std::chrono::steady_clock::now() - t0;
     const auto ev = rec.take();
     CHECK(ev.back().run_id == 2);
     CHECK(ev.back().kind == GenerateEventKind::kCanceled);
-    CHECK(std::chrono::steady_clock::now() - t0 < std::chrono::seconds(1));
+    CHECK(closed_in < std::chrono::seconds(1));
     CHECK(!fs::exists(dir / "standard.funscript"));
     fs::remove_all(dir);
 }
@@ -487,5 +489,86 @@ TEST_CASE("generate: without contact vibration only the tip box is stored") {
     const auto fs_json = ReadJson(dir / "standard.funscript");
     CHECK(!fs_json["metadata"].contains("device_recipe"));
     CHECK(fs_json["metadata"]["contact_marks"]["tip"]["class"] == "penis");
+    fs::remove_all(dir);
+}
+
+// Review E3: the terminal event's handler restarts the runner while the
+// destructor waits. Start() used to reset the cancel flag, so the new run ran
+// to the end and the destructor waited it out.
+TEST_CASE("generate: a restart from the handler during destruction is refused") {
+    const fs::path dir = TempDir("samn_generate_close_restart");
+    REQUIRE(clips::WriteMoving(dir / "long.mp4", 30, 80.0, 1.0));
+    std::atomic<int> starts{0}, accepted{0};
+    std::chrono::steady_clock::time_point t0;
+    {
+        GenerateRunner* self = nullptr;
+        std::atomic<bool> ready{false};
+        GenerateRunner runner([&](const GenerateEvent& e) {
+            if (e.kind != GenerateEventKind::kCanceled || ++starts > 1) return;
+            while (!ready) std::this_thread::yield();
+            if (self->Start(Request(dir, "long.mp4", "weich")) != 0) ++accepted;
+        });
+        self = &runner;
+        ready = true;
+        REQUIRE(runner.Start(Request(dir, "long.mp4", "standard")) == 1);
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        t0 = std::chrono::steady_clock::now();
+    }
+    const auto closed_in = std::chrono::steady_clock::now() - t0;
+    CHECK(starts == 1);
+    CHECK(accepted == 0);
+    CHECK(closed_in < std::chrono::seconds(2));
+    CHECK(!fs::exists(dir / "weich.funscript"));
+    fs::remove_all(dir);
+}
+
+// Review E4: the .funscript was written first; when the .samn write failed it
+// stayed alone and the next run was refused as "exists already" (FR-26: no
+// partial file).
+TEST_CASE("generate: a failed .samn write leaves no .funscript behind") {
+    const fs::path dir = TempDir("samn_generate_partial");
+    REQUIRE(clips::WriteMoving(dir / "moving.mp4", 4, 80.0, 1.0));
+    fs::create_directories(dir / "standard.samn");  // cannot be replaced by a file
+    GenerateRequest req = Request(dir, "moving.mp4", "standard");
+    req.overwrite = true;  // only so that the existing-path check lets the run start
+    Recorder rec;
+    Generate(req, 5, {}, rec.fn());
+    const auto ev = rec.take();
+    REQUIRE(!ev.empty());
+    CHECK(ev.back().kind == GenerateEventKind::kError);
+    CHECK(ev.back().message.find("cannot write") != std::string::npos);
+    CHECK(!fs::exists(dir / "standard.funscript"));
+    fs::remove_all(dir);
+}
+
+// Review E5: a callback that throws must not end the worker thread
+// (std::terminate), and a throw on the terminal event must not become a
+// second terminal event for the same run.
+TEST_CASE("generate: a throwing callback never adds a second terminal event") {
+    const fs::path dir = TempDir("samn_generate_throwing");
+    REQUIRE(clips::WriteMoving(dir / "moving.mp4", 3, 80.0, 1.0));
+    const auto terminal = [](const GenerateEvent& e) {
+        return e.kind == GenerateEventKind::kDone || e.kind == GenerateEventKind::kCanceled ||
+               e.kind == GenerateEventKind::kError;
+    };
+    int terminals = 0;
+    GenerateEventKind last = GenerateEventKind::kProgress;
+    Generate(Request(dir, "moving.mp4", "standard"), 6, {}, [&](const GenerateEvent& e) {
+        if (!terminal(e)) return;
+        ++terminals;
+        last = e.kind;
+        throw std::runtime_error("handler failed");
+    });
+    CHECK(terminals == 1);
+    CHECK(last == GenerateEventKind::kDone);
+
+    // A failing run whose error handler throws: nothing escapes.
+    int errors = 0;
+    CHECK_NOTHROW(Generate(Request(dir, "missing.mp4", "weich"), 7, {}, [&](const GenerateEvent& e) {
+        if (e.kind != GenerateEventKind::kError) return;
+        ++errors;
+        throw std::runtime_error("handler failed");
+    }));
+    CHECK(errors == 1);
     fs::remove_all(dir);
 }

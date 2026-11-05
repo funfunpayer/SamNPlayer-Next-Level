@@ -233,13 +233,22 @@ void GenerateUnguarded(const GenerateRequest& req, uint64_t run_id, const std::f
         return;
     }
     const std::vector<OMarker> markers = req.auto_ozone ? AutoOZoneMarkers(sig->actions) : std::vector<OMarker>{};
+    bool wrote_samn = false, wrote_funscript = false;
     try {
         Document samn = CompanionSamn(req, sig->actions, *tr);
         samn.o_markers = markers;
-        WriteFileAtomic(req.output, FunscriptJson(req, sig->actions, *tr, samn));
-        if (!markers.empty()) SaveOMarkers(req.output, markers);
+        const std::string funscript = FunscriptJson(req, sig->actions, *tr, samn);
         SaveDocument(samn_path, samn);
+        wrote_samn = true;
+        WriteFileAtomic(req.output, funscript);
+        wrote_funscript = true;
+        if (!markers.empty()) SaveOMarkers(req.output, markers);  // stored in the .funscript
     } catch (const std::exception& e) {
+        // No half a pair (FR-26): a lone file would refuse the next run as
+        // "exists already".
+        std::error_code rm;
+        if (wrote_funscript) std::filesystem::remove(req.output, rm);
+        if (wrote_samn) std::filesystem::remove(samn_path, rm);
         emit(GenerateEventKind::kError, std::string("cannot write the script: ") + e.what());
         return;
     }
@@ -259,20 +268,40 @@ void Generate(const GenerateRequest& req, uint64_t run_id, const std::function<b
     // Whatever throws below (OpenCV, FFmpeg, the signal chain) ends this run
     // as an error; on the runner's thread it would end the whole app.
     std::string failure;
+    // Once a terminal event has gone out the run is over: a handler that
+    // throws on it must not produce a second one.
+    bool terminal_sent = false;
+    const GenerateCallback guarded = [&](const GenerateEvent& e) {
+        if (e.kind == GenerateEventKind::kDone || e.kind == GenerateEventKind::kCanceled ||
+            e.kind == GenerateEventKind::kError)
+            terminal_sent = true;
+        if (on_event) on_event(e);
+    };
     try {
-        GenerateUnguarded(req, run_id, cancel, on_event);
+        GenerateUnguarded(req, run_id, cancel, guarded);
         return;
     } catch (const std::exception& e) {
         failure = e.what();
     } catch (...) {
         failure = "unknown error";
     }
-    if (on_event) on_event({run_id, GenerateEventKind::kError, -1, "generation failed: " + failure, 0});
+    if (terminal_sent) return;
+    try {
+        guarded({run_id, GenerateEventKind::kError, -1, "generation failed: " + failure, 0});
+    } catch (...) {
+        // A handler that throws on the last event has nobody left to tell.
+    }
 }
 
 GenerateRunner::GenerateRunner(GenerateCallback on_event) : on_event_(std::move(on_event)) {}
 
 GenerateRunner::~GenerateRunner() {
+    // First: a terminal-event handler that restarts the runner meanwhile must
+    // not reset the cancel flag and start a run that nobody wants.
+    {
+        std::lock_guard<std::mutex> lock(mutex_);  // a Start in flight has finished
+        closing_ = true;
+    }
     Cancel();
     Wait();
 }
@@ -282,6 +311,7 @@ uint64_t GenerateRunner::Start(GenerateRequest request) {
     uint64_t id = 0;
     {
         std::lock_guard<std::mutex> lock(mutex_);
+        if (closing_) return 0;
         id = next_id_ + 1;
         uint64_t idle = 0;
         if (!active_id_.compare_exchange_strong(idle, id)) return 0;  // a run is still going

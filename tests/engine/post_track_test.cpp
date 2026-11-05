@@ -1,6 +1,8 @@
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <cmath>
+#include <random>
 #include <fstream>
 
 #include <nlohmann/json.hpp>
@@ -208,4 +210,69 @@ TEST_CASE("post: clamp keeps positions in range") {
     CHECK(out[0].pos == 10);
     CHECK(out[1].pos == 50);
     CHECK(out[2].pos == 90);
+}
+
+// Review E1: more than half of the timestamp steps are 0 (duplicate frame
+// times), so the median step is 0. The peak spacing must come from the guarded
+// sample rate, not from 1000 / 0 (inf cast to int is undefined).
+TEST_CASE("post: a zero median timestamp step keeps the peak spacing finite") {
+    std::vector<double> t, y;
+    for (int i = 0; i < 40; ++i) {
+        t.push_back((i / 3) * 33.0);
+        y.push_back(50.0 + 40.0 * std::sin(i * 0.9));
+    }
+    PostOptions o;
+    o.smooth_window = 0;
+    o.min_peak_distance_ms = 400;
+    o.min_interval_ms = 0;
+    std::string error;
+    const auto r = PositionsToActions(t, y, o, &error);
+    REQUIRE_MESSAGE(r, error);
+    // The step is guarded to 1 ms (1000 Hz), so 400 ms is 400 samples: at most
+    // the tallest peak and the deepest valley survive besides the two ends.
+    CHECK(r->actions.size() <= 4);
+}
+
+namespace {
+// The O(samples x peaks) prominence FindPeaks used before the monotonic
+// stack, kept as the reference (review E8).
+double ReferenceProminence(const std::vector<double>& y, int peak) {
+    const int n = static_cast<int>(y.size());
+    if (peak <= 0 || peak >= n - 1) return 0;
+    double left = y[peak], right = y[peak];
+    for (int i = peak; i >= 0; --i) {
+        left = std::min(left, y[i]);
+        if (y[i] > y[peak]) break;
+    }
+    for (int i = peak; i < n; ++i) {
+        right = std::min(right, y[i]);
+        if (y[i] > y[peak]) break;
+    }
+    return y[peak] - std::max(left, right);
+}
+}  // namespace
+
+TEST_CASE("post: the prominence filter equals the reference on plateaus and ties") {
+    std::mt19937 rng(7);
+    for (int round = 0; round < 300; ++round) {
+        const int n = 3 + int(rng() % 60);
+        const int levels = 2 + int(rng() % 8);  // few levels: many plateaus and ties
+        std::vector<double> y(n);
+        for (double& v : y) v = double(rng() % levels) * 2.5;
+        const std::vector<int> cands = FindPeaks(y, 1, 0);
+        std::vector<double> thresholds{1e-9, 0.1, 100.0};
+        for (int c : cands) {
+            const double p = ReferenceProminence(y, c);
+            thresholds.push_back(p);                // exactly on the boundary
+            thresholds.push_back(p + 1e-9);
+        }
+        for (const double th : thresholds) {
+            if (th <= 0) continue;
+            std::vector<int> want;
+            for (int c : cands)
+                if (ReferenceProminence(y, c) >= th) want.push_back(c);
+            INFO("round " << round << " threshold " << th);
+            CHECK(FindPeaks(y, 1, th) == want);
+        }
+    }
 }

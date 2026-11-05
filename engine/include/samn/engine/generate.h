@@ -83,7 +83,8 @@ public:
     GenerateRunner(const GenerateRunner&) = delete;
     GenerateRunner& operator=(const GenerateRunner&) = delete;
 
-    // The new run's id, or 0 when a run is still going (single instance).
+    // The new run's id, or 0 when a run is still going (single instance) or the
+    // runner is being destroyed.
     uint64_t Start(GenerateRequest request);
     void Cancel();
     bool running() const { return active_id_.load() != 0; }
@@ -100,6 +101,7 @@ private:
     // joining it (review of #140).
     std::atomic<uint64_t> active_id_{0};
     std::atomic<bool> cancel_{false};
+    std::atomic<bool> closing_{false};  // the destructor runs: Start() gives 0
     uint64_t next_id_ = 0;  // guarded by mutex_
 };
 
