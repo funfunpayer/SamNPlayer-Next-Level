@@ -617,6 +617,37 @@ private slots:
         r.tc.stop();
     }
 
+    // A second toy of the same name at another Buttplug index after the
+    // reconnect is another device too. Without a status tick in between the
+    // session ends, and the new toy gets no level of it.
+    void aSameNamedToyAtAnotherIndexEndsTheSession() {
+        FakeButtplugServer server(FakeButtplug::StandardDeviceMessages());
+        Rig r;
+        r.dev.setTickIntervalMs(60000);  // no tick during the test
+        r.tc.setMock(false);
+        r.tc.setTimeScale(1);
+        r.tc.setRampUpMs(30000);
+        r.dev.connectIntiface(server.url());
+        QTRY_COMPARE_WITH_TIMEOUT(r.dev.state(), QString("connected"), 5000);
+        QVERIFY(r.tc.start());
+        QTRY_VERIFY(server.Count("ScalarCmd") >= 2);
+        server.device_index = 8;
+        server.DropClients();
+        QTRY_COMPARE_WITH_TIMEOUT(server.connections(), 2, 5000);
+        QTRY_COMPARE_WITH_TIMEOUT(r.tc.state(), QString("idle"), 1500);
+        QVERIFY(r.tc.logLines().contains("The device changed \xE2\x80\x94 training ended."));
+        QVERIFY(!r.dev.sessionActive());
+        QTRY_VERIFY(server.Count("StopDeviceCmd") >= 1);
+        QTest::qWait(200);
+        int handshakes = 0;
+        for (const auto& m : server.received) {
+            if (m.contains("RequestServerInfo")) ++handshakes;
+            if (handshakes == 2 && m.contains("ScalarCmd"))
+                for (const auto& sc : m.at("ScalarCmd").at("Scalars"))
+                    QVERIFY2(sc.at("Scalar").get<double>() == 0, qPrintable(QString::fromStdString(m.dump())));
+        }
+    }
+
     // The training is handed another DeviceController while it runs: the
     // old one stops and gets its hold (and the connection Training made)
     // back; the new one is not driven until a Start.

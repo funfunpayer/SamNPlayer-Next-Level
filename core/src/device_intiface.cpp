@@ -360,10 +360,15 @@ Status IntifaceDevice::Ping() {
 
 // Sends one message built by `build` (called when needed, so it sees the
 // current device index); on a dead socket it reconnects once and retries.
-// build returning false = nothing to send for this device.
+// build returning false = nothing to send for this device. A reconnect that
+// adopted another device (another index or name) sends nothing: the command
+// was meant for the old one.
 Status IntifaceDevice::Command(const std::function<bool(std::string*, json*)>& build) {
+    const int meant_idx = device_idx_;
+    const std::string meant_name = device_name_;
     Status s = EnsureConnected();
     if (!s) return s;
+    if (Status same = SameDevice(meant_idx, meant_name); !same) return same;
     std::string name;
     json body;
     if (!build(&name, &body)) return Status::Ok();
@@ -372,8 +377,17 @@ Status IntifaceDevice::Command(const std::function<bool(std::string*, json*)>& b
     // Dead socket: one-shot reconnect + single retry.
     if (!TryReconnectOnce()) return s;
     if (!connected_ || !transport_.IsConnected()) return s;
+    if (Status same = SameDevice(meant_idx, meant_name); !same) return same;
     if (!build(&name, &body)) return Status::Ok();
     return Send(name, body);
+}
+
+Status IntifaceDevice::SameDevice(int idx, const std::string& name) const {
+    if (device_idx_ == idx && device_name_ == name) return Status::Ok();
+    const std::string message = "intiface: the reconnect found another device (" + device_name_ +
+                                ", index " + std::to_string(device_idx_) + ") - command not sent";
+    Log(LogLevel::kWarn, message);
+    return Status::Error(message);
 }
 
 double IntifaceDevice::MotorLevel(const std::string& channel) const {

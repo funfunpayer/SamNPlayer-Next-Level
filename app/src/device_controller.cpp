@@ -106,25 +106,27 @@ public:
     }
 
     // --- thread-safe, coalescing level API (called from the GUI thread) ---
-    void QueueVibration(double v) {
+    // `generation`: the snapshot generation the caller saw (the device it
+    // means); levels for an earlier one are dropped (ApplyLevels).
+    void QueueVibration(double v, quint64 generation) {
         std::lock_guard<std::mutex> lock(pending_mutex_);
         pending_.vibration = v;
-        ScheduleFlushLocked();
+        ScheduleFlushLocked(generation);
     }
-    void QueueSuction(double v) {
+    void QueueSuction(double v, quint64 generation) {
         std::lock_guard<std::mutex> lock(pending_mutex_);
         pending_.suction = v;
-        ScheduleFlushLocked();
+        ScheduleFlushLocked(generation);
     }
-    void QueuePosition(double pos, int ms) {
+    void QueuePosition(double pos, int ms, quint64 generation) {
         std::lock_guard<std::mutex> lock(pending_mutex_);
         pending_.position = {pos, ms};
-        ScheduleFlushLocked();
+        ScheduleFlushLocked(generation);
     }
-    void QueueAxis(const std::string& axis, double pos, int ms) {
+    void QueueAxis(const std::string& axis, double pos, int ms, quint64 generation) {
         std::lock_guard<std::mutex> lock(pending_mutex_);
         pending_.axes[axis] = {pos, ms};
-        ScheduleFlushLocked();
+        ScheduleFlushLocked(generation);
     }
     void DropPending() {
         std::lock_guard<std::mutex> lock(pending_mutex_);
@@ -168,16 +170,21 @@ private:
         std::optional<double> vibration, suction;
         std::optional<std::pair<double, int>> position;
         std::map<std::string, std::pair<double, int>> axes;
+        std::optional<quint64> generation;  // the oldest one of the batch
     };
 
     void EnsureInit();
     void Drain();
-    void ScheduleFlushLocked();
+    void ScheduleFlushLocked(quint64 generation);
     void Flush();
     void ApplyLevels(const Pending& p);
     dev::Status Move(const std::string& axis, double pos, int ms);
 
     DeviceController::Snapshot MakeSnapshot(bool read_battery);
+    dev::ConnectionInfo SessionInfo(bool read_battery);
+    // Which device the session drives (DeviceController::deviceIdentity).
+    QString IdentityOf(const dev::ConnectionInfo& info) const;
+    QString CurrentIdentity();
     void EmitSnapshot(bool read_battery);
     void EmitError(const QString& message, const QString& hint = QString());
     void CommandError(const std::string& message);
@@ -219,6 +226,10 @@ private:
     int ble_scan_ms_ = 15000;
     bool tick_pending_ = false;
     bool pump_pending_ = false;
+    // The identity of the last snapshot and how often it changed (each
+    // change is a new generation; Snapshot::generation).
+    QString last_identity_;
+    quint64 generation_ = 0;
 
     std::unique_ptr<Session> session_;
     bool connecting_ = false;
@@ -268,7 +279,8 @@ void DeviceWorker::Drain() {
     draining_ = false;
 }
 
-void DeviceWorker::ScheduleFlushLocked() {
+void DeviceWorker::ScheduleFlushLocked(quint64 generation) {
+    if (!pending_.generation) pending_.generation = generation;
     if (flush_scheduled_) return;
     flush_scheduled_ = true;
     Post([this] { Flush(); });
@@ -322,19 +334,13 @@ void DeviceWorker::CommandError(const std::string& message) {
     EmitError(Q(message));
 }
 
-DeviceController::Snapshot DeviceWorker::MakeSnapshot(bool read_battery) {
-    DeviceController::Snapshot s;
-    s.connecting = connecting_;
-    if (!session_) return s;
+dev::ConnectionInfo DeviceWorker::SessionInfo(bool read_battery) {
     Session& se = *session_;
-    s.kind = se.kind;
-    s.mock = se.mock != nullptr;
     dev::ConnectionInfo info;
     info.connected = true;
     if (se.neo) {
         if (read_battery) se.neo->BatteryLevel();
         info = se.neo->Info();
-        s.raw = true;
     } else if (se.intiface) {
         if (read_battery) se.intiface->BatteryLevel();
         info = se.intiface->Info();
@@ -342,8 +348,29 @@ DeviceController::Snapshot DeviceWorker::MakeSnapshot(bool read_battery) {
         info = se.tcode->Info();
     } else {
         info.name = "Mock device (no real hardware)";
-        s.raw = true;
     }
+    return info;
+}
+
+// The Intiface index tells two toys of one name apart.
+QString DeviceWorker::IdentityOf(const dev::ConnectionInfo& info) const {
+    const Session& se = *session_;
+    const QString adopted = se.intiface ? QString::number(se.intiface->AdoptedIndex()) : QString();
+    return se.kind + QLatin1Char('\n') + Q(info.name) + QLatin1Char('\n') + Q(info.address) +
+           QLatin1Char('\n') + adopted;
+}
+
+QString DeviceWorker::CurrentIdentity() { return session_ ? IdentityOf(SessionInfo(false)) : QString(); }
+
+DeviceController::Snapshot DeviceWorker::MakeSnapshot(bool read_battery) {
+    DeviceController::Snapshot s;
+    s.connecting = connecting_;
+    if (!session_) return s;
+    Session& se = *session_;
+    s.kind = se.kind;
+    s.mock = se.mock != nullptr;
+    s.raw = se.neo != nullptr || se.mock != nullptr;
+    const dev::ConnectionInfo info = SessionInfo(read_battery);
     s.connected = info.connected;
     s.name = Q(info.name);
     s.address = Q(info.address);
@@ -353,12 +380,18 @@ DeviceController::Snapshot DeviceWorker::MakeSnapshot(bool read_battery) {
     s.battery_ok = info.connected && info.battery_ok;
     s.battery = s.battery_ok ? info.battery_pct : -1;
     s.caps = dev::CapabilitiesOf(*se.device);
+    s.identity = IdentityOf(info);
     return s;
 }
 
 void DeviceWorker::EmitSnapshot(bool read_battery) {
     DeviceController* ctl = ctl_;
     DeviceController::Snapshot snap = MakeSnapshot(read_battery);
+    if (snap.identity != last_identity_) {
+        last_identity_ = snap.identity;
+        ++generation_;
+    }
+    snap.generation = generation_;
     QMetaObject::invokeMethod(ctl, [ctl, snap] { ctl->applySnapshot(snap); }, Qt::QueuedConnection);
 }
 
@@ -378,9 +411,14 @@ bool DeviceWorker::Alive(std::string* why) {
     return false;
 }
 
+// After a command: a lost link is reported, and a reconnect that adopted
+// another device is shown now, not at the next tick (its levels stop at once).
 void DeviceWorker::CheckAlive() {
     std::string why;
-    if (session_ && !Alive(&why)) HandleLost(why);
+    if (session_ && !Alive(&why))
+        HandleLost(why);
+    else if (CurrentIdentity() != last_identity_)
+        EmitSnapshot(false);
 }
 
 void DeviceWorker::HandleLost(const std::string& why) {
@@ -653,15 +691,26 @@ void DeviceWorker::ApplyLevels(const Pending& p) {
         CommandError(kNoDevice);
         return;
     }
+    // Given while the GUI still showed an earlier device (the link was lost,
+    // or a reconnect adopted another toy): not for the one connected now.
+    if (p.generation && *p.generation != generation_) {
+        EmitLog(dev::LogLevel::kDebug, "device: levels for the previous device dropped");
+        return;
+    }
     dev::Device& d = *session_->device;
+    const QString meant = last_identity_;
     dev::Status first_error = dev::Status::Ok();
     auto note = [&](const dev::Status& s) {
         if (!s && first_error) first_error = s;
     };
-    if (p.vibration) note(d.SetVibration(dev::Clamp01(*p.vibration)));
-    if (p.suction) note(d.SetSuction(dev::Clamp01(*p.suction)));
-    if (p.position) note(Move(dev::kChStroke, p.position->first, p.position->second));
-    for (const auto& [axis, move] : p.axes) note(Move(axis, move.first, move.second));
+    // A command of this batch may reconnect to another device: the rest of
+    // the batch is not sent to it.
+    auto same = [&] { return CurrentIdentity() == meant; };
+    if (p.vibration && same()) note(d.SetVibration(dev::Clamp01(*p.vibration)));
+    if (p.suction && same()) note(d.SetSuction(dev::Clamp01(*p.suction)));
+    if (p.position && same()) note(Move(dev::kChStroke, p.position->first, p.position->second));
+    for (const auto& [axis, move] : p.axes)
+        if (same()) note(Move(axis, move.first, move.second));
     if (!first_error)
         CommandError(first_error.message);
     else
@@ -775,7 +824,7 @@ void DeviceWorker::Shutdown() {
 bool DeviceController::Snapshot::operator==(const Snapshot& o) const {
     return connected == o.connected && connecting == o.connecting && mock == o.mock && raw == o.raw &&
            kind == o.kind && name == o.name && address == o.address && rssi == o.rssi &&
-           battery == o.battery && battery_ok == o.battery_ok &&
+           battery == o.battery && battery_ok == o.battery_ok && identity == o.identity && generation == o.generation &&
            dev::ToJson(caps) == dev::ToJson(o.caps);
 }
 
@@ -927,17 +976,18 @@ QString DeviceController::savedTarget(const QString& kind) const {
     }
 }
 
-void DeviceController::setVibration(double level) { worker_->QueueVibration(dev::Clamp01(level)); }
-void DeviceController::setSuction(double level) { worker_->QueueSuction(dev::Clamp01(level)); }
+void DeviceController::setVibration(double level) { worker_->QueueVibration(dev::Clamp01(level), snap_.generation); }
+void DeviceController::setSuction(double level) { worker_->QueueSuction(dev::Clamp01(level), snap_.generation); }
 void DeviceController::setPosition(double pos, int durationMs) {
-    worker_->QueuePosition(dev::Clamp01(pos), std::max(0, durationMs));
+    worker_->QueuePosition(dev::Clamp01(pos), std::max(0, durationMs), snap_.generation);
 }
 void DeviceController::setAxis(const QString& axis, double pos, int durationMs) {
-    worker_->QueueAxis(axis.toStdString(), dev::Clamp01(pos), std::max(0, durationMs));
+    worker_->QueueAxis(axis.toStdString(), dev::Clamp01(pos), std::max(0, durationMs), snap_.generation);
 }
 void DeviceController::setAxes(const QVariantMap& positions, int durationMs) {
     for (auto it = positions.begin(); it != positions.end(); ++it)
-        worker_->QueueAxis(it.key().toStdString(), dev::Clamp01(it.value().toDouble()), std::max(0, durationMs));
+        worker_->QueueAxis(it.key().toStdString(), dev::Clamp01(it.value().toDouble()), std::max(0, durationMs),
+                           snap_.generation);
 }
 
 void DeviceController::setMotorLevels(const QVariantMap& levels) {

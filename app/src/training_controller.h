@@ -293,7 +293,7 @@ private:
     void beginSession();
     void connectThenBegin();
     void onDeviceStatus();
-    // kind, name and address: which device a session runs on.
+    // Which device a session runs on (DeviceController::deviceIdentity).
     QString deviceIdentity() const;
     void failStart(const QString& message);
     void tick();

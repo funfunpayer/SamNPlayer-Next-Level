@@ -152,6 +152,11 @@ public:
     bool capLinear() const;
     bool capBattery() const;
     bool capRaw() const;
+    // Which device the connection drives (kind, name, address and the
+    // adopted device: Intiface's device index); empty without one. Another
+    // value = another device. Shown at once after a command whose reconnect
+    // found another device; levels given before that are not sent to it.
+    QString deviceIdentity() const { return snap_.identity; }
     QString lastError() const { return last_error_; }
     QString hint() const { return hint_; }
     QStringList serialPorts() const { return serial_ports_; }
@@ -172,6 +177,10 @@ public:
         int rssi = 0;
         int battery = -1;
         bool battery_ok = false;
+        QString identity;  // deviceIdentity()
+        // Counts the identity changes; a level carries the one the GUI saw,
+        // and the worker drops levels meant for an earlier device.
+        quint64 generation = 0;
         samn::device::Capabilities caps;
         bool operator==(const Snapshot& o) const;
     };

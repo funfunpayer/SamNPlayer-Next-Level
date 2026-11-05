@@ -70,6 +70,7 @@ public:
     // The name of the one device the list reports (another toy chosen in
     // Intiface Central between two connections).
     std::string device_name = "Testgerät";
+    int device_index = 7;
 
     int Count(const std::string& name) const {
         int n = 0;
@@ -102,7 +103,7 @@ private:
                                                  {"MessageVersion", 3}, {"MaxPingTime", 5000}});
                 } else if (name == "RequestDeviceList") {
                     json devices = json::array();
-                    devices.push_back({{"DeviceIndex", 7}, {"DeviceName", device_name},
+                    devices.push_back({{"DeviceIndex", device_index}, {"DeviceName", device_name},
                                        {"DeviceMessages", device_messages_}});
                     Reply(client, "DeviceList", {{"Id", id}, {"Devices", devices}});
                 } else if (name == "BatteryLevelCmd") {

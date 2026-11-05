@@ -671,8 +671,7 @@ bool TrainingController::start() {
 }
 
 QString TrainingController::deviceIdentity() const {
-    if (!device_) return {};
-    return device_->kind() + QLatin1Char('\n') + device_->name() + QLatin1Char('\n') + device_->address();
+    return device_ ? device_->deviceIdentity() : QString();
 }
 
 void TrainingController::onDeviceStatus() {

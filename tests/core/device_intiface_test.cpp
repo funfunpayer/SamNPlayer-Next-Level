@@ -173,6 +173,34 @@ TEST_CASE("device/intiface: one-shot reconnect") {  // Go: TestIntifaceOneShotRe
                    R"("ScalarCmd":{"DeviceIndex":7,"Id":3,)"));
 }
 
+// A command that finds the socket dead reconnects once; when the server now
+// lists another toy (another name or another index), the level meant for
+// the old one is not sent to it.
+TEST_CASE("device/intiface: a reconnect to another device does not get the old command") {  // new
+    for (const bool other_index : {false, true}) {
+        INFO("another " << (other_index ? "index" : "name"));
+        Rig r(FakeButtplug::StandardDeviceMessages());
+        r.Up();
+        REQUIRE(r.dev.SetVibration(0.3));
+        r.fake.transport.Drop();
+        if (other_index)
+            r.fake.device_index = 8;  // a second toy of the same name
+        else
+            r.fake.device_name = "Other toy";
+        const std::size_t before = r.fake.Commands("ScalarCmd").size();
+        const Status s = r.dev.SetVibration(0.6);
+        CHECK_FALSE(s);
+        CHECK(Contains(s.message, "another device"));
+        CHECK(r.fake.transport.connect_count == 2);  // it did reconnect
+        CHECK(r.dev.Connected());
+        CHECK(r.fake.Commands("ScalarCmd").size() == before);  // nothing went to the new toy
+        CHECK(r.dev.AdoptedIndex() == (other_index ? 8 : 7));
+        // The caller decides what the new toy gets next.
+        REQUIRE(r.dev.SetVibration(0.1));
+        CHECK(r.fake.Commands("ScalarCmd").size() == before + 1);
+    }
+}
+
 // Go: TestIntifacePingStopReplacedOnReconnect checks goroutine / channel
 // internals (stopPing) that do not exist here: the app owns the ping timer.
 // Adapted: a failed Ping reconnects once, and Ping works again afterwards.

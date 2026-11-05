@@ -99,10 +99,15 @@ public:
     // Send a Ping; on a dead socket tries the one-shot reconnect.
     Status Ping();
     // One automatic Connect after a dead socket per healthy connection life.
-    // True when connected afterwards. Cleared by a successful Connect.
+    // True when connected afterwards. Cleared by a successful Connect. It
+    // adopts whatever device the server lists now: a command whose reconnect
+    // found another device (AdoptedIndex or name) is refused, not sent.
     bool TryReconnectOnce(Status* why = nullptr);
 
     bool Connected() const { return connected_; }
+    // The Buttplug DeviceIndex of the adopted device (two toys of one name
+    // differ here).
+    int AdoptedIndex() const { return device_idx_; }
     void SetLogSink(LogSink sink) { log_ = std::move(sink); }
 
 private:
@@ -119,6 +124,8 @@ private:
     void BatteryFailed();
     bool BatteryShown() const;
     Status Command(const std::function<bool(std::string*, nlohmann::json*)>& build);
+    // Ok while the adopted device is still (idx, name), else the refusal.
+    Status SameDevice(int idx, const std::string& name) const;
     Status EnsureConnected();
     nlohmann::json ScalarsFor(const std::string& curve, double value) const;
     double MotorLevel(const std::string& channel) const;

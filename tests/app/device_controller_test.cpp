@@ -644,6 +644,47 @@ private slots:
         QCOMPARE(c.batteryPercent(), -1);
     }
 
+    // The link drops and the one-shot reconnect adopts another toy: a level
+    // given for the old toy (before the new one was shown) never reaches the
+    // new one, and the new identity is shown at once, not at the next tick.
+    void intifaceReconnectToAnotherToyGetsNoOldLevel() {
+        for (const bool other_index : {false, true}) {
+            FakeButtplugServer server(FakeButtplug::StandardDeviceMessages());
+            DeviceController c;
+            c.setTickIntervalMs(60000);  // no tick during the test
+            c.connectIntiface(server.url());
+            QTRY_COMPARE_WITH_TIMEOUT(c.state(), QString("connected"), 5000);
+            c.setVibration(0.3);
+            QTRY_VERIFY(server.Count("ScalarCmd") >= 1);
+            const QString before = c.deviceIdentity();
+            QVERIFY(!before.isEmpty());
+
+            if (other_index)
+                server.device_index = 8;  // a second toy of the same name
+            else
+                server.device_name = "Other toy";
+            server.DropClients();
+            c.setVibration(0.6);  // still meant for the old toy
+            QTRY_COMPARE_WITH_TIMEOUT(server.connections(), 2, 5000);
+            QTRY_VERIFY_WITH_TIMEOUT(c.deviceIdentity() != before, 1500);
+            QCOMPARE(c.state(), QString("connected"));
+            if (!other_index) QVERIFY(c.name().contains("Other toy"));
+            QTest::qWait(200);
+            // Everything the new connection got after its handshake: no level.
+            int handshakes = 0;
+            for (const auto& m : server.received) {
+                if (m.contains("RequestServerInfo")) ++handshakes;
+                if (handshakes == 2 && m.contains("ScalarCmd"))
+                    for (const auto& sc : m.at("ScalarCmd").at("Scalars"))
+                        QVERIFY2(sc.at("Scalar").get<double>() == 0, qPrintable(QString::fromStdString(m.dump())));
+            }
+            // A level given now, for the toy shown now, goes out.
+            const int n = server.Count("ScalarCmd");
+            c.setVibration(0.2);
+            QTRY_COMPARE(server.Count("ScalarCmd"), n + 1);
+        }
+    }
+
     // --- Diagnostics ---
     void diagnosticsOnMock() {
         DeviceController c;
