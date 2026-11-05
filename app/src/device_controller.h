@@ -16,6 +16,10 @@
 #include "samn/device/capabilities.h"
 #include "samn/device/diagnostics.h"
 
+namespace samn::device {
+class DriverRegistry;
+}
+
 namespace samn::ui {
 
 class DeviceWorker;
@@ -34,9 +38,12 @@ class QtTransport;
 // the pumping of incoming Buttplug messages. Level commands are coalesced:
 // when the worker lags, only the newest value of each channel is sent.
 //
-// Kinds (the 0.7 transport names): "ble" (Sam Neo 2), "tcode" (address
-// "udp://host:port" / "tcp://...", default UDP :8000), "tcode-serial" (port),
-// "intiface" (URL or bare IP), "mock".
+// Kinds (the 0.7 transport names) are the ids of the core's built-in drivers
+// (samn/device/driver.h, listed by `drivers`): "ble" (Sam Neo 2), "tcode"
+// (address "udp://host:port" / "tcp://...", default UDP :8000),
+// "tcode-serial" (port), "intiface" (URL or bare IP), "mock". A driver says
+// what a kind needs; the transports, their cancel, the connect and Stop
+// deadlines and the session holds are this controller's.
 class DeviceController : public QObject {
     Q_OBJECT
     QML_ELEMENT
@@ -66,6 +73,9 @@ class DeviceController : public QObject {
     Q_PROPERTY(QString hint READ hint NOTIFY errorChanged)
     Q_PROPERTY(QStringList serialPorts READ serialPorts NOTIFY serialPortsChanged)
     Q_PROPERTY(bool diagnosticsRunning READ diagnosticsRunning NOTIFY diagnosticsRunningChanged)
+    // The kinds to choose from, in order: {id, name, help, needsAddress,
+    // addressExample, serialPort, simulated} (DriverInfo).
+    Q_PROPERTY(QVariantList drivers READ drivers CONSTANT)
     // true while playback / training uses the device: connecting, disconnecting
     // and the test commands are then refused with a message (0.7). Each user
     // holds the session on its own (setSessionActiveFor); it stays active
@@ -158,6 +168,7 @@ public:
     bool capLinear() const;
     bool capBattery() const;
     bool capRaw() const;
+    QVariantList drivers() const;
     // Which device the connection drives (kind, name, address and the
     // adopted device: Intiface's device index); empty without one. Another
     // value = another device. Shown at once after a command whose reconnect
@@ -216,6 +227,8 @@ private:
     void reportError(const QString& message, const QString& hint = QString());
 
     QThread thread_;
+    // Filled once in the constructor, then only read (GUI and worker thread).
+    std::unique_ptr<samn::device::DriverRegistry> drivers_;
     DeviceWorker* worker_ = nullptr;
     Snapshot snap_;
     QString last_error_;

@@ -186,22 +186,21 @@ GlassCard {
                 readonly property var dev: root.device
                 signal resetTests()
                 readonly property bool busy: dev.connecting
-                readonly property var kinds: ["ble", "tcode", "tcode-serial", "intiface", "mock"]
-                readonly property string kind: kinds[transport.currentIndex]
+                // The core's drivers in the order of the choice: id (the kind),
+                // name, help, needsAddress, addressExample, serialPort.
+                readonly property var drivers: dev.drivers
+                readonly property var kinds: drivers.map(d => d.id)
+                readonly property string kind: kinds[transport.currentIndex] ?? ""
+                readonly property var driver: drivers[transport.currentIndex] ?? ({})
                 readonly property bool canTest: dev.connected && !dev.sessionActive
-                readonly property var hints: ({
-                    "ble": qsTr("Searches up to 20 seconds for a device named “Sam Neo 2”. The device must be on and not connected to another app."),
-                    "tcode": qsTr("Sends TCode to an OSR2 / SR6 (or other TCode device) running Wi-Fi firmware. Enter its IP address; plain addresses use UDP port 8000, or write tcp://host:port. UDP has no handshake: if the device does not move, check the address and firmware settings."),
-                    "tcode-serial": qsTr("Sends TCode to an OSR2 / SR6 (or other TCode device) over its USB cable at 115200 baud. Choose its port. Close other programs that use the port (e.g. MultiFunPlayer) first."),
-                    "intiface": qsTr("Connects via a running Buttplug server. Start Intiface Central, connect the device there and start the server. Leave the address empty for ws://127.0.0.1:12345."),
-                    "mock": qsTr("Simulates a device to test the UI without hardware.")
-                })
                 function chosenTarget() {
-                    if (kind === "tcode-serial") return ports.currentIndex >= 0 && root.device.serialPorts.length > 0 ? root.device.serialPorts[ports.currentIndex] : ""
+                    if (driver.serialPort) return ports.currentIndex >= 0 && root.device.serialPorts.length > 0 ? root.device.serialPorts[ports.currentIndex] : ""
                     return target.text.trim()
                 }
                 function pickSavedPort() {
-                    const i = root.device.serialPorts.indexOf(root.device.savedTarget("tcode-serial"))
+                    const serial = drivers.find(d => d.serialPort)
+                    if (!serial) return
+                    const i = root.device.serialPorts.indexOf(root.device.savedTarget(serial.id))
                     if (i >= 0) ports.currentIndex = i
                 }
                 Component.onCompleted: {
@@ -209,7 +208,7 @@ GlassCard {
                     const i = kinds.indexOf(root.device.savedKind())
                     transport.currentIndex = i >= 0 ? i : 0
                     target.text = root.device.savedTarget(kind)
-                    if (kind === "tcode-serial") root.device.refreshSerialPorts()
+                    if (driver.serialPort) root.device.refreshSerialPorts()
                 }
                 Connections {
                     target: root.device
@@ -297,25 +296,23 @@ GlassCard {
                         id: transport
                         width: parent.width
                         enabled: !devices.dev.connected && !devices.busy
-                        model: [qsTr("Direct via Bluetooth (Sam Neo 2)"), qsTr("TCode over Wi-Fi (OSR2 / SR6)"),
-                                qsTr("TCode over USB (OSR2 / SR6)"), qsTr("Via Intiface Central"), qsTr("Mock device (no hardware)")]
+                        model: devices.drivers.map(d => d.name)
                         onActivated: {
                             target.text = root.device.savedTarget(devices.kind)
-                            if (devices.kind === "tcode-serial") { root.device.refreshSerialPorts(); devices.pickSavedPort() }
+                            if (devices.driver.serialPort) { root.device.refreshSerialPorts(); devices.pickSavedPort() }
                         }
                     }
                     FlowTextField {
                         id: target
                         width: parent.width
-                        visible: devices.kind === "tcode" || devices.kind === "intiface"
+                        visible: devices.driver.needsAddress === true
                         enabled: !devices.dev.connected && !devices.busy
                         maxLength: 200
-                        placeholder: devices.kind === "intiface" ? qsTr("e.g. 192.168.1.50 or empty = this machine")
-                                                                  : qsTr("e.g. 192.168.1.50 or tcp://osr.local:8000")
+                        placeholder: devices.driver.addressExample ?? ""
                         onAccepted: if (connectBtn.enabled) connectBtn.clicked()
                     }
                     Row {
-                        visible: devices.kind === "tcode-serial"
+                        visible: devices.driver.serialPort === true
                         spacing: 8
                         FlowCombo {
                             id: ports
@@ -331,7 +328,7 @@ GlassCard {
                             ToolTipText { shown: refreshHover.hovered; text: qsTr("Look for serial ports again") }
                         }
                     }
-                    Note { text: devices.hints[devices.kind] }
+                    Note { text: devices.driver.help ?? "" }
                     Row {
                         spacing: 8
                         FlowButton {

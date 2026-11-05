@@ -2,7 +2,19 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 5 Nov 2026, Claude, branch `claude/samn2-tidy`: a behaviour-neutral tidy-up from three code reviews (docs match the tree, shared helpers, dead code, test temp folders; handover below). Before: `claude/samn2-device-leftovers` (Training ends on a device change, the Intiface battery is never an old reading).
+**Last update:** 5 Nov 2026, Claude, branch `claude/samn2-driver-registry`: devices are built-in drivers in a Qt-free registry in core (D-163, first slice of "the core is the kernel"; handover below). Before: `claude/samn2-tidy` (behaviour-neutral tidy-up from three code reviews).
+
+## Handover: `claude/samn2-driver-registry` (5 Nov, D-163 first slice: device drivers)
+
+Owner: the core is the kernel, Player / Generator / Training are modules, device connections are kernel-internal and extensible. Chosen after an architecture review: drivers are compiled in and registered by explicit calls (no DLL plugins, no plugin ABI, no self-registering static objects, which the MSVC linker drops from a static library).
+
+- **Core** (`core/include/samn/device/driver.h`, `core/src/device_driver.cpp`, no Qt): `TransportKind` (none, BLE, serial line, socket line, WebSocket), `DriverInfo` (id = the kind string, name, help, transport, address field and its example, the settings key of the last target, simulated, connect timeout), `TransportRequest`, `SessionOptions` (log sink, clock), `DeviceSession` (`GetDevice`, `Info(read_battery)`, `AdoptedId`, `Alive`, `Tick`, `Pump` with a `PumpOutcome`, `HasRawValues`), `Driver` (`Info`, `Resolve`, `Create`, `Hint`), `DriverRegistry` (`Add` refuses a null driver, an empty id and a listed id; `Find`; `List` in the order added) and `RegisterBuiltinDrivers` (ble, tcode, tcode-serial, intiface, mock, the order of the device choice).
+- **What moved out of `DeviceWorker`:** the kind switch of `Connect`, the typed pointers of `Session` (neo / tcode / intiface / mock) and their branches in `SessionInfo`, `IdentityOf`, `MakeSnapshot`, `Alive`, `Pump`, `Tick` and `HintFor` (the TCode texts and `IntifaceHint`), the 20 s / 30 s connect timeouts and the target settings keys (`savedTarget` and the save after a connect now read `DriverInfo::target_setting`; keys unchanged). Intiface's pump / one-shot reconnect / ping is its session's `Tick`; its `Pump` reports a reconnect (`kReconnected`: the worker sends a snapshot at once) or that it watched the link itself (`kDone`: no `CheckAlive`, as before). The reconnect refusal, battery cache and identity semantics stay in `IntifaceDevice` unchanged; the identity's adopted index is `AdoptedId()`.
+- **Stays with the worker (app):** `MakeTransport` (BLE through `ble_factory_` when set), the transport's cancel (`SetCancel` only on `QtTransport`), the connect deadline, `BeginStopWindow` / `kStopBudgetMs` / `kStopGraceMs`, the per-owner holds, the generation counter, the emergency stop. `Session` declares the transport first (destroyed last) and owns a `DeviceSession`.
+- **QML:** `DeviceController::drivers` (`CONSTANT`, from `List()`); `InspectorPanel.qml` builds the choice, the address field, the serial port row and the help note from it.
+- **Tests:** new `tests/core/device_driver_test.cpp` (12 cases: registry order, unknown id, duplicate id, TCode Resolve for plain / udp / tcp / bad addresses and serial, the other Resolves, hints, mock / Sam Neo 2 / TCode sessions over `MockTransport`, Intiface over the fake Buttplug server incl. the reconnect-to-another-toy refusal and the pump / tick reconnect). No existing test was changed.
+- **Behaves differently (slightly):** the device choice's names and help texts come from C++ and are no longer wrapped in `qsTr` (there are no translations yet; when they come, `DriverInfo` needs translatable keys). `pickSavedPort` uses the saved target of the driver that picks a serial port instead of the literal "tcode-serial". A driver whose transport kind the app cannot build fails the connect with "no transport for the device kind" (unreachable with the five built-ins).
+- **Not verified:** real hardware (Sam Neo 2, OSR / SR6, Intiface Central) and Windows / MSVC (built and run on Linux, GCC, Qt 6.4 only).
 
 ## Handover: `claude/samn2-tidy` (5 Nov, behaviour-neutral tidy-up)
 
@@ -379,6 +391,8 @@ Data and file fixes from a read-only bug hunt. Each fix has a test that failed b
 **Parity (1 Nov):** recount with `python3 ci/parity_status.py` after handbook merges. Owner GUI order: toasts ✅, help chips ✅, reduced motion ✅, handbook ✅ (this PR); idle ribbon + donate still open. Generator: G2/G3/partner on `main` or open PRs; G4a Advanced open (#147).
 
 ## Next (in order; the work list is `LESSONS.md` § Gaps, `TEST_PARITY.md` and `P3_GENERATOR.md`)
+
+**Kernel (D-163), one theme per PR, after the driver registry:** a ModeRegistry with a `Repeater` in `Main.qml`; a narrow `DeviceService` interface instead of `DeviceController*` in Player, Training and `PlaybackOutput`; `DeviceWorker` into its own file; registries for detectors and teachers.
 
 0. **Generator:** G2 stack ✅ (#114–#116); Tf/Tj distance stroke ✅ (#119); G3 feel ✅; Player partner overlay ✅ (#141); extras multi (`track_multi`) ✅ (#145); G3 feel probe ✅ (#146); G4a Advanced shell ✅ (#147); G4b Expert knobs ✅ (#151, live postprocess probe still open); next MT-Debug trajectory line overlay → G8 `.sam`.
 1. **Look polish:** ✅ (#122, Claude takeover of Cursor #117; reduced-motion gates and a window-wide loop test added).
