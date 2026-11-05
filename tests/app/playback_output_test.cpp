@@ -2,6 +2,7 @@
 // moves (filter, safety range, soft seek), pause / stop / home, the emergency
 // stop and the lanes that follow the device (D-132). Real DeviceController on
 // its worker thread against the Mock device and a UDP sink (TCode).
+#include <QElapsedTimer>
 #include <QFile>
 #include <QRegularExpression>
 #include <QSignalSpy>
@@ -12,6 +13,7 @@
 
 #include "device_controller.h"
 #include "fake_servers.h"
+#include "media_playhead.h"
 #include "player_controller.h"
 #include "samn/device/tcode.h"
 #include "samn/stroke_filter.h"
@@ -1280,6 +1282,223 @@ private slots:
     }
 
     // --- settings ---
+    // --- the video playhead between the media player's reports ---
+    // The media player reports its position every 100 ms (Qt 6.4 FFmpeg).
+    // Between two reports the 16 ms tick sends the estimated position, so a
+    // move due between two reports goes out at the tick, not at the next
+    // report, and it ends when its point is due.
+    void videoStrokeStartsBetweenReports() {
+        const QString script = writeScript(files_.path(), "video1.funscript", {{0, 0}, {1050, 100}, {2050, 0}, {3050, 100}});
+        UdpLineSink sink;
+        DeviceController dev;
+        PlayerController p;
+        p.setDevice(&dev);
+        QVERIFY(p.openScript(script));
+        connectStroker(dev, sink);
+        qint64 clk = 0;
+        p.mediaPlayhead()->setClock([&] { return clk; }, false);
+        p.setMediaPlaying(true);
+        QVERIFY(dev.sessionActive());
+        for (clk = 0; clk <= 1000; clk += 100) p.reportMediaPosition(clk);
+        // The first move eases in, at the first report.
+        QTRY_VERIFY_WITH_TIMEOUT(Lines(sink).contains(Move("L0", 1.0, 1050)), kWait);
+        // Ticks before 1050 have nothing new to send.
+        for (clk = 1016; clk < 1050; clk += 16) p.mediaPlayhead()->tick();
+        // The tick at 1056: the estimate passed 1050, the next move goes out
+        // now and ends at 2050.
+        clk = 1056;
+        p.mediaPlayhead()->tick();
+        QTRY_VERIFY_WITH_TIMEOUT(Lines(sink).contains(Move("L0", 0.0, 994)), kWait);
+        // The report at 1100 does not send it again (nor the late move the
+        // report alone would have sent).
+        clk = 1100;
+        p.reportMediaPosition(1100);
+        QTest::qWait(150);
+        QCOMPARE(Lines(sink).size(), 2);
+        QVERIFY(!Lines(sink).contains(Move("L0", 0.0, 950)));
+        // The curves follow the reports, not the ticks.
+        QCOMPARE(p.playheadMs(), qint64(1100));
+        p.setMediaPlaying(false);
+    }
+
+    void videoLevelFollowsTheEstimate() {
+        const QString script = writeScript(files_.path(), "video2.funscript", zigzag(60, 250));
+        DeviceController dev;
+        PlayerController p;
+        p.setDevice(&dev);
+        QVERIFY(p.openScript(script));
+        connectMock(dev);
+        Log log(dev);
+        auto* o = p.output();
+        o->setSoftStartMs(0);
+        o->setScript({}, {{0, 20}, {1049, 20}, {1050, 80}, {60000, 80}}, {});
+        qint64 clk = 0;
+        p.mediaPlayhead()->setClock([&] { return clk; }, false);
+        p.setMediaPlaying(true);
+        for (clk = 0; clk <= 1000; clk += 100) p.reportMediaPosition(clk);
+        QTRY_COMPARE_WITH_TIMEOUT(log.last("vibration"), QString("[mock] vibration=0.20"), kWait);
+        clk = 1056;  // between the reports at 1000 and 1100
+        p.mediaPlayhead()->tick();
+        QTRY_COMPARE_WITH_TIMEOUT(log.last("vibration"), QString("[mock] vibration=0.80"), kWait);
+        p.setMediaPlaying(false);
+        QTRY_COMPARE_WITH_TIMEOUT(log.last({}), QString("[mock] stop"), kWait);
+    }
+
+    // At 2x the estimate moves twice as fast (the page binds the play speed
+    // to the media player and to the output).
+    void videoPlayheadFollowsThePlaySpeed() {
+        const QString script = writeScript(files_.path(), "video3.funscript", {{0, 0}, {240, 100}, {1240, 0}, {2240, 100}});
+        UdpLineSink sink;
+        DeviceController dev;
+        PlayerController p;
+        p.setDevice(&dev);
+        QVERIFY(p.openScript(script));
+        connectStroker(dev, sink);
+        p.output()->setSpeed(2.0);
+        qint64 clk = 0;
+        p.mediaPlayhead()->setClock([&] { return clk; }, false);
+        p.setMediaPlaying(true);
+        p.reportMediaPosition(0);
+        QTRY_VERIFY_WITH_TIMEOUT(Lines(sink).contains(Move("L0", 1.0, 500)), kWait);  // eased in
+        clk = 100;
+        p.reportMediaPosition(200);
+        clk = 125;  // video 250: past 240, so the move to 1240 goes out: (1240 - 250) / 2
+        p.mediaPlayhead()->tick();
+        QTRY_VERIFY_WITH_TIMEOUT(Lines(sink).contains(Move("L0", 0.0, 495)), kWait);
+        p.setMediaPlaying(false);
+    }
+
+    // A pause stops the device at once, and no tick sends anything after it.
+    void videoPauseStopsAtOnceAndTheTicksEnd() {
+        const QString script = writeScript(files_.path(), "video4.funscript", zigzag(100, 100));
+        UdpLineSink sink;
+        DeviceController dev;
+        PlayerController p;
+        p.setDevice(&dev);
+        QVERIFY(p.openScript(script));
+        connectStroker(dev, sink);
+        qint64 clk = 0;
+        p.mediaPlayhead()->setClock([&] { return clk; }, false);
+        p.setMediaPlaying(true);
+        p.reportMediaPosition(0);
+        QTRY_VERIFY_WITH_TIMEOUT(Lines(sink).contains(Move("L0", 1.0, 500)), kWait);  // eased in
+        clk = 116;  // past 100: the move to 200 goes out at the tick
+        p.mediaPlayhead()->tick();
+        QTRY_VERIFY_WITH_TIMEOUT(Lines(sink).contains(Move("L0", 0.0, 84)), kWait);
+        p.setMediaPlaying(false);
+        QVERIFY(!dev.sessionActive());
+        QVERIFY(!p.mediaPlayhead()->playing());
+        QTRY_COMPARE_WITH_TIMEOUT(Lines(sink).last(), QString("DSTOP"), kWait);
+        const int n = Lines(sink).size();
+        for (clk = 160; clk <= 220; clk += 16) p.mediaPlayhead()->tick();
+        QTest::qWait(300);
+        QCOMPARE(Lines(sink).size(), n);
+        QCOMPARE(Lines(sink).last(), QString("DSTOP"));
+    }
+
+    // The emergency stop: the ticks that follow (the video has not paused
+    // yet) send nothing.
+    void videoEmergencyStopSilencesTheTicks() {
+        const QString script = writeScript(files_.path(), "video5.funscript", zigzag(100, 100));
+        DeviceController dev;
+        PlayerController p;
+        p.setDevice(&dev);
+        QVERIFY(p.openScript(script));
+        connectMock(dev);
+        Log log(dev);
+        qint64 clk = 0;
+        p.mediaPlayhead()->setClock([&] { return clk; }, false);
+        p.setMediaPlaying(true);
+        p.reportMediaPosition(0);
+        QTRY_VERIFY_WITH_TIMEOUT(log.count("vibration") > 0, kWait);
+        p.output()->emergencyStop();
+        QTRY_COMPARE_WITH_TIMEOUT(log.last({}), QString("[mock] stop"), kWait);
+        const int n = log.lines().size();
+        for (clk = 16; clk <= 112; clk += 16) p.mediaPlayhead()->tick();
+        QTest::qWait(300);
+        QCOMPARE(log.lines().size(), n);
+        p.setMediaPlaying(false);
+        QTest::qWait(100);
+        QCOMPARE(log.lines().size(), n);
+    }
+
+    // The ticks never keep the stale watchdog alive: when the reports stop,
+    // the device stops 1.5 s (here 200 ms) after the last REPORT, even while
+    // the estimate still moves.
+    void videoTicksDoNotKeepTheWatchdogAlive() {
+        const QString script = writeScript(files_.path(), "video6.funscript", zigzag(60, 250));
+        DeviceController dev;
+        PlayerController p;
+        p.setDevice(&dev);
+        QVERIFY(p.openScript(script));
+        connectMock(dev);
+        Log log(dev);
+        p.output()->setStaleMs(200);
+        QElapsedTimer real;
+        real.start();
+        // A slow clock: the cap (120 ms of it) is 6 s of real time away, so
+        // the real 16 ms timer ticks with a moving estimate all along.
+        p.mediaPlayhead()->setClock([&] { return real.elapsed() / 50; }, true);
+        QSignalSpy moved(p.mediaPlayhead(), &samn::ui::MediaPlayhead::advanced);
+        p.setMediaPlaying(true);
+        p.reportMediaPosition(1000);  // the only report
+        QTRY_VERIFY_WITH_TIMEOUT(log.has("[mock] stop"), 5000);
+        QVERIFY(moved.count() > 0);
+        // Only a report wakes the output again, never a tick.
+        const int ticksBefore = moved.count();
+        QTest::qWait(400);
+        QVERIFY(moved.count() > ticksBefore);
+        QCOMPARE(log.last({}), QString("[mock] stop"));
+        p.setMediaPlaying(false);
+    }
+
+    // The script clock (no video) keeps its own path: no video playhead.
+    void scriptClockHasNoVideoPlayhead() {
+        const QString script = writeScript(files_.path(), "video7.funscript", zigzag(60, 250));
+        PlayerController p;
+        QVERIFY(p.openScript(script));
+        p.setPlaying(true);
+        p.setVideoPositionMs(500);
+        QVERIFY(!p.mediaPlayhead()->playing());
+        p.setPlaying(false);
+    }
+
+    // An offset change and a loop jump hold the estimate until the next report.
+    void videoOffsetAndLoopJumpHoldTheEstimate() {
+        const QString script = writeScript(files_.path(), "video8.funscript", zigzag(60, 250));
+        PlayerController p;
+        QVERIFY(p.openScript(script));
+        auto* head = p.mediaPlayhead();
+        qint64 clk = 0;
+        head->setClock([&] { return clk; }, false);
+        p.setMediaPlaying(true);
+        p.reportMediaPosition(0);
+        clk = 100;
+        p.reportMediaPosition(100);
+        clk = 150;
+        QCOMPARE(head->estimate(), qint64(150));
+        p.setOffsetMs(20);
+        clk = 200;
+        QCOMPARE(head->estimate(), qint64(150));
+        p.reportMediaPosition(200);
+        clk = 250;
+        QCOMPARE(head->estimate(), qint64(250));
+        // Loop over 0-300 ms of script (20-320 ms of video).
+        p.setMarker(0, 300);
+        p.setLoopEnabled(true);
+        QVERIFY(p.loopActive());
+        clk = 320;
+        p.reportMediaPosition(320);  // the end: the page jumps back next
+        QCOMPARE(p.loopJumpFor(320), qint64(20));
+        clk = 330;
+        QCOMPARE(head->estimate(), qint64(320));
+        p.reportMediaPosition(20);  // the jump
+        clk = 350;
+        QCOMPARE(head->estimate(), qint64(40));
+        p.setOffsetMs(0);
+        p.setMediaPlaying(false);
+    }
+
     void outputChoicesAreRemembered() {
         {
             PlayerController p;

@@ -108,6 +108,12 @@ add_test(NAME clip_prep_controller_test COMMAND clip_prep_controller_test)
 add_executable(clip_prep_real_check clip_prep_real_check.cpp)
 target_link_libraries(clip_prep_real_check PRIVATE samn_app Qt6::Test)
 
+# By hand only, never in ctest (minutes long, numbers depend on the
+# machine): the end-to-end timing of the device path (docs/TIMING.md).
+add_executable(timing_bench timing_bench.cpp)
+target_link_libraries(timing_bench PRIVATE samn_app)
+target_compile_definitions(timing_bench PRIVATE SAMN_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data")
+
 # Every test above writes its output unbuffered (see unbuffered_stdout.cpp)
 # and finds ONNX Runtime beside it on Windows (no rpath there).
 get_property(_samn_app_tests DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)

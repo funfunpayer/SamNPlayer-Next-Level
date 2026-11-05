@@ -24,9 +24,11 @@ class DeviceController;
 // What reaches the device while a script plays (0.7 player/sync.go, stroke.go,
 // axes.go and app_stroke_filter.go), in C++ and without QML timers.
 //
-// The Player reports the playhead (script time) at every video position
-// update (about 4 to 10 times a second, as the 0.7 timeupdate); each report
-// sends:
+// The Player reports the playhead (script time): the script clock every
+// 16 ms; with a video every media position report (every 100 ms with Qt
+// 6.4's FFmpeg backend, 50 ms with 6.7) and, between two reports, the
+// position MediaPlayhead estimates every 16 ms (at most its cap, 20-150 ms,
+// ahead of the last report). Each position sends:
 //  - vibration and suction at the playhead (the mapped curves, 0-100) times
 //    the channel level and the master intensity, or 0 when the channel is
 //    switched off;
@@ -40,10 +42,11 @@ class DeviceController;
 // With a speed limit, no move is shorter than the way from the last sent
 // position takes at that speed (after the play-speed division); the home
 // move counts the whole range.
-// A pause, a stop and a missing position (1.5 s) stop the device and, when
-// "Move home on pause" is on, send the stroker to the bottom of its range in
-// 1.2 s. The emergency stop drops queued levels, stops at once and keeps the
-// output silent until playback starts again.
+// A pause, a stop and a missing report (1.5 s; an estimated position between
+// two reports does not count, nor does it start the output after a stop)
+// stop the device and, when "Move home on pause" is on, send the stroker to
+// the bottom of its range in 1.2 s. The emergency stop drops queued levels,
+// stops at once and keeps the output silent until playback starts again.
 // The levels go through Reduce peaks (when on), the channel level times the
 // master intensity, the Extended-O scale and the soft start (0.7 setOutput):
 //  - soft start: after the first position of a start, a pause or a quiet
@@ -132,7 +135,9 @@ public:
     // The video starts or stops playing (pause, stop, end).
     void setPlaying(bool playing);
     // The playhead in script time, reported while the video plays.
-    void update(qint64 scriptMs);
+    // fromReport false: a position estimated between two reports; it
+    // neither feeds the stale watchdog nor wakes the output after a stop.
+    void update(qint64 scriptMs, bool fromReport = true);
     // Stop everything now (the Emergency stop button).
     Q_INVOKABLE void emergencyStop();
     // C++ knob (tests): how long without a position counts as a pause.

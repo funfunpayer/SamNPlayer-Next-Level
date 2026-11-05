@@ -2,7 +2,20 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 5 Nov 2026, Claude, branch `claude/samn2-tidy`: a behaviour-neutral tidy-up from three code reviews (docs match the tree, shared helpers, dead code, test temp folders; handover below). Before: `claude/samn2-device-leftovers` (Training ends on a device change, the Intiface battery is never an old reading).
+**Last update:** 5 Nov 2026, Claude, branch `claude/samn2-playhead`: the video playhead is extrapolated between the media position reports (Owner decision D-163, recommendation 1 of `TIMING.md`; handover below). It carries the timing bench and `TIMING.md` of `claude/samn2-timing-audit` (PR #159, not merged yet). Before: `claude/samn2-tidy` (a behaviour-neutral tidy-up).
+
+## Handover: `claude/samn2-playhead` (5 Nov, video playhead extrapolation)
+
+With a video, `QMediaPlayer` reports its position every 100 ms (Qt 6.4 FFmpeg; 50 ms in 6.7), and the output was sampled only at those reports: stroke starts 42 ms late at p50, 90 ms at p99, moves squeezed (`TIMING.md` § 4-5). Now the output follows an estimate between the reports.
+
+- **Core:** `samn::PlayheadExtrapolator` (`playhead.h`, no Qt). Estimate = last report + elapsed x rate, at most `CapMs()` of wall time after the last report (median interval x 1.2, 20-150 ms; 120 ms default). A report up to 40 ms behind holds it (no step back, no move sent twice); further behind or ahead is a seek. Paused it is the last report, and after a start it moves only from the first report on. `Hold()` freezes it until the next report, `Clear()` forgets the interval.
+- **App:** `MediaPlayhead` (`media_playhead.*`): monotonic clock, a 16 ms `PreciseTimer` only while the video plays, emits only while the estimate advances. `PlayerController::setMediaPlaying` / `reportMediaPosition` (new; the `MediaPlayer` of `PlayerPage.qml` calls them, `playheadMoved(pos, fromVideo)`). The ticks feed only `PlaybackOutput`; the curves, the heatmap and auto Extended-O follow the reports. The rate comes from `output.speed`. Hold on an offset change, on the report at a loop end and on the emergency stop; clear on a new video; the estimate never passes the video's duration.
+- **Safety:** `PlaybackOutput::update(t, fromReport = true)`. A tick (`false`) neither restarts the stale watchdog nor wakes the output after a stop, so the watchdog still fires 1.5 s after the last *report*. A pause stops the ticks and then the device at once. The device runs at most the cap (cap x rate ms of video) ahead of the last report.
+- **Unchanged:** the script clock path (`setPlaying` / `setVideoPositionMs`), Editor, Training, the Generator page (its own player, no device output), soft seek, soft start, speed limit, offset (PS-01).
+- **Tests:** `tests/core/playhead_test.cpp` (13 cases), `playback_output_test` (8 new `video*` / `scriptClock*` cases; the new ones failed against a stub with the old behaviour). No existing assertion changed.
+- **Measured** (`TIMING.md` § 7, `benchmarks/TIMING_PLAYHEAD_2026-11-05.md`): stroke start 42 -> 4.6 ms p50, 90 -> 12.7 ms p99, max 15.7; at most 3.7 % shorter than scripted (was 20.4 %); the sent duration equals the formula in every move. The bench got the scenarios `media raw` (reports only) beside `media`, and a "move shorter than scripted" row.
+- **Brought in:** `tests/app/timing_bench.cpp`, `tests/app/CMakeLists.txt`, `docs/TIMING.md` and `docs/benchmarks/TIMING_2026-11-05.md` from `claude/samn2-timing-audit` (PR #159). Merging after #159 will conflict in `TIMING.md` (this branch only appends § 7 and changes the § 6 heading), `VERSIONS_AND_PLANS.md` (the G2.5 row) and this file.
+- **Not verified:** Windows with Qt 6.7.3 (50 ms reports, cap 60 ms), a real device, the GStreamer backend, a GUI thread that also renders.
 
 ## Handover: `claude/samn2-tidy` (5 Nov, behaviour-neutral tidy-up)
 
