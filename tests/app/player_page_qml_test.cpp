@@ -519,6 +519,12 @@ private:
             cm.primary = samn::ContactMarkBox{60, 40, 40, 40, "nipples", false};
             cm.extras = {samn::ContactMarkBox{120, 40, 30, 30, "mouth", true}};
             doc.contact_marks = cm;
+            samn::TrajectoryData path;
+            path.width = 320;
+            path.height = 240;
+            path.tip = {{0, 20, 20}, {1000, 200, 100}, {2000, 20, 20}, {3000, 20, 20}};
+            path.partner = {{0, 40, 40}, {1000, 160, 140}, {2000, 40, 40}, {3000, 40, 40}};
+            doc.trajectory = path;
             const QString marks = md.filePath(QStringLiteral("marks.samn"));
             samn::SaveDocument(std::filesystem::u8path(marks.toStdString()), doc);
             QVERIFY(ctrl->openScript(marks, QStringLiteral(SAMN_TEST_DATA "/testpattern_4s.mp4")));
@@ -537,6 +543,17 @@ private:
             ctrl->setShowContactMarks(false);
             QTRY_VERIFY(!layer->isVisible());
             ctrl->setShowContactMarks(true);
+
+            // MT-Debug trajectory overlay: off until toggled; tip + partner paths.
+            QVERIFY(ctrl->hasTrajectory());
+            auto* traj = page->findChild<QQuickItem*>(QStringLiteral("trajectoryLayer"));
+            QVERIFY(traj);
+            QVERIFY(!ctrl->trajectoryOverlay());
+            QTRY_VERIFY(!traj->isVisible());
+            ctrl->setTrajectoryOverlay(true);
+            QTRY_VERIFY(traj->isVisible());
+            ctrl->setTrajectoryOverlay(false);
+            QTRY_VERIFY(!traj->isVisible());
         }
 
         // A file that is no video: the error bar says so (0.7 0.5.41).
