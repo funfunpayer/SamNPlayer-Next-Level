@@ -547,6 +547,146 @@ private slots:
         QVERIFY(MockLines(r.log).contains("[mock] stop"));
     }
 
+    // ---- the device changes under a running session ----
+    // The link is lost: the session ends and gives its hold up, so the
+    // device can be connected again, and a later Start runs on what is
+    // connected then.
+    void aLostDeviceEndsTheSessionAndALaterStartWorks() {
+        auto server = std::make_unique<FakeButtplugServer>(FakeButtplug::StandardDeviceMessages());
+        Rig r;
+        r.dev.setTickIntervalMs(50);
+        r.dev.setDialTimeoutMs(500);
+        r.tc.setMock(false);
+        r.tc.setTimeScale(1);
+        r.tc.setRampUpMs(30000);
+        r.dev.connectIntiface(server->url());
+        QTRY_COMPARE_WITH_TIMEOUT(r.dev.state(), QString("connected"), 5000);
+        QSignalSpy done(&r.tc, &TrainingController::sessionFinished);
+        QVERIFY(r.tc.start());
+        QCOMPARE(r.tc.state(), QString("running"));
+        QVERIFY(r.dev.sessionActive());
+        QTRY_VERIFY(server->Count("ScalarCmd") >= 1);
+        server->Shutdown();  // the server goes away for good
+        QTRY_COMPARE_WITH_TIMEOUT(r.dev.state(), QString("disconnected"), 8000);
+        QTRY_COMPARE(r.tc.state(), QString("idle"));
+        QCOMPARE(done.count(), 1);
+        QVERIFY(!r.dev.sessionActive());
+        QVERIFY(r.tc.logLines().contains("Device connection lost \xE2\x80\x94 training ended."));
+        QCOMPARE(r.tc.logLines().last(), QString("Training finished."));
+        QCOMPARE(r.tc.vibration(), 0.0);
+        // Not refused as "training is in progress": a new connection works.
+        r.dev.connectMock();
+        QTRY_COMPARE(r.dev.state(), QString("connected"));
+        r.tc.setMock(true);
+        QVERIFY(r.tc.start());
+        QCOMPARE(r.tc.state(), QString("running"));
+        QVERIFY(r.dev.sessionActive());
+        QTRY_VERIFY(MockLines(r.log).filter("vibration=").size() >= 1);
+        r.tc.stop();
+        QVERIFY(!r.dev.sessionActive());
+    }
+
+    // Another device behind the same connection (Intiface's one-shot
+    // reconnect adopts whatever toy the server lists now): the session that
+    // was started for the first one ends and switches the new one off.
+    void anotherDeviceAfterAReconnectEndsTheSession() {
+        FakeButtplugServer server(FakeButtplug::StandardDeviceMessages());
+        Rig r;
+        r.dev.setTickIntervalMs(50);
+        r.tc.setMock(false);
+        r.tc.setTimeScale(1);
+        r.tc.setRampUpMs(30000);
+        r.dev.connectIntiface(server.url());
+        QTRY_COMPARE_WITH_TIMEOUT(r.dev.state(), QString("connected"), 5000);
+        QVERIFY(r.tc.start());
+        QCOMPARE(r.tc.state(), QString("running"));
+        QTRY_VERIFY(server.Count("ScalarCmd") >= 1);
+        server.device_name = "Other toy";
+        server.DropClients();
+        QTRY_COMPARE_WITH_TIMEOUT(server.connections(), 2, 5000);
+        QTRY_VERIFY(r.dev.name().contains("Other toy"));
+        QTRY_COMPARE(r.tc.state(), QString("idle"));
+        QVERIFY(!r.dev.sessionActive());
+        QVERIFY(r.tc.logLines().contains("The device changed \xE2\x80\x94 training ended."));
+        QTRY_VERIFY(server.Count("StopDeviceCmd") >= 1);
+        QCOMPARE(r.dev.state(), QString("connected"));  // a connection Training did not make stays
+        // A later Start runs on the new toy.
+        QVERIFY(r.tc.start());
+        QCOMPARE(r.tc.state(), QString("running"));
+        QVERIFY(r.dev.sessionActive());
+        r.tc.stop();
+    }
+
+    // A second toy of the same name at another Buttplug index after the
+    // reconnect is another device too. Without a status tick in between the
+    // session ends, and the new toy gets no level of it.
+    void aSameNamedToyAtAnotherIndexEndsTheSession() {
+        FakeButtplugServer server(FakeButtplug::StandardDeviceMessages());
+        Rig r;
+        r.dev.setTickIntervalMs(60000);  // no tick during the test
+        r.tc.setMock(false);
+        r.tc.setTimeScale(1);
+        r.tc.setRampUpMs(30000);
+        r.dev.connectIntiface(server.url());
+        QTRY_COMPARE_WITH_TIMEOUT(r.dev.state(), QString("connected"), 5000);
+        QVERIFY(r.tc.start());
+        QTRY_VERIFY(server.Count("ScalarCmd") >= 2);
+        server.device_index = 8;
+        server.DropClients();
+        QTRY_COMPARE_WITH_TIMEOUT(server.connections(), 2, 5000);
+        QTRY_COMPARE_WITH_TIMEOUT(r.tc.state(), QString("idle"), 1500);
+        QVERIFY(r.tc.logLines().contains("The device changed \xE2\x80\x94 training ended."));
+        QVERIFY(!r.dev.sessionActive());
+        QTRY_VERIFY(server.Count("StopDeviceCmd") >= 1);
+        QTest::qWait(200);
+        int handshakes = 0;
+        for (const auto& m : server.received) {
+            if (m.contains("RequestServerInfo")) ++handshakes;
+            if (handshakes == 2 && m.contains("ScalarCmd"))
+                for (const auto& sc : m.at("ScalarCmd").at("Scalars"))
+                    QVERIFY2(sc.at("Scalar").get<double>() == 0, qPrintable(QString::fromStdString(m.dump())));
+        }
+    }
+
+    // The training is handed another DeviceController while it runs: the
+    // old one stops and gets its hold (and the connection Training made)
+    // back; the new one is not driven until a Start.
+    void aNewDeviceControllerEndsTheSessionOnTheOldOne() {
+        Rig r;
+        DeviceController other;
+        QSignalSpy other_log(&other, &DeviceController::logMessage);
+        other.connectMock();
+        QTRY_COMPARE(other.state(), QString("connected"));
+        r.tc.setTimeScale(1);
+        r.tc.setRampUpMs(30000);
+        QVERIFY(r.tc.start());  // connects r.dev itself (Mock)
+        QTRY_COMPARE(r.tc.state(), QString("running"));
+        QTRY_VERIFY(r.tc.vibration() > 0.0);
+        QTRY_VERIFY(MockLines(r.log).filter("vibration=").size() >= 1);
+        QVERIFY(r.dev.sessionActive());
+        const int other_lines = MockLines(other_log).size();
+
+        r.tc.setDevice(&other);
+        QCOMPARE(r.tc.state(), QString("idle"));
+        QVERIFY(r.tc.logLines().contains("The device changed \xE2\x80\x94 training ended."));
+        QVERIFY(!r.dev.sessionActive());
+        QVERIFY(!other.sessionActive());
+        QTRY_COMPARE(r.dev.state(), QString("disconnected"));  // Training had made that connection
+        const QStringList lines = MockLines(r.log);
+        const int stop = lines.lastIndexOf("[mock] stop");
+        QVERIFY(stop > 0);
+        QVERIFY(lines.mid(stop).filter("vibration=").isEmpty());
+        QTest::qWait(100);
+        QCOMPARE(MockLines(other_log).size(), other_lines);  // the new one was not driven
+
+        QVERIFY(r.tc.start());
+        QCOMPARE(r.tc.state(), QString("running"));  // on the new one's connection
+        QVERIFY(other.sessionActive());
+        QTRY_VERIFY(MockLines(other_log).filter("vibration=").size() >= 1);
+        r.tc.stop();
+        QVERIFY(!other.sessionActive());
+    }
+
     void startIsIgnoredWhileActiveAndStopWhenIdleIsSilent() {
         Rig r;
         r.tc.stop();

@@ -8,6 +8,7 @@
 #include <QVariantMap>
 #include <QtQml/qqmlregistration.h>
 #include <atomic>
+#include <chrono>
 #include <functional>
 #include <memory>
 #include <set>
@@ -128,6 +129,15 @@ public:
     // Builds the link of the "ble" kind instead of the Bluetooth one (a
     // stand-in Sam Neo 2). Called on the device thread; empty = Bluetooth.
     void setBleTransportFactory(std::function<std::unique_ptr<QtTransport>()> factory);
+    // The clock of the Sam Neo 2 and Intiface devices of the next connects
+    // (battery cache, keepalive). Called on the device thread; empty = the steady clock.
+    void setDeviceClock(std::function<std::chrono::steady_clock::time_point()> clock);
+    // A level as if given while this controller showed snapshot `generation`
+    // (a GUI that has not seen the newest snapshot yet).
+    void setVibrationForGeneration(double level, quint64 generation);
+    void setSuctionForGeneration(double level, quint64 generation);
+    // Counts the changes of deviceIdentity() the GUI has seen.
+    quint64 generation() const { return snap_.generation; }
 
     // --- state (GUI thread) ---
     QString state() const;
@@ -148,6 +158,11 @@ public:
     bool capLinear() const;
     bool capBattery() const;
     bool capRaw() const;
+    // Which device the connection drives (kind, name, address and the
+    // adopted device: Intiface's device index); empty without one. Another
+    // value = another device. Shown at once after a command whose reconnect
+    // found another device; levels given before that are not sent to it.
+    QString deviceIdentity() const { return snap_.identity; }
     QString lastError() const { return last_error_; }
     QString hint() const { return hint_; }
     QStringList serialPorts() const { return serial_ports_; }
@@ -168,6 +183,10 @@ public:
         int rssi = 0;
         int battery = -1;
         bool battery_ok = false;
+        QString identity;  // deviceIdentity()
+        // Counts the identity changes; a level carries the one the GUI saw,
+        // and the worker drops levels meant for an earlier device.
+        quint64 generation = 0;
         samn::device::Capabilities caps;
         bool operator==(const Snapshot& o) const;
     };

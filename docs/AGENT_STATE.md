@@ -2,7 +2,34 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 5 Nov 2026, Claude, branch `claude/samn2-review-fixes`: fixes from three read-only code reviews (engine E1-E8, core C1-C6, app A1-A2; handover below). Before: 1 Nov FuseTipPartners.
+**Last update:** 5 Nov 2026, Claude, branch `claude/samn2-device-leftovers`: Training ends on a device change, the Intiface battery is never an old reading, plus the PR #156 review follow-ups (handover below). Before: `FuseTipPartners` (#154).
+
+## Handover: `claude/samn2-device-leftovers` (5 Nov, device bug hunt leftovers)
+
+Two device bugs, each with tests that failed before the fix.
+
+- **Training on a device change:** `TrainingController::onDeviceStatus` only looked at the device while *connecting*. A running (or paused) session lived on after a lost link, kept its session hold (so connecting again was refused as "training is in progress") and kept sending levels. After an Intiface one-shot reconnect that adopted another toy, it drove that toy. `setDevice` with another controller left Training's hold on the old one for good, and that device kept its last level. Now a running session ends when the device is gone ("Device connection lost — training ended."; nothing to disconnect) or another one (`DeviceController::deviceIdentity()`, kind + name + address + Intiface device index, differs from the start: "The device changed — training ended."). The device is stopped if it is still there, the hold is released, and a connection Training made is closed. `setDevice` ends the session on the old controller first (a connect in progress fails). The next Start uses whatever is connected then. Tests: `training_controller_test` `aLostDeviceEndsTheSessionAndALaterStartWorks`, `anotherDeviceAfterAReconnectEndsTheSession`, `aNewDeviceControllerEndsTheSessionOnTheOldOne`.
+- **Intiface battery semantics** (`IntifaceDevice`, `battery.h`):
+  - A reading belongs to one device session. `Connect` (before the dial), `Disconnect`, a dead socket (`MarkDead`) and the server's `DeviceRemoved` for the adopted device drop it.
+  - A failed read (no reading, `Error`, socket gone) drops the old value at once. It is still cached for `kBatteryCacheTtl` (the Stop-budget rule from `samn2-stop-safety` is kept), so a failed refresh never leaves the old value on show.
+  - `Info()` shows a reading for `kBatteryMaxAge` (60 s) at most.
+  - A `BatteryLevelReading` counts only with the Id of the request that is waiting, so a late reply to a timed-out request is not taken as fresh. `pending_battery_` is gone.
+  - `DeviceController` publishes a battery value only while the device reports it is connected.
+  - New test knob: `DeviceController::setDeviceClock`. The fake server got `DropClients`, `device_name` and `battery_level`.
+  - Tests: `device/intiface: a failed battery refresh drops the old reading`, `... a battery reading ages out of Info`, `... the battery reading ends with the device session`, `... a late battery reply is not a fresh reading`, `device_controller_test::intifaceBatteryIsNeverAnOldReading`.
+- **Review follow-ups (PR #156):**
+  - *A reconnect inside a level command drove another toy* (major). A level that hit a dead socket made `IntifaceDevice::Command` reconnect, adopt whatever toy the server listed and send it the level. The worker's `CheckAlive` sent no snapshot while the link was alive, so Training only saw the new toy at the next 2 s tick. Fixes:
+    - `Command` remembers the adopted device (index and name) and refuses the command when the reconnect found another one (`SameDevice`, "the reconnect found another device").
+    - `CheckAlive` sends a snapshot as soon as the identity differs from the last one shown.
+    - `ApplyLevels` stops a batch when the identity changed during it.
+    - Every snapshot carries a `generation`, counted up at each identity change. A level carries the generation the GUI saw, and the worker drops levels meant for an earlier device. This also covers a reconnect in the tick or pump, where levels were queued before the GUI saw the new toy.
+    - Stops are never dropped.
+    - Tests: `device/intiface: a reconnect to another device does not get the old command` (another name, another index); `device_controller_test::intifaceReconnectToAnotherToyGetsNoOldLevel` (no tick during the test; the old level never reaches the new toy, and the identity changes within 1.5 s).
+  - *Same name at another index* (nit). The identity includes the Intiface `AdoptedIndex()`. Test: `training_controller_test::aSameNamedToyAtAnotherIndexEndsTheSession`, with no tick; the new toy gets no level above 0.
+  - *Merged batches* (second review). Waiting levels merge newest-wins, and a level for a newer generation used to keep the batch's older generation, so the whole batch was dropped (the Player then stayed silent on a constant hold). Now a level for another generation first clears the waiting batch's values (vibration, suction, position, axes) and takes the batch over. Keeping only the newest generation would have let an old suction through. Tests: `device_controller_test::levelsOfAnEarlierGenerationDoNotMergeIntoNewerOnes` (a diagnostics run holds the worker; stops unaffected) and `intifaceOldGenerationLevelNeverReachesTheNewToy` (deterministic, through the new hook `setVibrationForGeneration`).
+  - The fakes got `device_index` (core and app) and `device_name` (core).
+- **Not changed:** the stop budget (`kStopBudgetMs` / `kStopGraceMs`) and the Sam Neo 2 battery code (a failed GATT read already drops the value and is read at every tick). The Player keeps its hold while playing through a lost link (0.7 rule: pause first), and `PlaybackOutput::setDevice` moves the hold without stopping the old device. That is noted here, not changed.
+- **Not verified:** on real hardware or a real Intiface Central (no hardware here). That the server echoes the request Id in `BatteryLevelReading` follows the Buttplug v3 spec and the fakes. A server that leaves the Id out would show no battery.
 
 ## Handover: `claude/samn2-review-fixes` (5 Nov)
 

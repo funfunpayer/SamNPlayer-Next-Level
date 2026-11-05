@@ -293,6 +293,8 @@ private:
     void beginSession();
     void connectThenBegin();
     void onDeviceStatus();
+    // Which device a session runs on (DeviceController::deviceIdentity).
+    QString deviceIdentity() const;
     void failStart(const QString& message);
     void tick();
     void finishSession(const QString& logMessage = QString());
@@ -339,6 +341,7 @@ private:
     samn::training::Script run_script_;
     samn::training::Options run_opts_;
     QString run_key_;
+    QString run_device_;  // deviceIdentity() at the session's start
     bool run_is_script_ = false;
     bool we_connected_ = false;
     QTimer timer_, connect_timeout_;

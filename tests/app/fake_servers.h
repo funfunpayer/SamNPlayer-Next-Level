@@ -46,6 +46,10 @@ public:
     // Stops listening and drops every client: the server "went away".
     void Shutdown() {
         server_.close();
+        DropClients();
+    }
+    // Drops every client but keeps listening: a client may dial again.
+    void DropClients() {
         const QList<QWebSocket*> all = clients_;
         for (QWebSocket* c : all) c->abort();  // `disconnected` deletes them
     }
@@ -62,6 +66,11 @@ public:
     // How BatteryLevelCmd is answered: a reading (73 %), never, or an Error.
     enum class Battery { kReading, kMute, kError };
     Battery battery = Battery::kReading;
+    double battery_level = 0.73;
+    // The name of the one device the list reports (another toy chosen in
+    // Intiface Central between two connections).
+    std::string device_name = "Testgerät";
+    int device_index = 7;
 
     int Count(const std::string& name) const {
         int n = 0;
@@ -94,14 +103,14 @@ private:
                                                  {"MessageVersion", 3}, {"MaxPingTime", 5000}});
                 } else if (name == "RequestDeviceList") {
                     json devices = json::array();
-                    devices.push_back({{"DeviceIndex", 7}, {"DeviceName", "Testgerät"},
+                    devices.push_back({{"DeviceIndex", device_index}, {"DeviceName", device_name},
                                        {"DeviceMessages", device_messages_}});
                     Reply(client, "DeviceList", {{"Id", id}, {"Devices", devices}});
                 } else if (name == "BatteryLevelCmd") {
                     if (battery == Battery::kReading)
                         Reply(client, "BatteryLevelReading",
                               {{"Id", id}, {"DeviceIndex", item.value().value("DeviceIndex", json())},
-                               {"BatteryLevel", 0.73}});
+                               {"BatteryLevel", battery_level}});
                     else if (battery == Battery::kError)
                         Reply(client, "Error", {{"Id", id}, {"ErrorCode", 4},
                                                 {"ErrorMessage", "battery not readable"}});

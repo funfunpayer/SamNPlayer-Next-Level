@@ -14,6 +14,9 @@ namespace samn::device {
 
 // A reading is reused this long so the 2 s status poll does not hammer the link.
 inline constexpr std::chrono::seconds kBatteryCacheTtl{30};
+// A reading is shown at most this long after it was taken, also when no new
+// read was tried in between; a failed read never makes an old reading young.
+inline constexpr std::chrono::seconds kBatteryMaxAge{60};
 
 // Standard GATT battery service / level characteristic (128-bit form).
 inline constexpr const char* kBatteryServiceUuid = "0000180f-0000-1000-8000-00805f9b34fb";

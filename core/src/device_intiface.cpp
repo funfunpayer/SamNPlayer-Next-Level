@@ -34,15 +34,20 @@ std::string DisplayValue(const json& v) {
     return GoJsonDump(v);
 }
 
+// The message answers the request `id` (Buttplug replies carry its Id).
+bool HasId(const json& body, int id) {
+    if (!body.is_object()) return false;
+    const auto it = body.find("Id");
+    return it != body.end() && it->is_number_integer() && it->get<int>() == id;
+}
+
 // The server's Error reply to the request `id` in a received batch.
 bool IsErrorFor(const json& batch, int id) {
     if (!batch.is_array()) return false;
     for (const auto& message : batch) {
         if (!message.is_object()) continue;
         const auto it = message.find("Error");
-        if (it == message.end() || !it->is_object()) continue;
-        const auto id_it = it->find("Id");
-        if (id_it != it->end() && id_it->is_number_integer() && id_it->get<int>() == id) return true;
+        if (it != message.end() && HasId(*it, id)) return true;
     }
     return false;
 }
@@ -117,6 +122,7 @@ void IntifaceDevice::MarkDead(const std::string& reason) {
     const bool was = connected_ || transport_.IsConnected();
     if (transport_.IsConnected()) transport_.Disconnect();
     connected_ = false;
+    ForgetBattery();  // a reconnect may find another device (or none)
     if (was && !reason.empty()) Log(LogLevel::kWarn, "intiface: connection lost: " + reason);
 }
 
@@ -204,6 +210,9 @@ void IntifaceDevice::AdoptDevice(const json& body) {
 
 Status IntifaceDevice::Connect() {
     if (transport_.IsConnected()) transport_.Disconnect();
+    // The last session's reading goes first, also when the dial fails.
+    ForgetBattery();
+    connected_ = false;
     Status dial = transport_.Connect();
     if (!dial)
         return Status::Error("intiface: no connection to " + url_ + " - " + IntifaceHint(url_, dial.message) +
@@ -214,12 +223,6 @@ Status IntifaceDevice::Connect() {
     constrict_actuator_.clear();
     features_.clear();
     has_battery_ = false;
-    battery_ok_ = false;
-    battery_pct_ = 0;
-    battery_at_ = {};
-    battery_failed_at_.reset();
-    pending_battery_.reset();
-    connected_ = false;
 
     const auto deadline = Now() + kIntifaceTimeout;
     Status s = Send("RequestServerInfo", {{"ClientName", "SamNPlayer"}, {"MessageVersion", 3}});
@@ -267,15 +270,17 @@ Status IntifaceDevice::Connect() {
     return Status::Ok();
 }
 
-bool IntifaceDevice::HandleBatch(const json& batch, double* battery, bool* got_battery) {
+bool IntifaceDevice::HandleBatch(const json& batch, int battery_id, double* battery, bool* got_battery) {
     if (!batch.is_array()) return false;
     for (const auto& message : batch) {
         if (!message.is_object()) continue;
         for (const auto& item : message.items()) {
             const std::string& name = item.key();
+            const json& body = item.value();
             if (name == "BatteryLevelReading") {
-                const auto& body = item.value();
-                if (body.is_object()) {
+                // Only the answer to the request that waits: a late reply to
+                // an earlier one (timed out, maybe another session) is old.
+                if (battery_id > 0 && HasId(body, battery_id)) {
                     auto it = body.find("BatteryLevel");
                     if (it != body.end() && it->is_number() && !*got_battery) {
                         *battery = it->get<double>();
@@ -283,9 +288,16 @@ bool IntifaceDevice::HandleBatch(const json& batch, double* battery, bool* got_b
                     }
                 }
             } else if (name == "Error") {
-                Log(LogLevel::kWarn, "intiface: server error: " + GoJsonDump(item.value()));
+                Log(LogLevel::kWarn, "intiface: server error: " + GoJsonDump(body));
             } else if (name == "DeviceRemoved") {
-                Log(LogLevel::kWarn, "intiface: device removed: " + GoJsonDump(item.value()));
+                Log(LogLevel::kWarn, "intiface: device removed: " + GoJsonDump(body));
+                // The adopted device left the server: its reading goes too,
+                // and it is not asked again before the cache time (a read
+                // now would only wait for an Error).
+                const auto it = body.is_object() ? body.find("DeviceIndex") : body.end();
+                if (!device_name_.empty() && it != body.end() && it->is_number() &&
+                    static_cast<int>(it->get<double>()) == device_idx_)
+                    BatteryFailed();
             }
         }
     }
@@ -304,11 +316,12 @@ bool IntifaceDevice::PumpIncoming() {
         json batch = json::parse(ToText(r.data), nullptr, false);
         double reading = 0;
         bool got = false;
-        if (!HandleBatch(batch, &reading, &got)) {
+        // No battery request waits here (BatteryLevel reads its own reply):
+        // a reading that turns up now is late and dropped.
+        if (!HandleBatch(batch, 0, &reading, &got)) {
             MarkDead("read: invalid message");
             return false;
         }
-        if (got && !pending_battery_) pending_battery_ = reading;
     }
 }
 
@@ -347,10 +360,15 @@ Status IntifaceDevice::Ping() {
 
 // Sends one message built by `build` (called when needed, so it sees the
 // current device index); on a dead socket it reconnects once and retries.
-// build returning false = nothing to send for this device.
+// build returning false = nothing to send for this device. A reconnect that
+// adopted another device (another index or name) sends nothing: the command
+// was meant for the old one.
 Status IntifaceDevice::Command(const std::function<bool(std::string*, json*)>& build) {
+    const int meant_idx = device_idx_;
+    const std::string meant_name = device_name_;
     Status s = EnsureConnected();
     if (!s) return s;
+    if (Status same = SameDevice(meant_idx, meant_name); !same) return same;
     std::string name;
     json body;
     if (!build(&name, &body)) return Status::Ok();
@@ -359,8 +377,17 @@ Status IntifaceDevice::Command(const std::function<bool(std::string*, json*)>& b
     // Dead socket: one-shot reconnect + single retry.
     if (!TryReconnectOnce()) return s;
     if (!connected_ || !transport_.IsConnected()) return s;
+    if (Status same = SameDevice(meant_idx, meant_name); !same) return same;
     if (!build(&name, &body)) return Status::Ok();
     return Send(name, body);
+}
+
+Status IntifaceDevice::SameDevice(int idx, const std::string& name) const {
+    if (device_idx_ == idx && device_name_ == name) return Status::Ok();
+    const std::string message = "intiface: the reconnect found another device (" + device_name_ +
+                                ", index " + std::to_string(device_idx_) + ") - command not sent";
+    Log(LogLevel::kWarn, message);
+    return Status::Error(message);
 }
 
 double IntifaceDevice::MotorLevel(const std::string& channel) const {
@@ -452,6 +479,7 @@ Status IntifaceDevice::Stop() {
 Status IntifaceDevice::Disconnect() {
     const bool open = transport_.IsConnected();
     connected_ = false;
+    ForgetBattery();
     if (!open) return Status::Ok();
     // Switch off before closing; otherwise the device keeps running until the
     // server notices the missing ping.
@@ -489,9 +517,29 @@ ConnectionInfo IntifaceDevice::Info() const {
     info.connected = connected_;
     info.name = name;
     info.address = url_;
-    info.battery_pct = battery_pct_;
-    info.battery_ok = battery_ok_;
+    if (BatteryShown()) {
+        info.battery_pct = battery_pct_;
+        info.battery_ok = true;
+    }
     return info;
+}
+
+void IntifaceDevice::ForgetBattery() {
+    battery_ok_ = false;
+    battery_pct_ = 0;
+    battery_at_ = {};
+    battery_failed_at_.reset();
+}
+
+void IntifaceDevice::BatteryFailed() {
+    // Not knowing the level now is not "still at the old level".
+    battery_ok_ = false;
+    battery_pct_ = 0;
+    battery_failed_at_ = Now();
+}
+
+bool IntifaceDevice::BatteryShown() const {
+    return connected_ && battery_ok_ && Now() - battery_at_ < kBatteryMaxAge;
 }
 
 BatteryReading IntifaceDevice::BatteryLevel() {
@@ -502,18 +550,21 @@ BatteryReading IntifaceDevice::BatteryLevel() {
     // kIntifaceBatteryWait at every status tick.
     if (battery_failed_at_ && Now() - *battery_failed_at_ < kBatteryCacheTtl) return {};
 
-    pending_battery_.reset();  // a stale answer of an expired request
     int id = 0;
-    if (!Send("BatteryLevelCmd", {{"DeviceIndex", device_idx_}}, &id)) return {};
+    if (!Send("BatteryLevelCmd", {{"DeviceIndex", device_idx_}}, &id)) return {};  // MarkDead forgot it
 
     const auto deadline = Now() + kIntifaceBatteryWait;
-    while (!pending_battery_) {
-        if (!transport_.IsConnected()) return {};
+    std::optional<double> level;
+    while (!level) {
+        if (!transport_.IsConnected()) {
+            BatteryFailed();
+            return {};
+        }
         const auto left = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - Now());
         ReceiveResult r = transport_.Receive(left.count() > 0 ? left : std::chrono::milliseconds(0));
         if (r.kind == ReceiveResult::Kind::kTimeout) {
             Log(LogLevel::kDebug, "intiface: battery not readable (no reading within 3s)");
-            battery_failed_at_ = Now();
+            BatteryFailed();
             return {};
         }
         if (r.kind == ReceiveResult::Kind::kClosed) {
@@ -523,19 +574,18 @@ BatteryReading IntifaceDevice::BatteryLevel() {
         double reading = 0;
         bool got = false;
         json batch = json::parse(ToText(r.data), nullptr, false);
-        if (!HandleBatch(batch, &reading, &got)) {
+        if (!HandleBatch(batch, id, &reading, &got)) {
             MarkDead("read: invalid message");
             return {};
         }
-        if (got) pending_battery_ = reading;
-        if (!pending_battery_ && IsErrorFor(batch, id)) {
+        if (got) level = reading;
+        if (!level && IsErrorFor(batch, id)) {
             // The server refused the read (HandleBatch logged why): no point waiting.
-            battery_failed_at_ = Now();
+            BatteryFailed();
             return {};
         }
     }
-    battery_pct_ = BatteryFromButtplug(*pending_battery_);
-    pending_battery_.reset();
+    battery_pct_ = BatteryFromButtplug(*level);
     battery_ok_ = true;
     battery_at_ = Now();
     battery_failed_at_.reset();

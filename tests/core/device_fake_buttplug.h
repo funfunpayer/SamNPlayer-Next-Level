@@ -24,6 +24,9 @@ struct FakeButtplug {
     samn::device::MockTransport transport;
     json device_messages;  // which channels the reported device has
     bool no_devices = false;
+    // The one device the list reports (another toy between two connections).
+    int device_index = 7;
+    std::string device_name = "Testgerät";
     std::vector<json> received;  // one {"Name": body} per received message
 
     std::vector<std::string> Names() const {
@@ -72,7 +75,7 @@ private:
                 } else if (name == "RequestDeviceList") {
                     json devices = json::array();
                     if (!no_devices)
-                        devices.push_back({{"DeviceIndex", 7}, {"DeviceName", "Testgerät"},
+                        devices.push_back({{"DeviceIndex", device_index}, {"DeviceName", device_name},
                                            {"DeviceMessages", device_messages}});
                     Reply("DeviceList", {{"Id", id}, {"Devices", devices}});
                 } else if (name == "BatteryLevelCmd") {
