@@ -2,7 +2,18 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 5 Nov 2026, Cursor, branch `cursor/mt-debug-trajectory-635a`: Player MT-Debug tip/partner trajectory line overlay. Before: Claude `claude/samn2-driver-registry` (#161, D-163).
+**Last update:** 5 Nov 2026, Claude, branch `claude/samn2-timing-audit`: the device path's end-to-end timing measured for the first time (`docs/TIMING.md`, bench `tests/app/timing_bench.cpp`); no behaviour changed (handover below). Before: `claude/samn2-tidy` (behaviour-neutral tidy-up, #158).
+
+## Handover: `claude/samn2-timing-audit` (5 Nov, timing audit, measurement only)
+
+Owner question: is the Player as exact and fast as the Go version? Nothing had been measured. **No behaviour was changed.**
+
+- **`docs/TIMING.md`:** the timing path with file/line references (script clock, media player reports, `PlaybackOutput`, the worker queue, every transport, worst case per stage), the Go 0.7 comparison (read from the 0.7 repository, not in this repo), the results, caveats, findings and a ranked recommendation. All rows: `docs/benchmarks/TIMING_2026-11-05.md`.
+- **Bench:** `tests/app/timing_bench.cpp`, target `timing_bench`, built with the tests and **not** registered with ctest (as `clip_prep_real_check`). The real `ScriptClock` / `QMediaPlayer`, `PlaybackOutput`, `DeviceController` + worker and the real TCode UDP/TCP and Intiface transports into stand-ins on their own threads that stamp each write with the steady clock; a Sam Neo 2 stand-in transport (optional ack model). About 15 min for all scenarios; `--seconds`, `--only`, `--load`.
+- **Key numbers** (Linux, Qt 6.4.2, offscreen, 4 cores, 3 repetitions at loadavg below 1.4): report -> wire 0.3-0.7 ms p50, 1.6-5 ms p99 on every transport, also with 3 busy threads; levels and stroke starts late by the sampling lag, 8-9 ms p50 / 17 ms p99 with the 16 ms clock and **42 ms p50 / 90 ms p95 with a video** (Qt 6.4.2 FFmpeg reports every 100 ms; Qt 6.7.3, the release, every 50 ms per its source); stroke ends 1 ms p50 / 4 ms p99 after due on every path; sent durations equal the formula in every move (also 0.5x / 2x and the speed limit); offset +/-200 shifts the wire by exactly +/-200.
+- **Findings worth knowing:** `Qt::PreciseTimer` would change nothing (Qt already treats coarse timers of 20 ms or less as precise, on Windows with the multimedia timer); 0.7 sampled the video every ~250 ms, so SamN2 is at least as exact in every mode. Rare single gaps (one report interval up to 112 ms, one `update` call of 105 ms) were seen about once per 60 s run, cause not identified.
+- **Recommended next (not done):** 1. extrapolate the video playhead between media reports (gain: video lag 0-100 ms to 0-16 ms); 2. send the next stroke at its start time with a precise timer; 3. levels at their due time (low value); 4. `LowDelayOption` on the TCode TCP socket (cheap, no evidence of a problem yet); 5. measure the Bluetooth round trip on the device before any BLE change. Details, risks and protecting tests: `TIMING.md` § 6.
+- **Not measured:** a real device, the Bluetooth radio, Windows, the GStreamer backend, the GUI thread with QML rendering and video frames, the QML hop.
 
 ## Handover: `cursor/mt-debug-trajectory-635a` (5 Nov)
 
@@ -23,7 +34,6 @@ Owner: the core is the kernel, Player / Generator / Training are modules, device
 - **Tests:** new `tests/core/device_driver_test.cpp` (12 cases: registry order, unknown id, duplicate id, TCode Resolve for plain / udp / tcp / bad addresses and serial, the other Resolves, hints, mock / Sam Neo 2 / TCode sessions over `MockTransport`, Intiface over the fake Buttplug server incl. the reconnect-to-another-toy refusal and the pump / tick reconnect). No existing test was changed.
 - **Behaves differently (slightly):** the device choice's names and help texts come from C++ and are no longer wrapped in `qsTr` (there are no translations yet; when they come, `DriverInfo` needs translatable keys). `pickSavedPort` uses the saved target of the driver that picks a serial port instead of the literal "tcode-serial". A driver whose transport kind the app cannot build fails the connect with "no transport for the device kind" (unreachable with the five built-ins).
 - **Not verified:** real hardware (Sam Neo 2, OSR / SR6, Intiface Central) and Windows / MSVC (built and run on Linux, GCC, Qt 6.4 only).
-
 
 ## Handover: `claude/samn2-tidy` (5 Nov, behaviour-neutral tidy-up)
 
