@@ -24,14 +24,16 @@ bool IsHuge(const char* b, const char* e) {
         if (first_nonzero < 0 && *p != '0') first_nonzero = digits;
         ++digits;
     }
+    if (first_nonzero < 0) return false;  // zero stays zero
     if (p < e) {
         long x = 0;
         const char* q = p + 1;
         if (q < e && *q == '+') ++q;
-        std::from_chars(q, e, x);
+        const auto er = std::from_chars(q, e, x);
+        // Too long for a long: only its sign matters (negative: tiny, positive: huge).
+        if (er.ec == std::errc::result_out_of_range) return p[1] != '-';
         exp10 = x;
     }
-    if (first_nonzero < 0) return false;
     if (point < 0) point = digits;
     return exp10 + (point - first_nonzero) > 0;
 }

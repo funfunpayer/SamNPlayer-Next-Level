@@ -111,7 +111,11 @@ std::string delete_custom_script(const std::string& name, const fs::path& dir) {
     // that carries this name goes.
     const fs::path path = dir / (*slug + ".json");
     const auto existing = read_script(path);
-    if (!existing || existing->name != trim(name)) return "no custom script named \"" + name + "\"";
+    // A file that cannot be read has no name to compare; it carries this
+    // name's file name, so a corrupt script can still be deleted.
+    std::error_code exists_ec;
+    const bool unreadable = !existing && fs::is_regular_file(path, exists_ec);
+    if (!unreadable && (!existing || existing->name != trim(name))) return "no custom script named \"" + name + "\"";
     std::error_code ec;
     if (!fs::remove(path, ec)) return "no custom script named \"" + name + "\"";
     return {};

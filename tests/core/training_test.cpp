@@ -773,6 +773,12 @@ TEST_CASE("delete_custom_script removes only the script that carries the name") 
     CHECK(find_script("Edge A", t.path));
     CHECK(delete_custom_script("Edge A", t.path).empty());
     CHECK_FALSE(find_script("Edge A", t.path));
+    // A script file that cannot be read has no name to compare: the typed name
+    // whose file name it carries may delete it.
+    std::ofstream(t.path / "broken-one.json") << "{ nope";
+    CHECK(delete_custom_script("Broken One", t.path).empty());
+    CHECK_FALSE(fs::exists(t.path / "broken-one.json"));
+    CHECK(delete_custom_script("Broken One", t.path).find("no custom script") != std::string::npos);
 }
 
 TEST_CASE("a broken script file does not hide the others") {

@@ -42,6 +42,17 @@ TEST_CASE("number: ParseDoublePrefix follows strtod for decimal numbers") {
     CHECK(p.value == 0.0);
     p = samn::ParseDoublePrefix("0.000001e-999");
     CHECK(p.value == 0.0);
+    // An exponent too long for a long keeps its sign (strtod: 0 / inf).
+    p = samn::ParseDoublePrefix("1e-99999999999999999999");
+    CHECK(p.ok);
+    CHECK(p.out_of_range);
+    CHECK(p.value == 0.0);
+    p = samn::ParseDoublePrefix("1e99999999999999999999");
+    CHECK(p.out_of_range);
+    CHECK(std::isinf(p.value));
+    p = samn::ParseDoublePrefix("-1e-99999999999999999999");
+    CHECK(p.value == 0.0);
+    CHECK(samn::StrToDouble("0e99999999999999999999") == 0.0);
     p = samn::ParseDoublePrefix("123456e+305");
     CHECK(std::isinf(p.value));
 }
