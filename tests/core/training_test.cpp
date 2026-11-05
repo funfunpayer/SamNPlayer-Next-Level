@@ -763,6 +763,18 @@ TEST_CASE("custom scripts: save, edit in place, collisions, list, find, delete")
     CHECK(list_custom_scripts(t.path).empty());
 }
 
+// Review C4: delete went by the file name alone.
+TEST_CASE("delete_custom_script removes only the script that carries the name") {
+    TempDir t;
+    Script a = one({ph("p", cv(0, 0.5, 0, 10, 10, 10), std::nullopt, 1, 0)});
+    a.name = "Edge A";
+    REQUIRE(save_custom_script(a, t.path).empty());
+    CHECK(delete_custom_script("edge-a", t.path).find("no custom script") != std::string::npos);
+    CHECK(find_script("Edge A", t.path));
+    CHECK(delete_custom_script("Edge A", t.path).empty());
+    CHECK_FALSE(find_script("Edge A", t.path));
+}
+
 TEST_CASE("a broken script file does not hide the others") {
     TempDir t;
     Script a = one({ph("p", cv(0, 0.5, 0, 10, 10, 10), std::nullopt, 1, 0)});
@@ -818,6 +830,24 @@ void write_log(const fs::path& p, const std::string& technique, const std::strin
     }
 }
 }  // namespace
+
+// Review C2: a field of the wrong type threw type_error.302 out of the history.
+TEST_CASE("history: a log line with a field of the wrong type is skipped") {
+    TempDir t;
+    {
+        std::ofstream out(t.path / "a.jsonl");
+        out << R"({"timestamp":1,"peakIntensity":0.5})" << "\n"
+            << R"({"timestamp":"2026-01-01T00:00:00Z","peakIntensity":"high"})" << "\n"
+            << R"({"timestamp":"2026-01-02T00:00:00Z","peakIntensity":0.5,"reachedPeakAfterMs":null})" << "\n"
+            << R"({"timestamp":"2026-01-03T00:00:00Z","technique":"stop-start","peakIntensity":0.8})" << "\n";
+    }
+    std::vector<SessionSummary> h;
+    REQUIRE_NOTHROW(h = training_history(t.path));
+    REQUIRE(h.size() == 1);
+    CHECK(h[0].cycles_completed == 1);
+    CHECK(h[0].started_at == "2026-01-03T00:00:00Z");
+    CHECK(h[0].mean_peak_intensity == doctest::Approx(0.8));
+}
 
 TEST_CASE("history: summaries, newest first, broken lines skipped, empty logs ignored") {
     TempDir t;

@@ -1,4 +1,6 @@
 #include "samn/funscript.h"
+#include "samn/marks.h"
+#include "samn/number.h"
 #include <nlohmann/json.hpp>
 #include <algorithm>
 #include <cmath>
@@ -21,71 +23,25 @@ int64_t round_number(const json& j) {
         return static_cast<int64_t>(std::round(f));
     }
     if (j.is_string()) {
-        try {
-            double f = std::stod(j.get<std::string>());
-            f = std::max(-1e15, std::min(1e15, f));
-            return static_cast<int64_t>(std::round(f));
-        } catch (...) {
-            throw std::runtime_error("non-number");
-        }
+        // The locale-free read, with std::stod's rules: a number prefix counts,
+        // nothing readable or out of range is an error.
+        const ParsedDouble n = ParseDoublePrefix(j.get<std::string>());
+        if (!n.ok || n.out_of_range) throw std::runtime_error("non-number");
+        const double f = std::max(-1e15, std::min(1e15, n.value));
+        return static_cast<int64_t>(std::round(f));
     }
     throw std::runtime_error("non-number");
 }
 
-int64_t parse_clock_ms(const std::string& s) {
-    std::vector<std::string> parts;
-    std::stringstream ss(s);
-    std::string part;
-    while (std::getline(ss, part, ':')) {
-        if (!part.empty()) parts.push_back(part);
+// MetaDuration: the shared flexible time (marks.h); unreadable text and a
+// value that is no time at all count as "not set".
+int64_t meta_duration_ms(const json& j) {
+    try {
+        const int64_t ms = FlexTimeMs(j);
+        return ms > 0 && ms <= MaxActionMs ? ms : 0;
+    } catch (const std::exception&) {
+        return 0;
     }
-    if (parts.size() < 2 || parts.size() > 3) return -1;
-    double total = 0;
-    for (size_t i = 0; i < parts.size(); ++i) {
-        double v;
-        try {
-            v = std::stod(parts[i]);
-        } catch (...) {
-            return -1;
-        }
-        if (v < 0 || std::isnan(v) || std::isinf(v)) return -1;
-        if (i < parts.size() - 1 && v != std::floor(v)) return -1;
-        total = total * 60 + v;
-    }
-    return static_cast<int64_t>(std::round(total * 1000));
-}
-
-int64_t normalize_time_to_ms(double v) {
-    if (std::isnan(v) || std::isinf(v)) return 0;
-    double absv = std::abs(v);
-    double intpart;
-    double frac = std::modf(absv, &intpart);
-    if (absv < 100000.0 && frac > 1e-9) {
-        return static_cast<int64_t>(std::round(v * 1000));
-    }
-    return static_cast<int64_t>(std::round(v));
-}
-
-int64_t flex_time_ms(const json& j) {
-    if (j.is_null()) return 0;
-    if (j.is_string()) {
-        std::string s = j.get<std::string>();
-        // std::stod stops at the first non-digit ("10:31" -> 10), so only a
-        // string that is a number as a whole counts as one.
-        try {
-            size_t used = 0;
-            double f = std::stod(s, &used);
-            if (used == s.size()) return normalize_time_to_ms(f);
-        } catch (...) {
-        }
-        int64_t ms = parse_clock_ms(s);
-        if (ms >= 0) return ms;
-        return 0;  // unreadable -> 0 for MetaDuration
-    }
-    if (j.is_number()) {
-        return normalize_time_to_ms(j.get<double>());
-    }
-    return 0;
 }
 
 }  // namespace
@@ -145,7 +101,7 @@ Script Parse(const std::string& json_str) {
     if (doc.contains("metadata") && doc["metadata"].is_object()) {
         const auto& meta = doc["metadata"];
         if (meta.contains("duration")) {
-            s.duration_meta = flex_time_ms(meta["duration"]);
+            s.duration_meta = meta_duration_ms(meta["duration"]);
         }
     }
     int64_t last = s.actions.empty() ? 0 : s.actions.back().at;
