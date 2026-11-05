@@ -13,6 +13,14 @@ Three code reviews found real bugs; each fix has a regression test that failed b
 - **App:** A1 one `LibraryController` in `Main.qml`, passed as `library:` to both pages (standalone each keeps its own); A2 the three `QSKIP`s in `player_page_qml_test.cpp` fail in CI (`CI` set).
 - **Not touched:** device/training controllers, fileio umask, Editor dirty-guard, FlowSlider, Intiface URL.
 
+## Handover: `claude/samn2-hunt-leftovers` (5 Nov)
+
+The last two open items of the data-safety bug hunt. The wide-env `config_dir()` item was already fixed on main (`cursor/config-dir-wide-env-635a`).
+
+- **`picture_signals`:** one entry was pushed per decoded frame that crossed a step, so a clip slower than the step (or a gap or start offset) made `luma[i]` not the picture at `i * step_ms`. Now the sample sits at index `ms / step_ms`; skipped steps hold the last picture with motion 0. Test `a clip slower than the step keeps one sample per step on the time axis`.
+- **`repair.cpp` splice:** a failed window only partly verified by the retry was blanked in full, wiping the samples just spliced in, against the "verified part is kept" comment. New `BlankUnverified` blanks only from the verified reach. Test `a window the splice only partly verified keeps its verified samples`.
+- **Not verified:** no end-to-end clip that ends a retry mid-window; the helper is unit-tested only. `run_starts` still has no consumer.
+
 ## Handover: `claude/review-previous-work-jnjttn` — FuseTipPartners (1 Nov)
 
 The missing half of `track_multi` (#145 recorded the extras' paths only).
@@ -106,7 +114,7 @@ Takeover of Claude's Generator bug-hunt PR (CI was green; conflicted with #141 o
 - Track cache key covers `adaptive_cuts` and the seed; `record_checks` gives no key; `kTrackCacheVersion` 3. Test `spec FR-11: the cache key covers ...`.
 - `PositionsToActions` with `scene_ranges`: samples outside every range stay within 0..100. Test `post: samples outside every scene range stay within 0..100`.
 
-Not done: the `repair.cpp` camera-baseline splice (dev tool only) and `picture_signals` indexing. **Supersedes open PR #140** once this merges.
+**Supersedes open PR #140** once this merges.
 
 ## Handover: `cursor/code-gui-polish-635a` (31 Oct)
 
