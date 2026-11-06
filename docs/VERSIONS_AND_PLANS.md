@@ -206,7 +206,7 @@ Status: **covered** (where), **missing** (in no SamNPlayer 2 doc), **against** (
 | Audio Analysis Spectrum tab (FFT) | V1_TARGET_FEATURE_MAP | 1.0 | **missing** |
 | Scene tags (free tags), notes and marker list in scene details, Auto Scene Detect as an action, Scene Merge / Export Scene Map | V1_TARGET_FEATURE_MAP | 1.0 | partly: merge in CAP-06 Later; the rest **missing** |
 | Create tabs Templates / Presets / Batch | V1_TARGET_FEATURE_MAP | 1.0 | partly: Batch queue and presets in PARITY; Templates **missing** |
-| Training: skip phase, Endurance / Control / Edge Play categories, per-channel caps (Max Vibration / Max Suction), Auto Cool Down, Pause on Limit | V1_TARGET_FEATURE_MAP Training | 1.0 | **missing** |
+| Training: skip phase, Endurance / Control / Edge Play categories, per-channel caps (Max Vibration / Max Suction), Auto Cool Down, Pause on Limit | V1_TARGET_FEATURE_MAP Training | 1.0 | partly: categories (filter chips) + per-channel caps (`training.max_vibration` / `max_suction`, default 1); skip phase / Auto Cool Down / Pause on Limit **missing** |
 | Config export / backup, Calibrate quick tool | V1_TARGET_FEATURE_MAP Tools | 1.0 | **missing** |
 | Timeline lanes per connected device (D3 open); export of companion axes (D4 open) | DEVICE_SUPPORT | after D5 | partly: E9 export pack; "lanes per device" **missing** |
 | Playlist crossfades | old ROADMAP "Evaluated 19 Sep" | later | **missing** (low) |

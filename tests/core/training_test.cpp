@@ -134,6 +134,26 @@ TEST_CASE("stop_cycle interrupts the ramp up without reaching the peak") {
     CHECK(Rec::last(d.vib) == 0);
 }
 
+TEST_CASE("output caps clamp what the device receives (1 = unchanged)") {
+    Rec d;
+    Options o = fast(1);
+    o.peak_intensity = 1.0;
+    o.ramp_up_ms = 100;
+    o.hold_ms = 200;
+    o.rest_ms = 50;
+    auto s = make(o, d);
+    s->set_output_caps(0.5, 0.3);
+    run_all(*s);
+    CHECK(Rec::max(d.vib) == doctest::Approx(0.5));
+    CHECK(Rec::max(d.suc) == doctest::Approx(0.0));  // vibration-only custom
+    // Caps of 1 leave the planned peak alone.
+    Rec d2;
+    auto s2 = make(o, d2);
+    s2->set_output_caps(1.0, 1.0);
+    run_all(*s2);
+    CHECK(Rec::max(d2.vib) == doctest::Approx(1.0));
+}
+
 TEST_CASE("a session without Interrupt runs as planned") {
     Rec d;
     auto s = make(fast(3), d);

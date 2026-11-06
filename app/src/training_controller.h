@@ -48,6 +48,9 @@ class TrainingController : public QObject {
     Q_PROPERTY(double peak READ peak WRITE setPeak NOTIFY formChanged)
     Q_PROPERTY(double plateauFraction READ plateauFraction WRITE setPlateauFraction NOTIFY formChanged)
     Q_PROPERTY(double progression READ progression WRITE setProgression NOTIFY formChanged)
+    // Soft ceilings on levels sent to the device (1 = no cap). Session settings.
+    Q_PROPERTY(double maxVibration READ maxVibration WRITE setMaxVibration NOTIFY formChanged)
+    Q_PROPERTY(double maxSuction READ maxSuction WRITE setMaxSuction NOTIFY formChanged)
 
     // ---- programs ----
     // Category filter of the built-in list: "" (All) | control | endurance | edge | body.
@@ -198,6 +201,10 @@ public:
     void setPlateauFraction(double v);
     double progression() const { return opts_.progression_per_cycle; }
     void setProgression(double v);
+    double maxVibration() const { return max_vibration_; }
+    void setMaxVibration(double v);
+    double maxSuction() const { return max_suction_; }
+    void setMaxSuction(double v);
 
     QString category() const { return category_; }
     void setCategory(const QString& c);
@@ -319,6 +326,7 @@ private:
     bool mock_ = true, auto_adjust_ = true;
     QString script_name_, category_;
     double tier_ = 1.0;
+    double max_vibration_ = 1.0, max_suction_ = 1.0;
     samn::training::Options opts_;
     // programs
     std::vector<samn::training::Script> builtin_, mine_;

@@ -665,6 +665,29 @@ Item {
                             Text { textFormat: Text.PlainText; text: qsTr("Mock (test without device)"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11 }
                             FlowToggle { checked: ctl.mock; enabled: ctl.state === "idle"; onToggled: (on) => ctl.mock = on }
                         }
+                        // Soft ceilings on what leaves for the device (1 = no cap).
+                        SettingRow {
+                            Layout.fillWidth: true
+                            visible: ctl.vibrationAvailable
+                            label: qsTr("Max vibration")
+                            help: "training.max-vibration"
+                            from: 0; to: 1; step: 0.05
+                            value: ctl.maxVibration
+                            display: ctl.maxVibration >= 0.999 ? qsTr("off") : ctl.maxVibration.toFixed(2)
+                            tip: qsTr("Ceiling on vibration sent to the device (0–1). 1 = no cap.")
+                            onMoved: (v) => ctl.maxVibration = v
+                        }
+                        SettingRow {
+                            Layout.fillWidth: true
+                            visible: ctl.suctionAvailable
+                            label: qsTr("Max suction")
+                            help: "training.max-suction"
+                            from: 0; to: 1; step: 0.05
+                            value: ctl.maxSuction
+                            display: ctl.maxSuction >= 0.999 ? qsTr("off") : ctl.maxSuction.toFixed(2)
+                            tip: qsTr("Ceiling on suction sent to the device (0–1). 1 = no cap.")
+                            onMoved: (v) => ctl.maxSuction = v
+                        }
                         // A program: the intensity tier and the history nudge.
                         ColumnLayout {
                             visible: !page.custom
