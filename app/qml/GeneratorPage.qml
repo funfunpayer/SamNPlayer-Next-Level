@@ -2377,6 +2377,52 @@ Item {
                             }
                         }
                     }
+                    // After Create (or with an open script): adapt for the toy
+                    // before handing off to the Player — same actions as Tools…
+                    // Optimize, kept visible so the convert path is obvious.
+                    ColumnLayout {
+                        id: postCreateAdapt
+                        objectName: "postCreateAdapt"
+                        visible: edit.hasScript && !gen.running
+                        Layout.fillWidth: true
+                        spacing: 6
+                        Text {
+                            textFormat: Text.PlainText
+                            Layout.fillWidth: true
+                            text: qsTr("Adapt for device")
+                            color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold
+                        }
+                        Text {
+                            textFormat: Text.PlainText
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            text: qsTr("Turn the finished script into a clean any-device stroke, or bake Sam Neo 2 vibration and suction.")
+                            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 6
+                            enabled: !edit.busy
+                            FlowCombo {
+                                id: postAdaptTarget
+                                objectName: "postAdaptTarget"
+                                Layout.preferredWidth: 140; Layout.preferredHeight: 36
+                                readonly property var targets: ["general", "neo2"]
+                                model: [qsTr("Any device"), qsTr("Sam Neo 2")]
+                                currentIndex: Math.max(0, targets.indexOf(gen.optimizeTarget !== "" ? gen.optimizeTarget : "neo2"))
+                            }
+                            FlowButton {
+                                objectName: "postAdaptOptimize"
+                                text: qsTr("Optimize"); icon: "sliders"
+                                onClicked: edit.optimizeFor(postAdaptTarget.targets[postAdaptTarget.currentIndex])
+                            }
+                            FlowButton {
+                                objectName: "postAdaptAxes"
+                                text: qsTr("Axes from stroke"); icon: "effects"
+                                onClicked: edit.axesFromStroke()
+                            }
+                        }
+                    }
                     FlowButton {
                         objectName: "reviewButton"
                         visible: gen.outputPath !== "" || edit.hasScript
