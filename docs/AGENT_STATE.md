@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 6 Nov 2026, Cursor, branch `cursor/gen-curve-layout-635a`: Generator video/curves SplitView + FR-7 analysis-rate Expert control (handover below). Claude is on `claude/samn2-playhead` (#163 playhead extrapolator) — stay off playhead/playback_output. Before: timing audit #159, trajectory #160, drivers #161; idle Flow #162 open.
+**Last update:** 6 Nov 2026, Cursor, branch `cursor/gen-curve-layout-635a`: Generator video/curves stage + FR-7 analysis-rate Expert control (handover below). Idle Flow #162 merged. Claude is on `claude/samn2-playhead` (#163) — stay off playhead/playback_output.
 
 ## Handover: `cursor/gen-curve-layout-635a` (6 Nov, Generator stage + CPU)
 
@@ -16,6 +16,16 @@ Million-dollar Generator layout chunk + a legal FunGen-beat CPU lever (no ONNX c
 - **Next recognition beat (not this PR):** confidence-gated hybrid re-acquire — CSRT/light path every frame, wake student ONNX only when CSRT confidence drops / appearance fails / periodic semantic check; keep *Reuse the tracking* for post-feel re-runs.
 - **Stay off:** Claude #163 playhead files.
 
+## Handover: `cursor/idle-flow-stage-635a` (5 Nov, Feel without film Flow stage) — merged #162
+
+Owner GUI leftover: idle ribbon / Flow idle graphic (PARITY §11, D-138). Empty home stays Play + Open only.
+
+- **`FlowStage.qml` restored** (removed in #93 as unused on empty home): halo breathe, cyan/amber ribbon travel, floating play mark; idle 7 / 6 / 11+13 s, playing 4 / 5.5 / 6.5 s; still when paused, reduced motion or inactive.
+- **Assets:** `flow-ribbons.svg`, `flow-mark.svg`. Unused `empty-video.svg` dropped (replaced by the stage).
+- **`PlayerPage`:** `scriptOnly` panel `feelWithoutFilm` — FlowStage + "Playing without video" + copy + Play/Pause + "Link video…".
+- **Tests:** `scriptWithoutVideoPlaysOnItsClock` asserts the panel, idle→playing→paused `stageState`.
+- **Still open Owner GUI:** real donate URLs (D-022). Broader look polish welcome. Not touched: PlaybackOutput / device timing (Claude #159).
+
 ## Handover: `claude/samn2-timing-audit` (5 Nov, timing audit, measurement only)
 
 Owner question: is the Player as exact and fast as the Go version? Nothing had been measured. **No behaviour was changed.**
@@ -27,13 +37,15 @@ Owner question: is the Player as exact and fast as the Go version? Nothing had b
 - **Recommended next (not done):** 1. extrapolate the video playhead between media reports (gain: video lag 0-100 ms to 0-16 ms); 2. send the next stroke at its start time with a precise timer; 3. levels at their due time (low value); 4. `LowDelayOption` on the TCode TCP socket (cheap, no evidence of a problem yet); 5. measure the Bluetooth round trip on the device before any BLE change. Details, risks and protecting tests: `TIMING.md` § 6.
 - **Not measured:** a real device, the Bluetooth radio, Windows, the GStreamer backend, the GUI thread with QML rendering and video frames, the QML hop.
 
+
 ## Handover: `cursor/mt-debug-trajectory-635a` (5 Nov)
 
 Player MT-Debug trajectory overlay (PARITY tip/partner path lines).
 
 - **Controller:** `hasTrajectory`, `trajectoryOverlay` (`player.trajectoryOverlay`, default off), `tipPathPoints()` / `partnerPathPoints()`.
 - **UI:** Inspector → View → *Show tip path* (+ hint when the script has no path); stage `trajectoryLayer` Canvas (tip orange, partner teal) + moving tip dot.
-- **Still open:** live postprocess probe (G4b leftover); idle ribbon (open #162); real donate URLs (Owner); Quality Doctor.
+- **Still open:** live postprocess probe (G4b leftover); real donate URLs (Owner); Quality Doctor. Idle ribbon ✅ (this stack / #162).
+
 
 ## Handover: `claude/samn2-driver-registry` (5 Nov, D-163 first slice: device drivers)
 
@@ -419,7 +431,7 @@ Data and file fixes from a read-only bug hunt. Each fix has a test that failed b
 - **Phases** (D-157, #85, #86 and `claude/samn2-phase-feel`): playback shaping per phase (`.samn` `phase_ranges`, `ApplyPhaseShape` in `PlaybackFrames`, Editor *Phases shape playback*); the Training's video stage follows the film's phases (skip intro / empty, climax: pause by default); the phase lane in the label editor; rule-based suggestions (`core/include/samn/phase_rules.h`, `vision/include/samn/vision/picture_signals.h`, *Suggest phases*).
 - **AI Train as a plugin mode** (#82 plan, #84, D-155, `docs/P4_AI_TRAIN.md`): the `Plugins` singleton and Settings switch, the fourth tab, the label editor (`label_track.h`, `LabelController`, `LabelEditor.qml`): classes with several objects, the contact point, *not in the picture* (X), *there but covered* (H), exclusion zones ("not this", `ExcludeZonesAt`), lanes, undo, export as images / YOLO labels / classes.txt.
 
-**Parity (1 Nov):** recount with `python3 ci/parity_status.py` after handbook merges. Owner GUI order: toasts ✅, help chips ✅, reduced motion ✅, handbook ✅ (this PR); idle ribbon + donate still open. Generator: G2/G3/partner on `main` or open PRs; G4a Advanced open (#147).
+**Parity (1 Nov):** recount with `python3 ci/parity_status.py` after handbook merges. Owner GUI order: toasts ✅, help chips ✅, reduced motion ✅, handbook ✅ (#150); idle ribbon ✅ (`cursor/idle-flow-stage-635a`); donate still open. Generator: G2/G3/partner on `main`; G4a Advanced landed via #153.
 
 ## Next (in order; the work list is `LESSONS.md` § Gaps, `TEST_PARITY.md` and `P3_GENERATOR.md`)
 
@@ -427,7 +439,7 @@ Data and file fixes from a read-only bug hunt. Each fix has a test that failed b
 
 0. **Generator:** G2 stack ✅ (#114–#116); Tf/Tj distance stroke ✅ (#119); G3 feel ✅; Player partner overlay ✅ (#141); extras multi (`track_multi`) ✅ (#145); G3 feel probe ✅ (#146); G4a Advanced shell ✅ (#147); G4b Expert knobs ✅ (#151, live postprocess probe still open); MT-Debug trajectory overlay ✅ (this PR); next G8 `.sam` / live probe / Quality Doctor.
 1. **Look polish:** ✅ (#122, Claude takeover of Cursor #117; reduced-motion gates and a window-wide loop test added).
-2. **Owner GUI leftovers:** handbook ✅ (#150); idle ribbon (§11), real donation URLs (Manifest §2 / D-022). Empty-Play dark oval ✅ (#143); Support card shows "Donation page coming soon." Reduced motion ✅ (#120). Broader look polish after the Generator still welcome.
+2. **Owner GUI leftovers:** handbook ✅ (#150); idle ribbon / Flow stage ✅ (`cursor/idle-flow-stage-635a`, Feel without film); real donation URLs (Manifest §2 / D-022) still Owner. Empty-Play dark oval ✅ (#143); Support card shows "Donation page coming soon." Reduced motion ✅ (#120). Broader look polish after the Generator still welcome.
 3. **AI Train D-155:** script compare with labels, then golden-clip run (Owner clips).
 4. **Windows CI flakiness** under ctest; diagnostics already run functions alone.
 5. **Self-checking engine** (`docs/P3_SELF_CHECK_ENGINE.md`, merged with #133; **start with the handoff `docs/HANDOFF_2026-10-27_SELF_CHECK.md`**, tool `samn_selfcheck`): SC-1 sample gate, SC-2 checker signals recorded by `TrackBox` (`record_checks`) and SC-3 window verifier are built (`self_check.h`, `track_checks_test.cpp`; 83 engine tests). Measured in design §3.3: synthetic 13/13 bad windows fail, 0 false alarms; on the Owner clip the scene-cut test fires 1992 times and blocks the verifier. `AdaptiveSceneCut` (`adaptive_cuts`, off) takes the Owner clip from 1992 cuts to 2 but tracking gets worse (the false cuts were re-anchoring), design §3.4; on that clip the verdicts do not yet separate good from bad windows, so thresholds wait for the golden clips. SC-5 verified repair is built (`repair.h`, `repair_test.cpp`); on the Owner clip it repairs nothing at the strict setting because the look against the start crop cannot tell right from wrong there (design §3.5). Next in order: an identity check that works on real clips (continuity with the last good window, rhythm cell, detector) → speed (cached flow) → robust axis choice (principal axis) → wire `GateSamples` in front of the P3.2 chain behind a switch → SC-4 fast lane → SC-5 verified repair with YOLO-family re-anchoring → SC-6 golden gate. AI blocks the Owner asked for (YOLO, MediaPipe, OpenCV DL, Whisper, CLIP): roles and licences in §5a of the design.
@@ -441,7 +453,7 @@ Data and file fixes from a read-only bug hunt. Each fix has a test that failed b
 
 ### Handoff note (for the next agent)
 - **Routing:** one theme per agent. Generator Tf/Tj distance on this tip; Look #117 parallel (do not steal Look files for feature work).
-- Next after the 1 Nov integration: G4b live postprocess probe, MT-Debug trajectory line overlay, Quality Doctor (P3.6), idle ribbon.
+- Next after the 1 Nov integration: G4b live postprocess probe, MT-Debug trajectory line overlay (#160), Quality Doctor (P3.6); idle ribbon done (`cursor/idle-flow-stage-635a`).
 - Do not push to `claude/*`. Push often; update this file every PR.
 
 Owner reminders (16–17 Oct): the Generator is the Editor; detection better than 0.7 but measured against it; curves stay real curves (audio too); every function of 0.7 and all earlier versions and plans comes along, what was removed on purpose stays out (and why is in `VERSIONS_AND_PLANS.md`).
