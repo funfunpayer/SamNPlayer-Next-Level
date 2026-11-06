@@ -156,6 +156,7 @@ const texts = {
     // src/generator.js:191 (+ Another contact area)
     "gen-target-add": "Add another touch point (magenta) — e.g. second nipple or mouth. Same contact-vibe set. With tip trajectory on, extras can follow unless Stay fixed is checked.",
     "gen-track-cache": "Opt-in: keeps the raw tracking of a video in the settings folder (cache/track), so a second Create with another feel skips the tracking. Safe to delete at any time.",
+    "gen-analysis-fps": "Caps how many video frames Create analyses per second (0 = every frame). Lower values cut CPU on long/high-fps clips; stroke aliasing can appear if motion is faster than about 0.4× this rate. Default every frame for byte-identical Everyday.",
     // src/generator.js:58 (Use Player video)
     "gen-use-player-video": "Use the video that is linked in Play, so Create and Play work on the same clip.",
     // src/gen_feel.js:92 (Vibration follows suction)
@@ -381,6 +382,8 @@ const texts = {
     "training.hold-ms": "Hold duration at peak (ms). Default 3000. Training feel only.",
     // src/training.js:331 (Peak intensity)
     "training.peak-intensity": "Peak level for each cycle (0–1). Default 0.8. Training feel only — Create CSRT unchanged.",
+    "training.max-vibration": "Ceiling on vibration sent to the device (0–1). 1 = off (no cap). Soft safety for Training only — does not change Create.",
+    "training.max-suction": "Ceiling on suction sent to the device (0–1). 1 = off (no cap). Soft safety for Training only — does not change Create.",
     // src/training.js:336 (Plateau fraction)
     "training.plateau-fraction": "How high the plateau sits relative to peak (edging technique). Default 0.7. Training feel only.",
     // src/training.js:341 (Progression per cycle)

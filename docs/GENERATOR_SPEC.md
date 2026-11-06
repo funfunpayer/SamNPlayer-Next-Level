@@ -287,7 +287,7 @@ The Generator already did most of this before the spec existed; what was missing
 | FR-11 cache | *Reuse the tracking* → `config_dir()/cache/track` | `track_cache.cpp` |
 | E8 aliasing | always on (a note only) | `AliasingWarning` |
 
-End time and analysis rate have no control on the Generator page yet. The comparison controller's manifest reaches them (`end_ms`, `max_analysis_fps`).
+End time has no control on the Generator page yet (comparison manifest: `end_ms`). Analysis rate is the Expert slider *Tracking analysis rate* (`generator.max_analysis_fps`, 0 = every frame); the comparison manifest still reaches it too.
 
 **Default recipe "Recommended" (D-160, 27 Oct)**
 

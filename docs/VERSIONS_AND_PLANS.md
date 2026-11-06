@@ -194,7 +194,8 @@ Status: **covered** (where), **missing** (in no SamNPlayer 2 doc), **against** (
 | Climax ("cum") detection | NEXT §6 ("urgent", 14 Sep); old ROADMAP "deferred" | undecided | **missing** (PARITY's "Climax" is only the audio Feel band) |
 | Audio pre-pass tempo hint; "no motion, fall back to audio" | AUDIO_WORKFLOW, PRODUCTION_ROADMAP G1.3 | G1 | **missing** (D-079 only says audio never invents the curve) |
 | Chapters from scene cuts with regeneration of single sections | TEAM_STAND §8 | later | partly: CAP-06 Later; the scene-cut chapter source **missing** |
-| Tracking-cache reuse (change parameters without re-reading the video) | TEAM_STAND "Lessons from FunGen 2" | idea | **missing** |
+| Tracking-cache reuse (change parameters without re-reading the video) | TEAM_STAND "Lessons from FunGen 2" | idea | covered: `track_cache.h`, Generator *Reuse the tracking* (D-158; off by default) |
+| Confidence-gated hybrid track (light tracker every frame; ONNX/AI only on loss / low confidence / periodic check) | beat FunGen-style always-ONNX CPU; HyperTrack / confidence-skip literature | next | **missing** (CSRT + AI tip find exist; selective wake-up does not) |
 | Hybrid gap-filler (AI only where tracking is lost), scene-type / axis / depth / tempo per shot (stage 3) | SCENE_UNDERSTANDING_PLAN §3, §3b | next | partly: P3 item 2 (re-acquisition); stage 3 **missing** |
 | Own multi-class detector trained from teacher labels (RF-DETR, classes penis ... contact) | SCENE_UNDERSTANDING_PLAN §4, VLM_TEACHER_PLAN V3 | later | partly: ONNX body-part detector in P3.7; the teacher-to-detector loop **missing** |
 | Scene-map learning stages L1-L4 (priors, region detector, learned cell scorer, fusion) | SCENE_MAP_PLAN M6 | P6+ | partly: ROADMAP "AI Train", "Export for learning"; stages **missing** |
@@ -205,7 +206,7 @@ Status: **covered** (where), **missing** (in no SamNPlayer 2 doc), **against** (
 | Audio Analysis Spectrum tab (FFT) | V1_TARGET_FEATURE_MAP | 1.0 | **missing** |
 | Scene tags (free tags), notes and marker list in scene details, Auto Scene Detect as an action, Scene Merge / Export Scene Map | V1_TARGET_FEATURE_MAP | 1.0 | partly: merge in CAP-06 Later; the rest **missing** |
 | Create tabs Templates / Presets / Batch | V1_TARGET_FEATURE_MAP | 1.0 | partly: Batch queue and presets in PARITY; Templates **missing** |
-| Training: skip phase, Endurance / Control / Edge Play categories, per-channel caps (Max Vibration / Max Suction), Auto Cool Down, Pause on Limit | V1_TARGET_FEATURE_MAP Training | 1.0 | **missing** |
+| Training: skip phase, Endurance / Control / Edge Play categories, per-channel caps (Max Vibration / Max Suction), Auto Cool Down, Pause on Limit | V1_TARGET_FEATURE_MAP Training | 1.0 | partly: categories (filter chips) + per-channel caps (`training.max_vibration` / `max_suction`, default 1); skip phase / Auto Cool Down / Pause on Limit **missing** |
 | Config export / backup, Calibrate quick tool | V1_TARGET_FEATURE_MAP Tools | 1.0 | **missing** |
 | Timeline lanes per connected device (D3 open); export of companion axes (D4 open) | DEVICE_SUPPORT | after D5 | partly: E9 export pack; "lanes per device" **missing** |
 | Playlist crossfades | old ROADMAP "Evaluated 19 Sep" | later | **missing** (low) |

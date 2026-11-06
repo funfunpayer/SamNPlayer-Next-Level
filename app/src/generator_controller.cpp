@@ -92,6 +92,8 @@ void GeneratorController::loadSettings() {
         gap_handling_ = flag("generator.gap_handling", gap_handling_);
         outlier_rejection_ = flag("generator.outlier_rejection", outlier_rejection_);
         track_cache_ = flag("generator.track_cache", track_cache_);
+        if (const auto v = s.get("generator.max_analysis_fps"); v.is_number()) setMaxAnalysisFps(v.get<int>());
+        if (const auto v = s.get("generator.editor_share"); v.is_number()) setEditorShare(v.get<double>());
         contact_vibration_ = flag("generator.contact_vibration", contact_vibration_);
         setTipClass(str("generator.tip_class", tip_class_));
         setContactClass(str("generator.contact_class", contact_class_));
@@ -361,6 +363,7 @@ bool GeneratorController::runQueue(bool overwrite) {
     settings.auto_ozone = auto_ozone_;
     settings.overwrite = overwrite;
     applySwitches(settings.signal, settings.track_cache_dir);
+    settings.max_analysis_fps = max_analysis_fps_;
     settings.contact_vibration = contact_vibration_;
     settings.contact_vibration_span = contact_span_;
     settings.contact_vibration_curve = contact_curve_.toStdString();
@@ -575,6 +578,24 @@ SAMN_SETTER(setOutlierRejection, outlier_rejection_, "generator.outlier_rejectio
 SAMN_SETTER(setTrackCache, track_cache_, "generator.track_cache")
 SAMN_SETTER(setContactVibration, contact_vibration_, "generator.contact_vibration")
 #undef SAMN_SETTER
+
+void GeneratorController::setMaxAnalysisFps(int v) {
+    // 0 = every frame; otherwise 5..60 in steps of 5 (FR-7 analysis rate cap).
+    int n = std::clamp(v, 0, 60);
+    if (n > 0) n = std::max(5, (n / 5) * 5);
+    if (n == max_analysis_fps_) return;
+    max_analysis_fps_ = n;
+    saveSetting("generator.max_analysis_fps", n);
+    emit optionsChanged();
+}
+
+void GeneratorController::setEditorShare(double v) {
+    const double n = std::clamp(v, 0.18, 0.65);
+    if (std::abs(n - editor_share_) < 0.0005) return;
+    editor_share_ = n;
+    saveSetting("generator.editor_share", n);
+    emit optionsChanged();
+}
 
 void GeneratorController::setMotionAxis(const QString& axis) {
     const QString v = axis == QLatin1String("x") || axis == QLatin1String("y") ? axis : QStringLiteral("auto");
@@ -1087,6 +1108,7 @@ bool GeneratorController::create(bool overwrite) {
     req.output = funscriptPath();
     req.overwrite = overwrite;
     applySwitches(req.signal, req.track_cache_dir);
+    req.max_analysis_fps = max_analysis_fps_;
     req.auto_ozone = auto_ozone_;
     req.contact_vibration = contact_vibration_;
     req.contact_vibration_span = contact_span_;

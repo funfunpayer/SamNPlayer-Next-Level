@@ -109,6 +109,12 @@ private slots:
             tc.setPeak(0.55);
             tc.setPlateauFraction(0.4);
             tc.setProgression(0.3);
+            QCOMPARE(tc.maxVibration(), 1.0);
+            QCOMPARE(tc.maxSuction(), 1.0);
+            tc.setMaxVibration(0.6);
+            tc.setMaxSuction(1.4);  // clamp
+            QCOMPARE(tc.maxSuction(), 1.0);
+            tc.setMaxSuction(0.45);
             tc.setTechnique("plateau");
             tc.setMock(false);
         }
@@ -120,6 +126,8 @@ private slots:
         QCOMPARE(again.peak(), 0.55);
         QCOMPARE(again.plateauFraction(), 0.4);
         QCOMPARE(again.progression(), 0.3);
+        QCOMPARE(again.maxVibration(), 0.6);
+        QCOMPARE(again.maxSuction(), 0.45);
         QCOMPARE(again.technique(), QString("plateau"));
         QVERIFY(!again.mock());
     }

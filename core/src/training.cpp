@@ -438,14 +438,21 @@ void Session::notify() {
     if (on_levels) on_levels(vibration(), suction());
 }
 
+void Session::set_output_caps(double max_vibration, double max_suction) {
+    max_vib_ = std::clamp(max_vibration, 0.0, 1.0);
+    max_suc_ = std::clamp(max_suction, 0.0, 1.0);
+}
+
 void Session::write(bool vib, bool suc, double level) {
     if (vib) {
-        if (!held_) dev_->set_vibration(level);
-        vib_ = level;
+        const double c = std::clamp(level, 0.0, max_vib_);
+        if (!held_) dev_->set_vibration(c);
+        vib_ = c;
     }
     if (suc) {
-        if (!held_) dev_->set_suction(level);
-        suc_ = level;
+        const double c = std::clamp(level, 0.0, max_suc_);
+        if (!held_) dev_->set_suction(c);
+        suc_ = c;
     }
     notify();
 }

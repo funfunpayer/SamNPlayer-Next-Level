@@ -150,7 +150,7 @@ Controllers are `QObject`s registered for QML; their tests are `tests/app/<name>
 | `src/device_io/serial_line_transport.*` | TCode over USB serial (115200 8N1) and `SerialPorts()` (sorted, `/dev/ttyUSB0` / `COM3`). |
 | `src/device_io/websocket_transport.*` | Buttplug / Intiface: Qt WebSockets text transport with a dial timeout; same error words, so `IntifaceHint` matches. |
 | `qml/Main.qml`, `Splash.qml` | Window, background, top bar, pages, keys; the loading screen. |
-| `qml/TopBar.qml`, `PlayButton.qml`, `GlassCard.qml`, `SilkLayer.qml` | Flow components with animations. |
+| `qml/TopBar.qml`, `PlayButton.qml`, `GlassCard.qml`, `SilkLayer.qml`, `FlowStage.qml` | Flow components with animations (`FlowStage` = Feel-without-film idle graphic). |
 | `qml/PlayerPage.qml`, `VideoTransport.qml`, `LibraryPanel.qml`, `InspectorPanel.qml`, `MarkList.qml`, `LaneName.qml`, `PositionGauge.qml` | Player: video, transport, timeline; Library (left) and Inspector with Devices · Audio · Playback · View (right). |
 | `qml/GeneratorPage.qml`, `GeneratorProjectPanel.qml` | Generator mode and its project panel. |
 | `qml/AiTrainPage.qml`, `LabelEditor.qml` | AI Train: setup, models, label editor, training. |

@@ -81,6 +81,7 @@ QueueItemOutcome GenerateQueueItem(const std::filesystem::path& video, const Que
     req.auto_ozone = settings.auto_ozone;
     req.overwrite = settings.overwrite;
     req.track_cache_dir = settings.track_cache_dir;
+    req.max_analysis_fps = settings.max_analysis_fps;
     req.contact_vibration = settings.contact_vibration;
     req.contact_vibration_span = settings.contact_vibration_span;
     req.contact_vibration_curve = settings.contact_vibration_curve;
