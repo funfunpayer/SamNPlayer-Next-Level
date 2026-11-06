@@ -85,6 +85,7 @@ qt_add_qml_module(samn_app
     qml/AiTrainPage.qml
     qml/LabelEditor.qml
     qml/SilkLayer.qml
+    qml/FlowStage.qml
     qml/PositionGauge.qml
     qml/LibraryPanel.qml
     qml/InspectorPanel.qml
@@ -96,7 +97,8 @@ qt_add_qml_module(samn_app
     qml/assets/bg-bottom.svg
     qml/assets/bg-top.png
     qml/assets/bg-bottom.png
-    qml/assets/empty-video.svg
+    qml/assets/flow-ribbons.svg
+    qml/assets/flow-mark.svg
     qml/assets/stage-ribbons.svg
     qml/assets/logo.png
     qml/fonts/Sora.ttf

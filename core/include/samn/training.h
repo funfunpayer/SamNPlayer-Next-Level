@@ -190,6 +190,12 @@ public:
     void abort();
     bool finished() const { return finished_; }
 
+    // Soft ceilings on levels sent to the device (1 = no cap). Default 1, so
+    // unchanged sessions stay byte-identical on the wire.
+    void set_output_caps(double max_vibration, double max_suction);
+    double max_vibration() const { return max_vib_; }
+    double max_suction() const { return max_suc_; }
+
     // What the device really gets: 0 while paused.
     double vibration() const { return paused_ ? 0 : vib_; }
     double suction() const { return paused_ ? 0 : suc_; }
@@ -252,6 +258,7 @@ private:
     bool stop_requested_ = false;
     int arousal_ = 0;
     double vib_ = 0, suc_ = 0;
+    double max_vib_ = 1, max_suc_ = 1;
     Position pos_;
 
     // script state

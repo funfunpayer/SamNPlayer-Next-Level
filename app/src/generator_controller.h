@@ -71,6 +71,12 @@ class GeneratorController : public QObject {
     Q_PROPERTY(bool gapHandling READ gapHandling WRITE setGapHandling NOTIFY optionsChanged)
     Q_PROPERTY(bool outlierRejection READ outlierRejection WRITE setOutlierRejection NOTIFY optionsChanged)
     Q_PROPERTY(bool trackCache READ trackCache WRITE setTrackCache NOTIFY optionsChanged)
+    // Cap tracking decode rate (0 = every frame). Opt-in CPU saver; same
+    // engine knob the compare manifest already had (GENERATOR_SPEC FR-7).
+    Q_PROPERTY(int maxAnalysisFps READ maxAnalysisFps WRITE setMaxAnalysisFps NOTIFY optionsChanged)
+    // Share of the Generator stage height kept for the curve editor (0.18–0.65).
+    // Remembered so the video/curves SplitView stays where the user left it.
+    Q_PROPERTY(double editorShare READ editorShare WRITE setEditorShare NOTIFY optionsChanged)
     // Contact vibration (0.7 Step 2 "Tip & contact", on by default): the
     // tip's class, and contact areas the tip's path can reach; the Player
     // vibrates when it does. contactAreas: {x, y, w, h, cls} in video pixels,
@@ -206,6 +212,10 @@ public:
     void setOutlierRejection(bool v);
     bool trackCache() const { return track_cache_; }
     void setTrackCache(bool v);
+    int maxAnalysisFps() const { return max_analysis_fps_; }
+    void setMaxAnalysisFps(int v);
+    double editorShare() const { return editor_share_; }
+    void setEditorShare(double v);
     bool contactVibration() const { return contact_vibration_; }
     void setContactVibration(bool v);
     double contactSpan() const { return contact_span_; }
@@ -379,6 +389,8 @@ private:
     double rdp_tolerance_ = 0;
     int max_speed_ = 0;
     bool gap_handling_ = true, outlier_rejection_ = true, track_cache_ = false;
+    int max_analysis_fps_ = 0;  // 0 = every frame (byte-identical default)
+    double editor_share_ = 0.40;
     bool auto_tip_ = true;
     bool find_auto_ = false;     // the running search was started by openVideo
     bool refind_ = false;        // a new search starts when the running one has ended

@@ -273,6 +273,14 @@ private:
         twist.write(R"({"actions":[{"at":0,"pos":50},{"at":3000,"pos":90},{"at":6000,"pos":10}]})");
         twist.close();
         QVERIFY(ctrl->openPath(script));
+        // Feel without film panel: Flow idle graphic + Link video (D-138 / PARITY).
+        auto* feel = named(page, "feelWithoutFilm");
+        QVERIFY(feel && feel->isVisible());
+        auto* flow = named(page, "flowStage");
+        QVERIFY(flow && flow->isVisible());
+        QCOMPARE(flow->property("stageState").toString(), QStringLiteral("idle"));
+        QVERIFY(named(page, "feelWithoutFilmLink"));
+        QVERIFY(named(page, "feelWithoutFilmPlay"));
         QTRY_VERIFY(named(page, "axisLane_twist"));
         QVERIFY(named(page, "axisLane_twist")->isVisible());
         QVERIFY(named(page, "axisLane_twist")->height() >= 34);
@@ -304,10 +312,12 @@ private:
         QVERIFY(!eo->isEnabled());
         QMetaObject::invokeMethod(page, "togglePlay");
         QTRY_VERIFY(page->property("playing").toBool());
+        QTRY_COMPARE(named(page, "flowStage")->property("stageState").toString(), QStringLiteral("playing"));
         QTRY_VERIFY_WITH_TIMEOUT(ctrl->playheadMs() >= 200, 3000);  // the playhead moves
         QTRY_VERIFY(eo->isEnabled());
         QMetaObject::invokeMethod(page, "togglePlay");
         QTRY_VERIFY(!page->property("playing").toBool());
+        QTRY_COMPARE(named(page, "flowStage")->property("stageState").toString(), QStringLiteral("paused"));
         const qint64 held = clock->property("position").toLongLong();
         QTest::qWait(150);
         QCOMPARE(clock->property("position").toLongLong(), held);  // pause holds

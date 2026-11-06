@@ -736,24 +736,59 @@ Item {
                     visible: ctrl.hasScript && ctrl.posOverlay
                     value: ctrl.playheadMs >= 0 ? ctrl.strokeNow : -1
                 }
+                // Feel without film (D-138): Flow idle graphic + copy + Link video.
+                // Empty home stays Play + Open only — this panel is script, no video.
                 Column {
                     id: noVideoHint
+                    objectName: "feelWithoutFilm"
                     anchors.centerIn: parent
-                    visible: ctrl.videoName === "" && !ctrl.noScriptForVideo
-                    spacing: 10
-                    opacity: 0.92
-                    SequentialAnimation on anchors.verticalCenterOffset {
-                        running: noVideoHint.visible && Qt.application.state === Qt.ApplicationActive && !Theme.reducedMotion
-                        loops: Animation.Infinite
-                        NumberAnimation { from: -4; to: 4; duration: 3200; easing.type: Easing.InOutSine }
-                        NumberAnimation { to: -4; duration: 3200; easing.type: Easing.InOutSine }
+                    visible: page.scriptOnly
+                    spacing: 12
+                    opacity: 0.96
+                    width: Math.min(parent.width - 48, 480)
+                    FlowStage {
+                        id: feelFlow
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        width: Math.min(parent.width, 420)
+                        height: width * 236 / 420
+                        // scriptOnly only: the clock owns pause/idle here.
+                        stageState: page.playing ? "playing"
+                                    : (clock.playbackState === ScriptClock.PausedState ? "paused" : "idle")
                     }
-                    Image { source: "assets/empty-video.svg"; width: 120; height: 90; sourceSize: Qt.size(240, 180); anchors.horizontalCenter: parent.horizontalCenter; opacity: 0.85 }
                     Text {
+                        objectName: "feelWithoutFilmTitle"
                         textFormat: Text.PlainText
                         anchors.horizontalCenter: parent.horizontalCenter
-                        text: ctrl.hasScript ? qsTr("Feel without film — Play runs the script alone") : qsTr("Drop a video or script here, or press Open…")
-                        color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 14
+                        text: qsTr("Playing without video")
+                        color: Theme.text
+                        font.family: Theme.fontSoft
+                        font.pixelSize: 16
+                        font.weight: Font.Medium
+                    }
+                    Text {
+                        textFormat: Text.PlainText
+                        width: parent.width
+                        wrapMode: Text.Wrap
+                        horizontalAlignment: Text.AlignHCenter
+                        text: qsTr("Device and curve alone — video is optional. Play starts immediately.")
+                        color: Theme.textDim
+                        font.family: Theme.fontSoft
+                        font.pixelSize: 13
+                    }
+                    Row {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        spacing: 10
+                        FlowButton {
+                            objectName: "feelWithoutFilmPlay"
+                            primary: true
+                            text: page.playing ? qsTr("Pause") : qsTr("Play")
+                            onClicked: page.togglePlay()
+                        }
+                        FlowButton {
+                            objectName: "feelWithoutFilmLink"
+                            text: qsTr("Link video…")
+                            onClicked: videoDialog.open()
+                        }
                     }
                 }
                 // Video first: a video without a script says so and offers the ways on (0.7 open_media.js).
