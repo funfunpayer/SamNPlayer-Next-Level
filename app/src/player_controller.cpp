@@ -57,6 +57,31 @@ std::vector<samn::Action> laneFrom(const std::vector<samn::Frame>& frames, bool 
     return out;
 }
 
+// Median spacing of stroke peaks → BPM in 20–240 (0 when unclear). Peaks are
+// local maxima at least 55 — quiet baselines do not count as beats.
+double EstimateStrokeBpm(const std::vector<samn::Action>& stroke) {
+    if (stroke.size() < 4) return 0;
+    std::vector<int64_t> peaks;
+    peaks.reserve(stroke.size() / 2);
+    for (size_t i = 1; i + 1 < stroke.size(); ++i) {
+        const int p = stroke[i].pos;
+        if (p < 55) continue;
+        if (p >= stroke[i - 1].pos && p > stroke[i + 1].pos) peaks.push_back(stroke[i].at);
+    }
+    if (peaks.size() < 2) return 0;
+    std::vector<int64_t> gaps;
+    gaps.reserve(peaks.size() - 1);
+    for (size_t i = 1; i < peaks.size(); ++i) {
+        const int64_t g = peaks[i] - peaks[i - 1];
+        if (g >= 250 && g <= 3000) gaps.push_back(g);  // 20–240 BPM
+    }
+    if (gaps.empty()) return 0;
+    std::nth_element(gaps.begin(), gaps.begin() + gaps.size() / 2, gaps.end());
+    const double period = double(gaps[gaps.size() / 2]);
+    if (period <= 0) return 0;
+    return std::clamp(std::round(60000.0 / period), 20.0, 240.0);
+}
+
 }  // namespace
 
 PlayerController::PlayerController(QObject* parent)
@@ -88,6 +113,7 @@ PlayerController::PlayerController(QObject* parent)
     playlist_.SetAuto(flag("ui.player.playlist.auto", true));
     playlist_.SetRepeat(flag("ui.player.playlist.repeat", false));
     if (flag("ui.player.playlist.shuffle", false)) playlist_.SetShuffle(true, rng_);
+    bpmGrid_ = flag("playback.bpm_grid", false);
 }
 PlayerController::~PlayerController() = default;
 
@@ -775,6 +801,8 @@ bool PlayerController::openScript(const QString& pathIn, const QString& videoIn)
     mapping_.resetContactKnobs(doc.recipe.contact_vibration_span, doc.recipe.contact_vibration_curve);
     opening_ = false;
     stroke_ = std::move(doc.general);
+    scriptTempoBpm_ = EstimateStrokeBpm(stroke_);
+    emit bpmChanged();  // effectiveBpm / auto grid follow the new stroke tempo
     // D-132: a lane the file carries shows without a device.
     vibrationFromScript_ = !doc.vibration.empty();
     suctionFromScript_ = !doc.suction.empty();
@@ -1137,8 +1165,40 @@ void PlayerController::setBpm(double v) {
 void PlayerController::setBpmGrid(bool on) {
     if (on == bpmGrid_) return;
     bpmGrid_ = on;
+    try {
+        settings().set("playback.bpm_grid", on);
+    } catch (const std::exception&) {
+    }
     emit bpmChanged();
     pushMarks();
+}
+
+double PlayerController::effectiveBpm() const { return bpm_ > 0 ? bpm_ : scriptTempoBpm_; }
+
+double PlayerController::beatPeriodMs() const {
+    const double bpm = effectiveBpm();
+    return bpmGrid_ && bpm > 0 ? 60000.0 / bpm : 0.0;
+}
+
+double PlayerController::guessBpmFromStroke() {
+    if (stroke_.size() < 4) {
+        setError(tr("Open a script with a clear stroke first."));
+        return 0;
+    }
+    const double bpm = EstimateStrokeBpm(stroke_);
+    if (bpm <= 0) {
+        toolNote_ = tr("No clear beat in the stroke.");
+        emit toolNoteChanged();
+        setError(tr("No clear beat in the stroke."));
+        return 0;
+    }
+    scriptTempoBpm_ = bpm;
+    setBpm(bpm);
+    setBpmGrid(true);
+    toolNote_ = tr("%1 BPM from the stroke.").arg(int(bpm));
+    emit toolNoteChanged();
+    setError({});
+    return bpm;
 }
 
 bool PlayerController::attachVideo(const QString& pathOrUrl) {
@@ -1210,8 +1270,6 @@ void PlayerController::setUiValue(const QString& key, const QVariant& value) {
     }
 }
 
-double PlayerController::beatPeriodMs() const { return bpmGrid_ && bpm_ > 0 ? 60000.0 / bpm_ : 0.0; }
-
 void PlayerController::clearScript() {
     strength_.clear();
     activeStrength_.clear();
@@ -1231,6 +1289,10 @@ void PlayerController::clearScript() {
     marks_ = {};
     emit marksChanged();
     scriptPath_.clear();
+    if (scriptTempoBpm_ != 0) {
+        scriptTempoBpm_ = 0;
+        emit bpmChanged();
+    }
     playheadMs_ = -1;
     marker_ = {};
     emit markerChanged();

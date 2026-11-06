@@ -530,12 +530,28 @@ GlassCard {
                     Row {
                         spacing: 8
                         FlowTextField {
-                            width: 90; placeholder: root.ctrl.bpm > 0 ? String(root.ctrl.bpm) : qsTr("20–240")
+                            objectName: "bpmField"
+                            width: 90
+                            placeholder: root.ctrl.bpm > 0 ? String(root.ctrl.bpm)
+                                       : root.ctrl.effectiveBpm > 0 ? qsTr("auto %1").arg(root.ctrl.effectiveBpm)
+                                                                   : qsTr("20–240")
                             onAccepted: root.ctrl.bpm = parseFloat(text) || 0
                         }
-                        FlowButton { text: qsTr("BPM grid"); checked: root.ctrl.bpmGrid; onClicked: root.ctrl.bpmGrid = !root.ctrl.bpmGrid }
+                        FlowButton {
+                            objectName: "bpmGrid"
+                            text: qsTr("BPM grid")
+                            checked: root.ctrl.bpmGrid
+                            onClicked: root.ctrl.bpmGrid = !root.ctrl.bpmGrid
+                        }
                     }
-                    Note { text: qsTr("Beat lines on the curve (every 4th is a bar). Display only; the script is never changed. Detecting the BPM from the sound comes with the audio tempo port (P3).") }
+                    FlowButton {
+                        objectName: "bpmFromStroke"
+                        text: qsTr("Guess from stroke")
+                        enabled: root.ctrl.hasScript
+                        onClicked: root.ctrl.guessBpmFromStroke()
+                    }
+                    Note { text: qsTr("Beat lines on the curve (every 4th is a bar). Display only. Leave BPM blank to use the stroke's own tempo when the grid is on. Detecting BPM from the video sound comes later.") }
+                    Note { objectName: "bpmNote"; visible: root.ctrl.toolNote !== "" && root.ctrl.toolNote.indexOf("BPM") >= 0; text: root.ctrl.toolNote }
                 }
                 Card {
                     title: qsTr("Audio Vibration")
