@@ -2,9 +2,18 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 6 Nov 2026, Cursor, branch `cursor/hybrid-reacquire-635a`: opt-in AI tip re-acquire after CSRT+memory miss (handover below). Training caps #165, gen-curve #164, idle Flow #162 merged. Claude is on `claude/samn2-playhead` (#163) — stay off playhead/playback_output.
+**Last update:** 6 Nov 2026, Cursor, branch `cursor/player-adapt-device-635a`: Player + Editor Adapt-for-device (finished script → Sam Neo 2 / any toy). Hybrid reacquire #167 merged. Claude still on playhead (#163), device-worker (#166), intensity-arc (#168) — stay off those.
 
-## Handover: `cursor/hybrid-reacquire-635a` (6 Nov, hybrid tip re-acquire)
+## Handover: `cursor/player-adapt-device-635a` (6 Nov, Adapt finished scripts for toys)
+
+Owner ask: Player/Editor GUI — convert a finished script (after Create or an existing `.funscript`) for Sam Neo 2 and other toys.
+
+- **Player:** Inspector → Playback → *Adapt for device* (`optimizeFor` / `axesFromStroke` on `PlayerController`, rewrite+reload like Bake offset). Targets: Any device · Sam Neo 2 (defaults to Neo 2 when that device is connected). Confirm dialogs before rewrite.
+- **Editor:** Post-Create *Adapt for device* row above *Play in the Player* (`postCreateAdapt`) so the convert path is not buried in Tools….
+- **Tests:** `player_controller_test` optimize/axes; `inspector_qml_test` adapt card.
+- **Stay off:** Claude #163 playhead / #166 DeviceWorker / #168 intensity arc.
+
+## Handover: `cursor/hybrid-reacquire-635a` (6 Nov, hybrid tip re-acquire) — merged #167
 
 Legal FunGen-beat CPU lever (D-139 / D-158): ONNX only when the classical path already failed.
 

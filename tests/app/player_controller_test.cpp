@@ -413,6 +413,54 @@ private slots:
         QCOMPARE(bytes(samnPath), QByteArray("{broken"));
     }
 
+    void optimizeForFillsHealsAndWritesTheNeo2Feel() {
+        QTemporaryDir d;
+        const QString path = d.filePath("opt.funscript");
+        {
+            QByteArray body = R"({"version":"1.0","actions":[)";
+            for (int t = 0; t <= 1000; t += 100)
+                body += QStringLiteral("{\"at\":%1,\"pos\":%2},").arg(t).arg(t / 100 % 2 ? 90 : 10).toUtf8();
+            body += R"({"at":1500,"pos":99},{"at":4000,"pos":90},{"at":4100,"pos":10},{"at":4200,"pos":90}],)"
+                    R"("metadata":{"tracking_gaps":[{"start_ms":1100,"end_ms":1900}]}})";
+            writeFile(path, body);
+        }
+        PlayerController c;
+        QVERIFY(c.openScript(path));
+        const int before = c.pointCount();
+        QVERIFY(c.optimizeFor("nonsense").isEmpty());
+        const QString msg = c.optimizeFor("general");
+        QVERIFY2(msg.startsWith("Ready for any device"), qPrintable(msg));
+        QVERIFY2(msg.contains("healed 1 tracking gap"), qPrintable(msg));
+        QVERIFY2(msg.contains("filled"), qPrintable(msg));
+        QVERIFY(c.pointCount() > before);
+        QCOMPARE(c.toolNote(), msg);
+        const auto stroke = samn::LoadFunscript(std::filesystem::u8path(path.toStdString())).actions;
+        QCOMPARE(int(stroke.size()), c.pointCount());
+        for (const auto& a : stroke) QVERIFY(!(a.at == 1500 && a.pos == 99));
+
+        const QString neo = c.optimizeFor("neo2");
+        QVERIFY2(neo.startsWith("Neo 2 ready") && neo.contains("vibration and suction written"), qPrintable(neo));
+        QVERIFY(c.scriptPath().endsWith(QStringLiteral(".samn")));
+        const samn::Document doc = samn::LoadDocument(std::filesystem::u8path(c.scriptPath().toStdString()));
+        QVERIFY(doc.vibration.size() >= 2);
+        QVERIFY(doc.suction.size() >= 2);
+        QVERIFY(doc.recipe.contact_vibration);
+    }
+
+    void axesFromStrokeWritesNeoLanes() {
+        QTemporaryDir d;
+        const QString path = d.filePath("axes.funscript");
+        writeFile(path, zigzag(21, 100));
+        PlayerController c;
+        QVERIFY(c.openScript(path));
+        QVERIFY(c.axesFromStroke());
+        QVERIFY(c.scriptPath().endsWith(QStringLiteral(".samn")));
+        QVERIFY(c.toolNote().contains("Vibration and suction"));
+        const samn::Document doc = samn::LoadDocument(std::filesystem::u8path(c.scriptPath().toStdString()));
+        QVERIFY(doc.vibration.size() >= 2);
+        QVERIFY(doc.suction.size() >= 2);
+    }
+
     void loopOverMarkedRange() {
         QTemporaryDir d;
         writeFile(d.filePath("A.funscript"), zigzag());

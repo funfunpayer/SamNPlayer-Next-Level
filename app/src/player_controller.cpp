@@ -23,6 +23,7 @@
 #include "qt_paths.h"
 #include "samn/fileio.h"
 #include "samn/heatmap_image.h"
+#include "samn/improve.h"
 #include "samn/project.h"
 #include "samn/script_quality.h"
 #include "heatmap_item.h"
@@ -573,6 +574,141 @@ bool PlayerController::reloadScript() {
     if (scriptPath_.isEmpty()) return false;
     const QString script = scriptPath_, video = videoPath_;
     return openScript(script, video);
+}
+
+QString PlayerController::optimizeFor(const QString& target) {
+    if (scriptPath_.isEmpty() || stroke_.size() < 2) {
+        setError(tr("Open a script with at least 2 stroke points first."));
+        return {};
+    }
+    const bool neo2 = target == QLatin1String("neo2");
+    if (!neo2 && target != QLatin1String("general")) return {};
+
+    namespace fs = std::filesystem;
+    const std::string openedU8 = U8(scriptPath_);
+    const fs::path opened = fs::u8path(openedU8);
+    const bool wasSamn = samn::IsSamnPath(openedU8);
+    const std::string funscriptU8 = wasSamn ? samn::CompanionFunscriptPath(openedU8) : openedU8;
+    const fs::path funscript = fs::u8path(funscriptU8);
+    const fs::path samnPath = fs::u8path(samn::CompanionSamnPath(funscriptU8));
+
+    samn::ImproveOptions o;
+    o.fill_gaps = true;
+    o.heal_tracking_gaps = true;
+    try {
+        o.tracking_gaps = samn::LoadFunscript(funscript).metadata.tracking_gaps;
+    } catch (const std::exception&) {
+    }
+
+    samn::Document doc;
+    try {
+        if (wasSamn || fs::exists(samnPath)) {
+            doc = samn::LoadDocument(wasSamn ? opened : samnPath);
+            if (o.tracking_gaps.empty()) o.tracking_gaps = doc.tracking_gaps;
+        } else {
+            doc = samn::LoadFunscriptFile(funscript);
+        }
+    } catch (const std::exception& e) {
+        setFailure(tr("Optimize failed: %1").arg(FromU8(e.what())));
+        return {};
+    }
+    if (doc.general.size() < 2) doc.general = stroke_;
+
+    const QString label = neo2 ? tr("Optimize for Sam Neo 2") : tr("Optimize for any device");
+    QStringList parts{neo2 ? tr("Neo 2 ready") : tr("Ready for any device")};
+    try {
+        const samn::ImproveResult res = samn::ImproveScript(doc.general, o);
+        const bool strokeChanged = res.points_added > 0 || res.windows_healed > 0 || res.after_count != res.before_count;
+        if (strokeChanged) doc.general = res.actions;
+        if (res.windows_healed > 0) parts << tr("healed %n tracking gap(s)", "", res.windows_healed);
+        if (res.gaps_filled > 0) parts << tr("filled %n gap(s) (+%1 points)", "", res.gaps_filled).arg(res.points_added);
+        else if (!neo2) parts << tr("no gaps to fill");
+        if (res.clear_tracking_gaps) doc.tracking_gaps.clear();
+
+        if (neo2) {
+            doc.ApplyContactRecipe(true, samn::DefaultContactVibrationSpan, "soft");
+            doc.BakeNeoAxes();
+            parts << tr("contact on") << tr("vibration and suction written");
+            if (doc.version == 0) doc.version = samn::SamnCurrentVersion;
+            if (doc.kind.empty()) doc.kind = samn::SamnKind;
+            if (doc.creator.empty()) doc.creator = "SamNPlayer";
+            const char* source = samn::PlaybackAxes;
+            doc.playback_source = source;
+            doc.recipe.playback_source = source;
+            samn::SaveDocument(samnPath, doc);
+            if (fs::exists(funscript)) {
+                samn::PatchActions(funscript, doc.general);
+                if (res.clear_tracking_gaps) samn::PatchMetadataKey(funscript, "tracking_gaps", "null");
+            }
+        } else {
+            // Any device: rewrite the stroke on disk; keep an existing .samn in sync.
+            if (fs::exists(funscript)) {
+                samn::PatchActions(funscript, doc.general);
+                if (res.clear_tracking_gaps) samn::PatchMetadataKey(funscript, "tracking_gaps", "null");
+            }
+            if (wasSamn || fs::exists(samnPath)) {
+                if (doc.version == 0) doc.version = samn::SamnCurrentVersion;
+                if (doc.kind.empty()) doc.kind = samn::SamnKind;
+                samn::SaveDocument(wasSamn ? opened : samnPath, doc);
+            } else if (!fs::exists(funscript)) {
+                // Opened a lone .samn without a companion funscript.
+                samn::SaveDocument(opened, doc);
+            }
+        }
+    } catch (const std::exception& e) {
+        setFailure(tr("%1: %2").arg(label, FromU8(e.what())));
+        return {};
+    }
+
+    const QString reloadPath = neo2 || wasSamn || fs::exists(samnPath) ? FromU8(samnPath.u8string()) : scriptPath_;
+    const QString video = videoPath_;
+    if (!openScript(reloadPath, video)) return {};
+    const QString msg = parts.join(QStringLiteral(" · "));
+    toolNote_ = msg;
+    emit toolNoteChanged();
+    emit scriptEdited(scriptPath_);
+    return msg;
+}
+
+bool PlayerController::axesFromStroke() {
+    if (scriptPath_.isEmpty() || stroke_.size() < 2) {
+        setError(tr("Open a script with at least 2 stroke points first."));
+        return false;
+    }
+    namespace fs = std::filesystem;
+    const std::string openedU8 = U8(scriptPath_);
+    const fs::path opened = fs::u8path(openedU8);
+    const bool wasSamn = samn::IsSamnPath(openedU8);
+    const std::string funscriptU8 = wasSamn ? samn::CompanionFunscriptPath(openedU8) : openedU8;
+    const fs::path funscript = fs::u8path(funscriptU8);
+    const fs::path samnPath = fs::u8path(samn::CompanionSamnPath(funscriptU8));
+
+    try {
+        samn::Document doc;
+        if (wasSamn || fs::exists(samnPath)) {
+            doc = samn::LoadDocument(wasSamn ? opened : samnPath);
+        } else {
+            doc = samn::LoadFunscriptFile(funscript);
+        }
+        if (doc.general.size() < 2) doc.general = stroke_;
+        doc.BakeNeoAxes();
+        if (doc.version == 0) doc.version = samn::SamnCurrentVersion;
+        if (doc.kind.empty()) doc.kind = samn::SamnKind;
+        if (doc.creator.empty()) doc.creator = "SamNPlayer";
+        const char* source = samn::PlaybackAxes;
+        doc.playback_source = source;
+        doc.recipe.playback_source = source;
+        samn::SaveDocument(samnPath, doc);
+    } catch (const std::exception& e) {
+        setFailure(tr("Vibration and suction: %1").arg(FromU8(e.what())));
+        return false;
+    }
+
+    if (!openScript(FromU8(samnPath.u8string()), videoPath_)) return false;
+    toolNote_ = tr("Vibration and suction written from the stroke.");
+    emit toolNoteChanged();
+    emit scriptEdited(scriptPath_);
+    return true;
 }
 
 bool PlayerController::openScript(const QString& pathIn, const QString& videoIn) {

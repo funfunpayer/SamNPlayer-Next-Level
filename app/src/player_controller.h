@@ -254,6 +254,12 @@ public:
     // offset goes back to 0. What would land before 0 ms is dropped and
     // counted in the status line.
     Q_INVOKABLE bool bakeOffset();
+    // Adapt a finished script for any device (fill/heal stroke gaps) or for
+    // Sam Neo 2 (also contact recipe + baked vibration/suction). Rewrites the
+    // file(s) and reloads — same core path as the Editor's Optimize for.
+    Q_INVOKABLE QString optimizeFor(const QString& target);
+    // Write Neo vibration & suction lanes from the stroke into the .samn.
+    Q_INVOKABLE bool axesFromStroke();
     // 0.7 ExportScriptHeatmapPNG: "<script>.heatmap.png" beside the script,
     // 960 x 56 with chapter ticks. The path, or "" with lastError.
     Q_INVOKABLE QString exportHeatmapPng();
