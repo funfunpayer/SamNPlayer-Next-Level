@@ -8,7 +8,7 @@
 
 Million-dollar Generator layout chunk + a legal FunGen-beat CPU lever (no ONNX copy).
 
-- **GUI:** `GeneratorPage` centre column is a vertical `SplitView` (`stageSplit`): video fills, curves pane has a remembered share (`generator.editor_share`, 0.18–0.65, default 0.40). Compact height while no script is open.
+- **GUI:** `GeneratorPage` centre column is a vertical stage (`stageSplit` ColumnLayout + drag handle — Controls `SplitView` collapsed the curves pane under the async Loader): video and curves get explicit heights from a remembered share (`generator.editor_share`, 0.18–0.65, default 0.40). Empty state keeps curves ≤20% so the tip box still has room.
 - **CPU / recognition:** Expert *Tracking analysis rate* wires `GenerateRequest.max_analysis_fps` / queue (`generator.max_analysis_fps`, 0 = every frame, else 5–60 step 5). Engine already had FR-7; compare manifest kept. Help `gen-analysis-fps`.
 - **Docs:** VERSIONS track-cache row marked covered; new plan row for confidence-gated hybrid track (light every frame, AI only on loss / low confidence). GENERATOR_SPEC note updated.
 - **Tests:** `generator_controller_test` remembers analysis fps + editor share; `generator_qml_test` finds `stageSplit`.

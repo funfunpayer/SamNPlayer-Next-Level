@@ -313,30 +313,28 @@ Item {
         }
 
         // ---- main stage: video above, curves below (resizable, remembered) ----
-        C.SplitView {
+        // ColumnLayout + handle (not Controls SplitView): SplitView under the
+        // async Generator Loader collapsed the curves pane to ~0 on screen.
+        ColumnLayout {
             id: stageSplit
             objectName: "stageSplit"
             Layout.fillWidth: true
             Layout.fillHeight: true
-            orientation: Qt.Vertical
-            handle: Item {
-                implicitWidth: 1
-                implicitHeight: 10
-                Rectangle {
-                    anchors.centerIn: parent
-                    width: 40; height: 3; radius: 1.5
-                    color: Qt.rgba(1, 1, 1, 0.18)
-                }
-            }
-            onResizingChanged: {
-                if (!resizing && edit.hasScript && height > 80)
-                    gen.editorShare = Math.min(0.65, Math.max(0.18, editorCard.height / height))
+            spacing: 0
+            // editorH from the stage height; video takes the rest via fillHeight.
+            // (Controls SplitView under the async Loader collapsed curves to ~0.)
+            readonly property real editorH: {
+                const h = height - 10
+                if (h <= 0) return edit.hasScript ? 280 : 110
+                const share = edit.hasScript ? gen.editorShare : Math.min(gen.editorShare, 0.20)
+                return Math.max(edit.hasScript ? 140 : 96, Math.round(h * share))
             }
 
             // Video with the tip box (2 Tip) and the frame seek row.
             GlassCard {
-                C.SplitView.fillHeight: true
-                C.SplitView.minimumHeight: 160
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                Layout.minimumHeight: 160
                 ColumnLayout {
                     anchors.fill: parent; anchors.margins: 14; spacing: 8
                     RowLayout {
@@ -867,20 +865,44 @@ Item {
                 }
             }
 
+            Item {
+                objectName: "stageSplitHandle"
+                Layout.fillWidth: true
+                Layout.preferredHeight: 10
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: 40; height: 3; radius: 1.5
+                    color: Qt.rgba(1, 1, 1, splitDrag.containsMouse || splitDrag.pressed ? 0.35 : 0.18)
+                }
+                MouseArea {
+                    id: splitDrag
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.SplitVCursor
+                    property real grabShare: 0.40
+                    property real grabY: 0
+                    onPressed: (mouse) => {
+                        grabShare = gen.editorShare
+                        grabY = mapToItem(stageSplit, mouse.x, mouse.y).y
+                    }
+                    onPositionChanged: (mouse) => {
+                        if (!pressed || stageSplit.height < 120) return
+                        const y = mapToItem(stageSplit, mouse.x, mouse.y).y
+                        // Drag down → more video / less curves.
+                        gen.editorShare = Math.min(0.65, Math.max(0.18,
+                            grabShare - (y - grabY) / stageSplit.height))
+                    }
+                }
+            }
+
             // The curves: edit points, mark a range, range tools, undo.
             GlassCard {
                 id: editorCard
                 objectName: "editorCard"
-                C.SplitView.minimumHeight: edit.hasScript ? 140 : 88
-                C.SplitView.preferredHeight: {
-                    const h = stageSplit.height
-                    if (h <= 0) return edit.hasScript ? 320 : 100
-                    if (!edit.hasScript) {
-                        const compact = 96 + (gen.hasVideo ? 62 : 0) + (audioLane.visible ? 36 : 0)
-                        return Math.min(compact, Math.round(h * 0.28))
-                    }
-                    return Math.round(h * gen.editorShare)
-                }
+                Layout.fillWidth: true
+                Layout.minimumHeight: edit.hasScript ? 140 : 96
+                Layout.preferredHeight: stageSplit.editorH
+                Layout.maximumHeight: stageSplit.editorH
                 ColumnLayout {
                     anchors.fill: parent; anchors.margins: 12; spacing: 6
                     RowLayout {
