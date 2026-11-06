@@ -2,7 +2,27 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 6 Nov 2026, Cursor, branch `cursor/training-channel-caps-635a`: Training Max Vibration / Max Suction caps (handover below). Gen-curve #164 and idle Flow #162 merged. Claude is on `claude/samn2-playhead` (#163) — stay off playhead/playback_output.
+**Last update:** 6 Nov 2026, Claude, branch `claude/samn2-intensity-arc`: intro and climaxes from an intensity arc (D-165, core only; handover below). Before it: Cursor's Training output caps (`cursor/training-channel-caps-635a`, merged #165). Claude #163 (`claude/samn2-playhead`) is still open — stay off playhead/playback_output.
+
+## Handover: `claude/samn2-intensity-arc` (6 Nov, D-165 first slice: intro and climaxes)
+
+Owner: find the intro and the climaxes ("Höhepunkte") of a video from its sound and samples of its picture; cinema-grade, clean, lean, measured before and after, little CPU and memory. This slice is core only: no decoder change, no FFT, no Generator change.
+
+- **Core:** new `intensity_arc.h` / `intensity_arc.cpp`, `ComputeArc(PhaseSignals, ArcOptions)` -> `IntensityArc` (`detail` 4 s and `arc` 20 s curves, `intro_end_ms`, `peaks` with `t_ms`, `start_ms`, `end_ms`, `prominence`, `confidence`; the primary first). Design and constants in D-165; each constant has its reason next to it.
+- **`SuggestPhases`** keeps its empty-stretch rule and takes the intro and the climaxes from the arc. Public API unchanged: `PhaseRuleOptions` keeps every field (`active_share` is no longer read; `steady_ms` and `climax_gain` feed the arc), `PhaseSignals::tempo` is no longer read (nothing fills it). Still suggestions only; `ApplyPhaseSuggestions` untouched.
+- **Behaves differently:** climaxes anywhere after the intro (the old search began at half the clip), up to three of them (the Training's video stage pauses once per *confirmed* climax); motion is capped at 2x its 90th percentile, not at 1x (a climax shorter than 10 % of the clip was flattened into the action); the cool-down follows the last climax only when it is clearly calmer than the action before it too (after an early climax the action often just goes on).
+- **Measured** (`docs/benchmarks/INTENSITY_ARC_2026-11-06.md`, 175 synthetic clips): climax hits 75 -> 167, intro hits 150 -> 175, CPU per call 36 -> 38 us at -O2 (about 1.3 ms on a 2 h clip). Still weak: slow build-ups of 100-500 s, 17 of 25 within 5 s (the misses are 7-16 s early).
+- **Tests:** `tests/core/intensity_arc_test.cpp` (13 cases; the five phase-level cases A-E ran first against the old rules and A, C, D failed). `phase_rules_test.cpp` unchanged and green. Bench: `tests/bench/phase_bench.cpp`, target `phase_bench`, built with the tests, not in ctest (keeps the old rules as `LegacyRules`).
+- **Left alone on purpose:** `LabelController::finishSuggest` divides the 500 ms loudness by the loudest step after `NormalizeLoudness` already scaled it. Not behaviour-neutral for the arc (rescaling the loudness changes the 0.6 / 0.4 blend; on cases A-E the peak times moved by up to 69 ms and the confidence by up to 0.07), so it stays until a slice measures it.
+- **D-number:** D-165, because the open playhead PR #163 takes D-164. If #163 lands with another number, or another PR takes D-165 first, renumber this one.
+- **Not verified:** real clips (synthetic only), Windows / MSVC, the Training stage with several confirmed climaxes on a real film.
+- **Next slices (roadmap, one per PR):**
+  1. one shared 11 kHz mono streaming decode plus an `AudioAnalyzer` (spectral-flux onsets);
+  2. tempo from the onset curve (autocorrelation, a log-Gaussian prior at 72 BPM, octave folding, a confidence);
+  3. the heart-rhythm default tempo, `base_rhythm.h` (`generator.base_bpm` 72, `generator.base_bpm_variation` 3 %, range 60-90), blended with the measured tempo; rhythmic fill stays opt-in until it beats linear fill on synthetic gaps;
+  4. beat tracking (Ellis dynamic programming) as the AU-04 fallback for rounds without a visible beat bar;
+  5. a speech / music / silence gate.
+- **Cleanup list (found by the read-only analysis, not done here):** `AutoFillGapThreshold` always gives 800 (min of at least 2000 and `kDefaultFillGapMs` 800: a dead rule); `ImproveOptions::audio_hz` has no caller; `PhaseSignals::tempo` is never filled; three percentile helpers in core (`audio_envelope.cpp`, `script_quality.cpp`, and the one that moved from `phase_rules.cpp` to `intensity_arc.cpp`); three owners of an `AudioLevelDecoder` (label controller, editor controller, each `AudioLevelItem`), each decoding the same file again.
 
 ## Handover: `cursor/training-channel-caps-635a` (6 Nov, Training output caps)
 
@@ -444,6 +464,8 @@ Data and file fixes from a read-only bug hunt. Each fix has a test that failed b
 **Parity (1 Nov):** recount with `python3 ci/parity_status.py` after handbook merges. Owner GUI order: toasts ✅, help chips ✅, reduced motion ✅, handbook ✅ (#150); idle ribbon ✅ (`cursor/idle-flow-stage-635a`); donate still open. Generator: G2/G3/partner on `main`; G4a Advanced landed via #153.
 
 ## Next (in order; the work list is `LESSONS.md` § Gaps, `TEST_PARITY.md` and `P3_GENERATOR.md`)
+
+**Audio and phases (D-165), one slice per PR:** shared 11 kHz mono decode + `AudioAnalyzer` (spectral-flux onsets) → tempo from the onsets (autocorrelation, prior at 72 BPM, octave folding, confidence) → heart-rhythm default `base_rhythm.h` (72 BPM, 3 %) → Ellis beat tracking as the AU-04 fallback → speech / music / silence gate; cleanup list in the `claude/samn2-intensity-arc` handover.
 
 **Kernel (D-163), one theme per PR, after the driver registry:** a ModeRegistry with a `Repeater` in `Main.qml`; a narrow `DeviceService` interface instead of `DeviceController*` in Player, Training and `PlaybackOutput`; `DeviceWorker` into its own file; registries for detectors and teachers.
 
