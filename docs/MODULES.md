@@ -22,6 +22,7 @@ Functions use PascalCase and struct fields use snake_case.
 | `playback.h` | Offset key and clamp, script time, the video beside a script, companion axis files | Go `app_playback.go` | ✅ |
 | `stroke_filter.h` | Live stroker filter (PCHIP/MAKIMA, speed limit, idle fill) | Go `funscript/stroke_filter.go` | ✅ parity |
 | `output_levels.h` | Reduce peaks, the soft start ramp and the Extended-O scale schedule as functions of time | Go `player/player.go` (ReducePeak, setOutput), `player/sync.go` (softStartWithPositions), `player/extendedo.go` | ✅ parity |
+| `playhead.h` | The video playhead between two media position reports: estimate, cap, no step back, seek / pause / rate rules (`docs/TIMING.md` § 7) | new (0.7 sampled the video at its reports only) | ✅ |
 | `beatbar.h`, `beat_strokes.h` | Cock Hero beat bar → beats → strokes | Go `generator/beatbar.go` | ✅ parity |
 | `curve_geometry.h` | Curve as 0.7 draws it: Catmull-Rom (control points clamped to 0-100), tempo wave, density switch, zoom window. Binary search instead of 0.7's full scans. | 0.7 `playback.js` (smoothCurvePath, drawSpeedWave, zoomByFactor) | ✅ tempo wave equals 0.7 (node reference) |
 | `fileio.h` | `WriteFileAtomic`: temp file, flush, rename. The one writer for marks, `.samn`, settings and the range marker. `ReadFileToString`: the whole file or nullopt. | Go `writeFileAtomic` | ✅ |
@@ -125,6 +126,7 @@ Controllers are `QObject`s registered for QML; their tests are `tests/app/<name>
 | `src/library_controller.*` | The Library column: recent scripts and videos, favorites, imported / generated / edited. |
 | `src/script_clock.*` | The playhead for a script without a video, with the MediaPlayer's surface. |
 | `src/playback_output.*` | What reaches the device while a script plays (mapping, stroke filter, axes), without QML timers. |
+| `src/media_playhead.*` | The video playhead for the device output between the media player's reports (`samn/playhead.h` on a monotonic clock, a 16 ms tick while the video plays). |
 | `src/mapping_settings.*` | The Player's mapping settings, live contact controls and Effects presets; saved at once. |
 | `src/generator_controller.*` | The Generator mode: video, tip box, feel, Create with progress and cancel, queue, review; runs the engine on its own thread. |
 | `src/editor_controller.*` | The Editor inside the Generator: curves per lane, range tools, undo, beat-bar tool, sound vibration. |
