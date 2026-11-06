@@ -2,8 +2,7 @@ import QtQuick
 import QtQuick.Dialogs
 import SamN
 
-// The Inspector of the Player (0.7 v1): tabs Devices · Audio · Playback ·
-// View. Functions not built yet say which phase brings them; nothing pretends.
+// The Inspector of the Player (0.7 v1): tabs Devices · Audio · Playback · View.
 GlassCard {
     id: root
     required property PlayerController ctrl
@@ -540,15 +539,79 @@ GlassCard {
                 }
                 Card {
                     title: qsTr("Audio Vibration")
-                    Note { text: qsTr("Vibration from the video's sound is written into the script in the Editor (\"Vibration from the sound\"); the Player then plays it on the device.") }
+                    Note { text: qsTr("Vibration from the video's sound is written into the script in the Editor (\"Vibration from the sound\"). For Sam Neo 2 feel lanes from the stroke, use Playback → Adapt for device.") }
                     FlowButton { objectName: "editForSound"; text: qsTr("Open in the Editor"); enabled: root.ctrl.hasScript; onClicked: root.editRequested(false) }
                 }
             }
-            // Playback: script tools.
+            // Playback: adapt finished scripts for toys, then script tools.
             Column {
                 id: playback
                 visible: tabs.current === 2
                 width: parent.width; spacing: 10
+                Card {
+                    id: adapt
+                    objectName: "adaptCard"
+                    title: qsTr("Adapt for device")
+                    help: "pb-optimize-target"
+                    readonly property var targets: ["general", "neo2"]
+                    readonly property int preferredTarget: (root.device && root.device.connected && root.device.kind === "samneo2") ? 1 : 0
+                    Text {
+                        textFormat: Text.PlainText
+                        width: parent.width
+                        wrapMode: Text.WordWrap
+                        text: qsTr("Rewrite a finished script so it feels right on the toy — heal gaps, or bake Sam Neo 2 vibration and suction.")
+                        color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                    }
+                    Row {
+                        spacing: 8
+                        FlowCombo {
+                            id: adaptTarget
+                            objectName: "adaptTarget"
+                            width: adapt.width - 24 - 118
+                            model: [qsTr("Any device"), qsTr("Sam Neo 2")]
+                            currentIndex: adapt.preferredTarget
+                        }
+                        FlowButton {
+                            objectName: "adaptOptimize"
+                            text: qsTr("Optimize")
+                            icon: "sliders"
+                            enabled: root.ctrl.hasScript
+                            onClicked: adaptConfirm.open()
+                        }
+                    }
+                    FlowButton {
+                        objectName: "adaptAxes"
+                        text: qsTr("Vibration & suction from stroke")
+                        icon: "effects"
+                        enabled: root.ctrl.hasScript
+                        onClicked: axesConfirm.open()
+                    }
+                    FlowButton {
+                        objectName: "adaptEditTools"
+                        text: qsTr("More tools in the Editor…")
+                        icon: "edit"
+                        enabled: root.ctrl.hasScript
+                        onClicked: root.editRequested(false)
+                    }
+                    Note { text: qsTr("Optimize saves into the script (and a .samn Emotion Script for Neo 2). Effects below stay live playback feel only.") }
+                    Note { objectName: "adaptNote"; visible: root.ctrl.toolNote !== ""; text: root.ctrl.toolNote }
+                    MessageDialog {
+                        id: adaptConfirm
+                        title: qsTr("Optimize & save")
+                        text: adaptTarget.currentIndex === 1
+                              ? qsTr("Heal the stroke, add contact vibration and bake Neo 2 vibration / suction into the Emotion Script beside this file?")
+                              : qsTr("Fill and heal stroke gaps and save the script so it plays cleanly on any device?")
+                        buttons: MessageDialog.Ok | MessageDialog.Cancel
+                        onAccepted: root.ctrl.optimizeFor(adapt.targets[adaptTarget.currentIndex])
+                    }
+                    MessageDialog {
+                        id: axesConfirm
+                        title: qsTr("Vibration & suction")
+                        text: qsTr("Write vibration and suction lanes from the stroke into the Emotion Script (.samn) beside this file?")
+                        buttons: MessageDialog.Ok | MessageDialog.Cancel
+                        onAccepted: root.ctrl.axesFromStroke()
+                    }
+                }
                 Card {
                     title: qsTr("Script Tools")
                     help: "playback.script-offset"

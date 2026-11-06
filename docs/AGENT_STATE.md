@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 6 Nov 2026, Claude, branch `claude/samn2-device-worker`: `DeviceWorker` moved out of `device_controller.cpp` into `app/src/device_worker.{h,cpp}`, a pure move (handover below). Before: `claude/samn2-timing-audit` (device path timing, no behaviour change).
+**Last update:** 6 Nov 2026, Cursor, branch `cursor/player-adapt-device-635a`: Player + Editor Adapt-for-device (finished script → Sam Neo 2 / any toy). DeviceWorker move landed on main from Claude. Stay off playhead (#163) / intensity-arc (#168).
 
 ## Handover: `claude/samn2-device-worker` (6 Nov, D-163: DeviceWorker into its own file, pure move)
 
@@ -10,9 +10,16 @@
 - **Shared in the header:** `kPrefTransport` and `Q()` (now `inline`), both used by the controller too; `namespace dev` alias. No `Q_OBJECT` in the worker, so no moc change. `friend class DeviceWorker` in `device_controller.h` is unchanged.
 - **Checked:** sorted-line comparison old region vs new files (only includes, `#pragma once`, namespace lines and the `inline` on `Q` differ), full build, ctest, `device_controller_test` / `training_controller_test` 3x each. No test edited.
 
+## Handover: `cursor/player-adapt-device-635a` (6 Nov, Adapt finished scripts for toys)
 
+Owner ask: Player/Editor GUI — convert a finished script (after Create or an existing `.funscript`) for Sam Neo 2 and other toys.
 
-## Handover: `cursor/hybrid-reacquire-635a` (6 Nov, hybrid tip re-acquire)
+- **Player:** Inspector → Playback → *Adapt for device* (`optimizeFor` / `axesFromStroke` on `PlayerController`, rewrite+reload like Bake offset). Targets: Any device · Sam Neo 2 (defaults to Neo 2 when that device is connected). Confirm dialogs before rewrite.
+- **Editor:** Post-Create *Adapt for device* row above *Play in the Player* (`postCreateAdapt`) so the convert path is not buried in Tools….
+- **Tests:** `player_controller_test` optimize/axes; `inspector_qml_test` adapt card.
+- **Stay off:** Claude #163 playhead / #166 DeviceWorker / #168 intensity arc.
+
+## Handover: `cursor/hybrid-reacquire-635a` (6 Nov, hybrid tip re-acquire) — merged #167
 
 Legal FunGen-beat CPU lever (D-139 / D-158): ONNX only when the classical path already failed.
 
