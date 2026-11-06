@@ -10,14 +10,14 @@
 
 namespace samn {
 
-// One value per step through the clip, each 0..1. Loudness and tempo may be
-// empty (no sound, no script); then the rules use the picture alone.
+// One value per step through the clip, each 0..1. Loudness may be empty (no
+// sound); then the rules use the picture alone.
 struct PhaseSignals {
     int64_t step_ms = 500;
     std::vector<double> luma;      // mean brightness of the frame
     std::vector<double> motion;    // mean change to the previous frame
     std::vector<double> loudness;  // sound level
-    std::vector<double> tempo;     // stroke speed from a script, normalised
+    std::vector<double> tempo;     // stroke speed from a script, normalised; not read yet (nothing fills it)
 };
 
 struct PhaseRuleOptions {
@@ -26,16 +26,17 @@ struct PhaseRuleOptions {
     int64_t min_empty_ms = 2000;
     int64_t min_intro_ms = 5000;
     int64_t steady_ms = 5000;       // the action has begun after this long
-    double active_share = 0.35;     // of the clip's busy level (90th percentile)
+    double active_share = 0.35;     // unused since the intensity arc (D-165); kept for callers that set it
     int64_t climax_min_ms = 8000;
     int64_t climax_max_ms = 45000;
-    double climax_gain = 1.25;      // the peak must stand out over the median
+    double climax_gain = 1.25;      // a climax must stand out over the arc's median
     int64_t min_cooldown_ms = 5000;
 };
 
 // The suggested phases, sorted and not overlapping: empty stretches, the
-// intro before the first steady action, the climax where the action and the
-// sound peak in the second half, and the cool-down after it.
+// intro before the first steady action, up to three climaxes where the
+// intensity arc (intensity_arc.h) peaks anywhere after the intro, and the
+// cool-down after the last one.
 std::vector<LabelPhase> SuggestPhases(const PhaseSignals& s, const PhaseRuleOptions& o = {});
 
 // Adds suggestions to a project without touching what the user set: only
