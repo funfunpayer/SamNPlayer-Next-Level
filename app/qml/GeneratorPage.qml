@@ -2075,7 +2075,8 @@ Item {
                             Repeater {
                                 model: [{ text: qsTr("Invert motion direction"), key: "invert", help: "gen-invert" },
                                         { text: qsTr("Camera motion compensation"), key: "cameraCompensation", help: "gen-camcomp" },
-                                        { text: qsTr("Scene-cut detection"), key: "sceneCuts", help: "gen-scenecut" }]
+                                        { text: qsTr("Scene-cut detection"), key: "sceneCuts", help: "gen-scenecut" },
+                                        { text: qsTr("AI re-acquire on tip loss"), key: "hybridReacquire", help: "gen-hybrid-reacquire" }]
                                 delegate: RowLayout {
                                     required property var modelData
                                     Layout.fillWidth: true

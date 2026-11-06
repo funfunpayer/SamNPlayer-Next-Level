@@ -153,6 +153,8 @@ void GenerateUnguarded(const GenerateRequest& req, uint64_t run_id, const std::f
     to.max_analysis_fps = req.max_analysis_fps;
     to.camera_compensation = req.camera_compensation;
     to.scene_cuts = req.scene_cuts;
+    to.hybrid_reacquire = req.hybrid_reacquire;
+    to.ai_propose = req.ai_propose;
     to.axis = req.axis;
     to.mask_rois = req.mask_rois;
     // G2b: gold contact → partner path (fixed box or second CSRT).
