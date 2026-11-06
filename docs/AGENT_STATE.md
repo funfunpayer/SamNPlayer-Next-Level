@@ -2,9 +2,18 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 6 Nov 2026, Cursor, branch `cursor/hybrid-reacquire-635a`: opt-in AI tip re-acquire after CSRT+memory miss (handover below). Training caps #165, gen-curve #164, idle Flow #162 merged. Claude is on `claude/samn2-playhead` (#163) — stay off playhead/playback_output.
+**Last update:** 6 Nov 2026, Cursor, branch `cursor/player-rhythm-timeline-635a`: Player BPM from stroke + taller heatmap (wheel zoom). #169 Adapt-for-device still CI. Claude on playhead (#163) / DeviceWorker (#166) / intensity-arc (#168) — stay off.
 
-## Handover: `cursor/hybrid-reacquire-635a` (6 Nov, hybrid tip re-acquire)
+## Handover: `cursor/player-rhythm-timeline-635a` (6 Nov, Player rhythm + timeline)
+
+Owner: GUI / Player / Editor curves, BPM, optimize & align — finish Adapt (#169) first, then this.
+
+- **BPM:** blank field uses stroke-tempo estimate (`effectiveBpm`); *Guess from stroke* fills BPM and turns the grid on; `playback.bpm_grid` remembered. Honest notes (audio detect still later).
+- **Heatmap:** height 18→28; wheel zoom like the curve lanes (`heatBar`).
+- **Tests:** `bpmFromStrokeWhenFieldBlank`.
+- **Stay off:** Claude playhead / DeviceWorker / intensity-arc; Adapt-for-device is #169.
+
+## Handover: `cursor/hybrid-reacquire-635a` (6 Nov, hybrid tip re-acquire) — merged #167
 
 Legal FunGen-beat CPU lever (D-139 / D-158): ONNX only when the classical path already failed.
 

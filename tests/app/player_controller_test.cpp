@@ -527,6 +527,34 @@ private slots:
         QCOMPARE(c.beatPeriodMs(), 0.0);  // grid off
         c.setBpmGrid(true);
         QCOMPARE(c.beatPeriodMs(), 500.0);
+        QCOMPARE(c.effectiveBpm(), 120.0);
+    }
+
+    void bpmFromStrokeWhenFieldBlank() {
+        QTemporaryDir d;
+        // Peaks every 500 ms → 120 BPM.
+        QByteArray body = "{\"actions\":[";
+        for (int i = 0; i < 12; ++i) {
+            if (i) body += ",";
+            const int at = i * 250;
+            body += QStringLiteral("{\"at\":%1,\"pos\":%2}").arg(at).arg(i % 2 ? 90 : 10).toUtf8();
+        }
+        body += "]}";
+        writeFile(d.filePath("beat.funscript"), body);
+        PlayerController c;
+        QVERIFY(c.openScript(d.filePath("beat.funscript")));
+        QCOMPARE(c.bpm(), 0.0);
+        QVERIFY(c.effectiveBpm() >= 20.0);
+        c.setBpmGrid(true);
+        QVERIFY(c.beatPeriodMs() > 0);
+        QCOMPARE(c.guessBpmFromStroke(), c.bpm());
+        QVERIFY(c.bpmGrid());
+        QVERIFY(c.bpm() >= 20.0 && c.bpm() <= 240.0);
+        QVERIFY(c.toolNote().contains("BPM from the stroke"));
+
+        // Grid preference is remembered.
+        PlayerController again;
+        QVERIFY(again.bpmGrid());
     }
 
     void speedHighlights() {
