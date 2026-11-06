@@ -66,6 +66,9 @@ PlayerController::PlayerController(QObject* parent)
     connect(&mediaHead_, &MediaPlayhead::advanced, this, [this](qint64 videoMs) { sendToOutput(videoMs, false); });
     connect(&output_, &PlaybackOutput::outputChanged, this, [this] { mediaHead_.setRate(output_.speed()); });
     connect(&output_, &PlaybackOutput::emergencyStopped, this, [this] { mediaHead_.hold(); });
+    connect(this, &PlayerController::loopChanged, this, &PlayerController::updateMediaLimit);
+    connect(this, &PlayerController::markerChanged, this, &PlayerController::updateMediaLimit);
+    connect(this, &PlayerController::offsetMsChanged, this, &PlayerController::updateMediaLimit);
     // A picked lane that is no longer shown (device changed, script closed)
     // falls back to the stroke.
     connect(this, &PlayerController::lanesChanged, this, [this] {
@@ -1152,14 +1155,17 @@ void PlayerController::setOffsetMs(int ms) {
     }
     emit offsetMsChanged();
     // While the video plays the output stays where the estimate is (no step
-    // back to the last report) and moves on from the next report.
+    // back to the last report) and moves on from the next report. The
+    // change is no report then: it neither feeds the stale watchdog nor
+    // wakes the output (the script clock keeps its path).
     mediaHead_.hold();
-    movePlayhead(videoMs_, mediaHead_.playing() ? mediaHead_.estimate() : videoMs_);
+    const bool video = mediaHead_.playing();
+    movePlayhead(videoMs_, video ? mediaHead_.estimate() : videoMs_, !video);
 }
 
-void PlayerController::setVideoPositionMs(qint64 videoMs) { movePlayhead(videoMs, videoMs); }
+void PlayerController::setVideoPositionMs(qint64 videoMs) { movePlayhead(videoMs, videoMs, true); }
 
-void PlayerController::movePlayhead(qint64 videoMs, qint64 outputVideoMs) {
+void PlayerController::movePlayhead(qint64 videoMs, qint64 outputVideoMs, bool fromReport) {
     videoMs_ = videoMs;
     const qint64 ph = stroke_.empty() ? -1 : samn::script_time(videoMs, offsetMs_);
     if (ph != playheadMs_) {
@@ -1169,7 +1175,7 @@ void PlayerController::movePlayhead(qint64 videoMs, qint64 outputVideoMs) {
     for (const auto& c : curves_)
         if (c) c->setPlayheadMs(playheadMs_);
     if (heatmap_) heatmap_->setPlayheadMs(playheadMs_);
-    sendToOutput(outputVideoMs, true);
+    sendToOutput(outputVideoMs, fromReport);
     checkAutoExtendedO(ph);
 }
 
@@ -1177,8 +1183,15 @@ void PlayerController::reportMediaPosition(qint64 videoMs) {
     const qint64 out = mediaHead_.report(videoMs);
     // At the loop end the page jumps back right after this call: nothing
     // is estimated past the end until the jump's report.
-    if (mediaHead_.playing() && loopJumpFor(videoMs) >= 0) mediaHead_.hold();
-    movePlayhead(videoMs, out);
+    if (mediaHead_.playing() && loopJumpFor(videoMs) >= 0) mediaHead_.seek();
+    movePlayhead(videoMs, out, true);
+}
+
+void PlayerController::holdMediaPlayhead() { mediaHead_.seek(); }
+
+void PlayerController::updateMediaLimit() {
+    // The ms before the loop end in video time: only a report reaches it.
+    mediaHead_.setLimitMs(loopActive() ? std::max<qint64>(0, marker_.end_ms + offsetMs_ - 1) : -1);
 }
 
 void PlayerController::sendToOutput(qint64 videoMs, bool fromReport) {

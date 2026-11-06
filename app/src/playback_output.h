@@ -27,8 +27,8 @@ class DeviceController;
 // The Player reports the playhead (script time): the script clock every
 // 16 ms; with a video every media position report (every 100 ms with Qt
 // 6.4's FFmpeg backend, 50 ms with 6.7) and, between two reports, the
-// position MediaPlayhead estimates every 16 ms (at most its cap, 20-150 ms,
-// ahead of the last report). Each position sends:
+// position MediaPlayhead estimates every 16 ms (at most max(40 ms, cap x
+// rate) of video ahead of the last report). Each position sends:
 //  - vibration and suction at the playhead (the mapped curves, 0-100) times
 //    the channel level and the master intensity, or 0 when the channel is
 //    switched off;

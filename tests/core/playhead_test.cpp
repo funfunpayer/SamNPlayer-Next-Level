@@ -1,5 +1,6 @@
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 
@@ -125,11 +126,13 @@ TEST_CASE("playhead: a stall (no report for 300 ms) stops at the cap") {
     h.SetRate(2.0, 800);
     h.Report(1700, 800);
     CHECK(h.Estimate(1100) == 1700 + 240);
-    // The media clock comes back: the estimate follows the report again.
-    // It reports 1800: 140 ms behind the estimate is beyond the tolerance,
-    // so the estimate goes back to what the viewer sees.
+    // The media clock comes back at 1800: 140 ms behind the estimate is
+    // within cap x rate (240 ms), so the estimate holds (no step back) until
+    // the video has caught up ...
     h.Report(1800, 1100);
-    CHECK(h.Estimate(1100) == 1800);
+    CHECK(h.Estimate(1100) == 1940);
+    CHECK(h.Estimate(1150) == 1940);
+    // ... and then follows the reports again.
     h.Report(1950, 1150);
     CHECK(h.Estimate(1160) == 1970);
 }
@@ -159,9 +162,9 @@ TEST_CASE("playhead: a report far behind or far ahead is a seek") {
     PlayheadExtrapolator h;
     h.SetPlaying(true);
     for (int i = 0; i <= 4; ++i) h.Report(5000 + i * 100, i * 100);
-    // 60 ms behind is beyond the tolerance: taken as it is.
-    h.Report(5340, 400);
-    CHECK(h.Estimate(400) == 5340);
+    // 150 ms behind is beyond cap x rate (120 ms): taken as it is.
+    h.Report(5250, 400);
+    CHECK(h.Estimate(400) == 5250);
     // A seek back (the loop jump to the marked range's start).
     h.Report(1000, 450);
     CHECK(h.Estimate(450) == 1000);
@@ -183,7 +186,7 @@ TEST_CASE("playhead: a loop jump repeats cleanly") {
     for (int i = 0; i < 40; ++i, now += 100) {
         h.Report(pos, now);
         if (pos >= 1500) {
-            h.Hold(now);  // the player is about to jump
+            h.Seek(now);  // the player is about to jump
             CHECK(h.Estimate(now + 50) == pos);
             pos = 1000;
             h.Report(pos, now + 1);
@@ -247,4 +250,93 @@ TEST_CASE("playhead: noisy reports never move the estimate backwards and it stay
         if (now >= 100) worst = std::max(worst, std::abs(double(e - now)));
     }
     CHECK(worst <= 30);
+}
+
+TEST_CASE("playhead: a report up to cap x rate behind holds the estimate, so no move is sent again") {
+    // A tick at 1056 sent the move to the action after 1050; the media clock
+    // then reports 1040 at 1100 (60 ms behind the estimate, no jump).
+    PlayheadExtrapolator h;
+    h.SetPlaying(true);
+    for (int i = 0; i <= 10; ++i) h.Report(i * 100, i * 100);
+    CHECK(h.Estimate(1056) == 1056);
+    h.Report(1040, 1100);
+    CHECK(h.Estimate(1100) == 1100);  // not back to 1040 (the action at 1050 stays passed)
+    CHECK(h.Estimate(1159) == 1100);  // held until the video catches up (1040 + 60)
+    CHECK(h.Estimate(1170) == 1110);
+    // At rate 4 the window is 4 x 120 ms: 60 ms behind holds as well.
+    PlayheadExtrapolator r;
+    r.SetRate(4.0, 0);
+    r.SetPlaying(true);
+    for (int i = 0; i <= 10; ++i) r.Report(i * 400, i * 100);
+    CHECK(r.Estimate(1100) == 4400);
+    r.Report(4340, 1100);
+    CHECK(r.Estimate(1100) == 4400);
+}
+
+TEST_CASE("playhead: further behind than max(cap x rate, 40 ms) is a seek") {
+    PlayheadExtrapolator h;
+    h.SetPlaying(true);
+    for (int i = 0; i <= 10; ++i) h.Report(i * 100, i * 100);
+    REQUIRE(h.CapMs() == 120);
+    h.Report(979, 1100);  // 121 ms behind
+    CHECK(h.Estimate(1100) == 979);
+    // 10 ms reports: the cap is 20 ms, the window still 40 ms.
+    PlayheadExtrapolator f;
+    f.SetPlaying(true);
+    for (int i = 0; i <= 20; ++i) f.Report(i * 10, i * 10);
+    REQUIRE(f.CapMs() == 20);
+    f.Report(170, 210);  // 40 ms behind: held
+    CHECK(f.Estimate(210) == 210);
+    f.Report(100, 230);  // 110 ms behind: a seek
+    CHECK(f.Estimate(230) == 100);
+}
+
+TEST_CASE("playhead: Seek() takes the next report as it is, also a little behind") {
+    PlayheadExtrapolator h;
+    h.SetPlaying(true);
+    for (int i = 0; i <= 4; ++i) h.Report(i * 100, i * 100);
+    h.Seek(450);  // the page seeks 30 ms back (to 420)
+    CHECK(!h.Advancing(455));
+    CHECK(h.Estimate(455) == 450);
+    h.Report(420, 460);
+    CHECK(h.Estimate(460) == 420);
+    CHECK(h.Estimate(500) == 460);
+    // Only the next report: the one after it holds a step back again.
+    h.Report(480, 540);
+    CHECK(h.Estimate(560) == 500);
+    h.Report(470, 560);
+    CHECK(h.Estimate(560) == 500);
+    CHECK(h.CapMs() == 120);  // the seek report gave no interval
+}
+
+TEST_CASE("playhead: never more than max(cap x rate, 40 ms) ahead of the latest report") {
+    for (const double rate : {0.5, 1.0, 2.0}) {
+        PlayheadExtrapolator h;
+        h.SetRate(rate, 0);
+        h.SetPlaying(true);
+        double video = 0;
+        int64_t next = 0, last = -1;
+        for (int64_t now = 0, k = 0; now < 20000; ++now) {
+            video += rate;
+            bool reported = false;
+            if (now == next) {
+                // Hiccups: every 7th report 60 ms behind in position, every
+                // 11th after the media clock lost 250 ms.
+                if (k % 11 == 5) video -= 250 * rate;
+                const int64_t pos = int64_t(video) - (k % 7 == 3 ? 60 : 0);
+                const int64_t est = h.Estimate(now);
+                h.Report(pos, now);
+                const int64_t window = std::max<int64_t>(40, std::llround(double(h.CapMs()) * rate));
+                // Backwards only for a report further behind than the window.
+                if (h.Estimate(now) < est) CHECK(est - pos > window);
+                reported = true;
+                ++k;
+                next = now + 100 + (k % 3);
+            }
+            const int64_t e = h.Estimate(now);
+            CHECK(e - h.last_report_ms() <= std::max<int64_t>(40, std::llround(double(h.CapMs()) * rate)));
+            if (last >= 0 && !reported) CHECK(e >= last);
+            last = e;
+        }
+    }
 }

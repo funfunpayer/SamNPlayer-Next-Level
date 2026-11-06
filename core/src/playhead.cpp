@@ -39,6 +39,8 @@ void PlayheadExtrapolator::Freeze(int64_t pos_ms) {
 }
 
 void PlayheadExtrapolator::Report(int64_t pos_ms, int64_t now_ms) {
+    const bool seek = seek_pending_;
+    seek_pending_ = false;
     if (!playing_) {
         report_pos_ = pos_ms;
         report_at_ = now_ms;
@@ -54,20 +56,22 @@ void PlayheadExtrapolator::Report(int64_t pos_ms, int64_t now_ms) {
         const int64_t dt = now_ms - report_at_;
         const double expected = double(report_pos_) + double(dt) * rate_;
         jump = std::abs(double(pos_ms) - expected) > double(o_.jump_ms);
-        if (in_run_ && !jump && dt > 0) {
+        if (in_run_ && !jump && !seek && dt > 0) {
             intervals_.push_back(dt);
             while (intervals_.size() > o_.history) intervals_.pop_front();
         }
     }
-    // A little behind: the estimate holds where it is until the report has
-    // caught up. Further behind, or ahead: the report as it is.
-    has_floor_ = pos_ms < est && est - pos_ms <= o_.back_tolerance_ms;
+    // Behind by no more than the window: the estimate holds where it is
+    // until the report has caught up (no step back, so a move already sent
+    // is not sent again). Further behind, ahead, or the report of a seek:
+    // the report as it is.
+    has_floor_ = !seek && pos_ms < est && est - pos_ms <= HoldWindowMs();
     floor_ = est;
     report_pos_ = pos_ms;
     report_at_ = now_ms;
     have_report_ = true;
     live_ = true;
-    in_run_ = !jump;
+    in_run_ = !jump && !seek;
 }
 
 void PlayheadExtrapolator::SetPlaying(bool playing) {
@@ -77,6 +81,15 @@ void PlayheadExtrapolator::SetPlaying(bool playing) {
 }
 
 void PlayheadExtrapolator::Hold(int64_t now_ms) { Freeze(Estimate(now_ms)); }
+
+void PlayheadExtrapolator::Seek(int64_t now_ms) {
+    Hold(now_ms);
+    seek_pending_ = true;
+}
+
+int64_t PlayheadExtrapolator::HoldWindowMs() const {
+    return std::max(o_.back_tolerance_ms, int64_t(std::llround(double(CapMs()) * rate_)));
+}
 
 void PlayheadExtrapolator::SetRate(double rate, int64_t now_ms) {
     if (!(rate > 0) || !std::isfinite(rate) || rate == rate_) return;
@@ -88,6 +101,7 @@ void PlayheadExtrapolator::Clear() {
     have_report_ = false;
     report_pos_ = report_at_ = 0;
     Freeze(0);
+    seek_pending_ = false;
     intervals_.clear();
 }
 

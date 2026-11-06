@@ -483,7 +483,7 @@ struct Results {
     std::vector<double> tickInterval, tickJitter, updateUs, staleness;
     std::map<std::string, std::vector<double>> pipeline, lateness, shift, startLag, endErr, durErr, squeeze, sendInterval,
         effSpeed;
-    std::map<std::string, int> skipped, missing, found, limited;
+    std::map<std::string, int> skipped, missing, found, limited, extra;
 };
 
 const Tick* FirstTickAtOrAfter(const std::vector<Tick>& ticks, int64_t scriptMs) {
@@ -555,6 +555,12 @@ void AnalyzeStroke(const std::string& ch, const std::vector<samn::Action>& acts,
             continue;
         }
         ++r.found[ch];
+        // Until the move to the next action is due, nothing else may go out on
+        // this channel: a second write is the same move again or a reversal.
+        const Tick* nextMove = FirstTickAtOrAfter(ticks, acts[i].at);
+        const int64_t moveEndNs = nextMove ? nextMove->ns : ticks.back().ns + 1;
+        for (const Rec& x : recs)
+            if (x.ch == ch && x.ns > hit->ns && x.ns < moveEndNs) ++r.extra[ch];
         r.pipeline[ch].push_back((hit->ns - t->ns) / 1e6);
         r.startLag[ch].push_back((hit->ns - map.IdealNs(acts[i - 1].at)) / 1e6);
         r.endErr[ch].push_back((hit->ns + hit->dur * 1e6 - map.IdealNs(acts[i].at)) / 1e6);
@@ -615,7 +621,8 @@ void PrintResults(const std::string& name, const Results& r, bool clockTicks) {
         };
         const std::string note = "found " + std::to_string(count(r.found)) + ", no report inside " +
                                  std::to_string(count(r.skipped)) + ", not on the wire (coalesced) " +
-                                 std::to_string(count(r.missing));
+                                 std::to_string(count(r.missing)) +
+                                 (r.startLag.count(ch) ? ", extra sends within a move " + std::to_string(count(r.extra)) : "");
         Row(name, ch + " report -> wire", v, note);
         if (r.lateness.count(ch)) Row(name, ch + " wire - due", r.lateness.at(ch));
         if (r.startLag.count(ch)) Row(name, ch + " move start - due", r.startLag.at(ch));

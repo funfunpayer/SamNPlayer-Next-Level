@@ -274,12 +274,17 @@ Item {
             seekTo(0)
         }
     }
-    function seekBy(ms) { player.position = Math.max(0, Math.min(player.duration, player.position + ms)) }
+    // A seek of the video first freezes the device's playhead estimate,
+    // which then takes the seek's position report as it is.
+    function seekBy(ms) {
+        if (!scriptOnly) ctrl.holdMediaPlayhead()
+        player.position = Math.max(0, Math.min(player.duration, player.position + ms))
+    }
     function seekTo(ms) {
         if (ms < 0) return
         if (scriptOnly) clock.position = ms
         else if (media.duration <= 0 || media.mediaStatus === MediaPlayer.LoadingMedia) media.pendingSeekMs = ms
-        else media.position = Math.max(0, Math.min(media.duration, ms))
+        else { ctrl.holdMediaPlayhead(); media.position = Math.max(0, Math.min(media.duration, ms)) }
     }
     function showTip(item, x, y, text) {
         if (text === "") { chartTip.visible = false; return }

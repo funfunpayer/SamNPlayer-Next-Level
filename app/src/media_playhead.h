@@ -16,8 +16,9 @@ namespace samn::ui {
 // and it never moves the estimate further than the cap after the last
 // report, so it never keeps the output alive on its own: when the reports
 // stop, the ticks stop too (and PlaybackOutput's stale watchdog only counts
-// reports). The device runs at most the cap (20-150 ms of wall time, see
-// samn/playhead.h) ahead of the last position the player reported.
+// reports). The estimate is never more than max(40 ms, cap x rate) of video
+// (the hold window of samn/playhead.h; the cap is 20-150 ms) ahead of the
+// last position the player reported.
 class MediaPlayhead : public QObject {
     Q_OBJECT
 public:
@@ -35,13 +36,22 @@ public:
     // The play rate; a change holds the estimate until the next report.
     void setRate(double rate);
     double rate() const { return head_.rate(); }
-    // Freezes the estimate until the next report (a seek the page is about
-    // to make, an offset change, the emergency stop).
+    // Freezes the estimate until the next report (an offset change, the
+    // emergency stop); a report a little behind then holds it.
     void hold();
+    // The page is about to seek (a seek, a scrub, a jump key, the loop
+    // jump): frozen too, and the seek's report is taken as it is.
+    void seek();
+    // Tests: how many seeks the page announced.
+    int seekCount() const { return seeks_; }
     // A new video: the report interval is measured again.
     void clear();
     // The video's length (0 = unknown): the estimate never passes it.
     void setDurationMs(qint64 ms) { durationMs_ = ms; }
+    // The last video ms the estimate may reach (-1 = none): with the loop on,
+    // the ms before its end, so only a report reaches the end (and makes the
+    // page jump back).
+    void setLimitMs(qint64 ms) { limitMs_ = ms; }
     qint64 estimate() const;
     qint64 capMs() const { return head_.CapMs(); }
 
@@ -66,6 +76,8 @@ private:
     QTimer timer_;
     bool timerOn_ = true;
     qint64 durationMs_ = 0;
+    qint64 limitMs_ = -1;
+    int seeks_ = 0;
     qint64 lastSent_ = -1;
 };
 

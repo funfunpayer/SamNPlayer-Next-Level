@@ -206,6 +206,9 @@ public:
     // reports; while the video plays, the output gets the position
     // estimated between the reports (MediaPlayhead).
     Q_INVOKABLE void reportMediaPosition(qint64 videoMs);
+    // The page is about to seek the video (a seek, a scrub, a jump key):
+    // the estimate freezes and takes the seek's report as it is.
+    Q_INVOKABLE void holdMediaPlayhead();
     // Where the player should seek to (video time): the marked range's start
     // once its end is reached while the loop is on, else -1.
     Q_INVOKABLE qint64 loopJumpFor(qint64 videoMs) const;
@@ -453,8 +456,11 @@ private:
     void setFailure(const QString& e);
     void checkAutoExtendedO(qint64 playheadMs);
     // The curves at videoMs, the output at outputVideoMs (the estimate while
-    // the video plays), then the auto Extended-O check.
-    void movePlayhead(qint64 videoMs, qint64 outputVideoMs);
+    // the video plays; fromReport: a position report, see
+    // PlaybackOutput::update), then the auto Extended-O check.
+    void movePlayhead(qint64 videoMs, qint64 outputVideoMs, bool fromReport);
+    // The video playhead's limit: the loop end while the loop is on.
+    void updateMediaLimit();
     void sendToOutput(qint64 videoMs, bool fromReport);
     void setView(samn::ViewWindow v);
     void clearScript();

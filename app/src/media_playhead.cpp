@@ -14,8 +14,10 @@ MediaPlayhead::MediaPlayhead(QObject* parent) : QObject(parent) {
 }
 
 qint64 MediaPlayhead::clampToVideo(qint64 videoMs, qint64 atLeast) const {
-    if (durationMs_ <= 0) return videoMs;
-    return std::min(videoMs, std::max(durationMs_, atLeast));
+    qint64 end = durationMs_ > 0 ? durationMs_ : -1;
+    if (limitMs_ >= 0) end = end < 0 ? limitMs_ : std::min(end, limitMs_);
+    if (end < 0) return videoMs;
+    return std::min(videoMs, std::max(end, atLeast));  // never below the report itself
 }
 
 qint64 MediaPlayhead::report(qint64 videoMs) {
@@ -38,6 +40,11 @@ void MediaPlayhead::setPlaying(bool playing) {
 void MediaPlayhead::setRate(double rate) { head_.SetRate(rate, now()); }
 
 void MediaPlayhead::hold() { head_.Hold(now()); }
+
+void MediaPlayhead::seek() {
+    head_.Seek(now());
+    ++seeks_;
+}
 
 void MediaPlayhead::clear() {
     head_.Clear();
