@@ -71,6 +71,14 @@ struct TrackOptions {
     // own start box. The verified repair (SC-5) seeds every retry with it.
     cv::Mat seed_gray;
     cv::Rect seed_box;
+    // Opt-in hybrid re-acquire (D-139 / FunGen-beat CPU): after CSRT and
+    // appearance memory miss, call ai_propose once for a candidate tip box.
+    // Fail-closed when appearance_memory is on: the candidate must still
+    // match the start look. Off by default → byte-identical Everyday (D-158).
+    bool hybrid_reacquire = false;
+    // Optional AI proposal (BGR frame → tip box). Empty = hybrid does nothing
+    // even when hybrid_reacquire is on (no model loaded).
+    std::function<std::optional<cv::Rect>(const cv::Mat& bgr)> ai_propose;
     // Checked every frame; true stops the run (Result::canceled).
     std::function<bool()> cancel;
     // About every 1 % of frames: (done, total); total 0 when unknown.

@@ -23,6 +23,8 @@ struct QueueSettings {
     bool overwrite = false;  // otherwise a video that has a script is skipped
     std::filesystem::path track_cache_dir;  // empty = no tracking cache
     double max_analysis_fps = 0;            // 0 = every frame (FR-7)
+    bool hybrid_reacquire = false;
+    std::function<std::optional<cv::Rect>(const cv::Mat& bgr)> ai_propose;
     // Contact vibration and the tip class; contact areas are marked per
     // video, so the queue has none.
     bool contact_vibration = false;

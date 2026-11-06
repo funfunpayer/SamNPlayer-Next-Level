@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 6 Nov 2026, Claude, branch `claude/samn2-playhead`: the video playhead is extrapolated between the media position reports (Owner decision D-164, recommendation 1 of `TIMING.md`; handover below), merged with `main` up to #165; review fixes of PR #163 (no step back of the estimate, page seeks, loop end, offset change). Before: `claude/samn2-timing-audit` (the device path's end-to-end timing measured, no behaviour changed, #159).
+**Last update:** 6 Nov 2026, Claude, branch `claude/samn2-playhead`: the video playhead is extrapolated between the media position reports (Owner decision D-164, recommendation 1 of `TIMING.md`; handover below), merged with `main` up to #167; two review rounds of PR #163 fixed. Before: `cursor/hybrid-reacquire-635a` (opt-in AI tip re-acquire after a CSRT+memory miss, #167).
 
 ## Handover: `claude/samn2-playhead` (5 Nov, video playhead extrapolation)
 
@@ -23,7 +23,16 @@ With a video, `QMediaPlayer` reports its position every 100 ms (Qt 6.4 FFmpeg; 5
 - **Timing audit:** `tests/app/timing_bench.cpp` and `docs/TIMING.md` came from `claude/samn2-timing-audit` (#159, now in `main`); this branch adds the `media raw` scenarios and the squeeze row to the bench, § 7 to `TIMING.md` and changes its § 6 heading.
 - **Not verified:** Windows with Qt 6.7.3 (50 ms reports, cap 60 ms), a real device, the GStreamer backend, a GUI thread that also renders.
 
-## Handover: `cursor/training-channel-caps-635a` (6 Nov, Training output caps)
+## Handover: `cursor/hybrid-reacquire-635a` (6 Nov, hybrid tip re-acquire)
+
+Legal FunGen-beat CPU lever (D-139 / D-158): ONNX only when the classical path already failed.
+
+- **Engine:** `TrackOptions::hybrid_reacquire` + `ai_propose`; after CSRT and appearance miss, one AI box, fail-closed with `MatchesOriginal` when memory is on. Cache key v6 covers the flag.
+- **App:** Advanced → Tracking → *AI re-acquire on tip loss* (`generator.hybrid_reacquire`, default off). Loads `models/student/student.onnx` or `models/nudenet.onnx`; filters by tip class.
+- **Tests:** `track_box_test` hybrid hook unused when off; fires when on with a propose lambda.
+- **Stay off:** Claude #163 playhead.
+
+## Handover: `cursor/training-channel-caps-635a` (6 Nov, Training output caps) — merged #165
 
 V1 Training lever: soft ceilings on what the device receives.
 
