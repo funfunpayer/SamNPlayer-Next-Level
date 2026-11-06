@@ -186,6 +186,8 @@ void TrainingController::load() {
     opts_.peak_intensity = num("training.peak_intensity", 0.8, 0, 1);
     opts_.plateau_fraction = num("training.plateau_fraction", 0.7, 0, 1);
     opts_.progression_per_cycle = num("training.progression_per_cycle", 0.15, 0, 1);
+    max_vibration_ = num("training.max_vibration", 1.0, 0, 1);
+    max_suction_ = num("training.max_suction", 1.0, 0, 1);
     const auto text = [&](const char* key) {
         const auto v = s.get(key, "");
         return v.is_string() ? QString::fromStdString(v.get<std::string>()) : QString();
@@ -452,6 +454,24 @@ void TrainingController::setPlateauFraction(double v) { SAMN_SET(double, opts_.p
 void TrainingController::setProgression(double v) { SAMN_SET(double, opts_.progression_per_cycle, std::clamp(v, 0.0, 1.0), "training.progression_per_cycle", nv); }
 
 #undef SAMN_SET
+
+void TrainingController::setMaxVibration(double v) {
+    const double nv = std::clamp(v, 0.0, 1.0);
+    if (nv == max_vibration_) return;
+    max_vibration_ = nv;
+    save("training.max_vibration", nv);
+    emit formChanged();
+    if (session_) session_->set_output_caps(max_vibration_, max_suction_);
+}
+
+void TrainingController::setMaxSuction(double v) {
+    const double nv = std::clamp(v, 0.0, 1.0);
+    if (nv == max_suction_) return;
+    max_suction_ = nv;
+    save("training.max_suction", nv);
+    emit formChanged();
+    if (session_) session_->set_output_caps(max_vibration_, max_suction_);
+}
 
 // ---------------------------------------------------------------- programs
 
@@ -721,6 +741,7 @@ void TrainingController::beginSession() {
         failStart(QString::fromStdString(err));
         return;
     }
+    session_->set_output_caps(max_vibration_, max_suction_);
     session_->on_levels = [this](double v, double s) {
         const bool moved = std::abs(v - vib_) >= 0.005 || std::abs(s - suc_) >= 0.005 || ((v == 0) != (vib_ == 0)) ||
                            ((s == 0) != (suc_ == 0));

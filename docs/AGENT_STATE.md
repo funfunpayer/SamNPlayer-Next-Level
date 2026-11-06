@@ -2,9 +2,19 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 6 Nov 2026, Cursor, branch `cursor/gen-curve-layout-635a`: Generator video/curves stage + FR-7 analysis-rate Expert control (handover below). Idle Flow #162 merged. Claude is on `claude/samn2-playhead` (#163) — stay off playhead/playback_output.
+**Last update:** 6 Nov 2026, Cursor, branch `cursor/training-channel-caps-635a`: Training Max Vibration / Max Suction caps (handover below). Gen-curve #164 and idle Flow #162 merged. Claude is on `claude/samn2-playhead` (#163) — stay off playhead/playback_output.
 
-## Handover: `cursor/gen-curve-layout-635a` (6 Nov, Generator stage + CPU)
+## Handover: `cursor/training-channel-caps-635a` (6 Nov, Training output caps)
+
+V1 Training lever: soft ceilings on what the device receives.
+
+- **Core:** `Session::set_output_caps(max_vib, max_suc)` clamps in `write()` (default 1 = unchanged).
+- **UI:** Session Settings *Max vibration* / *Max suction* (`training.max_vibration` / `training.max_suction`, default 1 = “off”). Visible when the channel is available; can change mid-session.
+- **Tests:** `training_test` clamps peak 1.0 → 0.5; controller remembers both caps.
+- **Still open Training:** skip phase; Auto Cool Down; Pause on Limit. Categories already ship.
+- **Stay off:** Claude #163 playhead.
+
+## Handover: `cursor/gen-curve-layout-635a` (6 Nov, Generator stage + CPU) — merged #164
 
 Million-dollar Generator layout chunk + a legal FunGen-beat CPU lever (no ONNX copy).
 

@@ -382,6 +382,8 @@ const texts = {
     "training.hold-ms": "Hold duration at peak (ms). Default 3000. Training feel only.",
     // src/training.js:331 (Peak intensity)
     "training.peak-intensity": "Peak level for each cycle (0–1). Default 0.8. Training feel only — Create CSRT unchanged.",
+    "training.max-vibration": "Ceiling on vibration sent to the device (0–1). 1 = off (no cap). Soft safety for Training only — does not change Create.",
+    "training.max-suction": "Ceiling on suction sent to the device (0–1). 1 = off (no cap). Soft safety for Training only — does not change Create.",
     // src/training.js:336 (Plateau fraction)
     "training.plateau-fraction": "How high the plateau sits relative to peak (edging technique). Default 0.7. Training feel only.",
     // src/training.js:341 (Progression per cycle)
