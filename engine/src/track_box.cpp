@@ -300,6 +300,21 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
         if (tracker) tracker->Init(frame.bgr, found);
         return tracker != nullptr;
     };
+    // Hybrid (opt-in): one AI proposal after CSRT + appearance miss. Fail-closed
+    // against the start look when memory is on (D-139).
+    auto try_hybrid = [&]() -> std::optional<cv::Rect> {
+        if (!opts.hybrid_reacquire || !opts.ai_propose) return std::nullopt;
+        auto r = opts.ai_propose(frame.bgr);
+        if (!r || r->width < 8 || r->height < 8) return std::nullopt;
+        r->x = std::clamp(r->x, 0, std::max(0, frame.bgr.cols - r->width));
+        r->y = std::clamp(r->y, 0, std::max(0, frame.bgr.rows - r->height));
+        if (memory) {
+            const auto score = memory->MatchesOriginal(gray, *r);
+            if (!score || *score < AppearanceMemory::kMinScore) return std::nullopt;
+        }
+        if (!reanchor(*r)) return std::nullopt;
+        return r;
+    };
 
     int idx = 1, valid = 1;
     while (reader->Read(frame)) {
@@ -328,6 +343,11 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
                     found = r;
                     reanchored = true;
                 }
+            if (!found)
+                if (auto r = try_hybrid()) {
+                    found = r;
+                    reanchored = true;
+                }
         } else {
             found = tracker->Update(frame.bgr);
             if (found) {
@@ -341,6 +361,11 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
             }
             if (!found && memory)
                 if (auto r = memory->Reacquire(gray); r && reanchor(*r)) {
+                    found = r;
+                    reanchored = true;
+                }
+            if (!found)
+                if (auto r = try_hybrid()) {
                     found = r;
                     reanchored = true;
                 }

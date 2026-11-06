@@ -71,6 +71,9 @@ class GeneratorController : public QObject {
     Q_PROPERTY(bool gapHandling READ gapHandling WRITE setGapHandling NOTIFY optionsChanged)
     Q_PROPERTY(bool outlierRejection READ outlierRejection WRITE setOutlierRejection NOTIFY optionsChanged)
     Q_PROPERTY(bool trackCache READ trackCache WRITE setTrackCache NOTIFY optionsChanged)
+    // Opt-in hybrid tip re-acquire: ONNX only after CSRT + appearance miss
+    // (D-139; off = Everyday). Needs a student or NudeNet model on disk.
+    Q_PROPERTY(bool hybridReacquire READ hybridReacquire WRITE setHybridReacquire NOTIFY optionsChanged)
     // Cap tracking decode rate (0 = every frame). Opt-in CPU saver; same
     // engine knob the compare manifest already had (GENERATOR_SPEC FR-7).
     Q_PROPERTY(int maxAnalysisFps READ maxAnalysisFps WRITE setMaxAnalysisFps NOTIFY optionsChanged)
@@ -212,6 +215,8 @@ public:
     void setOutlierRejection(bool v);
     bool trackCache() const { return track_cache_; }
     void setTrackCache(bool v);
+    bool hybridReacquire() const { return hybrid_reacquire_; }
+    void setHybridReacquire(bool v);
     int maxAnalysisFps() const { return max_analysis_fps_; }
     void setMaxAnalysisFps(int v);
     double editorShare() const { return editor_share_; }
@@ -389,6 +394,7 @@ private:
     double rdp_tolerance_ = 0;
     int max_speed_ = 0;
     bool gap_handling_ = true, outlier_rejection_ = true, track_cache_ = false;
+    bool hybrid_reacquire_ = false;
     int max_analysis_fps_ = 0;  // 0 = every frame (byte-identical default)
     double editor_share_ = 0.40;
     bool auto_tip_ = true;

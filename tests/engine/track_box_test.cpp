@@ -495,6 +495,36 @@ TEST_CASE("parts: scene cut on a new background, none on small motion") {
     CHECK(IsSceneCut(gb, gc));
 }
 
+TEST_CASE("track: hybrid AI propose is unused while off, and called after a miss when on") {
+    TempDir dir;
+    const fs::path cut = dir.path / "cut.mp4";
+    REQUIRE(clips::WriteHardCut(cut, 6, 50, 80.0));
+    int calls = 0;
+    TrackOptions off = Plain();
+    off.scene_cuts = true;  // cut path empties `found` without CSRT update
+    off.hybrid_reacquire = false;
+    off.ai_propose = [&](const cv::Mat&) {
+        ++calls;
+        return cv::Rect(100, 40, 80, 100);
+    };
+    (void)Track(cut, off);
+    CHECK(calls == 0);
+
+    calls = 0;
+    TrackOptions on = Plain();
+    on.scene_cuts = true;
+    on.hybrid_reacquire = true;
+    on.ai_propose = [&](const cv::Mat& bgr) {
+        ++calls;
+        return cv::Rect(bgr.cols / 2 - 40, bgr.rows / 2 - 50, 80, 100);
+    };
+    std::string error;
+    auto r = TrackBox(cut, kRoi, on, &error);
+    REQUIRE_MESSAGE(r, error);
+    // After the hard cut, CSRT is not updated and memory is off → hybrid fires.
+    CHECK(calls >= 1);
+}
+
 TEST_CASE("parts: the adaptive cut test ignores steady fast motion, finds the real cut") {
     // A small, high-contrast picture panning fast: every frame differs a lot,
     // so 0.7's fixed threshold calls each one a cut (the Owner clip at

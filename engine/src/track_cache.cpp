@@ -67,6 +67,7 @@ std::string TrackCacheKey(const std::filesystem::path& video, const cv::Rect& bo
                         {"camera_compensation", o.camera_compensation},
                         {"scene_cuts", o.scene_cuts},
                         {"appearance_memory", o.appearance_memory},
+                        {"hybrid_reacquire", o.hybrid_reacquire},
                         {"axis", static_cast<int>(o.axis)},
                         {"partner_fixed", o.partner_fixed},
                         {"distance_stroke", o.distance_stroke},

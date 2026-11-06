@@ -2,9 +2,18 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 6 Nov 2026, Cursor, branch `cursor/training-channel-caps-635a`: Training Max Vibration / Max Suction caps (handover below). Gen-curve #164 and idle Flow #162 merged. Claude is on `claude/samn2-playhead` (#163) — stay off playhead/playback_output.
+**Last update:** 6 Nov 2026, Cursor, branch `cursor/hybrid-reacquire-635a`: opt-in AI tip re-acquire after CSRT+memory miss (handover below). Training caps #165, gen-curve #164, idle Flow #162 merged. Claude is on `claude/samn2-playhead` (#163) — stay off playhead/playback_output.
 
-## Handover: `cursor/training-channel-caps-635a` (6 Nov, Training output caps)
+## Handover: `cursor/hybrid-reacquire-635a` (6 Nov, hybrid tip re-acquire)
+
+Legal FunGen-beat CPU lever (D-139 / D-158): ONNX only when the classical path already failed.
+
+- **Engine:** `TrackOptions::hybrid_reacquire` + `ai_propose`; after CSRT and appearance miss, one AI box, fail-closed with `MatchesOriginal` when memory is on. Cache key v6 covers the flag.
+- **App:** Advanced → Tracking → *AI re-acquire on tip loss* (`generator.hybrid_reacquire`, default off). Loads `models/student/student.onnx` or `models/nudenet.onnx`; filters by tip class.
+- **Tests:** `track_box_test` hybrid hook unused when off; fires when on with a propose lambda.
+- **Stay off:** Claude #163 playhead.
+
+## Handover: `cursor/training-channel-caps-635a` (6 Nov, Training output caps) — merged #165
 
 V1 Training lever: soft ceilings on what the device receives.
 
