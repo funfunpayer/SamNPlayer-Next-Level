@@ -22,7 +22,8 @@
 //    after the report's own interval, the window from before a Hold() (so a
 //    rate decrease keeps the old rate's window), and, while the last report
 //    held the estimate on a floor, that report's window. `HoldWindowMs()` is
-//    the window the next report gets.
+//    a lower bound of the window the next report gets (a new report interval
+//    can only make it larger).
 //  - No step back unless a report is more than the window behind the
 //    estimate (which, apart from a rate change, means the media clock
 //    itself went backwards) or follows a seek (Seek()); pausing returns to
@@ -37,7 +38,9 @@
 //    the estimate where it is until the next report, which then follows the
 //    rules above. Seek() (the player is about to jump: a seek of the page, a
 //    loop jump) freezes it too, and takes the next report as it is if it
-//    comes within the cap (a seek without a report expires).
+//    comes within the cap. A seek that gives no report expires after the cap;
+//    that only helps when the reports have stalled: a timer report that comes
+//    within the cap is still taken as it is.
 #include <cstddef>
 #include <cstdint>
 #include <deque>
@@ -71,7 +74,8 @@ public:
     void Hold(int64_t now_ms);
     // The player is about to jump: Hold(), and the next report is taken as
     // it is, also when it is only a little behind, if it comes within the
-    // cap; later, the seek has expired (it gave no report).
+    // cap; later, the seek has expired (it gave no report; a timer report
+    // within the cap is still taken as it is).
     void Seek(int64_t now_ms);
     // A new video: everything is forgotten, the report interval too.
     void Clear();
