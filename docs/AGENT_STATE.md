@@ -2,9 +2,21 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 5 Nov 2026, Cursor, branch `cursor/idle-flow-stage-635a`: Feel-without-film Flow idle graphic restored (Owner GUI leftover §11). Before: Claude timing audit (#159), MT-Debug (#160), driver registry (#161).
+**Last update:** 6 Nov 2026, Cursor, branch `cursor/gen-curve-layout-635a`: Generator video/curves stage + FR-7 analysis-rate Expert control (handover below). Idle Flow #162 merged. Claude is on `claude/samn2-playhead` (#163) — stay off playhead/playback_output.
 
-## Handover: `cursor/idle-flow-stage-635a` (5 Nov, Feel without film Flow stage)
+## Handover: `cursor/gen-curve-layout-635a` (6 Nov, Generator stage + CPU)
+
+Million-dollar Generator layout chunk + a legal FunGen-beat CPU lever (no ONNX copy).
+
+- **GUI:** `GeneratorPage` centre column is a vertical stage (`stageSplit` ColumnLayout + drag handle — Controls `SplitView` collapsed the curves pane under the async Loader): video and curves get explicit heights from a remembered share (`generator.editor_share`, 0.18–0.65, default 0.40). Empty state keeps curves ≤20% so the tip box still has room.
+- **CPU / recognition:** Expert *Tracking analysis rate* wires `GenerateRequest.max_analysis_fps` / queue (`generator.max_analysis_fps`, 0 = every frame, else 5–60 step 5). Engine already had FR-7; compare manifest kept. Help `gen-analysis-fps`.
+- **Docs:** VERSIONS track-cache row marked covered; new plan row for confidence-gated hybrid track (light every frame, AI only on loss / low confidence). GENERATOR_SPEC note updated.
+- **Tests:** `generator_controller_test` remembers analysis fps + editor share; `generator_qml_test` finds `stageSplit`.
+- **Owner asks (Training algorithms — not in this PR):** which to add first among (a) multi-phase custom builder beyond Stop-Start/Plateau, (b) Endurance/Control/Edge categories + skip phase, (c) per-channel caps / Auto Cool Down / Pause on Limit, (d) something else? Classic Stop-Start + Plateau + wave/massage presets already ship.
+- **Next recognition beat (not this PR):** confidence-gated hybrid re-acquire — CSRT/light path every frame, wake student ONNX only when CSRT confidence drops / appearance fails / periodic semantic check; keep *Reuse the tracking* for post-feel re-runs.
+- **Stay off:** Claude #163 playhead files.
+
+## Handover: `cursor/idle-flow-stage-635a` (5 Nov, Feel without film Flow stage) — merged #162
 
 Owner GUI leftover: idle ribbon / Flow idle graphic (PARITY §11, D-138). Empty home stays Play + Open only.
 

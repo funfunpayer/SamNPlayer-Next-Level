@@ -417,7 +417,7 @@ private slots:
         }
     }
 
-    // G4b Expert: smooth / spacing / prominence / RDP / max-speed remembered with steps.
+    // G4b Expert: smooth / spacing / prominence / RDP / max-speed / analysis-fps remembered with steps.
     void expertKnobChoicesAreRemembered() {
         {
             GeneratorController g;
@@ -426,6 +426,8 @@ private slots:
             QCOMPARE(g.peakProminence(), 0.0);
             QCOMPARE(g.rdpTolerance(), 0.0);
             QCOMPARE(g.maxSpeed(), 0);
+            QCOMPARE(g.maxAnalysisFps(), 0);
+            QCOMPARE(g.editorShare(), 0.40);
             g.setSmoothWindow(20);  // even → 19
             QCOMPARE(g.smoothWindow(), 19);
             g.setMinPeakDistanceMs(157);  // → 150
@@ -437,6 +439,12 @@ private slots:
             QCOMPARE(g.rdpTolerance(), 1.0);
             g.setMaxSpeed(175);  // → 150
             QCOMPARE(g.maxSpeed(), 150);
+            g.setMaxAnalysisFps(17);  // → 15
+            QCOMPARE(g.maxAnalysisFps(), 15);
+            g.setEditorShare(0.55);
+            QCOMPARE(g.editorShare(), 0.55);
+            g.setEditorShare(0.9);  // clamp
+            QCOMPARE(g.editorShare(), 0.65);
         }
         const samn::Settings s;
         QCOMPARE(s.get("generator.smooth_window").get<int>(), 19);
@@ -444,6 +452,8 @@ private slots:
         QCOMPARE(s.get("generator.peak_prominence").get<double>(), 0.35);
         QCOMPARE(s.get("generator.rdp_tolerance").get<double>(), 1.0);
         QCOMPARE(s.get("generator.max_speed").get<int>(), 150);
+        QCOMPARE(s.get("generator.max_analysis_fps").get<int>(), 15);
+        QCOMPARE(s.get("generator.editor_share").get<double>(), 0.65);
         {
             GeneratorController g;
             QCOMPARE(g.smoothWindow(), 19);
@@ -451,12 +461,16 @@ private slots:
             QCOMPARE(g.peakProminence(), 0.35);
             QCOMPARE(g.rdpTolerance(), 1.0);
             QCOMPARE(g.maxSpeed(), 150);
+            QCOMPARE(g.maxAnalysisFps(), 15);
+            QCOMPARE(g.editorShare(), 0.65);
             // Restore Everyday defaults for later tests.
             g.setSmoothWindow(11);
             g.setMinPeakDistanceMs(150);
             g.setPeakProminence(0);
             g.setRdpTolerance(0);
             g.setMaxSpeed(0);
+            g.setMaxAnalysisFps(0);
+            g.setEditorShare(0.40);
         }
     }
 
