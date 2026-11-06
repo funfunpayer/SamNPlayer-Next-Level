@@ -53,7 +53,8 @@ Functions use PascalCase and struct fields use snake_case.
 | `motion_fidelity.h` | Motion Fidelity: how well a script follows a reference (rhythm, phase, amplitude, lag window) | 0.7 `funscript/phase.go` | ✅ |
 | `script_quality.h` | Script Doctor: jitter, jumps, gaps and device limits from the points alone | 0.7 `script_quality.go`, `device_compat.go` | ✅ |
 | `ozone.h` | O-zone suggestions for the primary O-marker | 0.7 `funscript/ozone.go` | ✅ |
-| `phase_rules.h` | Phase suggestions from picture, loudness and tempo, without a model; always unconfirmed | D-157 | ✅ |
+| `intensity_arc.h` | `ComputeArc`: the clip's intensity (motion against its busy level plus loudness) at a 4 s detail and a 20 s arc scale, where the intro ends and up to three climaxes with prominence and confidence; no model, no FFT, deterministic | D-165 | ✅ `intensity_arc_test.cpp`; bench `tests/bench/phase_bench.cpp` |
+| `phase_rules.h` | Phase suggestions (empty, intro, climaxes, cool-down) from the picture and the intensity arc, without a model; always unconfirmed | D-157, D-165 | ✅ |
 | `polarity.h` | Which way is up: a hint after Create, never applied alone | 0.7 `funscript/polarity.go` | ✅ |
 | `scenes.h` | Chapter scenes: feel names, proposals from `<clip>.scene.json`, suggested feel | 0.7 `app_feel.go`, `scene_proposals.go` | ✅ |
 | `simplify.h` | Ramer-Douglas-Peucker on a (time, position) curve, iterative | 0.7 `motionx.Simplify` | ✅ |
@@ -80,6 +81,8 @@ Functions use PascalCase and struct fields use snake_case.
 2. A `ModeDescriptor` (id, title, icon from `qml/icons`, hue, optional tooltip and shortcut, `page` = the file name) passed to `ModeRegistry::instance().registerMode(...)`, at start or later. An empty shortcut means Ctrl+<position>.
 3. A mode hidden by a switch: `setVisible(id, bool)`; it loses its tab, key and page. `Main.qml` follows the current mode by id: other modes coming and going keep it shown; if it is hidden, removed or disabled the shell returns to the Player.
 4. Tests: `tests/app/mode_registry_test.cpp` (registry) and `registeredModeGetsTabKeyAndPage` in `shell_qml_test.cpp` (tab, key, page).
+
+**Intro and climaxes (D-165):** `SuggestPhases` finds empty stretches itself and takes the intro end and the climaxes from `ComputeArc`. The intro is a two-segment mean change point in the first 40 % of the clip, placed where the action stays above the midpoint for 5 s (moved back to the rise's start after a build-up); climaxes are the arc's local maxima anywhere after the intro, ranked by prominence within 30 s times a lateness prior 0.7 + 0.3 t/T, plus up to two at half the primary's prominence and 20 s apart. On 175 synthetic clips with known truth the climax hits went from 75 to 167 and the intro hits from 150 to 175 at the same CPU cost ([`benchmarks/INTENSITY_ARC_2026-11-06.md`](benchmarks/INTENSITY_ARC_2026-11-06.md)). `tests/bench/phase_bench` (built with the tests, not in ctest) keeps the old rules for the comparison.
 
 **Open cleanups:**
 - `script_finder`/`settings`/`playback` use snake_case function names; rename them to PascalCase.

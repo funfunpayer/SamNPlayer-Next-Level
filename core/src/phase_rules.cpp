@@ -1,34 +1,22 @@
 #include "samn/phase_rules.h"
 
 #include <algorithm>
-#include <cmath>
+
+#include "samn/intensity_arc.h"
 
 namespace samn {
 
 namespace {
 
-double Percentile(std::vector<double> v, double q) {
-    if (v.empty()) return 0;
-    const size_t k = std::min(v.size() - 1, size_t(std::floor(q * double(v.size() - 1) + 0.5)));
-    std::nth_element(v.begin(), v.begin() + std::ptrdiff_t(k), v.end());
-    return v[k];
-}
+// A cool-down is clearly calmer than what came before it.
+constexpr double kCalmer = 0.8;
 
-// A centred moving average over `window` steps.
-std::vector<double> Smooth(const std::vector<double>& v, size_t window) {
-    if (v.empty() || window <= 1) return v;
-    std::vector<double> out(v.size());
-    const size_t half = window / 2;
-    for (size_t i = 0; i < v.size(); ++i) {
-        const size_t a = i >= half ? i - half : 0, b = std::min(v.size(), i + half + 1);
-        double sum = 0;
-        for (size_t j = a; j < b; ++j) sum += v[j];
-        out[i] = sum / double(b - a);
-    }
-    return out;
+// The mean of v[a, b).
+double Mean(const std::vector<double>& v, size_t a, size_t b) {
+    double sum = 0;
+    for (size_t i = a; i < b; ++i) sum += v[i];
+    return b > a ? sum / double(b - a) : 0;
 }
-
-LabelPhase Suggestion(int64_t a, int64_t b, const char* name) { return {a, b, name, false, "rules"}; }
 
 }  // namespace
 
@@ -37,113 +25,90 @@ std::vector<LabelPhase> SuggestPhases(const PhaseSignals& s, const PhaseRuleOpti
     if (n == 0 || s.step_ms <= 0) return {};
     const auto steps = [&](int64_t ms) { return std::max<size_t>(1, size_t((ms + s.step_ms - 1) / s.step_ms)); };
     const auto at = [&](size_t i) { return int64_t(i) * s.step_ms; };
+    const auto index = [&](int64_t ms) { return std::min(n, size_t(std::max<int64_t>(0, ms) / s.step_ms)); };
     const bool has_sound = s.loudness.size() >= n;
-    const bool has_tempo = s.tempo.size() >= n;
 
     // Empty pictures: dark, or still and silent.
-    std::vector<bool> empty(n);
-    for (size_t i = 0; i < n; ++i)
-        empty[i] = s.luma[i] < o.dark_luma ||
-                   (s.motion[i] < o.still_motion && (!has_sound || s.loudness[i] < 0.05));
+    std::vector<bool> in_empty(n, false);
     std::vector<std::pair<size_t, size_t>> empty_runs;
+    const auto empty = [&](size_t i) {
+        return s.luma[i] < o.dark_luma || (s.motion[i] < o.still_motion && (!has_sound || s.loudness[i] < 0.05));
+    };
     for (size_t i = 0; i < n;) {
-        if (!empty[i]) { ++i; continue; }
+        if (!empty(i)) {
+            ++i;
+            continue;
+        }
         size_t j = i;
-        while (j < n && empty[j]) ++j;
-        if (j - i >= steps(o.min_empty_ms)) empty_runs.push_back({i, j});
+        while (j < n && empty(j)) ++j;
+        if (j - i >= steps(o.min_empty_ms)) {
+            empty_runs.push_back({i, j});
+            std::fill(in_empty.begin() + std::ptrdiff_t(i), in_empty.begin() + std::ptrdiff_t(j), true);
+        }
         i = j;
     }
-    std::vector<bool> in_empty(n, false);
-    for (const auto& [a, b] : empty_runs)
-        for (size_t i = a; i < b; ++i) in_empty[i] = true;
-
-    // Activity: the motion against the clip's own busy level, with the
-    // script's tempo when there is one.
-    std::vector<double> active_motion;
-    for (size_t i = 0; i < n; ++i)
-        if (!in_empty[i]) active_motion.push_back(s.motion[i]);
-    const double motion_top = std::max(1e-6, Percentile(active_motion, 0.9));
-    std::vector<double> activity(n);
-    for (size_t i = 0; i < n; ++i) {
-        const double m = std::min(1.0, s.motion[i] / motion_top);
-        activity[i] = has_tempo ? 0.5 * m + 0.5 * std::clamp(s.tempo[i], 0.0, 1.0) : m;
-    }
-    activity = Smooth(activity, steps(4000));
-
-    std::vector<double> busy_values;
-    for (size_t i = 0; i < n; ++i)
-        if (!in_empty[i]) busy_values.push_back(activity[i]);
-    if (busy_values.empty()) {
-        std::vector<LabelPhase> out;
-        for (const auto& [a, b] : empty_runs) out.push_back(Suggestion(at(a), at(b), "empty"));
-        return out;
-    }
-    const double threshold = o.active_share * Percentile(busy_values, 0.9);
-
     LabelProject p;  // SetPhase keeps the stretches apart and sorted
-    // Intro: from the first picture until the action stays steady.
+    const auto add_empty = [&] {
+        for (const auto& [a, b] : empty_runs) p.SetPhase(at(a), at(b), "empty", false, "rules");
+        return p.phases;
+    };
+    if (std::all_of(in_empty.begin(), in_empty.end(), [](bool e) { return e; })) return add_empty();
+
+    PhaseSignals clip;  // the arc sees the stretch the picture covers
+    clip.step_ms = s.step_ms;
+    clip.motion.assign(s.motion.begin(), s.motion.begin() + std::ptrdiff_t(n));
+    if (has_sound) clip.loudness.assign(s.loudness.begin(), s.loudness.begin() + std::ptrdiff_t(n));
+    ArcOptions ao;
+    ao.steady_ms = o.steady_ms;
+    ao.min_gain = o.climax_gain;
+    const IntensityArc arc = ComputeArc(clip, ao);
+
+    // Intro: from the first picture until the action begins.
     size_t first = 0;
     while (first < n && in_empty[first]) ++first;
-    size_t action = n, run = 0;
-    for (size_t i = first; i < n; ++i) {
-        run = (!in_empty[i] && activity[i] >= threshold) ? run + 1 : 0;
-        if (run >= steps(o.steady_ms)) {
-            action = i + 1 - run;
-            break;
-        }
-    }
-    if (action < n && action > first && at(action) - at(first) >= o.min_intro_ms)
+    size_t action = std::max(first, index(arc.intro_end_ms));
+    if (action > first && at(action) - at(first) >= o.min_intro_ms)
         p.SetPhase(at(first), at(action), "intro", false, "rules");
-    if (action >= n) action = first;
-
-    // Climax: where action and sound peak together in the second half.
-    std::vector<double> intensity = Smooth(activity, steps(10000));
-    if (has_sound) {
-        const auto loud = Smooth(std::vector<double>(s.loudness.begin(), s.loudness.begin() + std::ptrdiff_t(n)), steps(10000));
-        for (size_t i = 0; i < n; ++i) intensity[i] = 0.6 * intensity[i] + 0.4 * std::clamp(loud[i], 0.0, 1.0);
-    }
+    else
+        action = first;
     size_t last = n;
     while (last > action && in_empty[last - 1]) --last;
-    std::vector<double> active_intensity;
-    for (size_t i = action; i < last; ++i)
-        if (!in_empty[i]) active_intensity.push_back(intensity[i]);
-    const size_t search_from = std::max(action, action + (last - action) / 2);
-    size_t peak = n;
-    for (size_t i = search_from; i < last; ++i)
-        if (!in_empty[i] && (peak == n || intensity[i] > intensity[peak])) peak = i;
-    const double median = Percentile(active_intensity, 0.5);
-    if (peak < n && intensity[peak] > 0 && intensity[peak] >= o.climax_gain * median) {
-        const double floor = 0.85 * intensity[peak];
-        size_t a = peak, b = peak + 1;
-        while (a > action && !in_empty[a - 1] && intensity[a - 1] >= floor) --a;
-        while (b < last && !in_empty[b] && intensity[b] >= floor) ++b;
-        // Clamp to a sensible length around the peak.
+
+    // Climaxes: the arc's peaks, each clamped to a sensible length around its top.
+    size_t latest_a = 0, latest_b = 0;
+    for (const auto& peak : arc.peaks) {
+        const size_t top = index(peak.t_ms);
+        if (top < action || top >= last || in_empty[top]) continue;
+        size_t a = std::max(action, index(peak.start_ms)), b = std::clamp(index(peak.end_ms), top + 1, last);
         const size_t lo = steps(o.climax_min_ms), hi = steps(o.climax_max_ms);
         while (b - a < lo && (a > action || b < last)) {
             if (a > action) --a;
             if (b - a < lo && b < last) ++b;
         }
         while (b - a > hi) {
-            if (peak - a > b - peak) ++a;
+            if (top - a > b - top) ++a;
             else --b;
         }
         p.SetPhase(at(a), at(b), "climax", false, "rules");
-
-        // Cool-down: what follows until the next empty stretch, when it is calmer.
-        size_t c = b;
-        while (c < last && !in_empty[c]) ++c;
-        if (at(c) - at(b) >= o.min_cooldown_ms) {
-            double after = 0, during = 0;
-            for (size_t i = b; i < c; ++i) after += activity[i];
-            for (size_t i = a; i < b; ++i) during += activity[i];
-            after /= double(c - b);
-            during /= double(b - a);
-            if (after < 0.8 * during) p.SetPhase(at(b), at(c), "cool-down", false, "rules");
+        if (b > latest_b) {
+            latest_a = a;
+            latest_b = b;
         }
     }
 
-    for (const auto& [a, b] : empty_runs) p.SetPhase(at(a), at(b), "empty", false, "rules");
-    return p.phases;
+    // Cool-down: after the last climax until the next empty stretch, when it is
+    // calmer than the climax and than the action before it (after an early
+    // climax the action often just goes on).
+    if (latest_b > 0) {
+        size_t c = latest_b;
+        while (c < last && !in_empty[c]) ++c;
+        const double after = Mean(arc.detail, latest_b, c), during = Mean(arc.detail, latest_a, latest_b);
+        const bool calmer_than_before = latest_a == action || after < kCalmer * Mean(arc.detail, action, latest_a);
+        if (at(c) - at(latest_b) >= o.min_cooldown_ms && after < kCalmer * during && calmer_than_before)
+            p.SetPhase(at(latest_b), at(c), "cool-down", false, "rules");
+    }
+
+    return add_empty();
 }
 
 int ApplyPhaseSuggestions(LabelProject& p, const std::vector<LabelPhase>& suggestions) {
