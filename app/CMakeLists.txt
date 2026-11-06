@@ -33,6 +33,7 @@ qt_add_qml_module(samn_app
     src/library_controller.h src/library_controller.cpp
     src/icon_provider.h src/icon_provider.cpp
     src/device_controller.h src/device_controller.cpp
+    src/device_worker.h src/device_worker.cpp
     src/training_controller.h src/training_controller.cpp
     src/training_curve_item.h src/training_curve_item.cpp
     src/frame_item.h src/frame_item.cpp

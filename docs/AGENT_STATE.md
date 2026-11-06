@@ -2,7 +2,13 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 5 Nov 2026, Claude, branch `claude/samn2-timing-audit`: the device path's end-to-end timing measured for the first time (`docs/TIMING.md`, bench `tests/app/timing_bench.cpp`); no behaviour changed (handover below). Before: `claude/samn2-tidy` (behaviour-neutral tidy-up, #158).
+**Last update:** 6 Nov 2026, Claude, branch `claude/samn2-device-worker`: `DeviceWorker` moved out of `device_controller.cpp` into `app/src/device_worker.{h,cpp}`, a pure move (handover below). Before: `claude/samn2-timing-audit` (device path timing, no behaviour change).
+
+## Handover: `claude/samn2-device-worker` (6 Nov, D-163: DeviceWorker into its own file, pure move)
+
+- **What moved:** the class `DeviceWorker` (declaration and inline members into `device_worker.h`, the out-of-line members into `device_worker.cpp`, same order, bodies byte-identical) with the constants and helpers only it uses (`kPrefConnectTest`, `kStopBudgetMs`, `kStopGraceMs`, `kNoDevice`, `HintFor`, `Err`). `device_controller.cpp` keeps only `DeviceController`.
+- **Shared in the header:** `kPrefTransport` and `Q()` (now `inline`), both used by the controller too; `namespace dev` alias. No `Q_OBJECT` in the worker, so no moc change. `friend class DeviceWorker` in `device_controller.h` is unchanged.
+- **Checked:** sorted-line comparison old region vs new files (only includes, `#pragma once`, namespace lines and the `inline` on `Q` differ), full build, ctest, `device_controller_test` / `training_controller_test` 3x each. No test edited.
 
 ## Handover: `claude/samn2-timing-audit` (5 Nov, timing audit, measurement only)
 
@@ -411,7 +417,7 @@ Data and file fixes from a read-only bug hunt. Each fix has a test that failed b
 
 ## Next (in order; the work list is `LESSONS.md` § Gaps, `TEST_PARITY.md` and `P3_GENERATOR.md`)
 
-**Kernel (D-163), one theme per PR, after the driver registry:** a ModeRegistry with a `Repeater` in `Main.qml`; a narrow `DeviceService` interface instead of `DeviceController*` in Player, Training and `PlaybackOutput`; `DeviceWorker` into its own file; registries for detectors and teachers.
+**Kernel (D-163), one theme per PR, after the driver registry:** a ModeRegistry with a `Repeater` in `Main.qml`; a narrow `DeviceService` interface instead of `DeviceController*` in Player, Training and `PlaybackOutput`; ~~`DeviceWorker` into its own file~~ (done, `claude/samn2-device-worker`); registries for detectors and teachers.
 
 0. **Generator:** G2 stack ✅ (#114–#116); Tf/Tj distance stroke ✅ (#119); G3 feel ✅; Player partner overlay ✅ (#141); extras multi (`track_multi`) ✅ (#145); G3 feel probe ✅ (#146); G4a Advanced shell ✅ (#147); G4b Expert knobs ✅ (#151, live postprocess probe still open); MT-Debug trajectory overlay ✅ (this PR); next G8 `.sam` / live probe / Quality Doctor.
 1. **Look polish:** ✅ (#122, Claude takeover of Cursor #117; reduced-motion gates and a window-wide loop test added).
