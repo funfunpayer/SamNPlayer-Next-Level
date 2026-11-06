@@ -20,16 +20,23 @@ qint64 MediaPlayhead::clampToVideo(qint64 videoMs, qint64 atLeast) const {
     return std::min(videoMs, std::max(end, atLeast));  // never below the report itself
 }
 
+qint64 MediaPlayhead::bounded(qint64 estimate) const {
+    // The limits (duration, loop end) never take the output below the report
+    // nor below what was already sent, unless the estimate itself went back
+    // (a seek): a limit lowered under the playhead holds it there.
+    qint64 atLeast = head_.last_report_ms();
+    if (lastSent_ >= 0 && estimate >= lastSent_) atLeast = std::max(atLeast, lastSent_);
+    return clampToVideo(estimate, atLeast);
+}
+
 qint64 MediaPlayhead::report(qint64 videoMs) {
     const qint64 n = now();
     head_.Report(videoMs, n);
-    lastSent_ = clampToVideo(head_.Estimate(n), videoMs);
+    lastSent_ = bounded(head_.Estimate(n));
     return lastSent_;
 }
 
-qint64 MediaPlayhead::estimate() const {
-    return clampToVideo(head_.Estimate(now()), head_.last_report_ms());
-}
+qint64 MediaPlayhead::estimate() const { return bounded(head_.Estimate(now())); }
 
 void MediaPlayhead::setPlaying(bool playing) {
     head_.SetPlaying(playing);
@@ -68,7 +75,7 @@ void MediaPlayhead::updateTimer() {
 void MediaPlayhead::tick() {
     const qint64 n = now();
     if (!head_.Advancing(n)) return;  // paused, waiting for a report, or at the cap
-    const qint64 v = clampToVideo(head_.Estimate(n), head_.last_report_ms());
+    const qint64 v = bounded(head_.Estimate(n));
     if (v == lastSent_) return;
     lastSent_ = v;
     emit advanced(v);

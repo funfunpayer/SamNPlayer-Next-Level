@@ -39,7 +39,9 @@ void PlayheadExtrapolator::Freeze(int64_t pos_ms) {
 }
 
 void PlayheadExtrapolator::Report(int64_t pos_ms, int64_t now_ms) {
-    const bool seek = seek_pending_;
+    // The report of a seek comes at once; a seek that gives none (the same
+    // position, a stream that cannot seek) expires after the cap.
+    const bool seek = seek_pending_ && now_ms - seek_at_ <= CapMs();
     seek_pending_ = false;
     if (!playing_) {
         report_pos_ = pos_ms;
@@ -49,6 +51,9 @@ void PlayheadExtrapolator::Report(int64_t pos_ms, int64_t now_ms) {
         return;
     }
     const int64_t est = have_report_ ? Estimate(now_ms) : pos_ms;
+    // The hold window of this report never shrinks inside it: the window in
+    // force before it (see HoldWindowMs) and the one after its new interval.
+    int64_t window = HoldWindowMs();
     // A timer report follows the last one by about the time since it; a
     // seek, a loop jump or a stall in between gives no report interval.
     bool jump = true;
@@ -65,8 +70,11 @@ void PlayheadExtrapolator::Report(int64_t pos_ms, int64_t now_ms) {
     // until the report has caught up (no step back, so a move already sent
     // is not sent again). Further behind, ahead, or the report of a seek:
     // the report as it is.
-    has_floor_ = !seek && pos_ms < est && est - pos_ms <= HoldWindowMs();
+    window = std::max(window, FormulaWindowMs());
+    has_floor_ = !seek && pos_ms < est && est - pos_ms <= window;
     floor_ = est;
+    last_window_ = window;
+    freeze_window_ = 0;
     report_pos_ = pos_ms;
     report_at_ = now_ms;
     have_report_ = true;
@@ -78,17 +86,32 @@ void PlayheadExtrapolator::SetPlaying(bool playing) {
     if (playing == playing_) return;
     playing_ = playing;
     Freeze(report_pos_);  // the last report; it moves again from the next one
+    last_window_ = freeze_window_ = 0;  // no lead left
 }
 
-void PlayheadExtrapolator::Hold(int64_t now_ms) { Freeze(Estimate(now_ms)); }
+void PlayheadExtrapolator::Hold(int64_t now_ms) {
+    const int64_t window = HoldWindowMs();  // before a rate change: at the old rate
+    Freeze(Estimate(now_ms));
+    freeze_window_ = window;
+}
 
 void PlayheadExtrapolator::Seek(int64_t now_ms) {
     Hold(now_ms);
     seek_pending_ = true;
+    seek_at_ = now_ms;
+}
+
+int64_t PlayheadExtrapolator::FormulaWindowMs() const {
+    return std::max(o_.back_tolerance_ms, int64_t(std::llround(double(CapMs()) * rate_)));
 }
 
 int64_t PlayheadExtrapolator::HoldWindowMs() const {
-    return std::max(o_.back_tolerance_ms, int64_t(std::llround(double(CapMs()) * rate_)));
+    int64_t window = FormulaWindowMs();
+    if (!live_)
+        window = std::max(window, freeze_window_);  // from before a Hold() (a rate change: the old rate)
+    else if (has_floor_)
+        window = std::max(window, last_window_);  // the floor of the last report holds
+    return window;
 }
 
 void PlayheadExtrapolator::SetRate(double rate, int64_t now_ms) {
@@ -102,6 +125,7 @@ void PlayheadExtrapolator::Clear() {
     report_pos_ = report_at_ = 0;
     Freeze(0);
     seek_pending_ = false;
+    last_window_ = freeze_window_ = 0;
     intervals_.clear();
 }
 

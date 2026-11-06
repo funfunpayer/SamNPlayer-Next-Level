@@ -16,9 +16,11 @@ namespace samn::ui {
 // and it never moves the estimate further than the cap after the last
 // report, so it never keeps the output alive on its own: when the reports
 // stop, the ticks stop too (and PlaybackOutput's stale watchdog only counts
-// reports). The estimate is never more than max(40 ms, cap x rate) of video
-// (the hold window of samn/playhead.h; the cap is 20-150 ms) ahead of the
-// last position the player reported.
+// reports). The estimate is never more than the hold window (max(40 ms,
+// cap x rate) of video in steady play, see samn/playhead.h; the cap is
+// 20-150 ms) ahead of the last position the player reported, and it never
+// steps back unless a report is more than the window behind or follows a
+// seek; pausing returns to the last report.
 class MediaPlayhead : public QObject {
     Q_OBJECT
 public:
@@ -50,7 +52,7 @@ public:
     void setDurationMs(qint64 ms) { durationMs_ = ms; }
     // The last video ms the estimate may reach (-1 = none): with the loop on,
     // the ms before its end, so only a report reaches the end (and makes the
-    // page jump back).
+    // page jump back). A limit below what was already sent holds there.
     void setLimitMs(qint64 ms) { limitMs_ = ms; }
     qint64 estimate() const;
     qint64 capMs() const { return head_.CapMs(); }
@@ -68,6 +70,7 @@ signals:
 private:
     qint64 now() const { return clock_ ? clock_() : mono_.elapsed(); }
     qint64 clampToVideo(qint64 videoMs, qint64 atLeast) const;
+    qint64 bounded(qint64 estimate) const;
     void updateTimer();
 
     samn::PlayheadExtrapolator head_;

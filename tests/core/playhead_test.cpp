@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <random>
 
 #include "samn/playhead.h"
 
@@ -339,4 +340,148 @@ TEST_CASE("playhead: never more than max(cap x rate, 40 ms) ahead of the latest 
             last = e;
         }
     }
+}
+
+TEST_CASE("playhead: a rate decrease keeps the old hold window until the next report") {
+    // At 4x the estimate is 360 ms past the 4000 report; the play speed goes
+    // to 1x (the window would drop from 480 to 120 ms) and the next report,
+    // 4150, lags the estimate by 210 ms without the media clock going back.
+    PlayheadExtrapolator h;
+    h.SetRate(4.0, 0);
+    h.SetPlaying(true);
+    for (int i = 0; i <= 10; ++i) h.Report(i * 400, i * 100);
+    REQUIRE(h.Estimate(1090) == 4360);
+    REQUIRE(h.HoldWindowMs() == 480);
+    h.SetRate(1.0, 1090);
+    CHECK(h.Estimate(1100) == 4360);
+    h.Report(4150, 1100);
+    CHECK(h.Estimate(1100) == 4360);  // no step back of 210 ms
+    CHECK(h.HoldWindowMs() >= 210);   // the bound covers the lead it keeps
+    CHECK(h.Estimate(1300) == 4360);  // held (the video reaches 4360 at 1310)
+    h.Report(4370, 1320);
+    CHECK(h.Estimate(1320) == 4370);
+}
+
+TEST_CASE("playhead: a new report interval does not shrink the window of the same report") {
+    // 100 ms reports, then 50 ms ones (as after a backend change of pace):
+    // the fifth 50 ms interval turns the median to 50 (cap 60, window 60)
+    // inside the report that is 70 ms behind the estimate.
+    PlayheadExtrapolator g;
+    g.SetPlaying(true);
+    for (int i = 0; i <= 5; ++i) g.Report(i * 100, i * 100);  // 4 intervals of 100
+    for (int i = 1; i <= 4; ++i) g.Report(500 + i * 50, 500 + i * 50);
+    REQUIRE(g.HoldWindowMs() == 120);  // median still 100
+    REQUIRE(g.Estimate(750) == 750);
+    g.Report(680, 750);
+    CHECK(g.CapMs() == 60);
+    CHECK(g.Estimate(750) == 750);  // held with the window from before the interval
+    CHECK(g.HoldWindowMs() >= 70);
+}
+
+TEST_CASE("playhead: a seek without a seek report expires after the cap") {
+    // A seek to the same position (or one the stream cannot do) gives no
+    // report; the next timer report must not count as the seek's.
+    PlayheadExtrapolator h;
+    h.SetPlaying(true);
+    for (int i = 0; i <= 10; ++i) h.Report(i * 100, i * 100);
+    h.Seek(1110);
+    CHECK(h.Estimate(1110) == 1110);
+    h.Report(1095, 1110 + 121);  // later than the cap (120 ms) after the seek, 15 ms behind
+    CHECK(h.Estimate(1231) == 1110);  // the hold rule, not "as it is"
+    // Within the cap it is the seek's report.
+    PlayheadExtrapolator g;
+    g.SetPlaying(true);
+    for (int i = 0; i <= 10; ++i) g.Report(i * 100, i * 100);
+    g.Seek(1050);
+    g.Report(1030, 1060);
+    CHECK(g.Estimate(1060) == 1030);
+}
+
+TEST_CASE("playhead: a stalled clock that keeps reporting one position: the estimate stands") {
+    PlayheadExtrapolator h;
+    h.SetPlaying(true);
+    for (int i = 0; i <= 10; ++i) h.Report(i * 100, i * 100);
+    h.Report(1000, 1100);
+    const int64_t first = h.Estimate(1100);
+    CHECK(first == 1100);
+    for (int t = 1200; t <= 5000; t += 100) {
+        h.Report(1000, t);
+        CHECK(h.Estimate(t + 50) == first);  // never further, never back
+        CHECK(h.Estimate(t + 50) - h.last_report_ms() <= h.HoldWindowMs());
+    }
+}
+
+TEST_CASE("playhead: random play (rates, holds, seeks, jitter, stalls, rewinds) never steps back unless allowed") {
+    // The reviewer's fuzz: a step back is allowed only for a report more than
+    // HoldWindowMs() behind the estimate or right after Seek(); the estimate
+    // is never more than the window ahead of the latest report (after a rate
+    // change, until the next report, the window from before it).
+    long steps_back = 0, too_far_ahead = 0;
+    for (unsigned seed = 1; seed <= 3000; ++seed) {
+        std::mt19937 g(seed);
+        const auto U = [&](int a, int b) { return std::uniform_int_distribution<int>(a, b)(g); };
+        PlayheadExtrapolator h;
+        h.SetPlaying(true);
+        const double rates[] = {0.5, 1, 2, 4};
+        double rate = 1, vid = 0;
+        int64_t now = 0, lastEst = -1, lastRep = 0;
+        int64_t winAtRep = h.HoldWindowMs(), winPrev = winAtRep;
+        bool justRate = false;
+        const int interval = U(0, 1) ? 50 : 100;
+        int64_t nextRep = interval;
+        for (int step = 0; step < 600; ++step) {
+            now += 16;
+            vid += 16 * rate;
+            bool reset = false;
+            const int ev = U(0, 1000);
+            if (ev < 5) {
+                const double r = rates[U(0, 3)];
+                if (r != rate) {
+                    h.SetRate(r, now);
+                    rate = r;
+                    justRate = true;
+                    winPrev = std::max(winPrev, h.HoldWindowMs());
+                }
+            } else if (ev < 8) {
+                h.Hold(now);
+            } else if (ev < 11) {
+                h.Seek(now);
+                vid = std::max(0.0, vid + U(-3000, 3000));
+                h.Report(int64_t(vid), now);
+                lastRep = int64_t(vid);
+                winAtRep = winPrev = h.HoldWindowMs();
+                justRate = false;
+                lastEst = h.Estimate(now);
+                continue;
+            }
+            while (now >= nextRep) {
+                int64_t pos = int64_t(vid) + U(-20, 5);
+                const int st = U(0, 100);
+                if (st < 3) nextRep += U(150, 400);  // a stall: no report for a while
+                if (st == 50) {  // the backend rewinds without a seek
+                    vid = std::max(0.0, vid - U(41, 250));
+                    pos = int64_t(vid);
+                }
+                const int64_t before = h.Estimate(now);
+                const int64_t w = h.HoldWindowMs();
+                h.Report(pos, now);
+                // A step back for a report no further behind than the window
+                // before it (the window shrank inside the report) is not.
+                if (before - pos <= w && h.Estimate(now) < before) ++steps_back;
+                if (before - pos > h.HoldWindowMs()) reset = true;  // allowed
+                lastRep = pos;
+                winPrev = std::max(winAtRep, w);
+                winAtRep = h.HoldWindowMs();
+                justRate = false;
+                nextRep += interval + U(-15, 15);
+            }
+            const int64_t e = h.Estimate(now);
+            if (!reset && lastEst >= 0 && e < lastEst) ++steps_back;
+            const int64_t lim = std::max(winAtRep, justRate ? winPrev : winAtRep);
+            if (e - lastRep > lim) ++too_far_ahead;
+            lastEst = e;
+        }
+    }
+    CHECK(steps_back == 0);
+    CHECK(too_far_ahead == 0);
 }

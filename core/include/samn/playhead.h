@@ -15,24 +15,29 @@
 //    (120 ms until two reports in a row gave an interval). A media clock
 //    that stalls (no report) is overrun by at most the cap, and then the
 //    estimate stands.
-//  - Hold window: `HoldWindowMs()` = max(back_tolerance_ms, cap x rate). A
-//    report behind the estimate by no more than the window holds the
-//    estimate where it is until the reported position has caught up: the
-//    estimate does not step back, so a move the output already sent for a
-//    passed point is not sent again. A report further behind, a report
-//    ahead, and the first report after Seek() are taken as they are; only
-//    then can the estimate go backwards (by more than the window, or by any
-//    amount after Seek()).
-//  - Bound: so the estimate is never more than the window, max(40 ms,
-//    cap x rate) of video, ahead of the latest report (after a rate change,
-//    until the next report, at the old rate).
+//  - Hold window: max(back_tolerance_ms, cap x rate). A report behind the
+//    estimate by no more than the window holds the estimate where it is
+//    until the reported position has caught up. The window of a report
+//    never shrinks inside it: it is the larger of the window before and
+//    after the report's own interval, the window from before a Hold() (so a
+//    rate decrease keeps the old rate's window), and, while the last report
+//    held the estimate on a floor, that report's window. `HoldWindowMs()` is
+//    the window the next report gets.
+//  - No step back unless a report is more than the window behind the
+//    estimate (which, apart from a rate change, means the media clock
+//    itself went backwards) or follows a seek (Seek()); pausing returns to
+//    the last report. A report ahead is taken as it is.
+//  - Bound: the estimate is never more than `HoldWindowMs()` of video ahead
+//    of the latest report (after a rate change, until the next report, the
+//    window from before it).
 //  - Not playing (paused, stopped, at the end) the estimate is the last
 //    report and does not move. After play() it moves only from the first
 //    report on.
 //  - Hold() (an offset change, a rate change, the emergency stop) freezes
 //    the estimate where it is until the next report, which then follows the
 //    rules above. Seek() (the player is about to jump: a seek of the page, a
-//    loop jump) freezes it too, and takes the next report as it is.
+//    loop jump) freezes it too, and takes the next report as it is if it
+//    comes within the cap (a seek without a report expires).
 #include <cstddef>
 #include <cstdint>
 #include <deque>
@@ -65,7 +70,8 @@ public:
     // Freeze the estimate where it is until the next report.
     void Hold(int64_t now_ms);
     // The player is about to jump: Hold(), and the next report is taken as
-    // it is, also when it is only a little behind.
+    // it is, also when it is only a little behind, if it comes within the
+    // cap; later, the seek has expired (it gave no report).
     void Seek(int64_t now_ms);
     // A new video: everything is forgotten, the report interval too.
     void Clear();
@@ -78,8 +84,9 @@ public:
     bool Advancing(int64_t now_ms) const;
     // How long after a report the estimate may advance (wall ms).
     int64_t CapMs() const;
-    // How far (video ms) a report may be behind the estimate and still hold
-    // it: max(back_tolerance_ms, cap x rate).
+    // How far (video ms) the next report may be behind the estimate and
+    // still hold it: max(back_tolerance_ms, cap x rate), or more after a
+    // Hold() or a held report (see above).
     int64_t HoldWindowMs() const;
 
     bool playing() const { return playing_; }
@@ -88,6 +95,7 @@ public:
 
 private:
     void Freeze(int64_t pos_ms);
+    int64_t FormulaWindowMs() const;  // max(back_tolerance_ms, cap x rate)
 
     PlayheadOptions o_;
     bool playing_ = false;
@@ -100,7 +108,10 @@ private:
     int64_t floor_ = 0;        // the estimate holds here until the report catches up
     bool has_floor_ = false;
     bool in_run_ = false;      // the last report and the next one are timer reports in a row
-    bool seek_pending_ = false; // the next report is the one of a seek
+    bool seek_pending_ = false; // the next report is the one of a seek ...
+    int64_t seek_at_ = 0;       // ... if it comes within the cap after this
+    int64_t freeze_window_ = 0; // the window at the last Hold()
+    int64_t last_window_ = 0;   // the window the last report used
     std::deque<int64_t> intervals_;
 };
 

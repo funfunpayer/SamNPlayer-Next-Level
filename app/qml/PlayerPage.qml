@@ -275,16 +275,22 @@ Item {
         }
     }
     // A seek of the video first freezes the device's playhead estimate,
-    // which then takes the seek's position report as it is.
+    // which then takes the seek's position report as it is. A seek to where
+    // the video already is gives no report, so it announces nothing.
     function seekBy(ms) {
-        if (!scriptOnly) ctrl.holdMediaPlayhead()
-        player.position = Math.max(0, Math.min(player.duration, player.position + ms))
+        const to = Math.max(0, Math.min(player.duration, player.position + ms))
+        if (!scriptOnly && to !== player.position) ctrl.holdMediaPlayhead()
+        player.position = to
     }
     function seekTo(ms) {
         if (ms < 0) return
         if (scriptOnly) clock.position = ms
         else if (media.duration <= 0 || media.mediaStatus === MediaPlayer.LoadingMedia) media.pendingSeekMs = ms
-        else { ctrl.holdMediaPlayhead(); media.position = Math.max(0, Math.min(media.duration, ms)) }
+        else {
+            const to = Math.max(0, Math.min(media.duration, ms))
+            if (to !== media.position) ctrl.holdMediaPlayhead()
+            media.position = to
+        }
     }
     function showTip(item, x, y, text) {
         if (text === "") { chartTip.visible = false; return }

@@ -1557,6 +1557,40 @@ private slots:
         p.setMediaPlaying(false);
     }
 
+    // The loop switched on (or its end moved) below where the estimate
+    // already is: the ticks do not step back to the limit.
+    void videoLoopEndBelowThePlayheadDoesNotStepBack() {
+        const QString script = writeScript(files_.path(), "video13.funscript", {{0, 0}, {1050, 100}, {2050, 0}, {3050, 100}});
+        UdpLineSink sink;
+        DeviceController dev;
+        PlayerController p;
+        p.setDevice(&dev);
+        QVERIFY(p.openScript(script));
+        connectStroker(dev, sink);
+        qint64 clk = 0;
+        p.mediaPlayhead()->setClock([&] { return clk; }, false);
+        QSignalSpy moved(p.mediaPlayhead(), &samn::ui::MediaPlayhead::advanced);
+        p.setMediaPlaying(true);
+        for (clk = 0; clk <= 1000; clk += 100) p.reportMediaPosition(clk);
+        QTRY_VERIFY_WITH_TIMEOUT(Lines(sink).contains(Move("L0", 1.0, 1050)), kWait);
+        clk = 1056;
+        p.mediaPlayhead()->tick();
+        QTRY_VERIFY_WITH_TIMEOUT(Lines(sink).contains(Move("L0", 0.0, 994)), kWait);
+        const QStringList sent = Lines(sink);
+        p.setMarker(0, 1000);  // the loop end is now behind the estimate (1056)
+        p.setLoopEnabled(true);
+        QVERIFY(p.loopActive());
+        for (clk = 1072; clk <= 1104; clk += 16) p.mediaPlayhead()->tick();
+        qint64 last = -1;
+        for (const auto& a : moved) {
+            QVERIFY(a.at(0).toLongLong() >= last);  // never back
+            last = a.at(0).toLongLong();
+        }
+        QTest::qWait(200);
+        QCOMPARE(Lines(sink), sent);  // no move back to the 1050 point
+        p.setMediaPlaying(false);
+    }
+
     // An offset change while the video plays is no report: with a stalled
     // media clock the watchdog still stops the device.
     void videoOffsetChangeDoesNotFeedTheWatchdog() {

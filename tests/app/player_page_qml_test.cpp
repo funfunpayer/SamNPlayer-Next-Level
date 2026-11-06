@@ -523,6 +523,12 @@ private:
             QMetaObject::invokeMethod(page, "seekBy", Q_ARG(QVariant, 200));
             QCOMPARE(ctrl->mediaPlayhead()->seekCount(), seeks + 2);
             QTRY_VERIFY_WITH_TIMEOUT(std::abs(media->position() - 1200) <= 150, 5000);
+            // A seek to where the video already is gives no seek report:
+            // nothing is announced.
+            QMetaObject::invokeMethod(page, "seekTo", Q_ARG(QVariant, double(media->position())));
+            QCOMPARE(ctrl->mediaPlayhead()->seekCount(), seeks + 2);
+            QMetaObject::invokeMethod(page, "seekBy", Q_ARG(QVariant, 0));
+            QCOMPARE(ctrl->mediaPlayhead()->seekCount(), seeks + 2);
         }
 
         // A script with contact marks draws them on the picture (0.7 contact
