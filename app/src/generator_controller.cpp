@@ -6,6 +6,7 @@
 #include <QCoreApplication>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QPointer>
@@ -29,6 +30,7 @@
 #include "samn/script_quality.h"
 #include "samn/settings.h"
 #include "samn/vision/frame_reader.h"
+#include "samn/vision/onnx_detector.h"
 
 namespace samn::ui {
 
@@ -42,6 +44,54 @@ QString Clock(double ms) {
 // The values behind the opt-in switches (spec FR-12, FR-13 defaults).
 constexpr double kGapBridgeMs = 500;
 constexpr double kOutlierMadFactor = 5;
+
+// Hybrid tip proposal: student.onnx preferred, else NudeNet if present.
+// Returns empty when ONNX is unavailable or no matching tip-class box.
+std::function<std::optional<cv::Rect>(const cv::Mat&)> MakeHybridPropose(const QString& tipClass) {
+    if (!samn::vision::OnnxDetector::Available()) return {};
+    const auto student = samn::config_dir() / "models" / "student" / "student.onnx";
+    const auto nudenet = samn::config_dir() / "models" / "nudenet.onnx";
+    std::filesystem::path model;
+    bool use_nudenet = false;
+    if (std::filesystem::exists(student))
+        model = student;
+    else if (std::filesystem::exists(nudenet)) {
+        model = nudenet;
+        use_nudenet = true;
+    } else
+        return {};
+    auto det = std::make_shared<samn::vision::OnnxDetector>();
+    std::string err;
+    if (!det->Load(model, &err)) return {};
+    const std::string want = tipClass.toStdString();
+    std::vector<std::string> student_names;
+    if (!use_nudenet) {
+        QFile f(QString::fromStdU16String((samn::config_dir() / "models" / "student" / "classes.json").u16string()));
+        if (f.open(QIODevice::ReadOnly)) {
+            for (const QJsonValue& v : QJsonDocument::fromJson(f.readAll()).object().value("classes").toArray())
+                student_names.push_back(v.toString().toStdString());
+        }
+    }
+    return [det, want, use_nudenet, student_names](const cv::Mat& bgr) -> std::optional<cv::Rect> {
+        std::string why;
+        const auto dets = det->Detect(bgr, 0.25f, &why);
+        if (dets.empty()) return std::nullopt;
+        const auto& nn = samn::vision::NudeNetClasses();
+        for (const auto& d : dets) {
+            std::string label;
+            if (use_nudenet) {
+                if (d.cls >= 0 && size_t(d.cls) < nn.size()) label = samn::vision::NudeNetToLabel(nn[size_t(d.cls)]);
+            } else if (d.cls >= 0 && size_t(d.cls) < student_names.size()) {
+                label = student_names[size_t(d.cls)];
+            }
+            if (label != want && !(want == "glans" && label == "penis") && !(want == "penis" && label == "glans"))
+                continue;
+            return cv::Rect(int(std::lround(d.box.x)), int(std::lround(d.box.y)), int(std::lround(d.box.width)),
+                            int(std::lround(d.box.height)));
+        }
+        return std::nullopt;
+    };
+}
 
 }  // namespace
 
@@ -92,6 +142,7 @@ void GeneratorController::loadSettings() {
         gap_handling_ = flag("generator.gap_handling", gap_handling_);
         outlier_rejection_ = flag("generator.outlier_rejection", outlier_rejection_);
         track_cache_ = flag("generator.track_cache", track_cache_);
+        hybrid_reacquire_ = flag("generator.hybrid_reacquire", hybrid_reacquire_);
         if (const auto v = s.get("generator.max_analysis_fps"); v.is_number()) setMaxAnalysisFps(v.get<int>());
         if (const auto v = s.get("generator.editor_share"); v.is_number()) setEditorShare(v.get<double>());
         contact_vibration_ = flag("generator.contact_vibration", contact_vibration_);
@@ -364,6 +415,8 @@ bool GeneratorController::runQueue(bool overwrite) {
     settings.overwrite = overwrite;
     applySwitches(settings.signal, settings.track_cache_dir);
     settings.max_analysis_fps = max_analysis_fps_;
+    settings.hybrid_reacquire = hybrid_reacquire_;
+    if (hybrid_reacquire_) settings.ai_propose = MakeHybridPropose(tip_class_);
     settings.contact_vibration = contact_vibration_;
     settings.contact_vibration_span = contact_span_;
     settings.contact_vibration_curve = contact_curve_.toStdString();
@@ -576,6 +629,7 @@ SAMN_SETTER(setAutoTip, auto_tip_, "generator.auto_tip")
 SAMN_SETTER(setGapHandling, gap_handling_, "generator.gap_handling")
 SAMN_SETTER(setOutlierRejection, outlier_rejection_, "generator.outlier_rejection")
 SAMN_SETTER(setTrackCache, track_cache_, "generator.track_cache")
+SAMN_SETTER(setHybridReacquire, hybrid_reacquire_, "generator.hybrid_reacquire")
 SAMN_SETTER(setContactVibration, contact_vibration_, "generator.contact_vibration")
 #undef SAMN_SETTER
 
@@ -1109,6 +1163,8 @@ bool GeneratorController::create(bool overwrite) {
     req.overwrite = overwrite;
     applySwitches(req.signal, req.track_cache_dir);
     req.max_analysis_fps = max_analysis_fps_;
+    req.hybrid_reacquire = hybrid_reacquire_;
+    if (hybrid_reacquire_) req.ai_propose = MakeHybridPropose(tip_class_);
     req.auto_ozone = auto_ozone_;
     req.contact_vibration = contact_vibration_;
     req.contact_vibration_span = contact_span_;

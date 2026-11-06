@@ -428,6 +428,7 @@ private slots:
             QCOMPARE(g.maxSpeed(), 0);
             QCOMPARE(g.maxAnalysisFps(), 0);
             QCOMPARE(g.editorShare(), 0.40);
+            QCOMPARE(g.hybridReacquire(), false);
             g.setSmoothWindow(20);  // even → 19
             QCOMPARE(g.smoothWindow(), 19);
             g.setMinPeakDistanceMs(157);  // → 150
@@ -445,6 +446,8 @@ private slots:
             QCOMPARE(g.editorShare(), 0.55);
             g.setEditorShare(0.9);  // clamp
             QCOMPARE(g.editorShare(), 0.65);
+            g.setHybridReacquire(true);
+            QVERIFY(g.hybridReacquire());
         }
         const samn::Settings s;
         QCOMPARE(s.get("generator.smooth_window").get<int>(), 19);
@@ -454,6 +457,7 @@ private slots:
         QCOMPARE(s.get("generator.max_speed").get<int>(), 150);
         QCOMPARE(s.get("generator.max_analysis_fps").get<int>(), 15);
         QCOMPARE(s.get("generator.editor_share").get<double>(), 0.65);
+        QCOMPARE(s.get("generator.hybrid_reacquire").get<bool>(), true);
         {
             GeneratorController g;
             QCOMPARE(g.smoothWindow(), 19);
@@ -463,6 +467,7 @@ private slots:
             QCOMPARE(g.maxSpeed(), 150);
             QCOMPARE(g.maxAnalysisFps(), 15);
             QCOMPARE(g.editorShare(), 0.65);
+            QVERIFY(g.hybridReacquire());
             // Restore Everyday defaults for later tests.
             g.setSmoothWindow(11);
             g.setMinPeakDistanceMs(150);
@@ -471,6 +476,7 @@ private slots:
             g.setMaxSpeed(0);
             g.setMaxAnalysisFps(0);
             g.setEditorShare(0.40);
+            g.setHybridReacquire(false);
         }
     }
 

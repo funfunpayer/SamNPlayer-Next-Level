@@ -10,7 +10,18 @@
 - **Shared in the header:** `kPrefTransport` and `Q()` (now `inline`), both used by the controller too; `namespace dev` alias. No `Q_OBJECT` in the worker, so no moc change. `friend class DeviceWorker` in `device_controller.h` is unchanged.
 - **Checked:** sorted-line comparison old region vs new files (only includes, `#pragma once`, namespace lines and the `inline` on `Q` differ), full build, ctest, `device_controller_test` / `training_controller_test` 3x each. No test edited.
 
-## Handover: `cursor/training-channel-caps-635a` (6 Nov, Training output caps)
+
+
+## Handover: `cursor/hybrid-reacquire-635a` (6 Nov, hybrid tip re-acquire)
+
+Legal FunGen-beat CPU lever (D-139 / D-158): ONNX only when the classical path already failed.
+
+- **Engine:** `TrackOptions::hybrid_reacquire` + `ai_propose`; after CSRT and appearance miss, one AI box, fail-closed with `MatchesOriginal` when memory is on. Cache key v6 covers the flag.
+- **App:** Advanced → Tracking → *AI re-acquire on tip loss* (`generator.hybrid_reacquire`, default off). Loads `models/student/student.onnx` or `models/nudenet.onnx`; filters by tip class.
+- **Tests:** `track_box_test` hybrid hook unused when off; fires when on with a propose lambda.
+- **Stay off:** Claude #163 playhead.
+
+## Handover: `cursor/training-channel-caps-635a` (6 Nov, Training output caps) — merged #165
 
 V1 Training lever: soft ceilings on what the device receives.
 

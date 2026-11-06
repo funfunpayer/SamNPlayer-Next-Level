@@ -21,7 +21,8 @@ namespace samn::engine {
 // 3: the key also covers adaptive_cuts and the seed; record_checks never caches.
 // 4: extras multi-path (TrackOptions::extra_boxes → extra_xs / extra_ys).
 // 5: a Tf/Tj distance stroke takes the smallest gap over partner and extras.
-constexpr int kTrackCacheVersion = 5;
+// 6: hybrid_reacquire (AI proposal after CSRT+memory miss) in the cache key.
+constexpr int kTrackCacheVersion = 6;
 
 // Hex key from the video (size, modification time and the first and last
 // MiB of content), the box and every option that changes the track; empty

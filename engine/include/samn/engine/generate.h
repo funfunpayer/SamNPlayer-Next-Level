@@ -34,6 +34,10 @@ struct GenerateRequest {
     std::filesystem::path track_cache_dir;
     bool camera_compensation = true;
     bool scene_cuts = true;
+    // Opt-in hybrid tip re-acquire (OFF by default). ai_propose may be empty
+    // when no model is loaded — hybrid then does nothing.
+    bool hybrid_reacquire = false;
+    std::function<std::optional<cv::Rect>(const cv::Mat& bgr)> ai_propose;
     TrackAxis axis = TrackAxis::kAuto;
     SignalOptions signal;
     std::optional<StrokeHint> stroke_hint;  // from the stroke preview (P3.6)
