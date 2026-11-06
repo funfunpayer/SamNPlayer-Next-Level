@@ -547,9 +547,12 @@ private slots:
         QVERIFY(c.effectiveBpm() >= 20.0);
         c.setBpmGrid(true);
         QVERIFY(c.beatPeriodMs() > 0);
-        QCOMPARE(c.guessBpmFromStroke(), c.bpm());
+        // Call first: QCOMPARE arg order is unspecified, so bpm() must not
+        // be sampled before guess fills it.
+        const double guessed = c.guessBpmFromStroke();
+        QCOMPARE(guessed, 120.0);
+        QCOMPARE(c.bpm(), guessed);
         QVERIFY(c.bpmGrid());
-        QVERIFY(c.bpm() >= 20.0 && c.bpm() <= 240.0);
         QVERIFY(c.toolNote().contains("BPM from the stroke"));
 
         // Grid preference is remembered.
