@@ -119,12 +119,14 @@ Item {
         buttons: MessageDialog.Ok | MessageDialog.Cancel
         onAccepted: edit.invert()
     }
+    // Cap intensity for the marked-range Speed-cap tool (0.7 default 400).
+    property int capIntensity: 400
     // The range tools, by name (the icon row and the tests call this).
     function rangeTool(name) {
         if (name === "tool_delete") edit.deleteRange()
-        else if (name === "tool_cap") edit.capSpeed(0)
-        else if (name === "tool_softer") edit.scaleRange(0.8, toolsMenu.softEdges)
-        else if (name === "tool_stronger") edit.scaleRange(1.25, toolsMenu.softEdges)
+        else if (name === "tool_cap") edit.capSpeed(page.capIntensity)
+        else if (name === "tool_softer") edit.scaleRange(0.8, softEdges.checked)
+        else if (name === "tool_stronger") edit.scaleRange(1.25, softEdges.checked)
         else if (name === "tool_simplify") edit.simplifyRange(2)
         else if (name === "tool_invert") { if (edit.hasMarker) edit.invert(); else invertAllDialog.open() }
     }
@@ -273,10 +275,17 @@ Item {
     Shortcut { sequence: "Shift+Right"; enabled: page.visible && !page.overlayOpen && gen.hasVideo; onActivated: page.seekBy(1000) }
     Shortcut { sequence: ","; enabled: page.visible && !page.overlayOpen && gen.hasVideo; onActivated: page.seekBy(-40) }
     Shortcut { sequence: "."; enabled: page.visible && !page.overlayOpen && gen.hasVideo; onActivated: page.seekBy(40) }
-    Shortcut { sequences: [StandardKey.Delete, "Backspace"]; enabled: page.visible && !page.overlayOpen && page.selectedMark !== -2; onActivated: page.deleteSelectedMark() }
+    Shortcut {
+        sequences: [StandardKey.Delete, "Backspace"]
+        context: Qt.ApplicationShortcut
+        enabled: page.visible && !page.overlayOpen && page.selectedMark !== -2
+        onActivated: page.deleteSelectedMark()
+    }
     // Esc ends a marking, else drops the selection (0.7 "Mark deselected.").
+    // ApplicationShortcut: still works when a combo/field stole focus (offscreen tests).
     Shortcut {
         sequence: "Esc"
+        context: Qt.ApplicationShortcut
         enabled: page.visible && !page.overlayOpen && (page.selectedMark !== -2 || gen.markContact || gen.markExtra || gen.markIgnore)
         onActivated: {
             if (gen.markContact || gen.markExtra || gen.markIgnore) {
@@ -939,8 +948,8 @@ Item {
                             text: edit.progress > 0 ? qsTr("Cancel · %1 %").arg(edit.progress) : qsTr("Cancel")
                             onClicked: edit.cancelTool()
                         }
-                        // The less frequent tools (whole lanes, sound, beat bar, snap) sit
-                        // in one menu so the lanes keep their height (Owner, 26 Oct).
+                        // Rare extras (+ lane, FPS snap) stay in Tools…; Optimize /
+                        // axes / sound / beat bar sit on the Align bar below.
                         FlowButton {
                             id: toolsButton
                             objectName: "toolsButton"
@@ -952,45 +961,21 @@ Item {
                                 objectName: "toolsMenu"
                                 y: toolsButton.height + 6
                                 x: toolsButton.width - width
-                                width: 400
+                                width: 320
                                 padding: 14
                                 margins: 8  // stays inside the window (moves up when low)
                                 closePolicy: C.Popup.CloseOnEscape | C.Popup.CloseOnPressOutsideParent
-                                property alias softEdges: softEdges.checked
                                 background: Rectangle { color: "#0a1a2e"; border.color: Theme.cardBorder; radius: 14 }
                                 contentItem: ColumnLayout {
                                     spacing: 10
                                     Text {
                                         textFormat: Text.PlainText
-                                        text: qsTr("Whole lanes (one undo step each)")
+                                        text: qsTr("Lanes and drawing")
                                         color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
-                                    }
-                                    // 0.8 "Optimize for" (D-156): fill and heal the stroke for any
-                                    // device, or also write the Sam Neo 2 feel.
-                                    RowLayout {
-                                        spacing: 6
-                                        enabled: edit.hasScript && !edit.busy && !gen.running
-                                        FlowCombo {
-                                            id: optimizeTarget
-                                            objectName: "optimizeTarget"
-                                            Layout.preferredWidth: 140; Layout.preferredHeight: 36
-                                            readonly property var targets: ["general", "neo2"]
-                                            model: [qsTr("Any device"), qsTr("Sam Neo 2")]
-                                        }
-                                        FlowButton {
-                                            objectName: "tool_optimize"
-                                            text: qsTr("Optimize for"); icon: "sliders"
-                                            onClicked: { toolsMenu.close(); edit.optimizeFor(optimizeTarget.targets[optimizeTarget.currentIndex]) }
-                                        }
                                     }
                                     Flow {
                                         Layout.fillWidth: true; spacing: 6
                                         enabled: edit.hasScript && !edit.busy && !gen.running
-                                        FlowButton {
-                                            objectName: "tool_axes"
-                                            text: qsTr("Vibration & suction from the stroke"); icon: "effects"
-                                            onClicked: { toolsMenu.close(); edit.axesFromStroke() }
-                                        }
                                         // 0.7: an empty feel lane starts with the stroke's times at 0.
                                         FlowButton {
                                             objectName: "tool_addVibration"
@@ -1004,38 +989,6 @@ Item {
                                             text: qsTr("+ Suction lane"); icon: "plus"
                                             onClicked: { toolsMenu.close(); edit.addLane("suction") }
                                         }
-                                    }
-                                    RowLayout {
-                                        spacing: 8
-                                        enabled: edit.hasScript && !edit.busy && !gen.running
-                                        FlowButton {
-                                            objectName: "tool_sound"
-                                            text: qsTr("Vibration from the sound"); icon: "audio"
-                                            enabled: gen.hasVideo
-                                            onClicked: { toolsMenu.close(); edit.vibrationFromSound(keepContact.checked) }
-                                        }
-                                        FlowToggle { id: keepContact; objectName: "keepContact"; checked: false }
-                                        Text { textFormat: Text.PlainText; text: qsTr("Keep contact vibration"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
-                                    }
-                                    // Cock Hero / Fap Hero: one stroke per beat of the video's
-                                    // beat bar; works without a script too.
-                                    FlowButton {
-                                        objectName: "tool_beatbar"
-                                        visible: gen.hasVideo
-                                        enabled: !edit.busy && !gen.running
-                                        text: qsTr("Stroke from the beat bar"); icon: "waveform"
-                                        onClicked: { toolsMenu.close(); edit.strokeFromBeatBar() }
-                                    }
-                                    Rectangle { Layout.fillWidth: true; height: 1; color: Theme.cardBorder }
-                                    Text {
-                                        textFormat: Text.PlainText
-                                        text: qsTr("Range tools and drawing")
-                                        color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
-                                    }
-                                    RowLayout {
-                                        spacing: 6
-                                        FlowToggle { id: softEdges; objectName: "softEdges"; checked: true }
-                                        Text { textFormat: Text.PlainText; text: qsTr("Soft edges (Softer / Stronger)"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
                                     }
                                     // FPS snap (0.7 FPS-Snap): new and dragged points land on frame boundaries.
                                     RowLayout {
@@ -1062,8 +1015,61 @@ Item {
                             onClicked: scriptDialog.open()
                         }
                     }
+                    // Align & lanes: Optimize / axes / sound / beat bar without opening Tools…
+                    // (post-Create Adapt row still on the Create card for the handoff).
+                    RowLayout {
+                        id: alignBar
+                        objectName: "alignBar"
+                        Layout.fillWidth: true
+                        spacing: 6
+                        visible: edit.hasScript
+                        enabled: !edit.busy && !gen.running
+                        FlowCombo {
+                            id: optimizeTarget
+                            objectName: "optimizeTarget"
+                            Layout.preferredWidth: 130; Layout.preferredHeight: 34
+                            readonly property var targets: ["general", "neo2"]
+                            model: [qsTr("Any device"), qsTr("Sam Neo 2")]
+                            currentIndex: Math.max(0, targets.indexOf(gen.optimizeTarget !== "" ? gen.optimizeTarget : "general"))
+                        }
+                        FlowButton {
+                            objectName: "tool_optimize"
+                            text: qsTr("Optimize"); icon: "sliders"
+                            onClicked: edit.optimizeFor(optimizeTarget.targets[optimizeTarget.currentIndex])
+                        }
+                        FlowButton {
+                            objectName: "tool_axes"
+                            text: qsTr("Axes from stroke"); icon: "effects"
+                            onClicked: edit.axesFromStroke()
+                        }
+                        FlowButton {
+                            objectName: "tool_sound"
+                            text: qsTr("From sound"); icon: "audio"
+                            enabled: gen.hasVideo
+                            onClicked: edit.vibrationFromSound(keepContact.checked)
+                            HoverHandler { id: soundHover }
+                            ToolTipText { shown: soundHover.hovered; text: qsTr("Write vibration from the video's sound into the script") }
+                        }
+                        FlowToggle {
+                            id: keepContact
+                            objectName: "keepContact"
+                            checked: false
+                            visible: gen.hasVideo
+                            HoverHandler { id: keepHover }
+                            ToolTipText { shown: keepHover.hovered; text: qsTr("Keep contact vibration when writing from sound") }
+                        }
+                        FlowButton {
+                            objectName: "tool_beatbar"
+                            visible: gen.hasVideo
+                            text: qsTr("Beat bar"); icon: "waveform"
+                            onClicked: edit.strokeFromBeatBar()
+                            HoverHandler { id: beatHover }
+                            ToolTipText { shown: beatHover.hovered; text: qsTr("Stroke from the video's beat bar") }
+                        }
+                        Item { Layout.fillWidth: true }
+                    }
                     // Range tools on the lane last touched (0.7 Play edit tools), as
-                    // icons with tooltips; they work on the marked range.
+                    // icons with tooltips; Soft edges and Cap sit beside them.
                     RowLayout {
                         Layout.fillWidth: true; spacing: 4
                         visible: edit.hasScript
@@ -1088,6 +1094,36 @@ Item {
                                 opacity: enabled ? 1 : 0.4
                                 onClicked: page.rangeTool(modelData.key)
                             }
+                        }
+                        FlowToggle {
+                            id: softEdges
+                            objectName: "softEdges"
+                            checked: true
+                            Layout.alignment: Qt.AlignVCenter
+                            HoverHandler { id: softHover }
+                            ToolTipText { shown: softHover.hovered; text: qsTr("Soft edges for Softer / Stronger") }
+                        }
+                        Text {
+                            textFormat: Text.PlainText
+                            text: qsTr("Soft")
+                            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11
+                            Layout.alignment: Qt.AlignVCenter
+                        }
+                        Text {
+                            textFormat: Text.PlainText
+                            text: qsTr("Cap")
+                            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11
+                            Layout.alignment: Qt.AlignVCenter
+                        }
+                        NumField {
+                            id: capField
+                            objectName: "capIntensity"
+                            Layout.preferredWidth: 74
+                            Layout.alignment: Qt.AlignVCenter
+                            label: ""
+                            from: 150; to: 800; decimals: 0
+                            value: page.capIntensity
+                            onEdited: (v) => page.capIntensity = Math.round(v)
                         }
                         Item { Layout.fillWidth: true }
                         Text {

@@ -2,9 +2,9 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 6 Nov 2026, Claude, branch `claude/samn2-playhead`: the video playhead is extrapolated between the media position reports (Owner decision D-164, recommendation 1 of `TIMING.md`; handover below), merged with `main` up to #167 and #166; two review rounds of PR #163 fixed. Before: `claude/samn2-device-worker` (`DeviceWorker` into its own file, a pure move, #166).
+**Last update:** 7 Nov 2026, Cursor, branch `cursor/editor-tools-surface-635a`: Editor Align bar on curves. Playhead extrapolation landed on main from Claude (#163). Stay off intensity-arc (#168) if still open.
 
-## Handover: `claude/samn2-playhead` (5 Nov, video playhead extrapolation)
+## Handover: `claude/samn2-playhead` (5 Nov, video playhead extrapolation) — merged #163
 
 With a video, `QMediaPlayer` reports its position every 100 ms (Qt 6.4 FFmpeg; 50 ms in 6.7), and the output was sampled only at those reports: stroke starts 42 ms late at p50, 90 ms at p99, moves squeezed (`TIMING.md` § 4-5). Now the output follows an estimate between the reports.
 
@@ -31,7 +31,17 @@ With a video, `QMediaPlayer` reports its position every 100 ms (Qt 6.4 FFmpeg; 5
 - **Timing audit:** `tests/app/timing_bench.cpp` and `docs/TIMING.md` came from `claude/samn2-timing-audit` (#159, now in `main`); this branch adds the `media raw` scenarios and the squeeze row to the bench, § 7 to `TIMING.md` and changes its § 6 heading.
 - **Not verified:** Windows with Qt 6.7.3 (50 ms reports, cap 60 ms), a real device, the GStreamer backend, a GUI thread that also renders.
 
-## Handover: `cursor/player-rhythm-timeline-635a` (6 Nov, Player rhythm + timeline)
+## Handover: `cursor/editor-tools-surface-635a` (7 Nov, Editor Align bar)
+
+Owner: Player/Editor GUI — curves, optimize, align. Unbury Tools… for everyday edit.
+
+- **Align bar** on `editorCard` (`alignBar`): Any device / Sam Neo 2 + Optimize, Axes from stroke, From sound (+ keep contact), Beat bar — visible whenever a script is open.
+- **Range row:** Soft edges toggle + Cap intensity (150–800, default 400) beside the icon tools; `rangeTool` uses them.
+- **Tools…** slimmed to + lane and FPS snap.
+- **Tests:** `generator_qml_test` asserts alignBar / capIntensity; axes without opening the menu.
+- **Stay off:** Claude #168 intensity arc (if still open).
+
+## Handover: `cursor/player-rhythm-timeline-635a` (6 Nov, Player rhythm + timeline) — merged #170
 
 Owner: GUI / Player / Editor curves, BPM, optimize & align.
 

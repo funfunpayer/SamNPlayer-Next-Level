@@ -492,25 +492,40 @@ private slots:
         QMetaObject::invokeMethod(ask, "accepted");
         QTRY_COMPARE(edit->property("undoText").toString(), QStringLiteral("Undo: Invert curve"));
 
-        // A create tool writes new lanes, which appear under the stroke; the
-        // "+ … lane" buttons are only there while a lane is missing.
-        // They live in the Tools… menu (Owner, 26 Oct: compact tools).
+        // Align bar: Optimize / axes sit on the curves card (not only in Tools…).
+        QVERIFY(named(root.get(), "alignBar")->isVisible());
+        QVERIFY(named(root.get(), "tool_optimize")->isVisible());
+        QVERIFY(named(root.get(), "tool_axes")->isVisible());
+        QVERIFY(named(root.get(), "softEdges")->isVisible());
+        QVERIFY(named(root.get(), "capIntensity"));
+        QCOMPARE(page->property("capIntensity").toInt(), 400);
+        page->setProperty("capIntensity", 300);
+        QCOMPARE(page->property("capIntensity").toInt(), 300);
+        // Axes from stroke without opening Tools…; "+ … lane" stays in the menu.
+        QMetaObject::invokeMethod(named(root.get(), "tool_axes"), "clicked");
+        QTRY_VERIFY(named(root.get(), "lane_vibration"));
+        QTRY_VERIFY(named(root.get(), "lane_suction"));
         auto* menu = root->findChild<QObject*>("toolsMenu");
         QVERIFY(menu);
         QMetaObject::invokeMethod(named(root.get(), "toolsButton"), "clicked");
         QTRY_VERIFY(menu->property("opened").toBool());
-        QVERIFY(named(root.get(), "tool_addVibration")->isVisible());
-        QVERIFY(named(root.get(), "tool_addSuction")->isVisible());
-        QMetaObject::invokeMethod(named(root.get(), "tool_axes"), "clicked");
-        QTRY_VERIFY(!menu->property("visible").toBool());  // a tool closes the menu
-        QTRY_VERIFY(named(root.get(), "lane_vibration"));
-        QTRY_VERIFY(named(root.get(), "lane_suction"));
-        QMetaObject::invokeMethod(named(root.get(), "toolsButton"), "clicked");
-        QTRY_VERIFY(menu->property("opened").toBool());
-        QTRY_VERIFY(!named(root.get(), "tool_addVibration")->isVisible());
+        QTRY_VERIFY(!named(root.get(), "tool_addVibration")->isVisible());  // lanes already present
         QVERIFY(!named(root.get(), "tool_addSuction")->isVisible());
         QMetaObject::invokeMethod(menu, "close");
         QTRY_VERIFY(!menu->property("visible").toBool());
+        // Still can open Tools… for +lane when a lane is missing: undo axes, then check.
+        QMetaObject::invokeMethod(edit, "undo");
+        QTRY_VERIFY(!named(root.get(), "lane_vibration"));
+        QMetaObject::invokeMethod(named(root.get(), "toolsButton"), "clicked");
+        QTRY_VERIFY(menu->property("opened").toBool());
+        QVERIFY(named(root.get(), "tool_addVibration")->isVisible());
+        QVERIFY(named(root.get(), "tool_addSuction")->isVisible());
+        QMetaObject::invokeMethod(named(root.get(), "tool_addVibration"), "clicked");
+        QTRY_VERIFY(!menu->property("visible").toBool());
+        QTRY_VERIFY(named(root.get(), "lane_vibration"));
+        // Restore both feel lanes for the height / ghost checks below.
+        QMetaObject::invokeMethod(named(root.get(), "tool_axes"), "clicked");
+        QTRY_VERIFY(named(root.get(), "lane_suction"));
         // 0.7 lane height: each feel lane keeps at least 34 px at this window size.
         QTRY_VERIFY(named(root.get(), "lane_vibration")->height() >= 34);
         QVERIFY(named(root.get(), "lane_suction")->height() >= 34);
