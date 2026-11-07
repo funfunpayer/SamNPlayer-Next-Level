@@ -1249,16 +1249,22 @@ Item {
                     }
                 }
                 Item { width: 1; height: 4; visible: heatBar.visible }
-                // Heatmap: click = seek, drag = mark (0.7).
+                // Heatmap: click = seek, drag = mark (0.7). Taller bar (0.5.45)
+                // so mark/align is usable; wheel zooms like the curve lanes.
                 HeatmapItem {
                     id: heatBar
-                    width: parent.width; height: 18
+                    objectName: "heatBar"
+                    width: parent.width; height: 28
                     opacity: 0.9
                     visible: !empty
                     viewStartMs: ctrl.viewStartMs; viewEndMs: ctrl.viewEndMs
                     markerStartMs: dragArea.dragging ? Math.min(dragArea.fromMs, dragArea.toMs) : ctrl.markerStartMs
                     markerEndMs: dragArea.dragging ? Math.max(dragArea.fromMs, dragArea.toMs) : ctrl.markerEndMs
                     Component.onCompleted: ctrl.attachHeatmap(heatBar)
+                    WheelHandler {
+                        acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                        onWheel: (e) => ctrl.zoomAt(e.angleDelta.y > 0 ? 1.25 : 1 / 1.25, point.position.x / heatBar.width)
+                    }
                     MouseArea {
                         id: dragArea
                         anchors.fill: parent
@@ -1396,23 +1402,33 @@ Item {
                     id: bpmRow
                     spacing: 10
                     Text {
+                        objectName: "audioAnalysisBpm"
                         textFormat: Text.PlainText
                         anchors.verticalCenter: parent.verticalCenter
-                        text: ctrl.bpm > 0 ? qsTr("%1 BPM").arg(ctrl.bpm) : qsTr("— BPM")
+                        text: ctrl.effectiveBpm > 0 ? qsTr("%1 BPM").arg(ctrl.effectiveBpm) : qsTr("— BPM")
                         color: Theme.text; font.family: Theme.font; font.pixelSize: 14
                     }
                     FlowTextField {
-                        width: 90; placeholder: qsTr("BPM")
+                        width: 90
+                        placeholder: ctrl.bpm > 0 ? String(ctrl.bpm)
+                                   : ctrl.effectiveBpm > 0 ? qsTr("auto %1").arg(ctrl.effectiveBpm)
+                                                          : qsTr("BPM")
                         onAccepted: ctrl.bpm = parseFloat(text) || 0
                     }
                     FlowButton {
                         text: qsTr("BPM grid"); checked: ctrl.bpmGrid
                         onClicked: ctrl.bpmGrid = !ctrl.bpmGrid
                     }
+                    FlowButton {
+                        objectName: "bpmFromStrokeTab"
+                        text: qsTr("Guess from stroke")
+                        enabled: ctrl.hasScript
+                        onClicked: ctrl.guessBpmFromStroke()
+                    }
                     Text {
                         textFormat: Text.PlainText
                         anchors.verticalCenter: parent.verticalCenter
-                        text: qsTr("Beat detection from the sound comes with the audio tempo port (P3).")
+                        text: qsTr("Blank BPM uses the stroke tempo when the grid is on.")
                         color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
                     }
                 }

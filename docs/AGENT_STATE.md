@@ -31,15 +31,31 @@ With a video, `QMediaPlayer` reports its position every 100 ms (Qt 6.4 FFmpeg; 5
 - **Timing audit:** `tests/app/timing_bench.cpp` and `docs/TIMING.md` came from `claude/samn2-timing-audit` (#159, now in `main`); this branch adds the `media raw` scenarios and the squeeze row to the bench, § 7 to `TIMING.md` and changes its § 6 heading.
 - **Not verified:** Windows with Qt 6.7.3 (50 ms reports, cap 60 ms), a real device, the GStreamer backend, a GUI thread that also renders.
 
+## Handover: `cursor/player-rhythm-timeline-635a` (6 Nov, Player rhythm + timeline)
+
+Owner: GUI / Player / Editor curves, BPM, optimize & align.
+
+- **BPM:** blank field uses stroke-tempo estimate (`effectiveBpm`); *Guess from stroke* fills BPM and turns the grid on; `playback.bpm_grid` remembered. Honest notes (audio detect still later).
+- **Heatmap:** height 18→28; wheel zoom like the curve lanes (`heatBar`).
+- **Tests:** `bpmFromStrokeWhenFieldBlank` (QCOMPARE samples bpm after guess).
+- **Stay off:** Claude playhead / intensity-arc.
+
 ## Handover: `claude/samn2-device-worker` (6 Nov, D-163: DeviceWorker into its own file, pure move)
 
 - **What moved:** the class `DeviceWorker` (declaration and inline members into `device_worker.h`, the out-of-line members into `device_worker.cpp`, same order, bodies byte-identical) with the constants and helpers only it uses (`kPrefConnectTest`, `kStopBudgetMs`, `kStopGraceMs`, `kNoDevice`, `HintFor`, `Err`). `device_controller.cpp` keeps only `DeviceController`.
 - **Shared in the header:** `kPrefTransport` and `Q()` (now `inline`), both used by the controller too; `namespace dev` alias. No `Q_OBJECT` in the worker, so no moc change. `friend class DeviceWorker` in `device_controller.h` is unchanged.
 - **Checked:** sorted-line comparison old region vs new files (only includes, `#pragma once`, namespace lines and the `inline` on `Q` differ), full build, ctest, `device_controller_test` / `training_controller_test` 3x each. No test edited.
 
+## Handover: `cursor/player-adapt-device-635a` (6 Nov, Adapt finished scripts for toys) — merged #169
 
+Owner ask: Player/Editor GUI — convert a finished script (after Create or an existing `.funscript`) for Sam Neo 2 and other toys.
 
-## Handover: `cursor/hybrid-reacquire-635a` (6 Nov, hybrid tip re-acquire)
+- **Player:** Inspector → Playback → *Adapt for device* (`optimizeFor` / `axesFromStroke` on `PlayerController`, rewrite+reload like Bake offset). Targets: Any device · Sam Neo 2 (defaults to Neo 2 when that device is connected). Confirm dialogs before rewrite.
+- **Editor:** Post-Create *Adapt for device* row above *Play in the Player* (`postCreateAdapt`) so the convert path is not buried in Tools….
+- **Tests:** `player_controller_test` optimize/axes; `inspector_qml_test` adapt card.
+- **Stay off:** Claude #163 playhead / #168 intensity arc.
+
+## Handover: `cursor/hybrid-reacquire-635a` (6 Nov, hybrid tip re-acquire) — merged #167
 
 Legal FunGen-beat CPU lever (D-139 / D-158): ONNX only when the classical path already failed.
 

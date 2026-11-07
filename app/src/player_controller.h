@@ -79,9 +79,11 @@ class PlayerController : public QObject {
     // playback.speed_highlight_thresh 150-800, default 400). Display only.
     Q_PROPERTY(bool speedHighlights READ speedHighlights WRITE setSpeedHighlights NOTIFY speedHighlightChanged)
     Q_PROPERTY(double speedHighlightThresh READ speedHighlightThresh WRITE setSpeedHighlightThresh NOTIFY speedHighlightChanged)
-    // Beat grid on the curve: BPM 20-240 (0 = none yet) and on/off.
+    // Beat grid on the curve: BPM 20-240 (0 = none / use script tempo) and on/off.
     Q_PROPERTY(double bpm READ bpm WRITE setBpm NOTIFY bpmChanged)
     Q_PROPERTY(bool bpmGrid READ bpmGrid WRITE setBpmGrid NOTIFY bpmChanged)
+    // Manual BPM when set; else the stroke-tempo estimate (0 if none).
+    Q_PROPERTY(double effectiveBpm READ effectiveBpm NOTIFY bpmChanged)
     Q_PROPERTY(QStringList scriptFolders READ scriptFolders NOTIFY scriptFoldersChanged)
     // 0.7 "Always create right away when a video has no script" (open.autoCreate;
     // here the setting "open.auto_create", default off).
@@ -269,6 +271,12 @@ public:
     // offset goes back to 0. What would land before 0 ms is dropped and
     // counted in the status line.
     Q_INVOKABLE bool bakeOffset();
+    // Adapt a finished script for any device (fill/heal stroke gaps) or for
+    // Sam Neo 2 (also contact recipe + baked vibration/suction). Rewrites the
+    // file(s) and reloads — same core path as the Editor's Optimize for.
+    Q_INVOKABLE QString optimizeFor(const QString& target);
+    // Write Neo vibration & suction lanes from the stroke into the .samn.
+    Q_INVOKABLE bool axesFromStroke();
     // 0.7 ExportScriptHeatmapPNG: "<script>.heatmap.png" beside the script,
     // 960 x 56 with chapter ticks. The path, or "" with lastError.
     Q_INVOKABLE QString exportHeatmapPng();
@@ -340,8 +348,12 @@ public:
     void setBpm(double v);
     bool bpmGrid() const { return bpmGrid_; }
     void setBpmGrid(bool on);
+    double effectiveBpm() const;
     // Beat period for the grid in ms, 0 when off.
     double beatPeriodMs() const;
+    // Fill BPM from the open stroke's peak spacing and turn the grid on.
+    // Returns the BPM set, or 0 with lastError / toolNote when unclear.
+    Q_INVOKABLE double guessBpmFromStroke();
     QStringList scriptFolders() const;
     bool hasMarker() const { return marker_.Valid(); }
     double markerStartMs() const { return double(marker_.start_ms); }
@@ -513,6 +525,7 @@ private:
     qint64 videoMs_ = 0, playheadMs_ = -1;
     samn::RangeMarker marker_;
     double oMarkerIntensity_ = 0.5, bpm_ = 0;
+    double scriptTempoBpm_ = 0;  // from stroke peaks when the script opens
     bool speedHL_ = true;
     double speedHLThresh_ = 400;
     bool bpmGrid_ = false;

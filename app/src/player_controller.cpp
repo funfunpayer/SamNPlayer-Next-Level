@@ -23,6 +23,7 @@
 #include "qt_paths.h"
 #include "samn/fileio.h"
 #include "samn/heatmap_image.h"
+#include "samn/improve.h"
 #include "samn/project.h"
 #include "samn/script_quality.h"
 #include "heatmap_item.h"
@@ -54,6 +55,31 @@ std::vector<samn::Action> laneFrom(const std::vector<samn::Frame>& frames, bool 
     out.reserve(frames.size());
     for (const auto& f : frames) out.push_back({f.at, static_cast<int>(std::lround((suction ? f.suction : f.vibration) * 100))});
     return out;
+}
+
+// Median spacing of stroke peaks → BPM in 20–240 (0 when unclear). Peaks are
+// local maxima at least 55 — quiet baselines do not count as beats.
+double EstimateStrokeBpm(const std::vector<samn::Action>& stroke) {
+    if (stroke.size() < 4) return 0;
+    std::vector<int64_t> peaks;
+    peaks.reserve(stroke.size() / 2);
+    for (size_t i = 1; i + 1 < stroke.size(); ++i) {
+        const int p = stroke[i].pos;
+        if (p < 55) continue;
+        if (p >= stroke[i - 1].pos && p > stroke[i + 1].pos) peaks.push_back(stroke[i].at);
+    }
+    if (peaks.size() < 2) return 0;
+    std::vector<int64_t> gaps;
+    gaps.reserve(peaks.size() - 1);
+    for (size_t i = 1; i < peaks.size(); ++i) {
+        const int64_t g = peaks[i] - peaks[i - 1];
+        if (g >= 250 && g <= 3000) gaps.push_back(g);  // 20–240 BPM
+    }
+    if (gaps.empty()) return 0;
+    std::nth_element(gaps.begin(), gaps.begin() + gaps.size() / 2, gaps.end());
+    const double period = double(gaps[gaps.size() / 2]);
+    if (period <= 0) return 0;
+    return std::clamp(std::round(60000.0 / period), 20.0, 240.0);
 }
 
 }  // namespace
@@ -95,6 +121,7 @@ PlayerController::PlayerController(QObject* parent)
     playlist_.SetAuto(flag("ui.player.playlist.auto", true));
     playlist_.SetRepeat(flag("ui.player.playlist.repeat", false));
     if (flag("ui.player.playlist.shuffle", false)) playlist_.SetShuffle(true, rng_);
+    bpmGrid_ = flag("playback.bpm_grid", false);
 }
 PlayerController::~PlayerController() = default;
 
@@ -583,6 +610,141 @@ bool PlayerController::reloadScript() {
     return openScript(script, video);
 }
 
+QString PlayerController::optimizeFor(const QString& target) {
+    if (scriptPath_.isEmpty() || stroke_.size() < 2) {
+        setError(tr("Open a script with at least 2 stroke points first."));
+        return {};
+    }
+    const bool neo2 = target == QLatin1String("neo2");
+    if (!neo2 && target != QLatin1String("general")) return {};
+
+    namespace fs = std::filesystem;
+    const std::string openedU8 = U8(scriptPath_);
+    const fs::path opened = fs::u8path(openedU8);
+    const bool wasSamn = samn::IsSamnPath(openedU8);
+    const std::string funscriptU8 = wasSamn ? samn::CompanionFunscriptPath(openedU8) : openedU8;
+    const fs::path funscript = fs::u8path(funscriptU8);
+    const fs::path samnPath = fs::u8path(samn::CompanionSamnPath(funscriptU8));
+
+    samn::ImproveOptions o;
+    o.fill_gaps = true;
+    o.heal_tracking_gaps = true;
+    try {
+        o.tracking_gaps = samn::LoadFunscript(funscript).metadata.tracking_gaps;
+    } catch (const std::exception&) {
+    }
+
+    samn::Document doc;
+    try {
+        if (wasSamn || fs::exists(samnPath)) {
+            doc = samn::LoadDocument(wasSamn ? opened : samnPath);
+            if (o.tracking_gaps.empty()) o.tracking_gaps = doc.tracking_gaps;
+        } else {
+            doc = samn::LoadFunscriptFile(funscript);
+        }
+    } catch (const std::exception& e) {
+        setFailure(tr("Optimize failed: %1").arg(FromU8(e.what())));
+        return {};
+    }
+    if (doc.general.size() < 2) doc.general = stroke_;
+
+    const QString label = neo2 ? tr("Optimize for Sam Neo 2") : tr("Optimize for any device");
+    QStringList parts{neo2 ? tr("Neo 2 ready") : tr("Ready for any device")};
+    try {
+        const samn::ImproveResult res = samn::ImproveScript(doc.general, o);
+        const bool strokeChanged = res.points_added > 0 || res.windows_healed > 0 || res.after_count != res.before_count;
+        if (strokeChanged) doc.general = res.actions;
+        if (res.windows_healed > 0) parts << tr("healed %n tracking gap(s)", "", res.windows_healed);
+        if (res.gaps_filled > 0) parts << tr("filled %n gap(s) (+%1 points)", "", res.gaps_filled).arg(res.points_added);
+        else if (!neo2) parts << tr("no gaps to fill");
+        if (res.clear_tracking_gaps) doc.tracking_gaps.clear();
+
+        if (neo2) {
+            doc.ApplyContactRecipe(true, samn::DefaultContactVibrationSpan, "soft");
+            doc.BakeNeoAxes();
+            parts << tr("contact on") << tr("vibration and suction written");
+            if (doc.version == 0) doc.version = samn::SamnCurrentVersion;
+            if (doc.kind.empty()) doc.kind = samn::SamnKind;
+            if (doc.creator.empty()) doc.creator = "SamNPlayer";
+            const char* source = samn::PlaybackAxes;
+            doc.playback_source = source;
+            doc.recipe.playback_source = source;
+            samn::SaveDocument(samnPath, doc);
+            if (fs::exists(funscript)) {
+                samn::PatchActions(funscript, doc.general);
+                if (res.clear_tracking_gaps) samn::PatchMetadataKey(funscript, "tracking_gaps", "null");
+            }
+        } else {
+            // Any device: rewrite the stroke on disk; keep an existing .samn in sync.
+            if (fs::exists(funscript)) {
+                samn::PatchActions(funscript, doc.general);
+                if (res.clear_tracking_gaps) samn::PatchMetadataKey(funscript, "tracking_gaps", "null");
+            }
+            if (wasSamn || fs::exists(samnPath)) {
+                if (doc.version == 0) doc.version = samn::SamnCurrentVersion;
+                if (doc.kind.empty()) doc.kind = samn::SamnKind;
+                samn::SaveDocument(wasSamn ? opened : samnPath, doc);
+            } else if (!fs::exists(funscript)) {
+                // Opened a lone .samn without a companion funscript.
+                samn::SaveDocument(opened, doc);
+            }
+        }
+    } catch (const std::exception& e) {
+        setFailure(tr("%1: %2").arg(label, FromU8(e.what())));
+        return {};
+    }
+
+    const QString reloadPath = neo2 || wasSamn || fs::exists(samnPath) ? FromU8(samnPath.u8string()) : scriptPath_;
+    const QString video = videoPath_;
+    if (!openScript(reloadPath, video)) return {};
+    const QString msg = parts.join(QStringLiteral(" · "));
+    toolNote_ = msg;
+    emit toolNoteChanged();
+    emit scriptEdited(scriptPath_);
+    return msg;
+}
+
+bool PlayerController::axesFromStroke() {
+    if (scriptPath_.isEmpty() || stroke_.size() < 2) {
+        setError(tr("Open a script with at least 2 stroke points first."));
+        return false;
+    }
+    namespace fs = std::filesystem;
+    const std::string openedU8 = U8(scriptPath_);
+    const fs::path opened = fs::u8path(openedU8);
+    const bool wasSamn = samn::IsSamnPath(openedU8);
+    const std::string funscriptU8 = wasSamn ? samn::CompanionFunscriptPath(openedU8) : openedU8;
+    const fs::path funscript = fs::u8path(funscriptU8);
+    const fs::path samnPath = fs::u8path(samn::CompanionSamnPath(funscriptU8));
+
+    try {
+        samn::Document doc;
+        if (wasSamn || fs::exists(samnPath)) {
+            doc = samn::LoadDocument(wasSamn ? opened : samnPath);
+        } else {
+            doc = samn::LoadFunscriptFile(funscript);
+        }
+        if (doc.general.size() < 2) doc.general = stroke_;
+        doc.BakeNeoAxes();
+        if (doc.version == 0) doc.version = samn::SamnCurrentVersion;
+        if (doc.kind.empty()) doc.kind = samn::SamnKind;
+        if (doc.creator.empty()) doc.creator = "SamNPlayer";
+        const char* source = samn::PlaybackAxes;
+        doc.playback_source = source;
+        doc.recipe.playback_source = source;
+        samn::SaveDocument(samnPath, doc);
+    } catch (const std::exception& e) {
+        setFailure(tr("Vibration and suction: %1").arg(FromU8(e.what())));
+        return false;
+    }
+
+    if (!openScript(FromU8(samnPath.u8string()), videoPath_)) return false;
+    toolNote_ = tr("Vibration and suction written from the stroke.");
+    emit toolNoteChanged();
+    emit scriptEdited(scriptPath_);
+    return true;
+}
+
 bool PlayerController::openScript(const QString& pathIn, const QString& videoIn) {
     // A .samn beside a .funscript of the same name wins (as in 0.7).
     const QString path = FromU8(samn::PreferSamnCompanion(U8(toLocalPath(pathIn))));
@@ -647,6 +809,8 @@ bool PlayerController::openScript(const QString& pathIn, const QString& videoIn)
     mapping_.resetContactKnobs(doc.recipe.contact_vibration_span, doc.recipe.contact_vibration_curve);
     opening_ = false;
     stroke_ = std::move(doc.general);
+    scriptTempoBpm_ = EstimateStrokeBpm(stroke_);
+    emit bpmChanged();  // effectiveBpm / auto grid follow the new stroke tempo
     // D-132: a lane the file carries shows without a device.
     vibrationFromScript_ = !doc.vibration.empty();
     suctionFromScript_ = !doc.suction.empty();
@@ -1009,8 +1173,40 @@ void PlayerController::setBpm(double v) {
 void PlayerController::setBpmGrid(bool on) {
     if (on == bpmGrid_) return;
     bpmGrid_ = on;
+    try {
+        settings().set("playback.bpm_grid", on);
+    } catch (const std::exception&) {
+    }
     emit bpmChanged();
     pushMarks();
+}
+
+double PlayerController::effectiveBpm() const { return bpm_ > 0 ? bpm_ : scriptTempoBpm_; }
+
+double PlayerController::beatPeriodMs() const {
+    const double bpm = effectiveBpm();
+    return bpmGrid_ && bpm > 0 ? 60000.0 / bpm : 0.0;
+}
+
+double PlayerController::guessBpmFromStroke() {
+    if (stroke_.size() < 4) {
+        setError(tr("Open a script with a clear stroke first."));
+        return 0;
+    }
+    const double bpm = EstimateStrokeBpm(stroke_);
+    if (bpm <= 0) {
+        toolNote_ = tr("No clear beat in the stroke.");
+        emit toolNoteChanged();
+        setError(tr("No clear beat in the stroke."));
+        return 0;
+    }
+    scriptTempoBpm_ = bpm;
+    setBpm(bpm);
+    setBpmGrid(true);
+    toolNote_ = tr("%1 BPM from the stroke.").arg(int(bpm));
+    emit toolNoteChanged();
+    setError({});
+    return bpm;
 }
 
 bool PlayerController::attachVideo(const QString& pathOrUrl) {
@@ -1082,8 +1278,6 @@ void PlayerController::setUiValue(const QString& key, const QVariant& value) {
     }
 }
 
-double PlayerController::beatPeriodMs() const { return bpmGrid_ && bpm_ > 0 ? 60000.0 / bpm_ : 0.0; }
-
 void PlayerController::clearScript() {
     strength_.clear();
     activeStrength_.clear();
@@ -1103,6 +1297,10 @@ void PlayerController::clearScript() {
     marks_ = {};
     emit marksChanged();
     scriptPath_.clear();
+    if (scriptTempoBpm_ != 0) {
+        scriptTempoBpm_ = 0;
+        emit bpmChanged();
+    }
     playheadMs_ = -1;
     marker_ = {};
     emit markerChanged();
