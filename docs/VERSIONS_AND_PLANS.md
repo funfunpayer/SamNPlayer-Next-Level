@@ -187,7 +187,7 @@ Status: **covered** (where), **missing** (in no SamNPlayer 2 doc), **against** (
 | Learning data contract, grouped hold-out, model registry, rollback | review §6 | N6 | partly: D-029, CAP-08 in ROADMAP; the data contract itself **missing** |
 | Local AI assist (LM Studio / ONNX) behind verifier | ENG-05 | N5 | covered: D-031, D-059 |
 | Neo 2 raw-value profile (G2.2-G2.5) | PRODUCTION_ROADMAP G2 | Owner opens | covered: D-049, ROADMAP Later |
-| Look-ahead / latency compensation, prediction | G2.5; perception backlog P4 | after measured lag | **missing**; the software lag is measured (`TIMING.md`, 5 Nov), the device and radio lag are not |
+| Look-ahead / latency compensation, prediction | G2.5; perception backlog P4 | after measured lag | partly: the software lag is measured (`TIMING.md`, 5 Nov) and the video playhead is extrapolated between the media reports (`TIMING.md` § 7: stroke start 42 -> 5 ms p50, 90 -> 13 ms p99 on Qt 6.4); look-ahead sending and a device / radio latency offset **missing** (the device and radio lag are not measured) |
 | PoseObserver, depth, MT-ID, segmentation layer | G3.4/G3.5; POSE_OBSERVER | Owner clip gates | partly: PoseObserver, depth, ByteTrack in ROADMAP/D-064; segmentation layer ("SAM 3.1" class) **missing** |
 | Perception v1 fusion, Auto-Evaluator, confidence calibration | old ROADMAP "Perception 2.0", SAM_ARCHITECTURE | each needs a go/no-go | **missing** as named items (P3 item 1 is a related idea) |
 | Camera Motion Compensation 2.0 (confidence, geometric models) | old ROADMAP | go/no-go | **missing** |

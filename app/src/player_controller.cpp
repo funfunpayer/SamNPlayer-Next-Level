@@ -87,6 +87,14 @@ double EstimateStrokeBpm(const std::vector<samn::Action>& stroke) {
 PlayerController::PlayerController(QObject* parent)
     : QObject(parent), output_(&settings()), mapping_(&settings(), &output_) {
     connect(&output_, &PlaybackOutput::emergencyStopped, this, &PlayerController::emergencyStopped);
+    // The video playhead between the media player's reports: the ticks feed
+    // only the output (the curves follow the reports).
+    connect(&mediaHead_, &MediaPlayhead::advanced, this, [this](qint64 videoMs) { sendToOutput(videoMs, false); });
+    connect(&output_, &PlaybackOutput::outputChanged, this, [this] { mediaHead_.setRate(output_.speed()); });
+    connect(&output_, &PlaybackOutput::emergencyStopped, this, [this] { mediaHead_.hold(); });
+    connect(this, &PlayerController::loopChanged, this, &PlayerController::updateMediaLimit);
+    connect(this, &PlayerController::markerChanged, this, &PlayerController::updateMediaLimit);
+    connect(this, &PlayerController::offsetMsChanged, this, &PlayerController::updateMediaLimit);
     // A picked lane that is no longer shown (device changed, script closed)
     // falls back to the stroke.
     connect(this, &PlayerController::lanesChanged, this, [this] {
@@ -1307,6 +1315,8 @@ void PlayerController::setVideo(const QString& path) {
     if (path == videoPath_) return;
     videoPath_ = path;
     videoDurationMs_ = 0;  // the player reports the new one
+    mediaHead_.clear();
+    mediaHead_.setDurationMs(0);
     emit videoChanged();
     if (!path.isEmpty()) emit videoLinked(path);
     emit scriptChanged();  // noScriptForVideo depends on the video too
@@ -1342,10 +1352,18 @@ void PlayerController::setOffsetMs(int ms) {
         }
     }
     emit offsetMsChanged();
-    setVideoPositionMs(videoMs_);
+    // While the video plays the output stays where the estimate is (no step
+    // back to the last report) and moves on from the next report. The
+    // change is no report then: it neither feeds the stale watchdog nor
+    // wakes the output (the script clock keeps its path).
+    mediaHead_.hold();
+    const bool video = mediaHead_.playing();
+    movePlayhead(videoMs_, video ? mediaHead_.estimate() : videoMs_, !video);
 }
 
-void PlayerController::setVideoPositionMs(qint64 videoMs) {
+void PlayerController::setVideoPositionMs(qint64 videoMs) { movePlayhead(videoMs, videoMs, true); }
+
+void PlayerController::movePlayhead(qint64 videoMs, qint64 outputVideoMs, bool fromReport) {
     videoMs_ = videoMs;
     const qint64 ph = stroke_.empty() ? -1 : samn::script_time(videoMs, offsetMs_);
     if (ph != playheadMs_) {
@@ -1355,8 +1373,28 @@ void PlayerController::setVideoPositionMs(qint64 videoMs) {
     for (const auto& c : curves_)
         if (c) c->setPlayheadMs(playheadMs_);
     if (heatmap_) heatmap_->setPlayheadMs(playheadMs_);
-    if (ph >= 0) output_.update(ph);
+    sendToOutput(outputVideoMs, fromReport);
     checkAutoExtendedO(ph);
+}
+
+void PlayerController::reportMediaPosition(qint64 videoMs) {
+    const qint64 out = mediaHead_.report(videoMs);
+    // At the loop end the page jumps back right after this call: nothing
+    // is estimated past the end until the jump's report.
+    if (mediaHead_.playing() && loopJumpFor(videoMs) >= 0) mediaHead_.seek();
+    movePlayhead(videoMs, out, true);
+}
+
+void PlayerController::holdMediaPlayhead() { mediaHead_.seek(); }
+
+void PlayerController::updateMediaLimit() {
+    // The ms before the loop end in video time: only a report reaches it.
+    mediaHead_.setLimitMs(loopActive() ? std::max<qint64>(0, marker_.end_ms + offsetMs_ - 1) : -1);
+}
+
+void PlayerController::sendToOutput(qint64 videoMs, bool fromReport) {
+    // One offset, applied to the (estimated) video time (PS-01).
+    if (!stroke_.empty()) output_.update(samn::script_time(videoMs, offsetMs_), fromReport);
 }
 
 void PlayerController::checkAutoExtendedO(qint64 ph) {
@@ -1590,6 +1628,13 @@ void PlayerController::reportNoPicture(const QString& codec) {
     setFailure(msg);
 }
 
+void PlayerController::setMediaPlaying(bool playing) {
+    // A pause stops the ticks before the output stops the device.
+    if (!playing) mediaHead_.setPlaying(false);
+    setPlaying(playing);
+    if (playing) mediaHead_.setPlaying(true);
+}
+
 void PlayerController::setPlaying(bool playing) {
     output_.setPlaying(playing);
     if (playing) autoEoFired_ = false;
@@ -1626,6 +1671,7 @@ void PlayerController::setView(samn::ViewWindow v) {
 void PlayerController::setVideoDurationMs(qint64 ms) {
     const bool wasZoomed = zoomed();
     videoDurationMs_ = std::max<qint64>(0, ms);
+    mediaHead_.setDurationMs(videoDurationMs_);
     setView(wasZoomed ? view_ : samn::FullView(timelineMs()));
 }
 
