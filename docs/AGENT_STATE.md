@@ -30,7 +30,6 @@ With a video, `QMediaPlayer` reports its position every 100 ms (Qt 6.4 FFmpeg; 5
 - **Measured** (`TIMING.md` § 7, `benchmarks/TIMING_PLAYHEAD_2026-11-06.md`, after the review fixes): stroke start 42 -> 4.5 ms p50, 90 -> 13-14 ms p99, max 17.2; at most 4.2 % shorter than scripted (reports only: 20.4 %); the sent duration equals the formula in every move; no extra send within a move. The bench got the scenarios `media raw` (reports only) beside `media`, and a "move shorter than scripted" row.
 - **Timing audit:** `tests/app/timing_bench.cpp` and `docs/TIMING.md` came from `claude/samn2-timing-audit` (#159, now in `main`); this branch adds the `media raw` scenarios and the squeeze row to the bench, § 7 to `TIMING.md` and changes its § 6 heading.
 - **Not verified:** Windows with Qt 6.7.3 (50 ms reports, cap 60 ms), a real device, the GStreamer backend, a GUI thread that also renders.
->>>>>>> origin/main
 
 ## Handover: `cursor/editor-tools-surface-635a` (7 Nov, Editor Align bar)
 
@@ -40,7 +39,7 @@ Owner: Player/Editor GUI — curves, optimize, align. Unbury Tools… for everyd
 - **Range row:** Soft edges toggle + Cap intensity (150–800, default 400) beside the icon tools; `rangeTool` uses them.
 - **Tools…** slimmed to + lane and FPS snap.
 - **Tests:** `generator_qml_test` asserts alignBar / capIntensity; axes without opening the menu.
-- **Stay off:** Claude #163 playhead / #168 intensity arc.
+- **Stay off:** Claude #168 intensity arc (if still open).
 
 ## Handover: `cursor/player-rhythm-timeline-635a` (6 Nov, Player rhythm + timeline) — merged #170
 
