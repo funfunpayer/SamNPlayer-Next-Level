@@ -94,8 +94,11 @@ Item {
         if (clock.playbackState !== ScriptClock.StoppedState) ctrl.setPlaying(false)
         clock.stop()  // also back to 0
     }
-    function playheadMoved(pos) {
-        ctrl.setVideoPositionMs(pos)
+    // fromVideo: a report of the video's media player (the output then
+    // follows the playhead estimated between the reports).
+    function playheadMoved(pos, fromVideo) {
+        if (fromVideo) ctrl.reportMediaPosition(pos)
+        else ctrl.setVideoPositionMs(pos)
         const jump = ctrl.loopJumpFor(pos)
         if (jump >= 0) page.player.position = jump
     }
@@ -170,7 +173,7 @@ Item {
         onDurationChanged: ctrl.setVideoDurationMs(media.duration)
         audioOutput: AudioOutput { id: audio; volume: transport.volume; muted: page.muted }
         playbackRate: page.speed
-        onPlaybackStateChanged: ctrl.setPlaying(playbackState === MediaPlayer.PlayingState)
+        onPlaybackStateChanged: ctrl.setMediaPlaying(playbackState === MediaPlayer.PlayingState)
         // errorChanged, not errorOccurred: the FFmpeg backend of Qt 6.4 sets
         // the error without emitting errorOccurred.
         onErrorChanged: if (media.error !== MediaPlayer.NoError) ctrl.reportMediaError(media.error, media.errorString)
@@ -193,7 +196,7 @@ Item {
             }
             else if (mediaStatus === MediaPlayer.LoadedMedia && playWhenLoaded) { playWhenLoaded = false; media.play() }
         }
-        onPositionChanged: page.playheadMoved(media.position)
+        onPositionChanged: page.playheadMoved(media.position, true)
     }
 
     FileDialog {
@@ -271,12 +274,23 @@ Item {
             seekTo(0)
         }
     }
-    function seekBy(ms) { player.position = Math.max(0, Math.min(player.duration, player.position + ms)) }
+    // A seek of the video first freezes the device's playhead estimate,
+    // which then takes the seek's position report as it is. A seek to where
+    // the video already is gives no report, so it announces nothing.
+    function seekBy(ms) {
+        const to = Math.max(0, Math.min(player.duration, player.position + ms))
+        if (!scriptOnly && to !== player.position) ctrl.holdMediaPlayhead()
+        player.position = to
+    }
     function seekTo(ms) {
         if (ms < 0) return
         if (scriptOnly) clock.position = ms
         else if (media.duration <= 0 || media.mediaStatus === MediaPlayer.LoadingMedia) media.pendingSeekMs = ms
-        else media.position = Math.max(0, Math.min(media.duration, ms))
+        else {
+            const to = Math.max(0, Math.min(media.duration, ms))
+            if (to !== media.position) ctrl.holdMediaPlayhead()
+            media.position = to
+        }
     }
     function showTip(item, x, y, text) {
         if (text === "") { chartTip.visible = false; return }

@@ -17,6 +17,9 @@
 //                     [--only name,name] [--media-runs N]
 // Defaults: 60 s baseline scripts, 20 s variants, 3 busy threads for the
 // load runs, every scenario. Output: one Markdown table per scenario.
+// The video scenarios: "media" and "media +load3" as the Player sends (the
+// reports and the estimate between them), "media raw" and "media raw
+// +load3" with the reports only (the path before the estimate).
 
 #include <QDateTime>
 #include <QElapsedTimer>
@@ -53,6 +56,7 @@
 
 #include "device_controller.h"
 #include "device_io/qt_transport.h"
+#include "media_playhead.h"
 #include "playback_output.h"
 #include "samn/device/protocol.h"
 #include "samn/playback.h"
@@ -60,6 +64,7 @@
 #include "script_clock.h"
 
 using samn::ui::DeviceController;
+using samn::ui::MediaPlayhead;
 using samn::ui::PlaybackOutput;
 using samn::ui::ScriptClock;
 using json = nlohmann::json;
@@ -476,8 +481,9 @@ Mapping MediaMapOf(const std::vector<Tick>& ticks) {
 
 struct Results {
     std::vector<double> tickInterval, tickJitter, updateUs, staleness;
-    std::map<std::string, std::vector<double>> pipeline, lateness, shift, startLag, endErr, durErr, sendInterval, effSpeed;
-    std::map<std::string, int> skipped, missing, found, limited;
+    std::map<std::string, std::vector<double>> pipeline, lateness, shift, startLag, endErr, durErr, squeeze, sendInterval,
+        effSpeed;
+    std::map<std::string, int> skipped, missing, found, limited, extra;
 };
 
 const Tick* FirstTickAtOrAfter(const std::vector<Tick>& ticks, int64_t scriptMs) {
@@ -549,9 +555,18 @@ void AnalyzeStroke(const std::string& ch, const std::vector<samn::Action>& acts,
             continue;
         }
         ++r.found[ch];
+        // Until the move to the next action is due, nothing else may go out on
+        // this channel: a second write is the same move again or a reversal.
+        const Tick* nextMove = FirstTickAtOrAfter(ticks, acts[i].at);
+        const int64_t moveEndNs = nextMove ? nextMove->ns : ticks.back().ns + 1;
+        for (const Rec& x : recs)
+            if (x.ch == ch && x.ns > hit->ns && x.ns < moveEndNs) ++r.extra[ch];
         r.pipeline[ch].push_back((hit->ns - t->ns) / 1e6);
         r.startLag[ch].push_back((hit->ns - map.IdealNs(acts[i - 1].at)) / 1e6);
         r.endErr[ch].push_back((hit->ns + hit->dur * 1e6 - map.IdealNs(acts[i].at)) / 1e6);
+        // How much shorter than scripted the move is (a late start squeezes it).
+        const double scripted = double(acts[i].at - acts[i - 1].at) / speed;
+        if (scripted > 0) r.squeeze[ch].push_back(100.0 * (1.0 - hit->dur / scripted));
         r.shift[ch].push_back((hit->ns + hit->dur * 1e6 - map.IdealNs(acts[i].at, false)) / 1e6);
         int expect = std::max<int>(PlaybackOutput::kMinMoveMs, int(double(acts[i].at - t->scriptMs) / speed));
         const Rec* prev = nullptr;
@@ -606,7 +621,8 @@ void PrintResults(const std::string& name, const Results& r, bool clockTicks) {
         };
         const std::string note = "found " + std::to_string(count(r.found)) + ", no report inside " +
                                  std::to_string(count(r.skipped)) + ", not on the wire (coalesced) " +
-                                 std::to_string(count(r.missing));
+                                 std::to_string(count(r.missing)) +
+                                 (r.startLag.count(ch) ? ", extra sends within a move " + std::to_string(count(r.extra)) : "");
         Row(name, ch + " report -> wire", v, note);
         if (r.lateness.count(ch)) Row(name, ch + " wire - due", r.lateness.at(ch));
         if (r.startLag.count(ch)) Row(name, ch + " move start - due", r.startLag.at(ch));
@@ -614,6 +630,7 @@ void PrintResults(const std::string& name, const Results& r, bool clockTicks) {
         if (r.shift.count(ch))
             Row(name, ch + (r.endErr.count(ch) ? " move end" : " wire") + " - due, offset ignored", r.shift.at(ch));
         if (r.durErr.count(ch)) Row(name, ch + " duration - formula", r.durErr.at(ch));
+        if (r.squeeze.count(ch)) Row(name, ch + " move shorter than scripted (%)", r.squeeze.at(ch));
         if (r.effSpeed.count(ch))
             Row(name, ch + " speed on the wire (u/s)", r.effSpeed.at(ch),
                 "limit raised " + std::to_string(count(r.limited)) + " moves");
@@ -827,8 +844,11 @@ bool RunSoftStart(const std::string& name, int load) {
 }
 
 // The video path: QMediaPlayer (the Player page's MediaPlayer) on the
-// 4 s test-pattern clip drives PlaybackOutput into the UDP TCode sink.
-bool RunMedia(const std::string& name, int runs, int load) {
+// 4 s test-pattern clip drives PlaybackOutput into the UDP TCode sink, as
+// PlayerController does: every report, and between the reports the
+// estimate of MediaPlayhead. `raw`: the reports only (the path before the
+// estimate, for comparison under the same load).
+bool RunMedia(const std::string& name, int runs, int load, bool raw) {
     const QString clip = QStringLiteral(SAMN_TEST_DATA "/testpattern_4s.mp4");
     Rig rig;
     DeviceController dev;
@@ -852,18 +872,39 @@ bool RunMedia(const std::string& name, int runs, int load) {
         Teardown(dev, rig);
         return false;
     }
-    std::vector<std::vector<Tick>> segments;
-    QObject::connect(&player, &QMediaPlayer::playbackStateChanged, &out,
-                     [&] { out.setPlaying(player.playbackState() == QMediaPlayer::PlayingState); });
+    // segments: the media reports (the media clock); updates: every
+    // position PlaybackOutput got (reports and estimates).
+    std::vector<std::vector<Tick>> segments, updates;
+    MediaPlayhead head;
+    QObject::connect(&player, &QMediaPlayer::playbackStateChanged, &out, [&] {
+        const bool playing = player.playbackState() == QMediaPlayer::PlayingState;
+        if (!playing && !raw) head.setPlaying(false);  // PlayerController::setMediaPlaying
+        out.setPlaying(playing);
+        if (playing && !raw) head.setPlaying(true);
+    });
     QObject::connect(&player, &QMediaPlayer::positionChanged, &out, [&](qint64 pos) {
+        const qint64 send = raw ? pos : head.report(pos);
         if (player.playbackState() != QMediaPlayer::PlayingState || segments.empty()) return;
         Tick t;
         t.ns = NowNs();
         t.clockPos = pos;
-        t.scriptMs = samn::script_time(pos, 0);
+        t.scriptMs = samn::script_time(send, 0);
         out.update(t.scriptMs);
         t.updateNs = NowNs() - t.ns;
+        Tick u = t;
+        u.clockPos = send;
         segments.back().push_back(t);
+        updates.back().push_back(u);
+    });
+    QObject::connect(&head, &MediaPlayhead::advanced, &out, [&](qint64 videoMs) {
+        if (updates.empty()) return;
+        Tick u;
+        u.ns = NowNs();
+        u.clockPos = videoMs;
+        u.scriptMs = samn::script_time(videoMs, 0);
+        out.update(u.scriptMs, false);
+        u.updateNs = NowNs() - u.ns;
+        updates.back().push_back(u);
     });
     const std::string loadStart = LoadAvg();
     std::unique_ptr<BusyLoad> busy = std::make_unique<BusyLoad>(load);
@@ -873,6 +914,7 @@ bool RunMedia(const std::string& name, int runs, int load) {
         player.setPosition(0);
         Spin(200);
         segments.emplace_back();
+        updates.emplace_back();
         QEventLoop loop;
         const auto c = QObject::connect(&player, &QMediaPlayer::playbackStateChanged, &loop, [&] {
             if (player.playbackState() == QMediaPlayer::StoppedState) loop.quit();
@@ -890,7 +932,8 @@ bool RunMedia(const std::string& name, int runs, int load) {
     const std::vector<Rec> recs = Decode("udp", rig.rec->Take());
 
     Results r;
-    for (const auto& seg : segments) {
+    for (std::size_t s = 0; s < segments.size(); ++s) {
+        const std::vector<Tick>& seg = segments[s];
         if (seg.size() < 3) continue;
         // The report at the end of the clip (positionChanged(duration)) is not a timer tick.
         std::vector<Tick> ticks(seg.begin(), seg.end() - 1);
@@ -898,13 +941,15 @@ bool RunMedia(const std::string& name, int runs, int load) {
         // How far the media clock fell behind a steady clock (decoding stalls) ...
         const Mapping linear = MapOf(ticks, 1, 0);
         for (const Tick& t : ticks) r.staleness.push_back((t.ns - linear.IdealNs(double(t.clockPos))) / 1e6);
-        // ... and the moves against the media clock itself (the picture follows it).
-        AnalyzeStroke("L0", stroke, ticks, recs, MediaMapOf(ticks), 1, 0, r);
+        // ... and the moves (sent at the reports and the estimates) against
+        // the media clock itself (the picture follows it).
+        AnalyzeStroke("L0", stroke, updates[s], recs, MediaMapOf(ticks), 1, 0, r);
     }
     char title[256];
-    std::snprintf(title, sizeof title, "%s: QMediaPlayer (%s backend) on the 4 s clip x %d, UDP TCode, %d busy threads, loadavg %s -> %s",
-                  name.c_str(), qgetenv("QT_MEDIA_BACKEND").constData(), runs, load, loadStart.c_str(),
-                  loadEnd.c_str());
+    std::snprintf(title, sizeof title,
+                  "%s: QMediaPlayer (%s backend) on the 4 s clip x %d, %s, UDP TCode, %d busy threads, loadavg %s -> %s",
+                  name.c_str(), qgetenv("QT_MEDIA_BACKEND").constData(), runs,
+                  raw ? "reports only" : "reports + estimate", load, loadStart.c_str(), loadEnd.c_str());
     TableHead(title);
     PrintResults(name, r, false);
     return true;
@@ -983,9 +1028,12 @@ int main(int argc, char** argv) {
     if (Selected("softstart", only)) ok = RunSoftStart("softstart", 0) && ok;
     const std::string softLoad = "softstart +load" + std::to_string(load);
     if (load > 0 && Selected(softLoad, only)) ok = RunSoftStart(softLoad, load) && ok;
-    if (Selected("media", only)) ok = RunMedia("media", mediaRuns, 0) && ok;
-    const std::string mediaLoad = "media +load" + std::to_string(load);
-    if (load > 0 && Selected(mediaLoad, only)) ok = RunMedia(mediaLoad, mediaRuns, load) && ok;
+    for (const bool raw : {true, false}) {
+        const std::string media = raw ? "media raw" : "media";
+        if (Selected(media, only)) ok = RunMedia(media, mediaRuns, 0, raw) && ok;
+        const std::string mediaLoad = media + " +load" + std::to_string(load);
+        if (load > 0 && Selected(mediaLoad, only)) ok = RunMedia(mediaLoad, mediaRuns, load, raw) && ok;
+    }
     std::printf("\n- loadavg at the end: %s\n", LoadAvg().c_str());
     return ok ? 0 : 1;
 }

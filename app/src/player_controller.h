@@ -22,6 +22,7 @@
 #include "samn/settings.h"
 #include "device_controller.h"
 #include "mapping_settings.h"
+#include "media_playhead.h"
 #include "playback_output.h"
 
 namespace samn::ui {
@@ -32,8 +33,10 @@ class HeatmapItem;
 // Play mode logic for QML. It opens videos and scripts (video first, with
 // script folders, tolerant names and variants), keeps the offset per script,
 // maps video time to script time and feeds the curve lanes, heatmap,
-// chapters and bookmarks. The MediaPlayer lives in QML and reports its
-// position through setVideoPositionMs().
+// chapters and bookmarks. The MediaPlayer lives in QML and reports its play
+// state and position through setMediaPlaying() and reportMediaPosition();
+// the script clock (a script without a video) through setPlaying() and
+// setVideoPositionMs().
 class PlayerController : public QObject {
     Q_OBJECT
     QML_ELEMENT
@@ -198,7 +201,16 @@ public:
     Q_INVOKABLE void addScriptFolder(const QString& pathOrUrl);
     // Settings → General → Script folders "Remove" (0.7).
     Q_INVOKABLE void removeScriptFolder(const QString& path);
+    // The playhead of the script clock (or a seek): the curves and the
+    // output get this position.
     Q_INVOKABLE void setVideoPositionMs(qint64 videoMs);
+    // A position report of the video's media player. The curves follow the
+    // reports; while the video plays, the output gets the position
+    // estimated between the reports (MediaPlayhead).
+    Q_INVOKABLE void reportMediaPosition(qint64 videoMs);
+    // The page is about to seek the video (a seek, a scrub, a jump key):
+    // the estimate freezes and takes the seek's report as it is.
+    Q_INVOKABLE void holdMediaPlayhead();
     // Where the player should seek to (video time): the marked range's start
     // once its end is reached while the loop is on, else -1.
     Q_INVOKABLE qint64 loopJumpFor(qint64 videoMs) const;
@@ -218,6 +230,9 @@ public:
     Q_INVOKABLE qint64 jumpTenthVideoMs(int n) const;
     // The player reports play / pause for the sleep timer.
     Q_INVOKABLE void setPlaying(bool playing);
+    // The video's media player reports play / pause: setPlaying() plus the
+    // video playhead between the reports.
+    Q_INVOKABLE void setMediaPlaying(bool playing);
     // The video player reports a failure (QMediaPlayer::Error and its
     // text): the error bar names the class and the file (0.7 0.5.41).
     // The message goes away once the video plays.
@@ -375,6 +390,8 @@ public:
     DeviceController* device() const { return device_; }
     void setDevice(DeviceController* device);
     PlaybackOutput* output() { return &output_; }
+    // Tests: the video playhead between the media player's reports.
+    MediaPlayhead* mediaPlayhead() { return &mediaHead_; }
     MappingSettings* mapping() { return &mapping_; }
     bool contactControls() const { return contactControls_; }
     bool contactKnobsLive() const { return contactKnobsLive_; }
@@ -450,6 +467,13 @@ private:
     // setError for a failure (not a hint): also an error toast (Notices).
     void setFailure(const QString& e);
     void checkAutoExtendedO(qint64 playheadMs);
+    // The curves at videoMs, the output at outputVideoMs (the estimate while
+    // the video plays; fromReport: a position report, see
+    // PlaybackOutput::update), then the auto Extended-O check.
+    void movePlayhead(qint64 videoMs, qint64 outputVideoMs, bool fromReport);
+    // The video playhead's limit: the loop end while the loop is on.
+    void updateMediaLimit();
+    void sendToOutput(qint64 videoMs, bool fromReport);
     void setView(samn::ViewWindow v);
     void clearScript();
     void pushToViews();
@@ -466,6 +490,7 @@ private:
     std::unique_ptr<samn::Settings> settings_;
     PlaybackOutput output_;
     MappingSettings mapping_;
+    MediaPlayhead mediaHead_;
     // The open script's own mapping (MapOptionsFromScript), profile, recipe
     // and strength presets (a .samn).
     samn::MapOptions scriptMap_;
