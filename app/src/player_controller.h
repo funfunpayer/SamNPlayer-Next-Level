@@ -22,6 +22,7 @@
 #include "samn/settings.h"
 #include "device_controller.h"
 #include "mapping_settings.h"
+#include "media_playhead.h"
 #include "playback_output.h"
 
 namespace samn::ui {
@@ -32,8 +33,10 @@ class HeatmapItem;
 // Play mode logic for QML. It opens videos and scripts (video first, with
 // script folders, tolerant names and variants), keeps the offset per script,
 // maps video time to script time and feeds the curve lanes, heatmap,
-// chapters and bookmarks. The MediaPlayer lives in QML and reports its
-// position through setVideoPositionMs().
+// chapters and bookmarks. The MediaPlayer lives in QML and reports its play
+// state and position through setMediaPlaying() and reportMediaPosition();
+// the script clock (a script without a video) through setPlaying() and
+// setVideoPositionMs().
 class PlayerController : public QObject {
     Q_OBJECT
     QML_ELEMENT
@@ -76,9 +79,11 @@ class PlayerController : public QObject {
     // playback.speed_highlight_thresh 150-800, default 400). Display only.
     Q_PROPERTY(bool speedHighlights READ speedHighlights WRITE setSpeedHighlights NOTIFY speedHighlightChanged)
     Q_PROPERTY(double speedHighlightThresh READ speedHighlightThresh WRITE setSpeedHighlightThresh NOTIFY speedHighlightChanged)
-    // Beat grid on the curve: BPM 20-240 (0 = none yet) and on/off.
+    // Beat grid on the curve: BPM 20-240 (0 = none / use script tempo) and on/off.
     Q_PROPERTY(double bpm READ bpm WRITE setBpm NOTIFY bpmChanged)
     Q_PROPERTY(bool bpmGrid READ bpmGrid WRITE setBpmGrid NOTIFY bpmChanged)
+    // Manual BPM when set; else the stroke-tempo estimate (0 if none).
+    Q_PROPERTY(double effectiveBpm READ effectiveBpm NOTIFY bpmChanged)
     Q_PROPERTY(QStringList scriptFolders READ scriptFolders NOTIFY scriptFoldersChanged)
     // 0.7 "Always create right away when a video has no script" (open.autoCreate;
     // here the setting "open.auto_create", default off).
@@ -196,7 +201,16 @@ public:
     Q_INVOKABLE void addScriptFolder(const QString& pathOrUrl);
     // Settings → General → Script folders "Remove" (0.7).
     Q_INVOKABLE void removeScriptFolder(const QString& path);
+    // The playhead of the script clock (or a seek): the curves and the
+    // output get this position.
     Q_INVOKABLE void setVideoPositionMs(qint64 videoMs);
+    // A position report of the video's media player. The curves follow the
+    // reports; while the video plays, the output gets the position
+    // estimated between the reports (MediaPlayhead).
+    Q_INVOKABLE void reportMediaPosition(qint64 videoMs);
+    // The page is about to seek the video (a seek, a scrub, a jump key):
+    // the estimate freezes and takes the seek's report as it is.
+    Q_INVOKABLE void holdMediaPlayhead();
     // Where the player should seek to (video time): the marked range's start
     // once its end is reached while the loop is on, else -1.
     Q_INVOKABLE qint64 loopJumpFor(qint64 videoMs) const;
@@ -216,6 +230,9 @@ public:
     Q_INVOKABLE qint64 jumpTenthVideoMs(int n) const;
     // The player reports play / pause for the sleep timer.
     Q_INVOKABLE void setPlaying(bool playing);
+    // The video's media player reports play / pause: setPlaying() plus the
+    // video playhead between the reports.
+    Q_INVOKABLE void setMediaPlaying(bool playing);
     // The video player reports a failure (QMediaPlayer::Error and its
     // text): the error bar names the class and the file (0.7 0.5.41).
     // The message goes away once the video plays.
@@ -254,6 +271,12 @@ public:
     // offset goes back to 0. What would land before 0 ms is dropped and
     // counted in the status line.
     Q_INVOKABLE bool bakeOffset();
+    // Adapt a finished script for any device (fill/heal stroke gaps) or for
+    // Sam Neo 2 (also contact recipe + baked vibration/suction). Rewrites the
+    // file(s) and reloads — same core path as the Editor's Optimize for.
+    Q_INVOKABLE QString optimizeFor(const QString& target);
+    // Write Neo vibration & suction lanes from the stroke into the .samn.
+    Q_INVOKABLE bool axesFromStroke();
     // 0.7 ExportScriptHeatmapPNG: "<script>.heatmap.png" beside the script,
     // 960 x 56 with chapter ticks. The path, or "" with lastError.
     Q_INVOKABLE QString exportHeatmapPng();
@@ -325,8 +348,12 @@ public:
     void setBpm(double v);
     bool bpmGrid() const { return bpmGrid_; }
     void setBpmGrid(bool on);
+    double effectiveBpm() const;
     // Beat period for the grid in ms, 0 when off.
     double beatPeriodMs() const;
+    // Fill BPM from the open stroke's peak spacing and turn the grid on.
+    // Returns the BPM set, or 0 with lastError / toolNote when unclear.
+    Q_INVOKABLE double guessBpmFromStroke();
     QStringList scriptFolders() const;
     bool hasMarker() const { return marker_.Valid(); }
     double markerStartMs() const { return double(marker_.start_ms); }
@@ -363,6 +390,8 @@ public:
     DeviceController* device() const { return device_; }
     void setDevice(DeviceController* device);
     PlaybackOutput* output() { return &output_; }
+    // Tests: the video playhead between the media player's reports.
+    MediaPlayhead* mediaPlayhead() { return &mediaHead_; }
     MappingSettings* mapping() { return &mapping_; }
     bool contactControls() const { return contactControls_; }
     bool contactKnobsLive() const { return contactKnobsLive_; }
@@ -438,6 +467,13 @@ private:
     // setError for a failure (not a hint): also an error toast (Notices).
     void setFailure(const QString& e);
     void checkAutoExtendedO(qint64 playheadMs);
+    // The curves at videoMs, the output at outputVideoMs (the estimate while
+    // the video plays; fromReport: a position report, see
+    // PlaybackOutput::update), then the auto Extended-O check.
+    void movePlayhead(qint64 videoMs, qint64 outputVideoMs, bool fromReport);
+    // The video playhead's limit: the loop end while the loop is on.
+    void updateMediaLimit();
+    void sendToOutput(qint64 videoMs, bool fromReport);
     void setView(samn::ViewWindow v);
     void clearScript();
     void pushToViews();
@@ -454,6 +490,7 @@ private:
     std::unique_ptr<samn::Settings> settings_;
     PlaybackOutput output_;
     MappingSettings mapping_;
+    MediaPlayhead mediaHead_;
     // The open script's own mapping (MapOptionsFromScript), profile, recipe
     // and strength presets (a .samn).
     samn::MapOptions scriptMap_;
@@ -488,6 +525,7 @@ private:
     qint64 videoMs_ = 0, playheadMs_ = -1;
     samn::RangeMarker marker_;
     double oMarkerIntensity_ = 0.5, bpm_ = 0;
+    double scriptTempoBpm_ = 0;  // from stroke peaks when the script opens
     bool speedHL_ = true;
     double speedHLThresh_ = 400;
     bool bpmGrid_ = false;

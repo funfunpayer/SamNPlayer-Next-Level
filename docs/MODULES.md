@@ -22,6 +22,7 @@ Functions use PascalCase and struct fields use snake_case.
 | `playback.h` | Offset key and clamp, script time, the video beside a script, companion axis files | Go `app_playback.go` | ✅ |
 | `stroke_filter.h` | Live stroker filter (PCHIP/MAKIMA, speed limit, idle fill) | Go `funscript/stroke_filter.go` | ✅ parity |
 | `output_levels.h` | Reduce peaks, the soft start ramp and the Extended-O scale schedule as functions of time | Go `player/player.go` (ReducePeak, setOutput), `player/sync.go` (softStartWithPositions), `player/extendedo.go` | ✅ parity |
+| `playhead.h` | The video playhead between two media position reports: estimate, cap, no step back, seek / pause / rate rules (`docs/TIMING.md` § 7) | new (0.7 sampled the video at its reports only) | ✅ |
 | `beatbar.h`, `beat_strokes.h` | Cock Hero beat bar → beats → strokes | Go `generator/beatbar.go` | ✅ parity |
 | `curve_geometry.h` | Curve as 0.7 draws it: Catmull-Rom (control points clamped to 0-100), tempo wave, density switch, zoom window. Binary search instead of 0.7's full scans. | 0.7 `playback.js` (smoothCurvePath, drawSpeedWave, zoomByFactor) | ✅ tempo wave equals 0.7 (node reference) |
 | `fileio.h` | `WriteFileAtomic`: temp file, flush, rename. The one writer for marks, `.samn`, settings and the range marker. `ReadFileToString`: the whole file or nullopt. | Go `writeFileAtomic` | ✅ |
@@ -67,7 +68,7 @@ Functions use PascalCase and struct fields use snake_case.
 1. A `DeviceSession` subclass over your `Device` (`GetDevice`, `Info`, `Alive`; `Tick` / `Pump` / `AdoptedId` when the device needs them) in `core/src/device_driver.cpp` or a new `core/src/device_<name>.cpp`.
 2. A `Driver` with its `DriverInfo` (id = the kind, name, help, transport kind, address field, settings key of the last target), `Resolve` (target → `TransportRequest`) and `Create`.
 3. One `registry.Add(std::make_unique<YourDriver>())` line in `RegisterBuiltinDrivers`; the Inspector's choice lists it with no QML edit.
-4. A new `TransportKind` only if no existing one fits: then one case in `DeviceWorker::MakeTransport` (`app/src/device_controller.cpp`) and a `QtTransport` in `app/src/device_io/`.
+4. A new `TransportKind` only if no existing one fits: then one case in `DeviceWorker::MakeTransport` (`app/src/device_worker.cpp`) and a `QtTransport` in `app/src/device_io/`.
 5. Tests in `tests/core/device_driver_test.cpp` over `MockTransport` (or a fake server like `device_fake_buttplug.h`).
 
 **Open cleanups:**
@@ -126,6 +127,7 @@ Controllers are `QObject`s registered for QML; their tests are `tests/app/<name>
 | `src/library_controller.*` | The Library column: recent scripts and videos, favorites, imported / generated / edited. |
 | `src/script_clock.*` | The playhead for a script without a video, with the MediaPlayer's surface. |
 | `src/playback_output.*` | What reaches the device while a script plays (mapping, stroke filter, axes), without QML timers. |
+| `src/media_playhead.*` | The video playhead for the device output between the media player's reports (`samn/playhead.h` on a monotonic clock, a 16 ms tick while the video plays). |
 | `src/mapping_settings.*` | The Player's mapping settings, live contact controls and Effects presets; saved at once. |
 | `src/generator_controller.*` | The Generator mode: video, tip box, feel, Create with progress and cancel, queue, review; runs the engine on its own thread. |
 | `src/editor_controller.*` | The Editor inside the Generator: curves per lane, range tools, undo, beat-bar tool, sound vibration. |
@@ -143,6 +145,7 @@ Controllers are `QObject`s registered for QML; their tests are `tests/app/<name>
 | `src/app_log.*` | The process log: Qt messages, device log and app notes in one buffer, optional file. |
 | `src/icon_provider.*`, `wordmark_item.*` | `image://icon/` Flow icons from `qml/icons/`; the painted wordmark. |
 | `src/device_controller.*` | `DeviceController` for QML: connect / disconnect by kind (the core's drivers, `drivers` lists them for the device choice: Sam Neo 2 BLE, TCode address or serial, Intiface URL, Mock; `MakeTransport` builds the transport a driver asks for), status, last error and hint, battery, capabilities (channels, axes), levels / position / axes, Stop, emergency stop, diagnostics, serial port list. Every device and transport lives on ONE worker `QThread` it owns; the GUI thread never blocks. 2 s timer (keepalive / ping / battery), incoming pumping, coalesced level commands, lost-link handling. |
+| `src/device_worker.*` | `DeviceWorker`, the device thread's worker behind `DeviceController`: task queue (Stop jumps it), Connect through the `DriverRegistry`, `MakeTransport`, ticks / keepalive, snapshots with generation, coalesced levels, the shared stop window, `DestroySession`. Moved out of `device_controller.cpp` unchanged. |
 | `src/device_io/waiter.h` | `Waiter`: blocks the worker thread until a condition holds while the Qt event loop runs (how async Qt APIs become the blocking `Transport` calls); polls cancel every 25 ms. |
 | `src/device_io/qt_transport.h` | `QtTransport`: base of the Qt transports (a `QObject` + `samn::device::Transport`), `incoming()` signal, cancel hook, `LastError()`. |
 | `src/device_io/ble_transport.*` | Qt Bluetooth LE for the Sam Neo 2: scan for `kSamNeo2NamePrefix`, connect, service ffe0 / characteristic ffe1, write with or without response, `ReadCharacteristic` (battery 0x180F / 0x2A19), `Peer()`. Bounded waits; every error says "Bluetooth". |

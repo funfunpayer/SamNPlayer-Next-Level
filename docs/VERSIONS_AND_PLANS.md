@@ -187,7 +187,7 @@ Status: **covered** (where), **missing** (in no SamNPlayer 2 doc), **against** (
 | Learning data contract, grouped hold-out, model registry, rollback | review §6 | N6 | partly: D-029, CAP-08 in ROADMAP; the data contract itself **missing** |
 | Local AI assist (LM Studio / ONNX) behind verifier | ENG-05 | N5 | covered: D-031, D-059 |
 | Neo 2 raw-value profile (G2.2-G2.5) | PRODUCTION_ROADMAP G2 | Owner opens | covered: D-049, ROADMAP Later |
-| Look-ahead / latency compensation, prediction | G2.5; perception backlog P4 | after measured lag | **missing**; the software lag is measured (`TIMING.md`, 5 Nov), the device and radio lag are not |
+| Look-ahead / latency compensation, prediction | G2.5; perception backlog P4 | after measured lag | partly: the software lag is measured (`TIMING.md`, 5 Nov) and the video playhead is extrapolated between the media reports (`TIMING.md` § 7: stroke start 42 -> 5 ms p50, 90 -> 13 ms p99 on Qt 6.4); look-ahead sending and a device / radio latency offset **missing** (the device and radio lag are not measured) |
 | PoseObserver, depth, MT-ID, segmentation layer | G3.4/G3.5; POSE_OBSERVER | Owner clip gates | partly: PoseObserver, depth, ByteTrack in ROADMAP/D-064; segmentation layer ("SAM 3.1" class) **missing** |
 | Perception v1 fusion, Auto-Evaluator, confidence calibration | old ROADMAP "Perception 2.0", SAM_ARCHITECTURE | each needs a go/no-go | **missing** as named items (P3 item 1 is a related idea) |
 | Camera Motion Compensation 2.0 (confidence, geometric models) | old ROADMAP | go/no-go | **missing** |
@@ -195,7 +195,7 @@ Status: **covered** (where), **missing** (in no SamNPlayer 2 doc), **against** (
 | Audio pre-pass tempo hint; "no motion, fall back to audio" | AUDIO_WORKFLOW, PRODUCTION_ROADMAP G1.3 | G1 | **missing** (D-079 only says audio never invents the curve) |
 | Chapters from scene cuts with regeneration of single sections | TEAM_STAND §8 | later | partly: CAP-06 Later; the scene-cut chapter source **missing** |
 | Tracking-cache reuse (change parameters without re-reading the video) | TEAM_STAND "Lessons from FunGen 2" | idea | covered: `track_cache.h`, Generator *Reuse the tracking* (D-158; off by default) |
-| Confidence-gated hybrid track (light tracker every frame; ONNX/AI only on loss / low confidence / periodic check) | beat FunGen-style always-ONNX CPU; HyperTrack / confidence-skip literature | next | **missing** (CSRT + AI tip find exist; selective wake-up does not) |
+| Confidence-gated hybrid track (light tracker every frame; ONNX/AI only on loss / low confidence / periodic check) | beat FunGen-style always-ONNX CPU; HyperTrack / confidence-skip literature | next | partly: *AI re-acquire on tip loss* (`generator.hybrid_reacquire`, off by default; student/NudeNet after CSRT+memory miss, fail-closed look check). Periodic semantic check **missing** |
 | Hybrid gap-filler (AI only where tracking is lost), scene-type / axis / depth / tempo per shot (stage 3) | SCENE_UNDERSTANDING_PLAN §3, §3b | next | partly: P3 item 2 (re-acquisition); stage 3 **missing** |
 | Own multi-class detector trained from teacher labels (RF-DETR, classes penis ... contact) | SCENE_UNDERSTANDING_PLAN §4, VLM_TEACHER_PLAN V3 | later | partly: ONNX body-part detector in P3.7; the teacher-to-detector loop **missing** |
 | Scene-map learning stages L1-L4 (priors, region detector, learned cell scorer, fusion) | SCENE_MAP_PLAN M6 | P6+ | partly: ROADMAP "AI Train", "Export for learning"; stages **missing** |

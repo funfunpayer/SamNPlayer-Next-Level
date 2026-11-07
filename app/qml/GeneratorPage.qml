@@ -2075,7 +2075,8 @@ Item {
                             Repeater {
                                 model: [{ text: qsTr("Invert motion direction"), key: "invert", help: "gen-invert" },
                                         { text: qsTr("Camera motion compensation"), key: "cameraCompensation", help: "gen-camcomp" },
-                                        { text: qsTr("Scene-cut detection"), key: "sceneCuts", help: "gen-scenecut" }]
+                                        { text: qsTr("Scene-cut detection"), key: "sceneCuts", help: "gen-scenecut" },
+                                        { text: qsTr("AI re-acquire on tip loss"), key: "hybridReacquire", help: "gen-hybrid-reacquire" }]
                                 delegate: RowLayout {
                                     required property var modelData
                                     Layout.fillWidth: true
@@ -2373,6 +2374,52 @@ Item {
                                 text: qsTr("Direction: %1").arg(qualityBox.r.direction || "") + "\n" + (qualityBox.r.ozone || "")
                                       + (qualityBox.r.suggestInvert ? qsTr(" (Direction uncertain — review in Play; invert curve if needed.)") : "")
                                 color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                        }
+                    }
+                    // After Create (or with an open script): adapt for the toy
+                    // before handing off to the Player — same actions as Tools…
+                    // Optimize, kept visible so the convert path is obvious.
+                    ColumnLayout {
+                        id: postCreateAdapt
+                        objectName: "postCreateAdapt"
+                        visible: edit.hasScript && !gen.running
+                        Layout.fillWidth: true
+                        spacing: 6
+                        Text {
+                            textFormat: Text.PlainText
+                            Layout.fillWidth: true
+                            text: qsTr("Adapt for device")
+                            color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold
+                        }
+                        Text {
+                            textFormat: Text.PlainText
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            text: qsTr("Turn the finished script into a clean any-device stroke, or bake Sam Neo 2 vibration and suction.")
+                            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 6
+                            enabled: !edit.busy
+                            FlowCombo {
+                                id: postAdaptTarget
+                                objectName: "postAdaptTarget"
+                                Layout.preferredWidth: 140; Layout.preferredHeight: 36
+                                readonly property var targets: ["general", "neo2"]
+                                model: [qsTr("Any device"), qsTr("Sam Neo 2")]
+                                currentIndex: Math.max(0, targets.indexOf(gen.optimizeTarget !== "" ? gen.optimizeTarget : "neo2"))
+                            }
+                            FlowButton {
+                                objectName: "postAdaptOptimize"
+                                text: qsTr("Optimize"); icon: "sliders"
+                                onClicked: edit.optimizeFor(postAdaptTarget.targets[postAdaptTarget.currentIndex])
+                            }
+                            FlowButton {
+                                objectName: "postAdaptAxes"
+                                text: qsTr("Axes from stroke"); icon: "effects"
+                                onClicked: edit.axesFromStroke()
                             }
                         }
                     }

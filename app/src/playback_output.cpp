@@ -199,9 +199,12 @@ void PlaybackOutput::setPlaying(bool playing) {
     emit extendedOChanged();
 }
 
-void PlaybackOutput::update(qint64 t) {
+void PlaybackOutput::update(qint64 t, bool fromReport) {
     if (!playing_ || halted_) return;
-    stale_.start();
+    // Only a report proves the video still moves: the watchdog counts
+    // reports, and only a report starts the output after a stop.
+    if (!fromReport && quiet_) return;
+    if (fromReport) stale_.start();
     if (!deviceReady()) {
         lastAt_ = t;
         return;

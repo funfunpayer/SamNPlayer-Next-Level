@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 7 Nov 2026, Claude, branch `claude/samn2-vision-bench`: `samn_bench`, the detection benchmark, and its baseline (handover below). No engine behaviour changed.
+**Last update:** 7 Nov 2026, Claude, branch `claude/samn2-vision-bench`: `samn_bench`, the detection benchmark, and its baseline (handover below). No engine behaviour changed. Before: the video playhead extrapolation (D-164, `claude/samn2-playhead`, #163) and the `DeviceWorker` move (#166) are merged.
 
 ## Handover: `claude/samn2-vision-bench` (7 Nov, detection benchmark, measurement only)
 
@@ -16,7 +16,67 @@ Owner: the Generator's video detection must become cinema-grade accurate and lea
 - **Next slices (each judged by this bench):** PR-2 full 2-D camera compensation (`camera_motion.cpp` returns only `t(1,2)`, `track_box.cpp` about line 456 shifts only ys; measured: pan clip Y stroke 0.888 -> 1.000 with compensation, X stroke 0.812 -> 0.812; the Owner's clip uses X; judge on `pan_x` track r); PR-3 forward-backward LK loss flag + confirmed scene cuts (drop30, light_cut_jump); PR-4 phase-locked periodic bridge (occlusion scenes); PR-5 sub-sample peaks (peak error vs the 40 ms frame); PR-6 FR-8 640 px downscale 90 -> 35 ms/frame. CPU / RAM: chunked label-tracking decode, `grab()` for skipped frames.
 - **Not done:** an automatic baseline-vs-candidate comparison of two CSVs (the rule is applied by hand); Windows (RSS 0 there, not built); real clips (Owner gate).
 
-## Handover: `cursor/training-channel-caps-635a` (6 Nov, Training output caps)
+## Handover: `claude/samn2-playhead` (5 Nov, video playhead extrapolation)
+
+With a video, `QMediaPlayer` reports its position every 100 ms (Qt 6.4 FFmpeg; 50 ms in 6.7), and the output was sampled only at those reports: stroke starts 42 ms late at p50, 90 ms at p99, moves squeezed (`TIMING.md` § 4-5). Now the output follows an estimate between the reports.
+
+- **Core:** `samn::PlayheadExtrapolator` (`playhead.h`, no Qt). Estimate = last report + elapsed x rate, at most `CapMs()` of wall time after the last report (median interval x 1.2, 20-150 ms; 120 ms default). A report behind it by up to the hold window, max(40 ms, cap x rate), holds it (no step back); further behind, ahead, or the first report after `Seek()` is taken as it is. Paused it is the last report, and after a start it moves only from the first report on. `Hold()` freezes it until the next report, `Clear()` forgets the interval.
+- **App:** `MediaPlayhead` (`media_playhead.*`): monotonic clock, a 16 ms `PreciseTimer` only while the video plays, emits only while the estimate advances. `PlayerController::setMediaPlaying` / `reportMediaPosition` (new; the `MediaPlayer` of `PlayerPage.qml` calls them, `playheadMoved(pos, fromVideo)`). The ticks feed only `PlaybackOutput`; the curves, the heatmap and auto Extended-O follow the reports. The rate comes from `output.speed`. Hold on an offset change, on the report at a loop end and on the emergency stop; clear on a new video; the estimate never passes the video's duration.
+- **Safety:** `PlaybackOutput::update(t, fromReport = true)`. A tick (`false`) neither restarts the stale watchdog nor wakes the output after a stop, so the watchdog still fires 1.5 s after the last *report*. A pause stops the ticks and then the device at once. The estimate is never more than the hold window ahead of the latest report.
+- **Unchanged:** the script clock path (`setPlaying` / `setVideoPositionMs`), Editor, Training, the Generator page (its own player, no device output), soft seek, soft start, speed limit, offset (PS-01).
+- **Tests:** `tests/core/playhead_test.cpp` (22 cases), `playback_output_test` (13 new `video*` / `scriptClock*` cases), `player_page_qml_test` (seeks announce themselves); each new one failed against a stub or the old rule first. No assertion of `main` changed.
+- **Review fixes (PR #163, 6 Nov):**
+  - *A step back sent a move twice with a reversal* (major): a report 41-250 ms behind the estimate set it back, so the output picked the passed point again and sent the stroker back (`max(20, …)` ms), then the next move again. Now the floor holds for any report up to the window behind; the fix is in the extrapolator, not in `PlaybackOutput`, so the script clock's behaviour (`seekEasesIn`: a small step back sends the earlier point) is unchanged. Two assertions of this branch's own core tests encoded the old rule and now expect the hold (60 ms behind at 1x, 140 ms behind at 2x); the seek case uses 150 ms behind. Test `videoReportBehindTheEstimateSendsNoMoveTwice`. The bench counts "extra sends within a move".
+  - *Seeks of the page*: `PlayerController::holdMediaPlayhead()` (invokable, `MediaPlayhead::seek()`, core `Seek()`), called by `seekTo` / `seekBy` before they set the position; the seek's report is taken as it is. The loop jump uses the same.
+  - *Loop end*: with the loop on, the estimate stops 1 ms before the loop end (`MediaPlayhead::setLimitMs`), so only a report reaches it.
+  - *Offset change* while the video plays is no report (`fromReport` false): it does not feed the watchdog. The script clock path keeps `true`.
+  - `scriptClockHasNoVideoPlayhead` now checks the exact moves of the script clock path and that ticks add nothing.
+- **Second review (PR #163, 6 Nov):**
+  - *A rate decrease stepped back* (major): `SetRate` held at the old rate, but the next report was judged with the new rate's smaller window (4x -> 1x: 480 -> 120 ms), so a lagging report 210 ms behind set the estimate back. `Hold()` now keeps the window from before it for the next report.
+  - *The window shrank inside a report*: the new interval was counted before the window was taken (default 120 ms -> 58 ms at the first 50 ms intervals). The window of a report is now the larger of before and after its interval, and while the last report held the estimate, that report's window too. `HoldWindowMs()` is a lower bound of the window the next report gets (a new interval can only enlarge it).
+  - The reviewer's fuzz (20000 runs with rate changes, holds, seeks, jitter, stalls and rewinds): 160 step backs that were not allowed before, 0 now. The test has 3000 runs: 22 before, 0 now.
+  - *The loop limit under the playhead stepped back*: `MediaPlayhead` never clamps below what it already sent unless the estimate itself went back (a seek). Test `videoLoopEndBelowThePlayheadDoesNotStepBack`.
+  - *A seek without a report*: `Seek()` expires after the cap; `seekTo` / `seekBy` skip the announcement when the target is the current position (`player_page_qml_test`).
+  - *Wording*: D-164, `TIMING.md` § 7.1 and `playhead.h` say the same thing: no step back unless a report is more than the window behind the estimate (apart from a rate change, the media clock itself went backwards) or follows a seek; pausing returns to the last report.
+  - *Left as it is (safe direction)*: a timer report queued before the seek's report, coming after `holdMediaPlayhead()`, counts as the seek's report; the seek's own report then follows the normal window rule (it can be held up to the window instead of being taken as it is). A timer report within the cap after a seek that gave no report (an unseekable stream) is taken as it is (one small step back at most).
+- **Measured** (`TIMING.md` § 7, `benchmarks/TIMING_PLAYHEAD_2026-11-06.md`, after the review fixes): stroke start 42 -> 4.5 ms p50, 90 -> 13-14 ms p99, max 17.2; at most 4.2 % shorter than scripted (reports only: 20.4 %); the sent duration equals the formula in every move; no extra send within a move. The bench got the scenarios `media raw` (reports only) beside `media`, and a "move shorter than scripted" row.
+- **Timing audit:** `tests/app/timing_bench.cpp` and `docs/TIMING.md` came from `claude/samn2-timing-audit` (#159, now in `main`); this branch adds the `media raw` scenarios and the squeeze row to the bench, § 7 to `TIMING.md` and changes its § 6 heading.
+- **Not verified:** Windows with Qt 6.7.3 (50 ms reports, cap 60 ms), a real device, the GStreamer backend, a GUI thread that also renders.
+
+## Handover: `cursor/player-rhythm-timeline-635a` (6 Nov, Player rhythm + timeline)
+
+Owner: GUI / Player / Editor curves, BPM, optimize & align.
+
+- **BPM:** blank field uses stroke-tempo estimate (`effectiveBpm`); *Guess from stroke* fills BPM and turns the grid on; `playback.bpm_grid` remembered. Honest notes (audio detect still later).
+- **Heatmap:** height 18→28; wheel zoom like the curve lanes (`heatBar`).
+- **Tests:** `bpmFromStrokeWhenFieldBlank` (QCOMPARE samples bpm after guess).
+- **Stay off:** Claude playhead / intensity-arc.
+
+## Handover: `claude/samn2-device-worker` (6 Nov, D-163: DeviceWorker into its own file, pure move)
+
+- **What moved:** the class `DeviceWorker` (declaration and inline members into `device_worker.h`, the out-of-line members into `device_worker.cpp`, same order, bodies byte-identical) with the constants and helpers only it uses (`kPrefConnectTest`, `kStopBudgetMs`, `kStopGraceMs`, `kNoDevice`, `HintFor`, `Err`). `device_controller.cpp` keeps only `DeviceController`.
+- **Shared in the header:** `kPrefTransport` and `Q()` (now `inline`), both used by the controller too; `namespace dev` alias. No `Q_OBJECT` in the worker, so no moc change. `friend class DeviceWorker` in `device_controller.h` is unchanged.
+- **Checked:** sorted-line comparison old region vs new files (only includes, `#pragma once`, namespace lines and the `inline` on `Q` differ), full build, ctest, `device_controller_test` / `training_controller_test` 3x each. No test edited.
+
+## Handover: `cursor/player-adapt-device-635a` (6 Nov, Adapt finished scripts for toys) — merged #169
+
+Owner ask: Player/Editor GUI — convert a finished script (after Create or an existing `.funscript`) for Sam Neo 2 and other toys.
+
+- **Player:** Inspector → Playback → *Adapt for device* (`optimizeFor` / `axesFromStroke` on `PlayerController`, rewrite+reload like Bake offset). Targets: Any device · Sam Neo 2 (defaults to Neo 2 when that device is connected). Confirm dialogs before rewrite.
+- **Editor:** Post-Create *Adapt for device* row above *Play in the Player* (`postCreateAdapt`) so the convert path is not buried in Tools….
+- **Tests:** `player_controller_test` optimize/axes; `inspector_qml_test` adapt card.
+- **Stay off:** Claude #163 playhead / #168 intensity arc.
+
+## Handover: `cursor/hybrid-reacquire-635a` (6 Nov, hybrid tip re-acquire) — merged #167
+
+Legal FunGen-beat CPU lever (D-139 / D-158): ONNX only when the classical path already failed.
+
+- **Engine:** `TrackOptions::hybrid_reacquire` + `ai_propose`; after CSRT and appearance miss, one AI box, fail-closed with `MatchesOriginal` when memory is on. Cache key v6 covers the flag.
+- **App:** Advanced → Tracking → *AI re-acquire on tip loss* (`generator.hybrid_reacquire`, default off). Loads `models/student/student.onnx` or `models/nudenet.onnx`; filters by tip class.
+- **Tests:** `track_box_test` hybrid hook unused when off; fires when on with a propose lambda.
+- **Stay off:** Claude #163 playhead.
+
+## Handover: `cursor/training-channel-caps-635a` (6 Nov, Training output caps) — merged #165
 
 V1 Training lever: soft ceilings on what the device receives.
 
@@ -457,7 +517,7 @@ Data and file fixes from a read-only bug hunt. Each fix has a test that failed b
 
 ## Next (in order; the work list is `LESSONS.md` § Gaps, `TEST_PARITY.md` and `P3_GENERATOR.md`)
 
-**Kernel (D-163), one theme per PR, after the driver registry:** a ModeRegistry with a `Repeater` in `Main.qml`; a narrow `DeviceService` interface instead of `DeviceController*` in Player, Training and `PlaybackOutput`; `DeviceWorker` into its own file; registries for detectors and teachers.
+**Kernel (D-163), one theme per PR, after the driver registry:** a ModeRegistry with a `Repeater` in `Main.qml`; a narrow `DeviceService` interface instead of `DeviceController*` in Player, Training and `PlaybackOutput`; ~~`DeviceWorker` into its own file~~ (done, `claude/samn2-device-worker`); registries for detectors and teachers.
 
 0. **Generator:** G2 stack ✅ (#114–#116); Tf/Tj distance stroke ✅ (#119); G3 feel ✅; Player partner overlay ✅ (#141); extras multi (`track_multi`) ✅ (#145); G3 feel probe ✅ (#146); G4a Advanced shell ✅ (#147); G4b Expert knobs ✅ (#151, live postprocess probe still open); MT-Debug trajectory overlay ✅ (this PR); next G8 `.sam` / live probe / Quality Doctor.
 1. **Look polish:** ✅ (#122, Claude takeover of Cursor #117; reduced-motion gates and a window-wide loop test added).

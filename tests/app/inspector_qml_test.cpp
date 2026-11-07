@@ -251,6 +251,61 @@ private slots:
         qInstallMessageHandler(g_previous);
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }
+
+    // Playback tab: Adapt for device rewrites a finished funscript for Neo 2.
+    void playbackTabAdaptForDevice() {
+        QTemporaryDir files;
+        const QString src = files.filePath("plain.funscript");
+        {
+            QFile f(src);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(R"({"actions":[{"at":0,"pos":10},{"at":200,"pos":90},{"at":400,"pos":20},{"at":600,"pos":80},{"at":800,"pos":30}]})");
+        }
+
+        g_messages.clear();
+        g_previous = qInstallMessageHandler(capture);
+        {
+            QQmlEngine engine;
+            engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
+            engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+            QQmlComponent comp(&engine);
+            comp.setData(R"(
+                import QtQuick
+                import SamN
+                Item {
+                    width: 360; height: 1700
+                    property alias player: pc
+                    DeviceController { id: dev }
+                    PlayerController { id: pc; device: dev }
+                    InspectorPanel { anchors.fill: parent; ctrl: pc; device: dev; tab: 2 }
+                })",
+                         QUrl("qrc:/test/WrapperAdapt.qml"));
+            QVERIFY2(comp.status() == QQmlComponent::Ready, qPrintable(comp.errorString()));
+            QQuickWindow window;
+            window.resize(360, 1700);
+            std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
+            QVERIFY(root);
+            root->setParentItem(window.contentItem());
+            window.show();
+            QVERIFY(QTest::qWaitForWindowExposed(&window));
+            auto* player = root->property("player").value<PlayerController*>();
+            QVERIFY(player);
+            QVERIFY(player->openPath(src));
+            for (const char* n : {"adaptCard", "adaptTarget", "adaptOptimize", "adaptAxes", "adaptEditTools"}) {
+                auto* it = root->findChild<QQuickItem*>(n);
+                QVERIFY2(it && it->isVisible(), n);
+            }
+            const QString msg = player->optimizeFor(QStringLiteral("neo2"));
+            QVERIFY2(msg.startsWith("Neo 2 ready"), qPrintable(msg));
+            QVERIFY(player->scriptPath().endsWith(QStringLiteral(".samn")));
+            QTRY_VERIFY(root->findChild<QQuickItem*>("adaptNote")->isVisible());
+            QCOMPARE(root->findChild<QQuickItem*>("adaptNote")->property("text").toString(), msg);
+            QVERIFY(player->axesFromStroke());
+            QTest::qWait(50);
+        }
+        qInstallMessageHandler(g_previous);
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
 };
 
 QTEST_MAIN(InspectorQmlTest)
