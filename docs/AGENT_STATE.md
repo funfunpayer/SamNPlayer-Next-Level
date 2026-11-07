@@ -2,9 +2,19 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 6 Nov 2026, Cursor, branch `cursor/player-rhythm-timeline-635a`: Player BPM from stroke + taller heatmap (wheel zoom). Adapt-for-device #169 merged. Stay off playhead (#163) / intensity-arc (#168).
+**Last update:** 7 Nov 2026, Cursor, branch `cursor/editor-tools-surface-635a`: Editor Align bar (Optimize/axes/sound) on the curves card. #169/#170 merged. Stay off playhead (#163) / intensity-arc (#168).
 
-## Handover: `cursor/player-rhythm-timeline-635a` (6 Nov, Player rhythm + timeline)
+## Handover: `cursor/editor-tools-surface-635a` (7 Nov, Editor Align bar)
+
+Owner: Player/Editor GUI — curves, optimize, align. Unbury Tools… for everyday edit.
+
+- **Align bar** on `editorCard` (`alignBar`): Any device / Sam Neo 2 + Optimize, Axes from stroke, From sound (+ keep contact), Beat bar — visible whenever a script is open.
+- **Range row:** Soft edges toggle + Cap intensity (150–800, default 400) beside the icon tools; `rangeTool` uses them.
+- **Tools…** slimmed to + lane and FPS snap.
+- **Tests:** `generator_qml_test` asserts alignBar / capIntensity; axes without opening the menu.
+- **Stay off:** Claude #163 playhead / #168 intensity arc.
+
+## Handover: `cursor/player-rhythm-timeline-635a` (6 Nov, Player rhythm + timeline) — merged #170
 
 Owner: GUI / Player / Editor curves, BPM, optimize & align.
 
