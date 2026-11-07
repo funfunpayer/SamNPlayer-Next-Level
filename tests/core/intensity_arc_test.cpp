@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <limits>
+#include <utility>
 #include <vector>
 
 #include "samn/intensity_arc.h"
@@ -34,6 +35,36 @@ samn::PhaseSignals Clip(const std::vector<Seg>& segs) {
             s.loudness.push_back(std::clamp(g.loud * (1 + 0.3 * j), 0.0, 1.0));
         }
     return s;
+}
+
+// A shape given as (motion, loudness) at t seconds, 500 ms per step, with
+// +-15 % jitter drawn separately for the motion and the sound.
+template <typename F>
+samn::PhaseSignals Shape(double seconds, F level) {
+    samn::PhaseSignals s;
+    s.step_ms = 500;
+    uint32_t state = 7;
+    const auto jitter = [&] {
+        state = state * 1103515245u + 12345u;
+        return double((state >> 16) % 1000) / 1000.0 - 0.5;
+    };
+    for (int i = 0; i < int(seconds * 2); ++i) {
+        const auto [m, l] = level(i / 2.0);
+        s.luma.push_back(0.5);
+        s.motion.push_back(m * (1 + 0.3 * jitter()));
+        s.loudness.push_back(std::min(1.0, l * (1 + 0.3 * jitter())));
+    }
+    return s;
+}
+using Level = std::pair<double, double>;
+// Climaxes of 12 s centred on `centres`, action between, a calm 10 s start.
+samn::PhaseSignals Bursts(double seconds, std::vector<double> centres, double half = 6) {
+    return Shape(seconds, [centres, half](double t) -> Level {
+        if (t < 10) return {.02, .2};
+        for (double c : centres)
+            if (std::abs(t - c) < half) return {.4, .9};
+        return {.2, .3};
+    });
 }
 
 // A: talk, action, a climax at 30-45 s (a third into the clip), long action after it.
@@ -75,6 +106,32 @@ double IntroEnd(const std::vector<samn::LabelPhase>& phases) {
     for (const auto& p : phases)
         if (p.name == "intro") return p.end_ms / 1000.0;
     return -1;
+}
+int Count(const std::vector<samn::LabelPhase>& phases, const char* name) {
+    return int(std::count_if(phases.begin(), phases.end(), [&](const samn::LabelPhase& p) { return p.name == name; }));
+}
+// Dark pictures over [from_s, to_s): an empty stretch for the phase rules.
+samn::PhaseSignals Black(samn::PhaseSignals s, double from_s, double to_s) {
+    for (size_t i = size_t(from_s * 2); i < size_t(to_s * 2) && i < s.luma.size(); ++i) s.luma[i] = 0;
+    return s;
+}
+// The motion as a slow random walk under even sound: no climax anywhere.
+samn::PhaseSignals Drift(uint32_t seed) {
+    samn::PhaseSignals s;
+    s.step_ms = 500;
+    uint32_t state = seed;
+    const auto jitter = [&] {
+        state = state * 1103515245u + 12345u;
+        return double((state >> 16) % 1000) / 1000.0 - 0.5;
+    };
+    double m = 0.2;
+    for (int i = 0; i < 1200; ++i) {
+        m = std::clamp(m + 0.01 * jitter(), 0.05, 0.4);
+        s.luma.push_back(0.5);
+        s.motion.push_back(m * (1 + 0.3 * jitter()));
+        s.loudness.push_back(0.3);
+    }
+    return s;
 }
 bool PeakNear(const samn::IntensityArc& arc, double truth_s, double tolerance_s) {
     for (const auto& p : arc.peaks)
@@ -229,16 +286,23 @@ TEST_CASE("arc: NaN, infinite and negative values count as 0") {
     CHECK(samn::ComputeArc(broken).peaks.empty());
 }
 
-TEST_CASE("arc: confidence follows the prominence, and sound and motion must agree") {
+TEST_CASE("arc: confidence ranks by prominence and drops when sound and motion disagree") {
+    // A ranking value, not a probability: prominence / 0.4, capped at 1, x 0.7
+    // when sound and motion top out more than 5 s apart.
+    const auto early = samn::ComputeArc(EarlyClimax());
+    REQUIRE(early.peaks.size() == 1);
+    CHECK(early.peaks[0].confidence == doctest::Approx(1.0));
+    const auto talky = samn::ComputeArc(TalkyIntro());
+    REQUIRE_FALSE(talky.peaks.empty());
+    CHECK(talky.peaks[0].confidence == doctest::Approx(0.811).epsilon(0.01));
     // Motion tops out at 60-72 s, the sound at 70-82 s: one climax, 10 s apart inside it.
     const auto apart = samn::ComputeArc(Clip({{10, .02, .2}, {50, .2, .3}, {10, .4, .3}, {2, .4, .9}, {10, .2, .9}, {38, .2, .3}}));
     REQUIRE(apart.peaks.size() == 1);
-    const auto& p = apart.peaks[0];
-    CHECK(p.confidence == doctest::Approx(0.7 * std::min(1.0, p.prominence / 0.4)));
-    const auto together = samn::ComputeArc(EarlyClimax());
-    REQUIRE(together.peaks.size() == 1);
-    CHECK(together.peaks[0].confidence == doctest::Approx(std::min(1.0, together.peaks[0].prominence / 0.4)));
-    CHECK(together.peaks[0].confidence > 0.9);
+    CHECK(apart.peaks[0].confidence == doctest::Approx(0.7));
+    // Even music has no top of its own near the motion's: it disagrees too.
+    const auto even_music = samn::ComputeArc(MotionPeak());
+    REQUIRE_FALSE(even_music.peaks.empty());
+    CHECK(even_music.peaks[0].confidence == doctest::Approx(0.519).epsilon(0.01));
 }
 
 TEST_CASE("arc: secondary climaxes must be high enough, far enough and few") {
@@ -246,12 +310,89 @@ TEST_CASE("arc: secondary climaxes must be high enough, far enough and few") {
     const auto weak = samn::ComputeArc(Clip({{10, .02, .2}, {30, .2, .3}, {12, .24, .36}, {40, .2, .3}, {12, .4, .9}, {16, .05, .1}}));
     REQUIRE(weak.peaks.size() == 1);
     CHECK(std::abs(weak.peaks[0].t_ms / 1000.0 - 98) <= 5);
-    // Four equal climaxes: the primary and two more. (Bursts much closer
-    // together lift the arc's median and fail the gain of 1.25 x median.)
-    const auto many = samn::ComputeArc(Clip({{10, .02, .2}, {45, .2, .3}, {10, .4, .9}, {45, .2, .3}, {10, .4, .9},
-                                             {45, .2, .3}, {10, .4, .9}, {45, .2, .3}, {10, .4, .9}, {30, .2, .3}}));
-    CHECK(many.peaks.size() == 3);
-    for (size_t i = 0; i < many.peaks.size(); ++i)
-        for (size_t j = i + 1; j < many.peaks.size(); ++j)
-            CHECK(std::llabs(many.peaks[i].t_ms - many.peaks[j].t_ms) >= 20000);
+    // Four equal 10 s climaxes `gap` seconds apart: the primary and two more,
+    // each on a true climax.
+    for (int gap : {25, 35, 45}) {
+        CAPTURE(gap);
+        const auto many = samn::ComputeArc(Clip({{10, .02, .2}, {gap, .2, .3}, {10, .4, .9}, {gap, .2, .3}, {10, .4, .9},
+                                                 {gap, .2, .3}, {10, .4, .9}, {gap, .2, .3}, {10, .4, .9}, {30, .2, .3}}));
+        CHECK(many.peaks.size() == 3);
+        for (const auto& p : many.peaks) {
+            bool on_one = false;
+            for (int k = 0; k < 4; ++k) on_one |= std::abs(p.t_ms / 1000.0 - (15 + gap + k * (gap + 10))) <= 5;
+            CHECK(on_one);
+        }
+        for (size_t i = 0; i < many.peaks.size(); ++i)
+            for (size_t j = i + 1; j < many.peaks.size(); ++j)
+                CHECK(std::llabs(many.peaks[i].t_ms - many.peaks[j].t_ms) >= 20000);
+    }
+}
+
+TEST_CASE("phases: a climax that runs to the clip's end is found") {
+    for (int length : {15, 20}) {
+        CAPTURE(length);
+        const auto phases = samn::SuggestPhases(Clip({{10, .02, .2}, {190 - length, .2, .3}, {length, .4, .9}}));
+        CHECK(Near(ClimaxMids(phases), 200 - length / 2.0, 5));
+    }
+}
+
+TEST_CASE("phases: a clip that opens at its top has an opening, not a climax") {
+    // Decided (D-165): the arc cannot tell a film cut in its climax from a
+    // loud cold open, and a climax at 0 s would stop the Training at once.
+    const auto open = samn::SuggestPhases(Clip({{15, .4, .9}, {185, .2, .3}}));
+    for (double m : ClimaxMids(open)) CHECK(m > 30);
+    const auto concert = samn::SuggestPhases(Clip({{30, .35, .95}, {215, .2, .35}, {13, .4, .9}, {42, .2, .35}}));
+    CHECK(Near(ClimaxMids(concert), 251.5, 5));
+    for (double m : ClimaxMids(concert)) CHECK(m > 40);
+}
+
+TEST_CASE("phases: a long plateau is one climax around its middle") {
+    const auto phases = samn::SuggestPhases(Clip({{10, .02, .2}, {50, .2, .3}, {100, .35, .8}, {80, .2, .3}}));
+    CHECK(Count(phases, "climax") == 1);
+    CHECK(Near(ClimaxMids(phases), 110, 5));
+}
+
+TEST_CASE("phases: short clips keep their climax") {
+    const auto c45 = samn::SuggestPhases(Clip({{8, .02, .2}, {18, .2, .3}, {8, .4, .9}, {11, .2, .3}}));
+    CHECK(Near(ClimaxMids(c45), 30, 5));
+    CHECK(std::abs(IntroEnd(c45) - 8) <= 3);
+    const auto c30 = samn::SuggestPhases(Clip({{5, .02, .2}, {12, .2, .3}, {6, .4, .9}, {7, .2, .3}}));
+    CHECK(Near(ClimaxMids(c30), 20, 5));
+}
+
+TEST_CASE("phases: two bursts close together: the climax sits on a burst, not in the dip") {
+    const auto s = Bursts(240, {100, 115}, 5);  // 95-105 s and 110-120 s
+    const auto mids = ClimaxMids(samn::SuggestPhases(s));
+    REQUIRE_FALSE(mids.empty());
+    for (double m : mids) CHECK((std::abs(m - 100) <= 3 || std::abs(m - 115) <= 3));
+    const auto arc = samn::ComputeArc(s);
+    REQUIRE_FALSE(arc.peaks.empty());
+    CHECK((PeakNear(arc, 100, 3) || PeakNear(arc, 115, 3)));
+}
+
+TEST_CASE("phases: a black cut inside a climax leaves one climax") {
+    const auto clip = Clip({{10, .02, .2}, {82, .2, .3}, {18, .4, .9}, {90, .2, .3}});  // climax 92-110 s
+    for (const auto& [from, to] : {std::pair{104.0, 106.5}, std::pair{98.0, 101.0}}) {
+        CAPTURE(from);
+        const auto phases = samn::SuggestPhases(Black(clip, from, to));
+        CHECK(Count(phases, "climax") == 1);
+        CHECK(Near(ClimaxMids(phases), 101, 5));
+        for (const auto& p : phases)
+            if (p.name == "climax") CHECK(p.end_ms - p.start_ms >= samn::PhaseRuleOptions{}.climax_min_ms);
+    }
+}
+
+TEST_CASE("phases: climaxes never merge past climax_max_ms") {
+    samn::PhaseRuleOptions o;
+    o.climax_min_ms = 30000;
+    const auto phases = samn::SuggestPhases(Bursts(260, {100, 122, 144}), o);
+    CHECK(Count(phases, "climax") >= 1);
+    for (const auto& p : phases)
+        if (p.name == "climax") CHECK(p.end_ms - p.start_ms <= o.climax_max_ms);
+}
+
+TEST_CASE("phases: slow drift is no climax") {
+    int climaxes = 0;
+    for (uint32_t seed = 1; seed <= 50; ++seed) climaxes += Count(samn::SuggestPhases(Drift(seed)), "climax");
+    CHECK(climaxes <= 2);
 }

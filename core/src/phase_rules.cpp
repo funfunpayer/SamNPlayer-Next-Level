@@ -1,6 +1,7 @@
 #include "samn/phase_rules.h"
 
 #include <algorithm>
+#include <cmath>
 
 #include "samn/intensity_arc.h"
 
@@ -67,29 +68,48 @@ std::vector<LabelPhase> SuggestPhases(const PhaseSignals& s, const PhaseRuleOpti
     size_t first = 0;
     while (first < n && in_empty[first]) ++first;
     size_t action = std::max(first, index(arc.intro_end_ms));
-    if (action > first && at(action) - at(first) >= o.min_intro_ms)
+    // A short clip has a short intro: the minimum scales like the arc.
+    const int64_t min_intro_ms = std::llround(double(o.min_intro_ms) * ArcScale(at(n)));
+    if (action > first && at(action) - at(first) >= min_intro_ms)
         p.SetPhase(at(first), at(action), "intro", false, "rules");
     else
         action = first;
     size_t last = n;
     while (last > action && in_empty[last - 1]) --last;
 
-    // Climaxes: the arc's peaks, each clamped to a sensible length around its top.
+    // Climaxes: the arc's peaks in rank order, each one stretch of free
+    // pictures (no empty stretch, a step away from every other climax, so
+    // that none is cut into pieces or merged past climax_max_ms), clamped to a
+    // sensible length around its top.
+    std::vector<bool> taken = in_empty;
+    // False outside [action, last), also for a - 1 at 0 (it wraps to the largest size_t).
+    const auto free = [&](size_t i) { return i >= action && i < last && !taken[i]; };
     size_t latest_a = 0, latest_b = 0;
     for (const auto& peak : arc.peaks) {
-        const size_t top = index(peak.t_ms);
-        if (top < action || top >= last || in_empty[top]) continue;
-        size_t a = std::max(action, index(peak.start_ms)), b = std::clamp(index(peak.end_ms), top + 1, last);
+        const size_t from = std::max(action, index(peak.start_ms)), to = std::min(last, index(peak.end_ms) + 1);
+        if (from >= to) continue;
+        // A top on an empty picture moves to the nearest free one of its stretch.
+        size_t top = std::clamp(index(peak.t_ms), from, to - 1);
+        for (size_t d = 0; !free(top) && d < to - from; ++d) {
+            if (top >= from + d && free(top - d)) top -= d;
+            else if (top + d < to && free(top + d)) top += d;
+        }
+        if (!free(top)) continue;
+        size_t a = top, b = top + 1;
+        while (a > from && free(a - 1)) --a;
+        while (b < to && free(b)) ++b;
         const size_t lo = steps(o.climax_min_ms), hi = steps(o.climax_max_ms);
-        while (b - a < lo && (a > action || b < last)) {
-            if (a > action) --a;
-            if (b - a < lo && b < last) ++b;
+        while (b - a < lo && (free(a - 1) || free(b))) {
+            if (free(a - 1)) --a;
+            if (b - a < lo && free(b)) ++b;
         }
         while (b - a > hi) {
             if (top - a > b - top) ++a;
             else --b;
         }
         p.SetPhase(at(a), at(b), "climax", false, "rules");
+        const size_t keep_from = a > 0 ? a - 1 : 0, keep_to = std::min(n, b + 1);
+        std::fill(taken.begin() + std::ptrdiff_t(keep_from), taken.begin() + std::ptrdiff_t(keep_to), true);
         if (b > latest_b) {
             latest_a = a;
             latest_b = b;

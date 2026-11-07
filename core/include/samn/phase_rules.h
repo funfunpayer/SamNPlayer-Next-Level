@@ -17,19 +17,17 @@ struct PhaseSignals {
     std::vector<double> luma;      // mean brightness of the frame
     std::vector<double> motion;    // mean change to the previous frame
     std::vector<double> loudness;  // sound level
-    std::vector<double> tempo;     // stroke speed from a script, normalised; not read yet (nothing fills it)
 };
 
 struct PhaseRuleOptions {
     double dark_luma = 0.06;        // darker than this is an empty picture
     double still_motion = 0.004;    // calmer than this is a still picture
     int64_t min_empty_ms = 2000;
-    int64_t min_intro_ms = 5000;
+    int64_t min_intro_ms = 5000;    // from 2 min on; shorter clips scale it down
     int64_t steady_ms = 5000;       // the action has begun after this long
-    double active_share = 0.35;     // unused since the intensity arc (D-165); kept for callers that set it
     int64_t climax_min_ms = 8000;
     int64_t climax_max_ms = 45000;
-    double climax_gain = 1.25;      // a climax must stand out over the arc's median
+    double climax_gain = 1.25;      // a climax stands this far over the median of the rest of the arc
     int64_t min_cooldown_ms = 5000;
 };
 
