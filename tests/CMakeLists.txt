@@ -30,6 +30,9 @@ if(SAMN_BUILD_VISION)
   target_compile_definitions(engine_tests PRIVATE SAMN_ENGINE_TESTDATA="${CMAKE_CURRENT_SOURCE_DIR}/engine/testdata")
   samn_copy_runtime_dlls(engine_tests)
   add_test(NAME engine_tests COMMAND engine_tests)
+  # Detection benchmark smoke check: one scene, one run, no extra track (about 10 s).
+  add_test(NAME samn_bench_smoke COMMAND samn_bench --quick --no-track --scenes clean --require-r 0.9
+           --out ${CMAKE_CURRENT_BINARY_DIR}/samn_bench_smoke)
   # Parity tool against 0.7 (run by hand, docs/benchmarks/P3_1_TRACK_PARITY.md).
   add_executable(engine_parity_dump EXCLUDE_FROM_ALL engine/parity_dump.cpp)
   target_link_libraries(engine_parity_dump PRIVATE samn_engine)
