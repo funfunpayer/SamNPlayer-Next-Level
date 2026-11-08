@@ -2,9 +2,18 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-make-playable-635a`: Make playable on media error. Stay off #168 / Speech-Hold.
+**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-mock-635a`: Mock (no device) checkbox. Stay off #168 / Speech-Hold.
 
-## Handover: `cursor/player-make-playable-635a` (8 Nov, Make playable)
+## Handover: `cursor/player-mock-635a` (8 Nov, Mock checkbox)
+
+Owner: finish Player/Editor GUI except Claude #168.
+
+- **Player:** `playbackMock` / `playback.mock` (default on); Play auto-connects Mock when disconnected.
+- **UI:** Inspector → View → "Mock (no device)" (`pb-mock`).
+- **Tests:** `playbackMockDefaultsOnAndConnectsOnPlay`.
+- **Stay off:** Claude #168. Live Audio vibration is PR #189.
+
+## Handover: `cursor/player-make-playable-635a` (8 Nov, Make playable) — merged #187
 
 Owner: finish Player/Editor GUI except Claude #168.
 
@@ -55,7 +64,7 @@ Owner: finish Player/Editor GUI except Claude #168.
 
 - Speech-Hold / Feel segment strip + heatmap bands (needs `audio_check` segments)
 - Probe-on-link warning leftover (Make playable button ✅ on error / no-picture)
-- Live Audio vibration; Mock checkbox leftover
+- Live Audio vibration (PR #189 in flight)
 - Scene strip thumbnails in Player (markers done; thumbs Generator-side)
 
 ## Handover: `cursor/player-bpm-audio-635a` (8 Nov, BPM From audio) — merged #183

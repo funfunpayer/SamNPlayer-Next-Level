@@ -139,6 +139,9 @@ class PlayerController : public QObject {
     Q_PROPERTY(bool trajectoryOverlay READ trajectoryOverlay WRITE setTrajectoryOverlay NOTIFY viewOptionsChanged)
     // 0.7 "Video play starts device" (playback.video_play_autostart, default on).
     Q_PROPERTY(bool videoPlayAutostart READ videoPlayAutostart WRITE setVideoPlayAutostart NOTIFY viewOptionsChanged)
+    // 0.7 "Mock (no device)" (playback.mock, default on): Play auto-connects the
+    // Mock transport when nothing is connected yet.
+    Q_PROPERTY(bool playbackMock READ playbackMock WRITE setPlaybackMock NOTIFY viewOptionsChanged)
     Q_PROPERTY(int suctionNow READ suctionNow NOTIFY playheadMsChanged)
     // The device the script plays on (one DeviceController for the app) and
     // what goes to it while playing (the stroke filter, safety range ...).
@@ -460,6 +463,8 @@ public:
     void setTrajectoryOverlay(bool on);
     bool videoPlayAutostart() const;
     void setVideoPlayAutostart(bool on);
+    bool playbackMock() const;
+    void setPlaybackMock(bool on);
     // Tip / partner / extra place at a script time (the playhead) from the
     // recorded paths ({x, y} in video pixels), empty when no sample is near.
     Q_INVOKABLE QVariantMap tipAt(double scriptMs) const;
