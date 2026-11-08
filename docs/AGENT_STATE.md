@@ -12,6 +12,15 @@ Owner: finish Player/Editor GUI except Claude #168.
 - **Messages:** `reportMediaError` / `reportNoPicture`; `mediaError` + `videoDurationMs` for QML.
 - **Stay off:** Claude #168. Full ffprobe/proxy naming still open.
 
+## Handover: `cursor/player-video-autostart-635a` (8 Nov, Video play autostart) — merged #188
+
+Owner: finish Player/Editor GUI except Claude #168.
+
+- **Player:** `videoPlayAutostart` / `playback.video_play_autostart` (default on); gates `setMediaPlaying` → device.
+- **UI:** Inspector → View → "Video play starts device".
+- **Tests:** `videoPlayAutostartDefaultsOnAndGatesDevice`.
+- **Stay off:** Claude #168.
+
 ## Handover: `cursor/player-auto-sync-635a` (8 Nov, Auto sync) — merged #186
 
 Owner: finish Player/Editor GUI except Claude #168.
@@ -46,7 +55,7 @@ Owner: finish Player/Editor GUI except Claude #168.
 
 - Speech-Hold / Feel segment strip + heatmap bands (needs `audio_check` segments)
 - Probe-on-link warning leftover (Make playable button ✅ on error / no-picture)
-- Video play autostart (PR in flight); live Audio vibration; Mock checkbox leftover
+- Live Audio vibration; Mock checkbox leftover
 - Scene strip thumbnails in Player (markers done; thumbs Generator-side)
 
 ## Handover: `cursor/player-bpm-audio-635a` (8 Nov, BPM From audio) — merged #183
