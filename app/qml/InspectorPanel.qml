@@ -585,8 +585,33 @@ GlassCard {
                     Note { objectName: "bpmNote"; visible: root.ctrl.toolNote !== "" && (root.ctrl.toolNote.indexOf("BPM") >= 0 || root.ctrl.toolNote.indexOf("audio") >= 0 || root.ctrl.toolNote.indexOf("sound") >= 0); text: root.ctrl.toolNote }
                 }
                 Card {
+                    title: qsTr("Sound Curve")
+                    help: "pb-aa-write"
+                    Note { text: qsTr("Write the video's loudness into the script as the Vibration curve (smoothed). Playback then uses axes mode. Undo restores the previous vibration for this script.") }
+                    Row {
+                        spacing: 8
+                        FlowButton {
+                            objectName: "soundCurveWriteInspector"
+                            text: qsTr("Sound curve")
+                            enabled: root.ctrl.hasScript && root.ctrl.videoName !== ""
+                            onClicked: root.ctrl.proposeSoundCurve()
+                        }
+                        FlowButton {
+                            objectName: "soundCurveUndoInspector"
+                            text: qsTr("Undo")
+                            visible: root.ctrl.canUndoSoundCurve
+                            onClicked: root.ctrl.undoSoundCurve()
+                        }
+                    }
+                    Note {
+                        objectName: "soundCurveNote"
+                        visible: root.ctrl.toolNote !== "" && root.ctrl.toolNote.indexOf("Sound") >= 0
+                        text: root.ctrl.toolNote
+                    }
+                }
+                Card {
                     title: qsTr("Audio Vibration")
-                    Note { text: qsTr("Vibration from the video's sound is written into the script in the Editor (\"Vibration from the sound\"). For Sam Neo 2 feel lanes from the stroke, use Playback → Adapt for device.") }
+                    Note { text: qsTr("Live vibration that follows the sound while playing is separate. For a denser bake tied to mapped frames, use the Editor (\"Vibration from the sound\"). For Sam Neo 2 feel lanes from the stroke, use Playback → Adapt for device.") }
                     FlowButton { objectName: "editForSound"; text: qsTr("Open in the Editor"); enabled: root.ctrl.hasScript; onClicked: root.editRequested(false) }
                 }
             }

@@ -1439,11 +1439,44 @@ Item {
                         enabled: ctrl.hasScript
                         onClicked: ctrl.guessBpmFromStroke()
                     }
+                    FlowButton {
+                        objectName: "bpmFromAudioTab"
+                        text: qsTr("From audio")
+                        enabled: ctrl.videoName !== ""
+                        onClicked: ctrl.guessBpmFromAudio()
+                    }
+                    FlowButton {
+                        objectName: "soundCurveWrite"
+                        text: qsTr("Sound curve")
+                        enabled: ctrl.hasScript && ctrl.videoName !== ""
+                        onClicked: ctrl.proposeSoundCurve()
+                    }
+                    FlowButton {
+                        objectName: "soundCurveUndo"
+                        text: qsTr("Undo sound curve")
+                        visible: ctrl.canUndoSoundCurve
+                        onClicked: ctrl.undoSoundCurve()
+                    }
                     Text {
                         textFormat: Text.PlainText
                         anchors.verticalCenter: parent.verticalCenter
                         text: qsTr("Blank BPM uses the stroke tempo when the grid is on.")
                         color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
+                    }
+                }
+                MessageDialog {
+                    id: soundCurveDialog
+                    title: qsTr("Sound Curve")
+                    text: qsTr("Write the sound as the Vibration curve (%1 points)? Undo brings the old curve back.")
+                           .arg(ctrl.pendingSoundCurvePoints)
+                    buttons: MessageDialog.Ok | MessageDialog.Cancel
+                    onAccepted: ctrl.confirmSoundCurve()
+                    onRejected: ctrl.cancelSoundCurve()
+                }
+                Connections {
+                    target: ctrl
+                    function onSoundCurveReady(points) {
+                        if (points >= 2) soundCurveDialog.open()
                     }
                 }
                 AudioLevelItem {

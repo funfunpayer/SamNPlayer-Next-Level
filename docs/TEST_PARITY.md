@@ -435,7 +435,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 | `app_session_guard_test.go` | `TestStartTrainingKeepsDeviceWhenSessionBusy` | todo-later | P2 (Training). |
 | `app_session_guard_test.go` | `TestStartPlaybackKeepsPlayerWhenSessionBusy` | n/a | Go `App` pointer bookkeeping (`activePlayer` / `activeDevice`); the Qt rule "no connect while a session is active" is covered by `playback_output_test.cpp connectionIsRefusedWhilePlaying`. |
 | `app_snapshot_test.go` | `TestSaveVideoSnapshot` | ported | tests/app/player_controller_test.cpp `snapshotNameAndSave` (cancel is the dialog's own) |
-| `app_sound_vibration_test.go` | `TestBakeSoundVibrationFollowsLoudness`, `TestBakeSoundVibrationWithContactKeepsScriptVibration`, `TestBakeSoundVibrationRejects` | todo-later | P3 (Sound Curve: loudness written as the vibration curve). |
+| `app_sound_vibration_test.go` | `TestBakeSoundVibrationFollowsLoudness`, `TestBakeSoundVibrationWithContactKeepsScriptVibration`, `TestBakeSoundVibrationRejects` | partly | Editor bake → `SoundVibrationLane` / `vibrationFollowsTheSound`; Player Sound Curve → `VibrationCurveFromSound` + `soundCurveWritesVibrationAndUndoes`. |
 | `app_stroke_filter_test.go` | `TestStrokeFilterSettingsRoundTrip` | covered | tests/app/playback_output_test.cpp `outputChoicesAreRemembered`, `speedLimitFilterShapesWhatIsSent` |
 | `app_suggest_test.go` | `TestSuggestPolarityAndInvertRoundtrip`, `TestSuggestOZoneOnLoadedScript`, `TestApplyRingDownOnLoadedScript`, `TestHonorInvertedSetting`, `TestInvertLoadedScriptExportsSamnCompanion` | todo-later | P4 Editor (Suggest polarity / O-zone, ring-down, honor inverted, invert + export .samn). |
 | `app_tcode_test.go` | `TestConnectDeviceViaTCode` | covered | tests/app/device_controller_test.cpp `tcodeOverTcp`, `tcodeOverUdpDefaultScheme` |
@@ -731,7 +731,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 | `pb_scene_strip_test.py` | `main` script, 19 checks | todo-later | P4 (scene strip with thumbnails). |
 | `pb_script_alone_test.py` | `main` script, 6 checks | covered | tests/app/playback_output_test.cpp (scripts are opened without a video) |
 | `pb_seek_sync_test.py` | `main` script, 2 checks | covered | tests/app/playback_output_test.cpp `seekEasesIn`; tests/app/player_controller_test.cpp `zoomWindow` (heatmap seek) |
-| `pb_sound_curve_test.py` | `main` script, 8 checks | todo-later | P3 (Sound Curve: loudness written as the vibration curve). |
+| `pb_sound_curve_test.py` | `main` script, 8 checks | partly | Covered by `VibrationCurveFromSound averages and decimates` + Player propose/confirm/undo (full 8-check UI script not ported). |
 | `pb_speed_highlight_knob_test.py` | `main` script, 8 checks | covered | tests/app/player_controller_test.cpp `speedHighlights` |
 | `pb_stroke_output_test.py` | `main` script, 26 checks | covered | tests/app/playback_output_test.cpp, tests/app/inspector_qml_test.cpp `devicesTabLoadsWithoutWarnings` |
 | `pb_tools_toggle_test.py` | `main` script, 11 checks | ported | tests/app/shell_qml_test.cpp `libraryAndInspectorCollapseAndTheVideoGrows` (both columns collapse to 44 px and expand again, the video grows and shrinks by the same amount, the choice is remembered by a new shell). Left out: the T key and the info sidebar (neither exists in SamNPlayer 2). |

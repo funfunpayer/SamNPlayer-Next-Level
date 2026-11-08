@@ -2,9 +2,18 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-bpm-audio-635a`: BPM From audio. #178–#182 on main. Stay off intensity-arc (#168).
+**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-sound-curve-635a`: Player Sound Curve. #178–#183 on main. Stay off intensity-arc (#168) and Speech-Hold/feel-bands.
 
-## Handover: `cursor/player-bpm-audio-635a` (8 Nov, BPM From audio)
+## Handover: `cursor/player-sound-curve-635a` (8 Nov, Sound Curve)
+
+Owner: finish Player/Editor GUI except Claude #168.
+
+- **Core:** `VibrationCurveFromSound` (250 ms avg, Δ≥4 / 2 s, always last).
+- **Player:** `proposeSoundCurve` / `confirmSoundCurve` / `undoSoundCurve`; Audio Analysis + Inspector.
+- **Tests:** core decimate + `soundCurveWritesVibrationAndUndoes` (skips without decoder).
+- **Stay off:** Claude #168.
+
+## Handover: `cursor/player-bpm-audio-635a` (8 Nov, BPM From audio) — merged #183
 
 Owner: finish Player/Editor GUI except Claude #168.
 
