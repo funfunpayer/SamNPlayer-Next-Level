@@ -130,6 +130,11 @@ PlayerController::PlayerController(QObject* parent)
         const double c = v.is_number() ? v.get<double>() : 400.0;
         capIntensity_ = (std::isfinite(c) && c > 0) ? std::clamp(c, 150.0, 800.0) : 400.0;
     }
+    {
+        const auto v = settings().get("playback.fps_snap", 0.0);
+        const double f = v.is_number() ? v.get<double>() : 0.0;
+        fpsSnap_ = (std::isfinite(f) && f > 0) ? std::clamp(f, 0.0, 240.0) : 0.0;
+    }
 }
 PlayerController::~PlayerController() = default;
 
@@ -1013,6 +1018,17 @@ void PlayerController::setScaleSoftEdges(bool on) {
     emit curveEditChanged();
 }
 
+void PlayerController::setFpsSnap(double fps) {
+    fps = std::isfinite(fps) ? std::clamp(fps, 0.0, 240.0) : 0.0;
+    if (fps == fpsSnap_) return;
+    fpsSnap_ = fps;
+    try {
+        settings().set("playback.fps_snap", fpsSnap_);
+    } catch (const std::exception&) {
+    }
+    emit curveEditChanged();
+}
+
 namespace {
 
 enum class EditLane { Stroke, Vibration, Suction };
@@ -1760,7 +1776,15 @@ void PlayerController::setOffsetMs(int ms) {
     movePlayhead(videoMs_, video ? mediaHead_.estimate() : videoMs_, !video);
 }
 
-void PlayerController::setVideoPositionMs(qint64 videoMs) { movePlayhead(videoMs, videoMs, true); }
+void PlayerController::setVideoPositionMs(qint64 videoMs) {
+    // 0.7 FPS-Snap: explicit seeks land on frame boundaries of script time.
+    if (fpsSnap_ > 0 && !stroke_.empty()) {
+        const int64_t script = samn::SnapMs(samn::script_time(videoMs, offsetMs_), fpsSnap_);
+        videoMs = script + offsetMs_;
+        if (videoMs < 0) videoMs = 0;
+    }
+    movePlayhead(videoMs, videoMs, true);
+}
 
 void PlayerController::movePlayhead(qint64 videoMs, qint64 outputVideoMs, bool fromReport) {
     videoMs_ = videoMs;

@@ -1340,6 +1340,30 @@ GlassCard {
                             }
                         }
                     }
+                    Row {
+                        spacing: 8
+                        Text {
+                            textFormat: Text.PlainText
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 78
+                            text: qsTr("FPS-Snap")
+                            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                        }
+                        FlowSlider {
+                            objectName: "fpsSnap"
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: curveEdit.width - 24 - 78 - 48
+                            from: 0; to: 60; value: root.ctrl.fpsSnap
+                            onMoved: (v) => root.ctrl.fpsSnap = Math.round(v)
+                        }
+                        Text {
+                            textFormat: Text.PlainText
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: root.ctrl.fpsSnap > 0 ? qsTr("%1").arg(Math.round(root.ctrl.fpsSnap)) : qsTr("off")
+                            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                        }
+                    }
+                    Note { text: qsTr("Seeks snap to frame boundaries when FPS-Snap is on (0 = off).") }
                     Note { visible: !root.ctrl.hasMarker; text: qsTr("Mark a range for Cap / Scale / Delete. Invert all works without one.") }
                     Note { objectName: "curveEditNote"; visible: root.ctrl.toolNote !== ""; text: root.ctrl.toolNote }
                     FlowButton {

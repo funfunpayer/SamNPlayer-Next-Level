@@ -2,7 +2,16 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 8 Nov 2026, Cursor, branch `cursor/plus-axis-635a`: CreateScriptAxis / "+ Axis…" + Curve select; stacks on typed-offset #178. Stay off intensity-arc (#168).
+**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-fps-snap-635a`: Player FPS-Snap seeks; stacks on plus-axis #179. Stay off intensity-arc (#168).
+
+## Handover: `cursor/player-fps-snap-635a` (8 Nov, Player FPS-Snap)
+
+Owner: finish Player/Editor GUI except Claude #168.
+
+- **Player:** `fpsSnap` (playback.fps_snap); `setVideoPositionMs` snaps script time via `SnapMs`.
+- **Inspector → View → Curve edit:** FPS-Snap slider 0–60 (off at 0).
+- **Tests:** `fpsSnapSeeksToFrameBoundaries`.
+- **Stay off:** Claude #168.
 
 ## Handover: `cursor/plus-axis-635a` (8 Nov, CreateScriptAxis / "+ Axis…")
 
