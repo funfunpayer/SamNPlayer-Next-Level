@@ -2,14 +2,14 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-audio-vib-635a`: Live Audio vibration. Stay off #168 / Speech-Hold.
+**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-audio-vib-635a`: Live Audio vibration + Settings mirror. Stay off #168 / Speech-Hold.
 
 ## Handover: `cursor/player-audio-vib-635a` (8 Nov, Audio vibration)
 
 Owner: finish Player/Editor GUI except Claude #168.
 
 - **Player:** `audioVibration` / `playback.audio_vibration` (default off); at Play start `ApplyAudioVibration` on mapped frames; warm decode on toggle; pause restores script lanes.
-- **UI:** Inspector Audio + View toggles (`pb-audio-vibration`).
+- **UI:** Inspector Audio + View (`pb-audio-vibration`); Settings → Play (`st-audio-vibration`).
 - **Tests:** `audioVibrationDefaultsOffAndSwapsOnPlay`.
 - **Stay off:** Claude #168.
 
