@@ -1323,6 +1323,7 @@ void PlayerController::remap(bool fresh) {
     // these frames), on the device tick.
     vibration_ = laneFrom(frames, false);
     suction_ = laneFrom(frames, true);
+    audioVibApplied_ = false;
     if (fresh)
         output_.setScript(stroke_, vibration_, suction_, axisActions_);
     else
@@ -1336,6 +1337,8 @@ void PlayerController::remap(bool fresh) {
                 c->setActions(c->lane() == QLatin1String("vibration") ? vibration_ : suction_);
         emit playheadMsChanged();  // the live values at the playhead
     }
+    // Live audio vibration: re-apply after a mid-play remap when ready.
+    if (output_.playing()) applyLiveAudioVibrationIfReady();
 }
 
 QStringList PlayerController::strengthPresets() const {
@@ -2023,9 +2026,11 @@ void PlayerController::setVideo(const QString& path) {
     videoDurationMs_ = 0;  // the player reports the new one
     mediaHead_.clear();
     mediaHead_.setDurationMs(0);
+    clearPlayEnvelope();
     emit videoChanged();
     if (!path.isEmpty()) emit videoLinked(path);
     emit scriptChanged();  // noScriptForVideo depends on the video too
+    if (audioVibration() && !path.isEmpty()) warmPlayAudio();
 }
 
 void PlayerController::setError(const QString& e) {
@@ -2365,6 +2370,106 @@ void PlayerController::setVideoPlayAutostart(bool on) {
     emit viewOptionsChanged();
 }
 
+bool PlayerController::audioVibration() const {
+    const auto v = const_cast<PlayerController*>(this)->settings().get("playback.audio_vibration", false);
+    return v.is_boolean() && v.get<bool>();
+}
+
+void PlayerController::setAudioVibration(bool on) {
+    if (on == audioVibration()) return;
+    settings().set("playback.audio_vibration", on);
+    emit viewOptionsChanged();
+    if (on) {
+        warmPlayAudio();
+    } else {
+        restoreScriptVibrationIfNeeded();
+    }
+}
+
+void PlayerController::setPlayAudioEnvelopeForTest(std::vector<double> envelope) {
+    const bool had = !playEnvelope_.empty();
+    playEnvelope_ = std::move(envelope);
+    if (had != !playEnvelope_.empty()) emit audioVibrationReadyChanged();
+}
+
+void PlayerController::ensurePlayAudioDecoder() {
+    if (playAudio_) return;
+    playAudio_ = new AudioLevelDecoder(this);
+    connect(playAudio_, &AudioLevelDecoder::finished, this, [this](const std::vector<double>& env) {
+        playEnvelope_ = env;
+        emit audioVibrationReadyChanged();
+        if (output_.playing()) applyLiveAudioVibrationIfReady();
+        if (playEnvelope_.empty())
+            qInfo().noquote() << QStringLiteral("Audio vibration: empty envelope — keeping script vibration");
+        else
+            qInfo().noquote() << QStringLiteral("Audio vibration: envelope ready (%1 steps)").arg(int(playEnvelope_.size()));
+    });
+    connect(playAudio_, &AudioLevelDecoder::failed, this, [this](const QString& error) {
+        clearPlayEnvelope();
+        qInfo().noquote() << QStringLiteral("Audio vibration: %1 — keeping script vibration").arg(error);
+    });
+}
+
+void PlayerController::warmPlayAudio() {
+    if (videoPath_.isEmpty()) return;
+    ensurePlayAudioDecoder();
+    if (playAudio_->busy()) return;
+    playAudio_->start(videoPath_);
+}
+
+void PlayerController::clearPlayEnvelope() {
+    const bool had = !playEnvelope_.empty();
+    playEnvelope_.clear();
+    if (had) emit audioVibrationReadyChanged();
+}
+
+double PlayerController::activeVibrationScale() const {
+    for (const auto& p : strength_) {
+        if (!activeStrength_.empty() && p.name == activeStrength_)
+            return p.vibration_scale > 0 ? p.vibration_scale : 1.0;
+    }
+    return 1.0;
+}
+
+void PlayerController::applyLiveAudioVibrationIfReady() {
+    if (!audioVibration()) return;
+    if (stroke_.empty()) return;
+    if (videoPath_.isEmpty()) {
+        qInfo().noquote() << QStringLiteral("Audio vibration: no video — keeping script vibration");
+        return;
+    }
+    if (playEnvelope_.empty()) {
+        warmPlayAudio();
+        qInfo().noquote() << QStringLiteral("Audio vibration: envelope not ready — keeping script vibration");
+        return;
+    }
+    try {
+        const samn::StrengthPreset* preset = nullptr;
+        for (const auto& p : strength_)
+            if (!activeStrength_.empty() && p.name == activeStrength_) preset = &p;
+        const auto plan = samn::PlanPlayback(scriptMap_, profile_, mapping_.choices(recipeHasContact_), preset);
+        auto frames = samn::PlaybackFrames(stroke_, plan);
+        frames = samn::ApplyAudioVibration(frames, playEnvelope_, samn::kAudioLevelStepMs, offsetMs_,
+                                           activeVibrationScale());
+        vibration_ = laneFrom(frames, false);
+        suction_ = laneFrom(frames, true);
+        output_.setLevels(vibration_, suction_);
+        audioVibApplied_ = true;
+        for (const auto& c : curves_)
+            if (c && c->lane() != QLatin1String("stroke"))
+                c->setActions(c->lane() == QLatin1String("vibration") ? vibration_ : suction_);
+        emit playheadMsChanged();
+        qInfo().noquote() << QStringLiteral("Audio vibration: live from video sound");
+    } catch (const std::exception& e) {
+        qInfo().noquote() << QStringLiteral("Audio vibration: %1 — keeping script vibration").arg(FromU8(e.what()));
+    }
+}
+
+void PlayerController::restoreScriptVibrationIfNeeded() {
+    if (!audioVibApplied_) return;
+    remap(false);
+}
+
 void PlayerController::setMediaPlaying(bool playing) {
     // A pause stops the ticks before the output stops the device.
     if (!playing) {
@@ -2379,7 +2484,12 @@ void PlayerController::setMediaPlaying(bool playing) {
 }
 
 void PlayerController::setPlaying(bool playing) {
+    // Apply live audio vibration before the device session starts; restore
+    // script lanes only after output_.playing is false so remap does not
+    // re-apply mid-stop.
+    if (playing) applyLiveAudioVibrationIfReady();
     output_.setPlaying(playing);
+    if (!playing) restoreScriptVibrationIfNeeded();
     if (playing) autoEoFired_ = false;
     if (playing && mediaError_) setError({});
     if (playing) {

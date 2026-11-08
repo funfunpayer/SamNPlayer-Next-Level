@@ -2,9 +2,18 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-make-playable-635a`: Make playable on media error. Stay off #168 / Speech-Hold.
+**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-audio-vib-635a`: Live Audio vibration. Stay off #168 / Speech-Hold.
 
-## Handover: `cursor/player-make-playable-635a` (8 Nov, Make playable)
+## Handover: `cursor/player-audio-vib-635a` (8 Nov, Audio vibration)
+
+Owner: finish Player/Editor GUI except Claude #168.
+
+- **Player:** `audioVibration` / `playback.audio_vibration` (default off); at Play start `ApplyAudioVibration` on mapped frames; warm decode on toggle; pause restores script lanes.
+- **UI:** Inspector Audio + View toggles (`pb-audio-vibration`).
+- **Tests:** `audioVibrationDefaultsOffAndSwapsOnPlay`.
+- **Stay off:** Claude #168.
+
+## Handover: `cursor/player-make-playable-635a` (8 Nov, Make playable) — merged #187
 
 Owner: finish Player/Editor GUI except Claude #168.
 
@@ -55,7 +64,7 @@ Owner: finish Player/Editor GUI except Claude #168.
 
 - Speech-Hold / Feel segment strip + heatmap bands (needs `audio_check` segments)
 - Probe-on-link warning leftover (Make playable button ✅ on error / no-picture)
-- Live Audio vibration; Mock checkbox leftover
+- Mock checkbox leftover
 - Scene strip thumbnails in Player (markers done; thumbs Generator-side)
 
 ## Handover: `cursor/player-bpm-audio-635a` (8 Nov, BPM From audio) — merged #183

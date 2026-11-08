@@ -139,6 +139,10 @@ class PlayerController : public QObject {
     Q_PROPERTY(bool trajectoryOverlay READ trajectoryOverlay WRITE setTrajectoryOverlay NOTIFY viewOptionsChanged)
     // 0.7 "Video play starts device" (playback.video_play_autostart, default on).
     Q_PROPERTY(bool videoPlayAutostart READ videoPlayAutostart WRITE setVideoPlayAutostart NOTIFY viewOptionsChanged)
+    // 0.7 "Audio vibration" (playback.audio_vibration, default off): at the next
+    // Play start, vibration follows video loudness; suction stays on the script.
+    Q_PROPERTY(bool audioVibration READ audioVibration WRITE setAudioVibration NOTIFY viewOptionsChanged)
+    Q_PROPERTY(bool audioVibrationReady READ audioVibrationReady NOTIFY audioVibrationReadyChanged)
     Q_PROPERTY(int suctionNow READ suctionNow NOTIFY playheadMsChanged)
     // The device the script plays on (one DeviceController for the app) and
     // what goes to it while playing (the stroke filter, safety range ...).
@@ -460,6 +464,11 @@ public:
     void setTrajectoryOverlay(bool on);
     bool videoPlayAutostart() const;
     void setVideoPlayAutostart(bool on);
+    bool audioVibration() const;
+    void setAudioVibration(bool on);
+    bool audioVibrationReady() const { return !playEnvelope_.empty(); }
+    // Tests: inject a loudness envelope without Qt Multimedia decode.
+    void setPlayAudioEnvelopeForTest(std::vector<double> envelope);
     // Tip / partner / extra place at a script time (the playhead) from the
     // recorded paths ({x, y} in video pixels), empty when no sample is near.
     Q_INVOKABLE QVariantMap tipAt(double scriptMs) const;
@@ -544,6 +553,7 @@ signals:
     void marksChanged();
     void bpmChanged();
     void viewOptionsChanged();
+    void audioVibrationReadyChanged();
     // For the Library: a script was opened, a video linked, marks edited.
     void mappedChanged();
     void scriptOpened(const QString& path);
@@ -653,6 +663,15 @@ private:
     QString autoSyncConfidence_ = QStringLiteral("none");
     int autoSyncOffsetMs_ = 0;
     void clearAutoSyncSuggestion();
+    AudioLevelDecoder* playAudio_ = nullptr;
+    std::vector<double> playEnvelope_;
+    bool audioVibApplied_ = false;
+    void ensurePlayAudioDecoder();
+    void warmPlayAudio();
+    void clearPlayEnvelope();
+    void applyLiveAudioVibrationIfReady();
+    void restoreScriptVibrationIfNeeded();
+    double activeVibrationScale() const;
 };
 
 }  // namespace samn::ui

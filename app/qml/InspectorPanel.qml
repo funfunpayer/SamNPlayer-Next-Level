@@ -611,7 +611,20 @@ GlassCard {
                 }
                 Card {
                     title: qsTr("Audio Vibration")
-                    Note { text: qsTr("Live vibration that follows the sound while playing is separate. For a denser bake tied to mapped frames, use the Editor (\"Vibration from the sound\"). For Sam Neo 2 feel lanes from the stroke, use Playback → Adapt for device.") }
+                    help: "pb-audio-vibration"
+                    FlowButton {
+                        objectName: "pb-audio-vibration"
+                        text: qsTr("Audio vibration")
+                        checked: root.ctrl.audioVibration
+                        onClicked: root.ctrl.audioVibration = !root.ctrl.audioVibration
+                    }
+                    Note {
+                        text: root.ctrl.audioVibration
+                              ? (root.ctrl.audioVibrationReady
+                                 ? qsTr("On: at the next Play start, vibration follows the video's sound. Suction stays on the script. Files are not changed.")
+                                 : qsTr("On: reading the sound… Play keeps script vibration until the envelope is ready."))
+                              : qsTr("Off (default). For a denser bake into the file, use the Editor (“Vibration from the sound”).")
+                    }
                     FlowButton { objectName: "editForSound"; text: qsTr("Open in the Editor"); enabled: root.ctrl.hasScript; onClicked: root.editRequested(false) }
                 }
             }
@@ -1298,6 +1311,16 @@ GlassCard {
                         onClicked: root.ctrl.videoPlayAutostart = !root.ctrl.videoPlayAutostart
                     }
                     Note { text: qsTr("When off, the film can play without moving the toy. Script Play (no video) still starts the device.") }
+                    Row {
+                        spacing: 8
+                        FlowButton {
+                            objectName: "pb-audio-vibration-view"
+                            text: qsTr("Audio vibration")
+                            checked: root.ctrl.audioVibration
+                            onClicked: root.ctrl.audioVibration = !root.ctrl.audioVibration
+                        }
+                        HelpChip { key: "pb-audio-vibration"; anchors.verticalCenter: parent.verticalCenter }
+                    }
                     // MT-Debug tip/partner path (0.7 Show tip path).
                     Row {
                         spacing: 8
