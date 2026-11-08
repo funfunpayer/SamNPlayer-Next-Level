@@ -290,6 +290,21 @@ private slots:
         QCOMPARE(c.fpsSnap(), 30.0);
     }
 
+    // 0.7 Scene markers strip (pb.scenes): off by default in the Player.
+    void showScenesDefaultsOffAndRemembers() {
+        PlayerController c;
+        QVERIFY(!c.showScenes());
+        QSignalSpy spy(&c, &PlayerController::viewOptionsChanged);
+        c.setShowScenes(true);
+        QVERIFY(c.showScenes());
+        QCOMPARE(spy.count(), 1);
+        c.setShowScenes(true);  // no-op
+        QCOMPARE(spy.count(), 1);
+        c.setShowScenes(false);
+        QVERIFY(!c.showScenes());
+        QCOMPARE(spy.count(), 2);
+    }
+
     // 0.7 CreateScriptAxis / "+ Axis…": centred companion file, never overwrite.
     void createCompanionAxisAddsLane() {
         QTemporaryDir d;

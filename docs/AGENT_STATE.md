@@ -2,9 +2,17 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-keys-635a`: stage keys hint + Inspector collapse tip. #178–#180 on main. Stay off intensity-arc (#168).
+**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-scenes-toggle-635a`: Scene markers toggle (`showScenes`). #178–#181 on main. Stay off intensity-arc (#168).
 
-## Handover: `cursor/player-keys-635a` (8 Nov, Player keys hint)
+## Handover: `cursor/player-scenes-toggle-635a` (8 Nov, Scene markers toggle)
+
+Owner: finish Player/Editor GUI except Claude #168.
+
+- **View → Scene markers:** `showScenes` / `ui.player.scenes` (default off); hides chapter strip.
+- **Tests:** `showScenesDefaultsOffAndRemembers`.
+- **Stay off:** Claude #168.
+
+## Handover: `cursor/player-keys-635a` (8 Nov, Player keys hint) — merged #181
 
 Owner: finish Player/Editor GUI except Claude #168.
 

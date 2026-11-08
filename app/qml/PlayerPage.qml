@@ -1052,7 +1052,7 @@ Item {
                     }
                 }
                 LaneName { name: qsTr("Audio Level"); dot: "#93aec4"; height: audioLane.height; visible: audioLane.visible }
-                LaneName { name: qsTr("Chapters"); dot: "#2f80ed"; height: chapterStrip.height; visible: chapterStrip.visible }
+                LaneName { name: qsTr("Chapters"); dot: "#2f80ed"; height: chapterStrip.height; visible: chapterStrip.visible && ctrl.showScenes }
                 Item { width: 1; height: 4; visible: heatBar.visible }
                 LaneName { name: qsTr("Heatmap"); dot: "#e8603c"; height: heatBar.height; visible: heatBar.visible }
             }
@@ -1192,7 +1192,8 @@ Item {
                 Item {
                     id: chapterStrip
                     width: parent.width; height: 30
-                    visible: ctrl.hasScript
+                    // 0.7 pb.scenes: off by default in the Player.
+                    visible: ctrl.hasScript && ctrl.showScenes
                     clip: true
                     readonly property var colors: [Qt.rgba(47 / 255, 128 / 255, 237 / 255, 0.45), Qt.rgba(242 / 255, 140 / 255, 40 / 255, 0.45),
                                                    Qt.rgba(155 / 255, 81 / 255, 224 / 255, 0.45), Qt.rgba(39 / 255, 174 / 255, 160 / 255, 0.45),

@@ -1928,6 +1928,16 @@ void PlayerController::setAudioLane(bool on) {
     emit viewOptionsChanged();
 }
 
+bool PlayerController::showScenes() const {
+    return const_cast<PlayerController*>(this)->uiValue(QStringLiteral("player.scenes"), false).toBool();
+}
+
+void PlayerController::setShowScenes(bool on) {
+    if (on == showScenes()) return;
+    setUiValue(QStringLiteral("player.scenes"), on);
+    emit viewOptionsChanged();
+}
+
 bool PlayerController::showContactMarks() const {
     return const_cast<PlayerController*>(this)->uiValue(QStringLiteral("player.showContactMarks"), true).toBool();
 }

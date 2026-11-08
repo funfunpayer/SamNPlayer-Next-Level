@@ -1205,6 +1205,14 @@ GlassCard {
                             onClicked: root.ctrl.audioLane = !root.ctrl.audioLane
                         }
                         FlowButton {
+                            objectName: "showScenes"
+                            text: qsTr("Scene markers"); checked: root.ctrl.showScenes
+                            onClicked: root.ctrl.showScenes = !root.ctrl.showScenes
+                        }
+                    }
+                    Row {
+                        spacing: 8
+                        FlowButton {
                             text: qsTr("0–100 on video"); checked: root.ctrl.posOverlay
                             onClicked: root.ctrl.posOverlay = !root.ctrl.posOverlay
                         }
