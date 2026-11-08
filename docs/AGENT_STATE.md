@@ -11,6 +11,13 @@ On 8 Nov GitHub returned HTTP 504 for the release download of `json.tar.xz` for 
 - **CMake:** `find_package(nlohmann_json 3.11 QUIET)` first; only if nothing is found, the shallow git clone of the pinned tag v3.11.3 that main already used instead of the Releases archive. No change for a developer machine without the package.
 - **CI:** the three Linux jobs install `nlohmann-json3-dev` (3.11.3 on Ubuntu 24.04) together with OpenCV. Verified: configure and build `core_tests` against the system package, 491/491 pass; without the package the fallback branch is taken. First CI run of this PR failed because `include(FetchContent)` had moved into the fallback branch (vision/ needs it for ONNX Runtime): fixed, it stays unconditional.
 - **Not changed:** the Windows job still fetches nlohmann_json (git clone) from github.com. Adding `nlohmann-json` to `ci/vcpkg/vcpkg.json` would change the hash that keys the vcpkg and the FFmpeg-dav1d caches and force an expensive rebuild; do it as its own PR if the outage returns.
+## Handover: `cursor/player-code-tidy-635a` (8 Nov, Player code tidy)
+
+Owner: clean Player code — same class, split translation units.
+
+- `player_script_io.cpp` / `player_audio_jobs.cpp` / `player_marks.cpp` + `player_internal.h`
+- No Q_PROPERTY / objectName / behaviour change. Stacked on probe-link.
+- **Stay off:** Claude #168. No QML radius / Inspector tab split in this PR.
 
 ## Handover: `cursor/player-probe-link-635a` (8 Nov, Probe on link)
 
