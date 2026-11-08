@@ -791,6 +791,7 @@ GlassCard {
                     title: qsTr("Contact vibration & strength")
                     visible: root.ctrl.contactControls || root.ctrl.strengthPresets.length > 0
                     readonly property var mapping: root.ctrl.mapping
+                    readonly property var probe: root.ctrl.contactFeelProbe
                     FlowButton {
                         objectName: "contactOff"
                         visible: root.ctrl.contactControls
@@ -813,7 +814,7 @@ GlassCard {
                         active: root.ctrl.contactKnobsLive
                         label: qsTr("Sensitivity")
                         help: "playback.sensitivity"
-                        tip: qsTr("Lower = the vibration starts earlier in the stroke. Starts from the script's recipe; not saved.")
+                        tip: qsTr("Lower = the vibration starts earlier in the stroke. Starts from the script's recipe; Save to script keeps it.")
                         from: 0.4; to: 0.95; value: contact.mapping.contactSpan
                         valueText: contact.mapping.contactSpan.toFixed(2)
                         onPicked: (v) => contact.mapping.contactSpan = Math.round(v * 20) / 20
@@ -830,6 +831,105 @@ GlassCard {
                             currentIndex: Math.max(0, contact.mapping.contactCurves.indexOf(contact.mapping.contactCurve))
                             onActivated: (i) => contact.mapping.contactCurve = contact.mapping.contactCurves[i]
                         }
+                    }
+                    // 0.7 Contact feel probe: synthetic bounce through Sensitivity / Curve / Strength.
+                    Column {
+                        objectName: "contactFeelProbe"
+                        visible: root.ctrl.contactControls
+                        width: parent.width
+                        spacing: 4
+                        Row {
+                            spacing: 8
+                            width: parent.width
+                            Text {
+                                textFormat: Text.PlainText
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: qsTr("Feel probe")
+                                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                            HelpChip { key: "gen-feel-probe"; anchors.verticalCenter: parent.verticalCenter }
+                            Item { width: Math.max(0, parent.width - 200); height: 1 }
+                            Text {
+                                objectName: "playerFeelProbeActive"
+                                textFormat: Text.PlainText
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: qsTr("%1% active").arg(Math.round(contact.probe.activePct || 0))
+                                color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                            Text {
+                                objectName: "playerFeelProbePeak"
+                                textFormat: Text.PlainText
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: qsTr("peak %1").arg(Math.round(contact.probe.peak || 0))
+                                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                        }
+                        Canvas {
+                            id: playerFeelProbeCanvas
+                            objectName: "playerFeelProbeCanvas"
+                            width: parent.width
+                            height: 72
+                            property var probe: contact.probe
+                            onProbeChanged: requestPaint()
+                            onWidthChanged: requestPaint()
+                            onHeightChanged: requestPaint()
+                            onPaint: {
+                                const ctx = getContext("2d")
+                                ctx.reset()
+                                const w = width, h = height
+                                ctx.fillStyle = Qt.rgba(1, 1, 1, 0.04)
+                                ctx.fillRect(0, 0, w, h)
+                                const stroke = probe.stroke || []
+                                const vib = probe.vib || []
+                                const peaks = probe.peaks || []
+                                function poly(pts, color, width) {
+                                    if (pts.length < 2) return
+                                    ctx.beginPath()
+                                    ctx.strokeStyle = color
+                                    ctx.lineWidth = width
+                                    ctx.lineJoin = "round"
+                                    for (let i = 0; i < pts.length; ++i) {
+                                        const x = pts[i].x * w
+                                        const y = (1 - pts[i].y) * h
+                                        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
+                                    }
+                                    ctx.stroke()
+                                }
+                                poly(stroke, Theme.orange, 1.5)
+                                poly(vib, Theme.cyan, 1.75)
+                                ctx.fillStyle = Theme.cyan
+                                for (let i = 0; i < peaks.length; ++i) {
+                                    const x = peaks[i].x * w
+                                    const y = (1 - peaks[i].y) * h
+                                    ctx.beginPath()
+                                    ctx.arc(x, y, 2.5, 0, Math.PI * 2)
+                                    ctx.fill()
+                                }
+                            }
+                        }
+                        Text {
+                            objectName: "playerFeelProbeHint"
+                            width: parent.width
+                            textFormat: Text.PlainText
+                            wrapMode: Text.WordWrap
+                            text: contact.probe.hint || ""
+                            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11
+                        }
+                    }
+                    FlowButton {
+                        objectName: "saveContactToScript"
+                        visible: root.ctrl.contactControls
+                        text: qsTr("Save to script")
+                        icon: "save"
+                        enabled: root.ctrl.hasScript && root.ctrl.contactKnobsLive
+                        onClicked: root.ctrl.saveContactToScript()
+                        HoverHandler { id: saveContactHover }
+                        ToolTipText { shown: saveContactHover.hovered; text: qsTr("Write Contact on/off, Sensitivity and Curve into the Emotion Script recipe.") }
+                    }
+                    Note {
+                        objectName: "contactSaveNote"
+                        visible: root.ctrl.toolNote !== "" && root.ctrl.toolNote.indexOf("Contact settings") === 0
+                        text: root.ctrl.toolNote
                     }
                     Note {
                         visible: root.ctrl.contactControls && !root.ctrl.contactKnobsLive

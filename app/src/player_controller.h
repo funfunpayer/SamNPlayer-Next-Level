@@ -6,6 +6,7 @@
 #include <QPointer>
 #include <QUrl>
 #include <QVariantList>
+#include <QVariantMap>
 #include <QtQml/qqmlregistration.h>
 #include <functional>
 #include <map>
@@ -137,6 +138,9 @@ class PlayerController : public QObject {
     // vibration, 0.7 StartPlayback contactOn).
     Q_PROPERTY(bool contactControls READ contactControls NOTIFY mappedChanged)
     Q_PROPERTY(bool contactKnobsLive READ contactKnobsLive NOTIFY mappedChanged)
+    // Live Feel probe (0.7 PreviewContactVibration) for Sensitivity / Curve /
+    // Strength: {activePct, peak, hint, stroke, vib, peaks}.
+    Q_PROPERTY(QVariantMap contactFeelProbe READ contactFeelProbe NOTIFY mappedChanged)
     // Strength presets of an Emotion Script (.samn): the names and the one
     // in use ("" = none). Choosing one saves it in the file (0.7).
     Q_PROPERTY(QStringList strengthPresets READ strengthPresets NOTIFY mappedChanged)
@@ -282,6 +286,9 @@ public:
     // 0.7 Share for other apps: community .funscript (no Neo axes embedded).
     // Empty dest → companion .funscript beside the open script. Path or "".
     Q_INVOKABLE QString exportFunscript(const QString& destPath = {});
+    // 0.7 SaveContactSettings: write live contact on/off, Sensitivity and
+    // Curve into the Emotion Script recipe and reload.
+    Q_INVOKABLE bool saveContactToScript();
     // Curve edit on the heatmap selection (0.7 Cap / Scale / Delete / Invert):
     // rewrites the active script lane (stroke, or baked vibration/suction),
     // saves and reloads. Cap/Scale/Delete and invertSelection need a mark;
@@ -415,6 +422,7 @@ public:
     MappingSettings* mapping() { return &mapping_; }
     bool contactControls() const { return contactControls_; }
     bool contactKnobsLive() const { return contactKnobsLive_; }
+    QVariantMap contactFeelProbe() const;
     QStringList strengthPresets() const;
     QString activeStrength() const { return QString::fromStdString(activeStrength_); }
     void setActiveStrength(const QString& name);
