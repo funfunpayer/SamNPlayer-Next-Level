@@ -369,6 +369,50 @@ private slots:
         QCOMPARE(spy.count(), 2);
     }
 
+    // 0.7 "Audio vibration" (playback.audio_vibration): live vib from loudness.
+    void audioVibrationDefaultsOffAndSwapsOnPlay() {
+        QTemporaryDir d;
+        const QString path = d.filePath("avib.funscript");
+        writeFile(path, zigzag(41, 100));
+        const QString wav = writeToneWav(d.path());
+        PlayerController c;
+        QVERIFY(c.openScript(path, wav));
+        QVERIFY(!c.audioVibration());
+        QVERIFY(!c.audioVibrationReady());
+
+        // Setting on without an envelope yet: Play keeps script vibration.
+        c.setAudioVibration(true);
+        QVERIFY(c.audioVibration());
+        c.setVideoPositionMs(0);
+        const int scriptVib = c.vibrationNow();
+        const int scriptSuc = c.suctionNow();
+        c.setPlayAudioEnvelopeForTest({});  // ignore warm race; force empty
+        QVERIFY(!c.audioVibrationReady());
+        c.setPlaying(true);
+        QCOMPARE(c.vibrationNow(), scriptVib);
+        QCOMPARE(c.suctionNow(), scriptSuc);
+        c.setPlaying(false);
+
+        // Inject silence→loud envelope — vibration follows; suction stays.
+        std::vector<double> env(80, 0.0);
+        for (size_t i = 40; i < env.size(); ++i) env[i] = 1.0;
+        c.setPlayAudioEnvelopeForTest(env);
+        QVERIFY(c.audioVibrationReady());
+        c.setVideoPositionMs(0);
+        c.setPlaying(true);
+        QCOMPARE(c.suctionNow(), scriptSuc);
+        QVERIFY(c.vibrationNow() <= 5);       // silent region
+        c.setVideoPositionMs(2500);           // loud region (~50 * 50 ms)
+        QVERIFY(c.vibrationNow() >= 90);
+        c.setPlaying(false);
+        c.setVideoPositionMs(0);
+        QCOMPARE(c.vibrationNow(), scriptVib);  // script lanes restored
+
+        PlayerController remembered;
+        QVERIFY(remembered.audioVibration());  // persisted
+        c.setAudioVibration(false);            // leave shared settings clean
+    }
+
     // 0.7 "Mock (no device)" (playback.mock): Play auto-connects Mock.
     void playbackMockDefaultsOnAndConnectsOnPlay() {
         QTemporaryDir d;
