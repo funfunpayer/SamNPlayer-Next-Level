@@ -1321,6 +1321,19 @@ GlassCard {
                         }
                         HelpChip { key: "pb-audio-vibration"; anchors.verticalCenter: parent.verticalCenter }
                     }
+                    Row {
+                        spacing: 8
+                        FlowButton {
+                            objectName: "pb-mock"
+                            text: qsTr("Mock (no device)")
+                            checked: root.ctrl.playbackMock
+                            onClicked: root.ctrl.playbackMock = !root.ctrl.playbackMock
+                        }
+                        HelpChip { key: "pb-mock"; anchors.verticalCenter: parent.verticalCenter }
+                    }
+                    Note {
+                        text: qsTr("On (default): Play connects a simulated device when nothing is connected. Off: connect a real toy in Devices first.")
+                    }
                     // MT-Debug tip/partner path (0.7 Show tip path).
                     Row {
                         spacing: 8

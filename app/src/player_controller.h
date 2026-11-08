@@ -143,6 +143,9 @@ class PlayerController : public QObject {
     // Play start, vibration follows video loudness; suction stays on the script.
     Q_PROPERTY(bool audioVibration READ audioVibration WRITE setAudioVibration NOTIFY viewOptionsChanged)
     Q_PROPERTY(bool audioVibrationReady READ audioVibrationReady NOTIFY audioVibrationReadyChanged)
+    // 0.7 "Mock (no device)" (playback.mock, default on): Play auto-connects the
+    // Mock transport when nothing is connected yet.
+    Q_PROPERTY(bool playbackMock READ playbackMock WRITE setPlaybackMock NOTIFY viewOptionsChanged)
     Q_PROPERTY(int suctionNow READ suctionNow NOTIFY playheadMsChanged)
     // The device the script plays on (one DeviceController for the app) and
     // what goes to it while playing (the stroke filter, safety range ...).
@@ -469,6 +472,8 @@ public:
     bool audioVibrationReady() const { return !playEnvelope_.empty(); }
     // Tests: inject a loudness envelope without Qt Multimedia decode.
     void setPlayAudioEnvelopeForTest(std::vector<double> envelope);
+    bool playbackMock() const;
+    void setPlaybackMock(bool on);
     // Tip / partner / extra place at a script time (the playhead) from the
     // recorded paths ({x, y} in video pixels), empty when no sample is near.
     Q_INVOKABLE QVariantMap tipAt(double scriptMs) const;

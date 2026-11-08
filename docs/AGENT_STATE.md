@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-audio-vib-635a`: Live Audio vibration + Settings mirror. Stay off #168 / Speech-Hold.
+**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-audio-vib-635a`: Live Audio vibration + Settings mirror (rebased on Mock #190). Stay off #168 / Speech-Hold.
 
 ## Handover: `cursor/player-audio-vib-635a` (8 Nov, Audio vibration)
 
@@ -11,6 +11,15 @@ Owner: finish Player/Editor GUI except Claude #168.
 - **Player:** `audioVibration` / `playback.audio_vibration` (default off); at Play start `ApplyAudioVibration` on mapped frames; warm decode on toggle; pause restores script lanes.
 - **UI:** Inspector Audio + View (`pb-audio-vibration`); Settings → Play (`st-audio-vibration`).
 - **Tests:** `audioVibrationDefaultsOffAndSwapsOnPlay`.
+- **Stay off:** Claude #168.
+
+## Handover: `cursor/player-mock-635a` (8 Nov, Mock checkbox) — merged #190
+
+Owner: finish Player/Editor GUI except Claude #168.
+
+- **Player:** `playbackMock` / `playback.mock` (default on); Play auto-connects Mock when disconnected.
+- **UI:** Inspector → View → "Mock (no device)" (`pb-mock`).
+- **Tests:** `playbackMockDefaultsOnAndConnectsOnPlay`.
 - **Stay off:** Claude #168.
 
 ## Handover: `cursor/player-make-playable-635a` (8 Nov, Make playable) — merged #187
@@ -64,7 +73,7 @@ Owner: finish Player/Editor GUI except Claude #168.
 
 - Speech-Hold / Feel segment strip + heatmap bands (needs `audio_check` segments)
 - Probe-on-link warning leftover (Make playable button ✅ on error / no-picture)
-- Mock checkbox leftover
+- Live Audio vibration (PR #189 in flight)
 - Scene strip thumbnails in Player (markers done; thumbs Generator-side)
 
 ## Handover: `cursor/player-bpm-audio-635a` (8 Nov, BPM From audio) — merged #183

@@ -2470,6 +2470,17 @@ void PlayerController::restoreScriptVibrationIfNeeded() {
     remap(false);
 }
 
+bool PlayerController::playbackMock() const {
+    const auto v = const_cast<PlayerController*>(this)->settings().get("playback.mock", true);
+    return !v.is_boolean() || v.get<bool>();
+}
+
+void PlayerController::setPlaybackMock(bool on) {
+    if (on == playbackMock()) return;
+    settings().set("playback.mock", on);
+    emit viewOptionsChanged();
+}
+
 void PlayerController::setMediaPlaying(bool playing) {
     // A pause stops the ticks before the output stops the device.
     if (!playing) {
@@ -2484,6 +2495,13 @@ void PlayerController::setMediaPlaying(bool playing) {
 }
 
 void PlayerController::setPlaying(bool playing) {
+    // 0.7 playback.mock: with nothing connected, Play starts the Mock so the
+    // session has a device without opening Devices first. Output waits until
+    // the worker reports connected (same soft-start path as a late link).
+    if (playing && playbackMock() && device_ && !device_->connected() && !device_->connecting()) {
+        device_->connectMock();
+        qInfo().noquote() << QStringLiteral("Playback: connecting Mock device");
+    }
     // Apply live audio vibration before the device session starts; restore
     // script lanes only after output_.playing is false so remap does not
     // re-apply mid-stop.

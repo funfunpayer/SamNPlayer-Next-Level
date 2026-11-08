@@ -18,6 +18,7 @@
 
 #include "audio_level.h"
 #include "curve_item.h"
+#include "device_controller.h"
 #include "heatmap_item.h"
 #include "player_controller.h"
 #include "samn/marks.h"
@@ -29,6 +30,7 @@
 
 using samn::ui::AudioLevelDecoder;
 using samn::ui::CurveItem;
+using samn::ui::DeviceController;
 using samn::ui::HeatmapItem;
 using samn::ui::PlayerController;
 
@@ -409,6 +411,40 @@ private slots:
         PlayerController remembered;
         QVERIFY(remembered.audioVibration());  // persisted
         c.setAudioVibration(false);            // leave shared settings clean
+    }
+
+    // 0.7 "Mock (no device)" (playback.mock): Play auto-connects Mock.
+    void playbackMockDefaultsOnAndConnectsOnPlay() {
+        QTemporaryDir d;
+        const QString path = d.filePath("mock.funscript");
+        writeFile(path, zigzag(21, 100));
+        DeviceController dev;
+        PlayerController c;
+        c.setDevice(&dev);
+        QVERIFY(c.openScript(path));
+        QVERIFY(c.playbackMock());
+        QVERIFY(!dev.connected());
+        c.setPlaying(true);
+        QTRY_COMPARE_WITH_TIMEOUT(dev.state(), QStringLiteral("connected"), 5000);
+        QVERIFY(dev.isMock());
+        QVERIFY(c.output()->playing());
+        c.setPlaying(false);
+        c.setPlaybackMock(false);
+        QVERIFY(!c.playbackMock());
+        PlayerController remembered;
+        QVERIFY(!remembered.playbackMock());
+        // Off: Play does not auto-connect (disconnect first).
+        dev.disconnectDevice();
+        QTRY_COMPARE(dev.state(), QStringLiteral("disconnected"));
+        PlayerController off;
+        off.setDevice(&dev);
+        QVERIFY(off.openScript(path));
+        QVERIFY(!off.playbackMock());
+        off.setPlaying(true);
+        QVERIFY(!dev.connected());
+        QVERIFY(!dev.connecting());
+        off.setPlaying(false);
+        off.setPlaybackMock(true);  // leave shared settings at the 0.7 default
     }
 
     // 0.7 "Video play starts device" (playback.video_play_autostart).
