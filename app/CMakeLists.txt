@@ -30,6 +30,10 @@ qt_add_qml_module(samn_app
     src/playback_output.h src/playback_output.cpp
     src/media_playhead.h src/media_playhead.cpp
     src/player_controller.h src/player_controller.cpp
+    src/player_internal.h
+    src/player_script_io.cpp
+    src/player_audio_jobs.cpp
+    src/player_marks.cpp
     src/script_clock.h src/script_clock.cpp
     src/library_controller.h src/library_controller.cpp
     src/icon_provider.h src/icon_provider.cpp

@@ -2,7 +2,15 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-probe-link-635a`: Probe-on-link warning box. Stay off #168 / Speech-Hold.
+**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-code-tidy-635a`: Split PlayerController .cpp (no API change). Stay off #168 / Speech-Hold.
+
+## Handover: `cursor/player-code-tidy-635a` (8 Nov, Player code tidy)
+
+Owner: clean Player code — same class, split translation units.
+
+- `player_script_io.cpp` / `player_audio_jobs.cpp` / `player_marks.cpp` + `player_internal.h`
+- No Q_PROPERTY / objectName / behaviour change. Stacked on probe-link.
+- **Stay off:** Claude #168. No QML radius / Inspector tab split in this PR.
 
 ## Handover: `cursor/player-probe-link-635a` (8 Nov, Probe on link)
 
