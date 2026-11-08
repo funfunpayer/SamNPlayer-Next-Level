@@ -646,6 +646,34 @@ private slots:
         QVERIFY(!del.hasMarker());
     }
 
+    void invertOnHeatmapSelectionAndAll() {
+        QTemporaryDir d;
+        const QString path = d.filePath("inv.funscript");
+        writeFile(path, R"({"actions":[{"at":0,"pos":10},{"at":1000,"pos":90},{"at":2000,"pos":20},{"at":3000,"pos":80}]})");
+        PlayerController range;
+        QVERIFY(range.openScript(path));
+        range.setMarker(500, 1500);
+        QVERIFY(range.invertSelection());
+        QVERIFY(range.toolNote().contains("Invert range"));
+        const auto mid = samn::LoadFunscript(std::filesystem::u8path(path.toStdString())).actions;
+        QCOMPARE(mid[0].pos, 10);
+        QCOMPARE(mid[1].pos, 10);  // 90 inverted
+        QCOMPARE(mid[2].pos, 20);
+        QCOMPARE(mid[3].pos, 80);
+        range.clearMarker();  // drop the sidecar so Invert all is exercised without a mark
+
+        PlayerController all;
+        QVERIFY(all.openScript(path));
+        QVERIFY(!all.hasMarker());
+        QVERIFY(all.invertAll());
+        QVERIFY(all.toolNote().contains("Invert curve"));
+        const auto flipped = samn::LoadFunscript(std::filesystem::u8path(path.toStdString())).actions;
+        QCOMPARE(flipped[0].pos, 90);
+        QCOMPARE(flipped[1].pos, 90);
+        QCOMPARE(flipped[2].pos, 80);
+        QCOMPARE(flipped[3].pos, 20);
+    }
+
     void speedHighlights() {
         QTemporaryDir d;
         writeFile(d.filePath("S.funscript"), zigzag());

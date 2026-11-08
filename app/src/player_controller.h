@@ -278,14 +278,17 @@ public:
     Q_INVOKABLE QString optimizeFor(const QString& target);
     // Write Neo vibration & suction lanes from the stroke into the .samn.
     Q_INVOKABLE bool axesFromStroke();
-    // Curve edit on the heatmap selection (0.7 Cap / Scale / Delete): rewrites
-    // the active script lane (stroke, or baked vibration/suction), saves and
-    // reloads. Needs a marked range.
+    // Curve edit on the heatmap selection (0.7 Cap / Scale / Delete / Invert):
+    // rewrites the active script lane (stroke, or baked vibration/suction),
+    // saves and reloads. Cap/Scale/Delete and invertSelection need a mark;
+    // invertAll flips the whole lane (Player asks first in QML).
     Q_PROPERTY(double capIntensity READ capIntensity WRITE setCapIntensity NOTIFY curveEditChanged)
     Q_PROPERTY(bool scaleSoftEdges READ scaleSoftEdges WRITE setScaleSoftEdges NOTIFY curveEditChanged)
     Q_INVOKABLE bool capSelection();
     Q_INVOKABLE bool scaleSelection(double factor);
     Q_INVOKABLE bool deleteSelection();
+    Q_INVOKABLE bool invertSelection();
+    Q_INVOKABLE bool invertAll();
     // 0.7 ExportScriptHeatmapPNG: "<script>.heatmap.png" beside the script,
     // 960 x 56 with chapter ticks. The path, or "" with lastError.
     Q_INVOKABLE QString exportHeatmapPng();
@@ -491,9 +494,11 @@ private:
     void setView(samn::ViewWindow v);
     void clearScript();
     void pushToViews();
-    // Cap / Scale / Delete on the heatmap selection for the active script lane.
+    // Cap / Scale / Delete / Invert for the active script lane.
+    // needMarker: Cap/Scale/Delete/invertSelection require a heatmap mark.
     bool applySelectionEdit(const QString& label,
-                            const std::function<std::vector<samn::Action>(const std::vector<samn::Action>&)>& op);
+                            const std::function<std::vector<samn::Action>(const std::vector<samn::Action>&)>& op,
+                            bool needMarker = true);
     // Maps the script with the settings (0.7 StartPlayback): the vibration
     // and suction lanes and what the device gets. `fresh`: a new script.
     void remap(bool fresh);

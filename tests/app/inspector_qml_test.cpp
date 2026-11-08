@@ -346,18 +346,23 @@ private slots:
             QVERIFY(player);
             QVERIFY(player->openPath(src));
             for (const char* n : {"curveEditCard", "curveCap", "curveSoftEdges", "curveSofter",
-                                  "curveStronger", "curveDelete"}) {
+                                  "curveStronger", "curveDelete", "curveInvert"}) {
                 auto* it = root->findChild<QQuickItem*>(n);
                 QVERIFY2(it && it->isVisible(), n);
             }
             QVERIFY(!root->findChild<QQuickItem*>("curveCap")->isEnabled());
             QVERIFY(!root->findChild<QQuickItem*>("curveSofter")->isEnabled());
+            QVERIFY(root->findChild<QQuickItem*>("curveInvert")->isEnabled());  // Invert all without mark
+            QCOMPARE(root->findChild<QQuickItem*>("curveInvert")->property("text").toString(),
+                     QStringLiteral("Invert all"));
             QVERIFY(root->findChild<QQuickItem*>("curveSoftEdges")->isEnabled());  // preference only
             player->setMarker(0, 4000);
             QTRY_VERIFY(root->findChild<QQuickItem*>("curveCap")->isEnabled());
-            player->setCapIntensity(20);
-            QVERIFY(player->capSelection());
+            QTRY_COMPARE(root->findChild<QQuickItem*>("curveInvert")->property("text").toString(),
+                         QStringLiteral("Invert range"));
+            QVERIFY(player->invertSelection());
             QTRY_VERIFY(root->findChild<QQuickItem*>("curveEditNote")->isVisible());
+            QVERIFY(player->toolNote().contains("Invert range"));
         }
         qInstallMessageHandler(g_previous);
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
