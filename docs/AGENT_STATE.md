@@ -2,9 +2,26 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-bpm-audio-635a`: BPM From audio. #178–#182 on main. Stay off intensity-arc (#168).
+**Last update:** 8 Nov 2026, Cursor: Player/Editor everyday path largely shipped (#169–#183). Stay off intensity-arc (#168) and Speech-Hold/feel-bands (P3.6 audio segments — Claude/larger).
 
-## Handover: `cursor/player-bpm-audio-635a` (8 Nov, BPM From audio)
+## Shipped this stream (8 Nov, #178–#183)
+
+- Typed offset, Drive/Recipe, Save Emotion Script (#178)
+- CreateScriptAxis / + Axis… + Curve select (#179)
+- FPS-Snap seeks (#180)
+- Stage keys hint (#181)
+- Scene markers toggle (#182)
+- BPM From audio (#183)
+- CI: Linux `--parallel` capped to nproc/2 (OOM kills)
+
+## Still open (non-Claude, Player/Editor)
+
+- Speech-Hold / Feel segment strip + heatmap bands (needs `audio_check` segments)
+- Auto sync; Sound curve write from Player Audio card
+- "Make playable" / dedicated video warning chrome leftovers
+- Scene strip thumbnails in Player (markers done; thumbs Generator-side)
+
+## Handover: `cursor/player-bpm-audio-635a` (8 Nov, BPM From audio) — merged #183
 
 Owner: finish Player/Editor GUI except Claude #168.
 
