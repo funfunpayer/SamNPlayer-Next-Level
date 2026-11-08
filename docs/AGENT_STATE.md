@@ -2,9 +2,18 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-auto-sync-635a`: Player Auto sync. Stay off intensity-arc (#168) and Speech-Hold/feel-bands.
+**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-video-autostart-635a`: Video play starts device toggle. Stay off #168 / Speech-Hold.
 
-## Handover: `cursor/player-auto-sync-635a` (8 Nov, Auto sync)
+## Handover: `cursor/player-video-autostart-635a` (8 Nov, Video play autostart)
+
+Owner: finish Player/Editor GUI except Claude #168.
+
+- **Player:** `videoPlayAutostart` / `playback.video_play_autostart` (default on); gates `setMediaPlaying` → device.
+- **UI:** Inspector → View → "Video play starts device".
+- **Tests:** `videoPlayAutostartDefaultsOnAndGatesDevice`.
+- **Stay off:** Claude #168.
+
+## Handover: `cursor/player-auto-sync-635a` (8 Nov, Auto sync) — merged #186
 
 Owner: finish Player/Editor GUI except Claude #168.
 
@@ -36,8 +45,7 @@ Owner: finish Player/Editor GUI except Claude #168.
 ## Still open (non-Claude, Player/Editor)
 
 - Speech-Hold / Feel segment strip + heatmap bands (needs `audio_check` segments)
-- "Make playable" / dedicated video warning chrome leftovers
-- Mock, Video play autostart, live Audio vibration toggle
+- Make playable (PR in flight); live Audio vibration; Mock checkbox leftover
 - Scene strip thumbnails in Player (markers done; thumbs Generator-side)
 
 ## Handover: `cursor/player-bpm-audio-635a` (8 Nov, BPM From audio) — merged #183

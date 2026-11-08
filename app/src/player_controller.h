@@ -134,6 +134,8 @@ class PlayerController : public QObject {
     // partner polylines when the script recorded a path. Off by default.
     Q_PROPERTY(bool hasTrajectory READ hasTrajectory NOTIFY scriptChanged)
     Q_PROPERTY(bool trajectoryOverlay READ trajectoryOverlay WRITE setTrajectoryOverlay NOTIFY viewOptionsChanged)
+    // 0.7 "Video play starts device" (playback.video_play_autostart, default on).
+    Q_PROPERTY(bool videoPlayAutostart READ videoPlayAutostart WRITE setVideoPlayAutostart NOTIFY viewOptionsChanged)
     Q_PROPERTY(int suctionNow READ suctionNow NOTIFY playheadMsChanged)
     // The device the script plays on (one DeviceController for the app) and
     // what goes to it while playing (the stroke filter, safety range ...).
@@ -451,6 +453,8 @@ public:
     bool hasTrajectory() const { return !tipPath_.empty() || !partnerPath_.empty(); }
     bool trajectoryOverlay() const;
     void setTrajectoryOverlay(bool on);
+    bool videoPlayAutostart() const;
+    void setVideoPlayAutostart(bool on);
     // Tip / partner / extra place at a script time (the playhead) from the
     // recorded paths ({x, y} in video pixels), empty when no sample is near.
     Q_INVOKABLE QVariantMap tipAt(double scriptMs) const;

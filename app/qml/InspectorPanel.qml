@@ -1291,6 +1291,13 @@ GlassCard {
                         text: root.ctrl.contactMarks.hint !== undefined ? root.ctrl.contactMarks.hint : ""
                         color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 11
                     }
+                    FlowButton {
+                        objectName: "videoPlayAutostart"
+                        text: qsTr("Video play starts device")
+                        checked: root.ctrl.videoPlayAutostart
+                        onClicked: root.ctrl.videoPlayAutostart = !root.ctrl.videoPlayAutostart
+                    }
+                    Note { text: qsTr("When off, the film can play without moving the toy. Script Play (no video) still starts the device.") }
                     // MT-Debug tip/partner path (0.7 Show tip path).
                     Row {
                         spacing: 8

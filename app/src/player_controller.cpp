@@ -2352,11 +2352,28 @@ void PlayerController::reportNoPicture(const QString& codec) {
     setFailure(msg);
 }
 
+bool PlayerController::videoPlayAutostart() const {
+    const auto v = const_cast<PlayerController*>(this)->settings().get("playback.video_play_autostart", true);
+    return !v.is_boolean() || v.get<bool>();
+}
+
+void PlayerController::setVideoPlayAutostart(bool on) {
+    if (on == videoPlayAutostart()) return;
+    settings().set("playback.video_play_autostart", on);
+    emit viewOptionsChanged();
+}
+
 void PlayerController::setMediaPlaying(bool playing) {
     // A pause stops the ticks before the output stops the device.
-    if (!playing) mediaHead_.setPlaying(false);
-    setPlaying(playing);
-    if (playing) mediaHead_.setPlaying(true);
+    if (!playing) {
+        mediaHead_.setPlaying(false);
+        setPlaying(false);
+        return;
+    }
+    // Video is playing: the media playhead ticks either way. The device only
+    // starts when "Video play starts device" is on (0.7 default).
+    mediaHead_.setPlaying(true);
+    if (videoPlayAutostart()) setPlaying(true);
 }
 
 void PlayerController::setPlaying(bool playing) {
