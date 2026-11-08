@@ -17,6 +17,9 @@ Rgba HeatmapColor(double n) {
         const double t = (n - 0.35) / 0.35;
         return {u8(47 + 196 * t), u8(212 - 34 * t), u8(196 - 136 * t), 255};
     }
+    // Exact hot stop: (1-0.7)/0.3 is 1.0 on some builds and ~0.999… on others;
+    // Go's heatmapColor prints 243 97 40 at n=1 — pin that instead of truncating.
+    if (n >= 1) return {243, 97, 40, 255};
     const double t = (n - 0.7) / 0.3;
     return {243, u8(178 - 80 * t), u8(60 - 20 * t), 255};
 }
