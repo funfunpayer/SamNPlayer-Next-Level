@@ -17,6 +17,7 @@ namespace samn::ui {
 struct GpuInfo {
     QString name;
     QString vendor;  // "NVIDIA", "AMD", "Intel", "Microsoft" or "Other"
+    QString driver;  // driver name or version; empty when unknown
     quint64 dedicated_mb = 0;
     bool integrated = false;
     bool software = false;  // Microsoft's Basic Render Driver and the like
@@ -40,7 +41,7 @@ std::optional<GpuInfo> PickTrainingGpu(const QList<GpuInfo>& gpus);
 
 struct CheckItem {
     QString id, title;
-    QString state;  // "ok" | "warn" | "fail"
+    QString state;  // "ok" | "warn" | "fail" | "off" (optional and not there)
     QString detail, fix;
     bool important = false;  // a failure of it raises the start notice
 };
@@ -57,6 +58,9 @@ struct CheckInputs {
     bool onnx_available = true;
     TrainEnvState train_env = TrainEnvState::kReady;
     bool nudenet_present = true;
+    // The missing-parts inputs (D-165); the defaults are "all there".
+    QString ffmpeg_path = QStringLiteral("ffmpeg"), ffprobe_path = QStringLiteral("ffprobe"), python_path = QStringLiteral("python");
+    qint64 ram_mb = 16384;  // -1 unknown
 };
 
 // The inputs of this PC, with the adapters given (ListGpus is slow, so the
@@ -64,7 +68,8 @@ struct CheckInputs {
 CheckInputs GatherInputs(const QList<GpuInfo>& gpus);
 
 // The checks in the order the tab shows them: settings, disk, gpu, ai-gpu,
-// video, onnx, ai-env, nudenet.
+// ai-provider, video, video-path, onnx, ai-env, nudenet, ffmpeg, python, ram.
+// The rules of ai-provider, video-path, ffmpeg, python and ram live in samn::health (core, D-165).
 QList<CheckItem> RunChecks(const CheckInputs& in);
 
 // Plain text for "Copy report": version, system, one line per check.

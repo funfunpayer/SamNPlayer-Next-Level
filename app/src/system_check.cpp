@@ -10,6 +10,7 @@
 #include <QGuiApplication>
 #include <QMediaFormat>
 #include <QPointer>
+#include <QProcess>
 #include <QRegularExpression>
 #include <QStorageInfo>
 #include <QSysInfo>
@@ -29,6 +30,7 @@
 #include "app_log.h"
 #include "ai_paths.h"
 #include "qt_paths.h"
+#include "samn/health.h"
 #include "samn/settings.h"
 #include "samn/vision/onnx_detector.h"
 
@@ -62,6 +64,86 @@ CheckItem Make(const char* id, const QString& title, const QString& state, const
     return {QString::fromLatin1(id), title, state, detail, state == QLatin1String("ok") ? QString() : fix, important};
 }
 
+samn::health::Gpu ToHealth(const GpuInfo& g) {
+    samn::health::Gpu h;
+    h.vendor = g.vendor.toStdString();
+    h.name = g.name.toStdString();
+    h.vram_mb = g.dedicated_mb;
+    h.driver = g.driver.toStdString();
+    h.kind = g.software ? samn::health::GpuKind::kSoftware
+                        : g.integrated ? samn::health::GpuKind::kIntegrated : samn::health::GpuKind::kDiscrete;
+    return h;
+}
+std::vector<samn::health::Gpu> ToHealth(const QList<GpuInfo>& gpus) {
+    std::vector<samn::health::Gpu> out;
+    for (const GpuInfo& g : gpus) out.push_back(ToHealth(g));
+    return out;
+}
+
+CheckItem FromCore(const samn::health::Check& k) {
+    using samn::health::Status;
+    const char* state = k.status == Status::kOk ? "ok" : k.status == Status::kWarn ? "warn" : k.status == Status::kBad ? "fail" : "off";
+    return {QString::fromStdString(k.id), QString::fromStdString(k.title), QString::fromLatin1(state), QString::fromStdString(k.detail),
+            QString::fromStdString(k.fix), false};
+}
+
+// A program's output, or empty when it is missing, fails or takes longer than `ms`.
+QString RunProgram(const QString& program, const QStringList& args, int ms) {
+    QProcess p;
+    p.start(program, args);
+    if (!p.waitForStarted(ms)) return {};
+    if (!p.waitForFinished(ms)) {
+        p.kill();
+        p.waitForFinished(500);
+        return {};
+    }
+    return p.exitStatus() == QProcess::NormalExit && p.exitCode() == 0 ? QString::fromUtf8(p.readAllStandardOutput()) : QString();
+}
+
+QString OnPath(const char* name) {
+    const std::string p = samn::health::FindOnPath(name, qgetenv("PATH").toStdString(), samn::health::CurrentPlatform());
+    return p.empty() ? QString() : QString::fromStdString(p);
+}
+
+QString FirstOnPath(std::initializer_list<const char*> names) {
+    for (const char* n : names) {
+        const QString p = OnPath(n);
+        if (!p.isEmpty()) return p;
+    }
+    return {};
+}
+
+QString FindFfmpeg() {
+    try {
+        samn::Settings settings;
+        const auto chosen = settings.get("clipprep.ffmpeg", "");
+        if (chosen.is_string()) {
+            const QString f = QString::fromStdString(chosen.get<std::string>());
+            if (!f.isEmpty() && QFileInfo(f).isFile()) return f;
+        }
+    } catch (const std::exception&) {
+    }
+    const QString tools = FromFs(samn::config_dir() / "tools");  // where Clip Prep keeps the one it fetched
+    for (const char* n : {"ffmpeg", "ffmpeg.exe"})
+        if (QFileInfo(tools + QLatin1Char('/') + QLatin1String(n)).isFile()) return tools + QLatin1Char('/') + QLatin1String(n);
+    return OnPath("ffmpeg");
+}
+
+qint64 TotalRamMb() {
+#ifdef Q_OS_WIN
+    MEMORYSTATUSEX m{};
+    m.dwLength = sizeof(m);
+    return GlobalMemoryStatusEx(&m) ? qint64(m.ullTotalPhys / (1024 * 1024)) : -1;
+#elif defined(Q_OS_LINUX)
+    QFile f(QStringLiteral("/proc/meminfo"));
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return -1;
+    const auto mb = samn::health::ParseMemTotalMb(f.read(4096).toStdString());
+    return mb ? qint64(*mb) : -1;
+#else
+    return -1;
+#endif
+}
+
 #ifdef Q_OS_LINUX
 QString ReadLine(const QString& path) {
     QFile f(path);
@@ -84,13 +166,9 @@ QString GpuVendorName(quint32 id) {
 
 void ClassifyGpus(QList<GpuInfo>& gpus) {
     for (GpuInfo& g : gpus) {
-        if (g.vendor == QLatin1String("Microsoft")) g.software = true;
-        if (g.vendor == QLatin1String("Intel"))
-            g.integrated = g.dedicated_mb < 2048;
-        else if (g.vendor == QLatin1String("AMD"))
-            g.integrated = g.dedicated_mb < 1024;
-        else
-            g.integrated = false;
+        const auto kind = samn::health::ClassifyKind(g.vendor.toStdString(), g.dedicated_mb, g.software);
+        g.software = kind == samn::health::GpuKind::kSoftware;
+        g.integrated = kind == samn::health::GpuKind::kIntegrated;
     }
 }
 
@@ -108,15 +186,34 @@ QList<GpuInfo> ListGpus() {
                 g.vendor = GpuVendorName(d.VendorId);
                 g.dedicated_mb = quint64(d.DedicatedVideoMemory) / quint64(kMiB);
                 g.software = (d.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) != 0;
+                LARGE_INTEGER umd{};  // the user-mode driver version, four 16-bit parts
+                if (SUCCEEDED(adapter->CheckInterfaceSupport(__uuidof(IDXGIDevice), &umd)))
+                    g.driver = QStringLiteral("%1.%2.%3.%4").arg(HIWORD(umd.HighPart)).arg(LOWORD(umd.HighPart)).arg(HIWORD(umd.LowPart)).arg(LOWORD(umd.LowPart));
                 out << g;
             }
             adapter->Release();
         }
         factory->Release();
     }
+    if (out.isEmpty()) {  // DXGI gave nothing (remote session, broken driver): ask WMI, which is slower
+        const QString text = RunProgram(QStringLiteral("powershell"),
+                                        {QStringLiteral("-NoProfile"), QStringLiteral("-NonInteractive"), QStringLiteral("-Command"),
+                                         QStringLiteral("Get-CimInstance Win32_VideoController | Format-List Name,AdapterRAM,DriverVersion,AdapterCompatibility")},
+                                        4000);
+        for (const samn::health::Gpu& h : samn::health::ParseWindowsVideoControllers(text.toStdString())) {
+            GpuInfo g;
+            g.name = QString::fromStdString(h.name);
+            g.vendor = QString::fromStdString(h.vendor);
+            g.dedicated_mb = h.vram_mb;
+            g.driver = QString::fromStdString(h.driver);
+            out << g;
+        }
+    }
 #elif defined(Q_OS_LINUX)
     const QDir drm(QStringLiteral("/sys/class/drm"));
     static const QRegularExpression card(QStringLiteral("^card\\d+$"));  // not the card0-HDMI-A-1 connectors
+    const std::vector<samn::health::PciDisplay> names = samn::health::ParseLspciMm(
+        RunProgram(QStringLiteral("lspci"), {QStringLiteral("-mm"), QStringLiteral("-nn"), QStringLiteral("-D")}, 1500).toStdString());
     for (const QString& entry : drm.entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name)) {
         if (!card.match(entry).hasMatch()) continue;
         const QString dev = drm.filePath(entry) + QStringLiteral("/device/");
@@ -131,6 +228,14 @@ QList<GpuInfo> ListGpus() {
                                   : QStringLiteral("%1 (device 0x%2)").arg(g.vendor == QLatin1String("Other") ? QStringLiteral("Graphics adapter") : g.vendor)
                                         .arg(device, 4, 16, QLatin1Char('0'));
         g.dedicated_mb = ReadLine(dev + QStringLiteral("mem_info_vram_total")).toULongLong() / quint64(kMiB);  // AMD only
+        g.driver = QFileInfo(QFileInfo(dev + QStringLiteral("driver")).symLinkTarget()).fileName();  // "nvidia", "i915", "amdgpu"
+        // lspci (when installed) knows the marketing name; sysfs only has ids.
+        const QString slot = QFileInfo(QDir(dev).canonicalPath()).fileName();  // "0000:01:00.0"
+        for (const samn::health::PciDisplay& d : names)
+            if (QString::fromStdString(d.slot) == slot && !d.name.empty()) {
+                g.name = (g.vendor == QLatin1String("Other") ? QString() : g.vendor + QLatin1Char(' ')) + QString::fromStdString(d.name);
+                break;
+            }
         out << g;
     }
 #endif
@@ -173,11 +278,19 @@ CheckInputs GatherInputs(const QList<GpuInfo>& gpus) {
     } catch (const std::exception&) {
         in.nudenet_present = false;
     }
+    in.ffmpeg_path = FindFfmpeg();
+    in.ffprobe_path = OnPath("ffprobe");
+    in.python_path = samn::health::CurrentPlatform() == samn::health::Platform::kWindows ? FirstOnPath({"python", "py"})
+                                                                                         : FirstOnPath({"python3", "python"});
+    in.ram_mb = TotalRamMb();
     return in;
 }
 
 QList<CheckItem> RunChecks(const CheckInputs& in) {
     QList<CheckItem> out;
+    using samn::health::Platform;
+    const std::vector<samn::health::Gpu> gpus = ToHealth(in.gpus);
+    const Platform platform = samn::health::CurrentPlatform();
 
     out << (in.config_writable
                 ? Make("settings", T("Settings folder"), "ok", QDir::toNativeSeparators(in.config_dir))
@@ -224,6 +337,8 @@ QList<CheckItem> RunChecks(const CheckInputs& in) {
         }
     }
 
+    out << FromCore(samn::health::CheckAiProvider(gpus, platform));
+
     {
         const QString title = T("Video decoding");
         if (!in.decodes_h264)
@@ -235,6 +350,8 @@ QList<CheckItem> RunChecks(const CheckInputs& in) {
         else
             out << Make("video", title, "ok", T("H.264 and AV1 can be decoded."));
     }
+
+    out << FromCore(samn::health::CheckVideoPath(gpus, in.decodes_h264, in.decodes_av1));
 
     out << (in.onnx_available ? Make("onnx", T("ONNX Runtime"), "ok", T("Models can run in this build."))
                               : Make("onnx", T("ONNX Runtime"), "warn", T("Not in this build: the detector and the tip confirmation of Find are unavailable."),
@@ -253,6 +370,9 @@ QList<CheckItem> RunChecks(const CheckInputs& in) {
 
     out << (in.nudenet_present ? Make("nudenet", T("NudeNet model"), "ok", T("Present."))
                                : Make("nudenet", T("NudeNet model"), "warn", T("Not present (optional)."), T("Fetch it in AI Train if you want it as a teacher.")));
+
+    out << FromCore(samn::health::CheckFfmpeg(in.ffmpeg_path.toStdString(), in.ffprobe_path.toStdString()))
+        << FromCore(samn::health::CheckPython(in.python_path.toStdString())) << FromCore(samn::health::CheckRam(in.ram_mb));
     return out;
 }
 
@@ -261,7 +381,10 @@ QString Report(const QList<CheckItem>& items) {
     lines << QStringLiteral("SamNPlayer Next %1").arg(QCoreApplication::applicationVersion())
           << QStringLiteral("%1 (%2)").arg(QSysInfo::prettyProductName(), QSysInfo::currentCpuArchitecture()) << QString();
     for (const CheckItem& i : items) {
-        const char* tag = i.state == QLatin1String("ok") ? "OK" : i.state == QLatin1String("warn") ? "WARN" : "FAIL";
+        const char* tag = i.state == QLatin1String("ok")     ? "OK"
+                          : i.state == QLatin1String("warn") ? "WARN"
+                          : i.state == QLatin1String("off")  ? "OFF"
+                                                             : "FAIL";
         lines << QStringLiteral("[%1] %2: %3").arg(QLatin1String(tag), i.title, QString(i.detail).replace('\n', QStringLiteral("; ")));
         if (!i.fix.isEmpty()) lines << QStringLiteral("      %1").arg(i.fix);
     }
