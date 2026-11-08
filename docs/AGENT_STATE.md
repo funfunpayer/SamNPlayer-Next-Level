@@ -2,7 +2,17 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 8 Nov 2026, Claude, branch `claude/samn2-json-fallback`: nlohmann_json comes from the system package first, then the git-clone fallback main already had (handover below). No code behaviour changed. Cursor, same day: probe-on-link warning box (#191). Earlier: 7 Nov 2026, Claude, branch `claude/samn2-vision-bench`: `samn_bench`, the detection benchmark, and its baseline (handover below). No engine behaviour changed. Before: the video playhead extrapolation (D-164, `claude/samn2-playhead`, #163) and the `DeviceWorker` move (#166) are merged.
+**Last update:** 8 Nov 2026, Claude, branch `claude/samn2-parity-refresh`: `docs/PARITY.md` audited against `main` (#193) and recounted, new `docs/PARITY_REMAINING.md` (handover below). Documentation only, no code changed. Before that: 8 Nov 2026, Claude, branch `claude/samn2-json-fallback`: nlohmann_json comes from the system package first, then the git-clone fallback main already had (handover below). No code behaviour changed. Cursor, same day: probe-on-link warning box (#191). Earlier: 7 Nov 2026, Claude, branch `claude/samn2-vision-bench`: `samn_bench`, the detection benchmark, and its baseline (handover below). No engine behaviour changed. Before: the video playhead extrapolation (D-164, `claude/samn2-playhead`, #163) and the `DeviceWorker` move (#166) are merged.
+
+## Handover: `claude/samn2-parity-refresh` (8 Nov, PARITY audit and the list of what is left)
+
+Owner asked for an honest picture of how far SamNPlayer 2 is against 0.7.0 and 0.8. **Documentation only; no code or test changed.**
+
+- **Table:** `python3 ci/parity_status.py` (existing script, unchanged) now prints 374 done, 139 partly, 52 dropped, 113 open of 678 = 73 %. The old table in `PARITY.md` said 292 / 133 / 44 / 209 = 59 % but the markers on `main` already counted 334 / 111 / 44 / 189 = 64 %, so the table was stale before this audit.
+- **Method:** every cited file and test name was checked with grep; open and partly lines were checked against `app/`, `core/`, `engine/`. 46 lines moved to done (38 from open, 8 from partly), 8 open lines became dropped or replaced with a decision, 30 open lines became partly, 6 ticked lines were downgraded to partly because no test covers them (top-bar Open and Ctrl+O, Player keyboard shortcuts, keyframe dots, time ruler, global keys, Optimize-after-Create remembering).
+- **Not re-checked one by one:** 207 open and partly lines kept their 26 Oct text (counts per section in "Audit notes" at the end of `PARITY.md`). Nothing was built or run.
+- **New file:** `docs/PARITY_REMAINING.md`: quick wins, medium and large blocks for 0.7, the 0.8 gaps, and what was dropped on purpose. Start with its (a) 1 to 6.
+- **Stay off:** Cursor edits `PARITY.md` in its PRs; merge `main` and keep its newer ticks where they are correct, then run the script and paste the table.
 
 ## Handover: `claude/samn2-json-fallback` (8 Nov, CI: nlohmann_json from the system first)
 
