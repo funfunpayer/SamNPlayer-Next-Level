@@ -1,0 +1,537 @@
+import QtQuick
+import QtQuick.Dialogs
+import SamN
+
+// Timeline card: the curve, the channel lanes and the audio level.
+GlassCard {
+    id: root
+    objectName: "timeline"
+    required property PlayerController ctrl
+    property bool empty
+    property real mediaPosition
+    property real mediaDuration
+    property real playheadPosition
+
+    signal seekRequested(real ms)
+    signal tipRequested(var item, real x, real y, string text)
+    signal editScenesRequested()
+
+    function showAudioAnalysis() {
+        bottomTabs.current = 4
+        ctrl.setUiValue("player.bottomTab", 4)
+    }
+    // 0.7 companion axis names and colours (theme_flow.css axis tokens).
+    function axisTitle(axis) {
+        return { surge: qsTr("Surge"), sway: qsTr("Sway"), twist: qsTr("Twist"), roll: qsTr("Roll"), pitch: qsTr("Pitch") }[axis] || axis
+    }
+    function laneTitle(lane) {
+        return lane === "vibration" ? qsTr("Vibration") : lane === "suction" ? qsTr("Suction")
+             : lane === "stroke" ? qsTr("Stroke") : axisTitle(lane)
+    }
+    function laneColor(lane) {
+        return lane === "vibration" ? Theme.laneVibration : lane === "suction" ? Theme.laneSuction
+             : lane === "stroke" ? Theme.orange : axisColor(lane)
+    }
+    function axisColor(axis) {
+        return { surge: "#e5c07b", sway: "#98c379", twist: "#e06c9f", roll: "#61afef", pitch: "#d19a66" }[axis] || Theme.textDim
+    }
+
+    // Bottom tabs (0.7 v1): Timeline · Chapters · Bookmarks · Scene Map · Audio Analysis.
+    FlowTabs {
+        id: bottomTabs
+        x: 16; y: 9
+        model: [qsTr("Timeline"), qsTr("Chapters"), qsTr("Bookmarks"), qsTr("Scene Map"), qsTr("Audio Analysis")]
+        current: ctrl.uiValue("player.bottomTab", 0)
+        onPicked: (i) => { current = i; ctrl.setUiValue("player.bottomTab", i) }
+    }
+    Row {
+        id: offsetRow
+        anchors.right: parent.right; anchors.rightMargin: 16; y: 8; spacing: 8
+        Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; text: qsTr("Offset"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13 }
+        OffsetField { value: ctrl.offsetMs; onChanged: (v) => ctrl.offsetMs = v }
+    }
+    // Lane names left of the lanes (0.7 v1), one per visible row.
+    Column {
+        id: laneNames
+        visible: lanes.visible
+        x: 16; y: 46; width: 108
+        Item { width: 1; height: ruler.height; visible: ruler.visible }
+        // 0.7 legend chips: a click picks the lane the main curve shows.
+        LaneName {
+            objectName: "laneName_stroke"
+            name: qsTr("Stroke"); dot: Theme.orange; height: curve.height; visible: ctrl.showStrokeLane
+            selectable: ctrl.laneChoices.length > 1; active: selectable && ctrl.activeLane === "stroke"
+            onPicked: ctrl.activeLane = "stroke"; onStepped: (d) => ctrl.stepActiveLane(d)
+        }
+        LaneName {
+            objectName: "laneName_vibration"
+            name: qsTr("Vibration"); dot: Theme.laneVibration; height: vibLane.height; visible: ctrl.showVibrationLane
+            selectable: true; active: ctrl.activeLane === "vibration"
+            onPicked: ctrl.activeLane = "vibration"; onStepped: (d) => ctrl.stepActiveLane(d)
+        }
+        LaneName {
+            objectName: "laneName_suction"
+            name: qsTr("Suction"); dot: Theme.laneSuction; height: sucLane.height; visible: ctrl.showSuctionLane
+            selectable: true; active: ctrl.activeLane === "suction"
+            onPicked: ctrl.activeLane = "suction"; onStepped: (d) => ctrl.stepActiveLane(d)
+        }
+        Repeater {
+            model: ctrl.axisLanes
+            delegate: LaneName {
+                required property string modelData
+                objectName: "laneName_" + modelData
+                name: root.axisTitle(modelData); dot: root.axisColor(modelData); height: lanes.laneH
+                selectable: true; active: ctrl.activeLane === modelData
+                onPicked: ctrl.activeLane = modelData; onStepped: (d) => ctrl.stepActiveLane(d)
+            }
+        }
+        LaneName { name: qsTr("Audio Level"); dot: "#93aec4"; height: audioLane.height; visible: audioLane.visible }
+        LaneName { name: qsTr("Chapters"); dot: "#2f80ed"; height: chapterStrip.height; visible: chapterStrip.visible && ctrl.showScenes }
+        Item { width: 1; height: 4; visible: heatBar.visible }
+        LaneName { name: qsTr("Heatmap"); dot: "#e8603c"; height: heatBar.height; visible: heatBar.visible }
+    }
+    Column {
+        id: lanes
+        visible: bottomTabs.current === 0
+        x: 16 + 112; y: 46
+        width: parent.width - 32 - 112; height: parent.height - 58
+        // D-132: lanes the device cannot use are hidden; without the stroke
+        // lane the device's lanes share its height.
+        readonly property int audioH: 34
+        readonly property int extraLanes: (vibLane.visible ? 1 : 0) + (sucLane.visible ? 1 : 0) + ctrl.axisLanes.length
+        readonly property int laneH: curve.visible ? 34
+            : Math.max(34, Math.min(140, (height - fixedH - (audioLane.visible ? audioH : 0)) / Math.max(1, extraLanes)))
+        readonly property int fixedH: ruler.height + (heatBar.visible ? heatBar.height + 4 : 0) + markRow.height
+                                      + (chapterStrip.visible ? chapterStrip.height : 0)
+        RulerItem {
+            id: ruler
+            width: parent.width; height: 22
+            visible: ctrl.hasScript
+            viewStartMs: ctrl.viewStartMs; viewEndMs: ctrl.viewEndMs
+            playheadMs: ctrl.playheadMs
+            textColor: Theme.textDim; markColor: Theme.laneVibration
+        }
+        CurveItem {
+            id: curve
+            width: parent.width
+            visible: ctrl.showStrokeLane || !ctrl.hasScript
+            height: Math.max(60, parent.height - lanes.extraLanes * lanes.laneH - (audioLane.visible ? lanes.audioH : 0) - lanes.fixedH)
+            // The main curve shows the picked lane (0.7 Curve select / legend).
+            objectName: "mainCurve"
+            lane: ctrl.activeLane; lineColor: root.laneColor(ctrl.activeLane); showGrid: true
+            // Sharp Play wave: soft bloom, not a muddy halo.
+            lineWidth: 1.55; glow: 4.5; fill: 0.12
+            markerStartMs: ctrl.markerStartMs; markerEndMs: ctrl.markerEndMs
+            viewStartMs: ctrl.viewStartMs; viewEndMs: ctrl.viewEndMs
+            Component.onCompleted: ctrl.attachCurve(curve)
+            WheelHandler {
+                acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                onWheel: (e) => ctrl.zoomAt(e.angleDelta.y > 0 ? 1.25 : 1 / 1.25, point.position.x / curve.width)
+            }
+            // Hover shows time and position; a click seeks (0.7).
+            MouseArea {
+                anchors.fill: parent
+                hoverEnabled: true
+                acceptedButtons: Qt.LeftButton
+                onPositionChanged: (m) => root.tipRequested(curve, m.x, m.y, curve.hoverText(m.x))
+                onExited: root.tipRequested(null, 0, 0, "")
+                onClicked: (m) => root.seekRequested(Math.round(curve.msAtX(m.x)) + ctrl.offsetMs)
+            }
+            Text {
+                textFormat: Text.PlainText
+                anchors.centerIn: parent
+                visible: curve.empty
+                text: qsTr("No script loaded"); color: Theme.textMuted; font.family: Theme.fontSoft
+            }
+            // Another lane picked: its name on the main curve (the chip beside
+            // the curve still reads "Stroke" and brings the stroke back).
+            Text {
+                objectName: "mainCurveLane"
+                textFormat: Text.PlainText
+                x: 8; y: 6
+                visible: ctrl.activeLane !== "stroke"
+                text: root.laneTitle(ctrl.activeLane)
+                color: root.laneColor(ctrl.activeLane); font.family: Theme.fontSoft; font.pixelSize: 12; font.bold: true
+            }
+        }
+        CurveItem {
+            id: vibLane
+            width: parent.width; height: lanes.laneH
+            visible: ctrl.showVibrationLane  // D-132: the script's channels, or the device's
+            lane: "vibration"; lineColor: Theme.laneVibration
+            // 0.7: the picked lane is brighter and thicker.
+            lineWidth: ctrl.activeLane === "vibration" ? 1.6 : 1.2; glow: ctrl.activeLane === "vibration" ? 6 : 3; fill: 0.14
+            Rectangle { anchors.fill: parent; z: -1; color: Qt.rgba(1, 1, 1, 0.045); visible: ctrl.activeLane === "vibration" }
+            viewStartMs: ctrl.viewStartMs; viewEndMs: ctrl.viewEndMs
+            Component.onCompleted: ctrl.attachCurve(vibLane)
+            // 0.7: a click on a lane picks it for the main curve.
+            MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: ctrl.activeLane = "vibration" }
+            WheelHandler {
+                acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                onWheel: (e) => ctrl.zoomAt(e.angleDelta.y > 0 ? 1.25 : 1 / 1.25, point.position.x / parent.width)
+            }
+            Rectangle { width: parent.width; height: 1; color: Qt.rgba(1, 1, 1, 0.08) }
+        }
+        CurveItem {
+            id: sucLane
+            width: parent.width; height: lanes.laneH
+            visible: ctrl.showSuctionLane
+            lane: "suction"; lineColor: Theme.laneSuction
+            lineWidth: ctrl.activeLane === "suction" ? 1.6 : 1.2; glow: ctrl.activeLane === "suction" ? 6 : 3; fill: 0.14
+            Rectangle { anchors.fill: parent; z: -1; color: Qt.rgba(1, 1, 1, 0.045); visible: ctrl.activeLane === "suction" }
+            viewStartMs: ctrl.viewStartMs; viewEndMs: ctrl.viewEndMs
+            Component.onCompleted: ctrl.attachCurve(sucLane)
+            // 0.7: a click on a lane picks it for the main curve.
+            MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: ctrl.activeLane = "suction" }
+            WheelHandler {
+                acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                onWheel: (e) => ctrl.zoomAt(e.angleDelta.y > 0 ? 1.25 : 1 / 1.25, point.position.x / parent.width)
+            }
+            Rectangle { width: parent.width; height: 1; color: Qt.rgba(1, 1, 1, 0.08) }
+        }
+        // 0.7 companion axes (surge … pitch) beside the script: read lanes.
+        Repeater {
+            model: ctrl.axisLanes
+            delegate: CurveItem {
+                id: axisLane
+                required property string modelData
+                objectName: "axisLane_" + modelData
+                width: lanes.width; height: lanes.laneH
+                lane: modelData; lineColor: root.axisColor(modelData)
+                lineWidth: ctrl.activeLane === modelData ? 1.6 : 1.2; glow: ctrl.activeLane === modelData ? 6 : 3; fill: 0.14
+                Rectangle { anchors.fill: parent; z: -1; color: Qt.rgba(1, 1, 1, 0.045); visible: ctrl.activeLane === axisLane.modelData }
+                viewStartMs: ctrl.viewStartMs; viewEndMs: ctrl.viewEndMs
+                Component.onCompleted: ctrl.attachCurve(axisLane)
+                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: ctrl.activeLane = axisLane.modelData }
+                WheelHandler {
+                    acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                    onWheel: (e) => ctrl.zoomAt(e.angleDelta.y > 0 ? 1.25 : 1 / 1.25, point.position.x / axisLane.width)
+                }
+                Rectangle { width: parent.width; height: 1; color: Qt.rgba(1, 1, 1, 0.08) }
+            }
+        }
+        AudioLevelItem {
+            id: audioLane
+            width: parent.width; height: lanes.audioH
+            visible: !root.empty && ctrl.audioLane
+            source: ctrl.videoUrl
+            viewStartMs: ctrl.viewStartMs; viewEndMs: ctrl.viewEndMs
+            offsetMs: ctrl.offsetMs
+            playheadMs: ctrl.playheadMs
+            label: ""
+            Rectangle { width: parent.width; height: 1; color: Qt.rgba(1, 1, 1, 0.08) }
+        }
+        // Chapter bands (0.7 pb-chapter-bands): one coloured band per
+        // chapter on the curve's time scale; click = seek to its start.
+        Item {
+            id: chapterStrip
+            width: parent.width; height: 30
+            // 0.7 pb.scenes: off by default in the Player.
+            visible: ctrl.hasScript && ctrl.showScenes
+            clip: true
+            readonly property var colors: [Qt.rgba(47 / 255, 128 / 255, 237 / 255, 0.45), Qt.rgba(242 / 255, 140 / 255, 40 / 255, 0.45),
+                                           Qt.rgba(155 / 255, 81 / 255, 224 / 255, 0.45), Qt.rgba(39 / 255, 174 / 255, 160 / 255, 0.45),
+                                           Qt.rgba(86 / 255, 140 / 255, 220 / 255, 0.38)]
+            readonly property var solid: ["#2f80ed", "#f28c28", "#9b51e0", "#27aea0", "#568cdc"]
+            readonly property real span: Math.max(1, ctrl.viewEndMs - ctrl.viewStartMs)
+            Repeater {
+                model: ctrl.chapterBands
+                delegate: Rectangle {
+                    required property var modelData
+                    readonly property real from: Math.max(modelData.startMs, ctrl.viewStartMs)
+                    readonly property real to: Math.min(modelData.endMs, ctrl.viewEndMs)
+                    readonly property bool current: ctrl.playheadMs >= modelData.startMs && ctrl.playheadMs < modelData.endMs
+                    visible: modelData.endMs > ctrl.viewStartMs && modelData.startMs < ctrl.viewEndMs
+                    x: (from - ctrl.viewStartMs) / chapterStrip.span * chapterStrip.width
+                    width: Math.max(chapterStrip.width * 0.005, (to - from) / chapterStrip.span * chapterStrip.width)
+                    y: 2; height: 26; radius: 7
+                    color: chapterStrip.colors[modelData.index % 5]
+                    border.width: 1; border.color: current ? "white" : "transparent"
+                    Text {
+                        textFormat: Text.PlainText
+                        anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 4
+                        verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                        text: modelData.name; color: parent.current ? "white" : "#e9f4ff"
+                        font.family: Theme.fontSoft; font.pixelSize: 12
+                    }
+                    MouseArea {
+                        anchors.fill: parent; hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onPositionChanged: (m) => root.tipRequested(parent, m.x, m.y, modelData.tip)
+                        onExited: root.tipRequested(null, 0, 0, "")
+                        onClicked: root.seekRequested(modelData.startMs + ctrl.offsetMs)
+                    }
+                    // Scene marker (0.7 pb-scene-mark): a diamond at the chapter start.
+                    Rectangle {
+                        visible: modelData.startMs >= ctrl.viewStartMs
+                        x: -5; anchors.verticalCenter: parent.verticalCenter
+                        width: 10; height: 10; rotation: 45
+                        color: chapterStrip.solid[modelData.index % 5]
+                        border.width: 1; border.color: "white"
+                    }
+                }
+            }
+            Text {
+                textFormat: Text.PlainText
+                anchors.left: parent.left; anchors.leftMargin: 8; anchors.verticalCenter: parent.verticalCenter
+                visible: ctrl.chapterBands.length === 0
+                text: qsTr("No chapters yet — + adds a scene marker at the playhead.")
+                color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
+            }
+            // "+" (0.7 pb-scene-add): a scene marker at the playhead.
+            Rectangle {
+                id: sceneAdd
+                anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                width: 26; height: 26; radius: 13
+                color: addArea.containsMouse ? Qt.rgba(0, 217 / 255, 244 / 255, 0.3) : "#0a2340"
+                border.width: 1; border.color: Theme.cyan
+                Icon { anchors.centerIn: parent; name: "plus"; color: Theme.cyan; width: 14; height: 14 }
+                MouseArea {
+                    id: addArea
+                    anchors.fill: parent; hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onPositionChanged: (m) => root.tipRequested(sceneAdd, m.x, m.y, qsTr("Add a scene marker at the playhead (starts a chapter)"))
+                    onExited: root.tipRequested(null, 0, 0, "")
+                    onClicked: ctrl.addSceneMarker(ctrl.playheadMs + ctrl.offsetMs)
+                }
+            }
+        }
+        Item { width: 1; height: 4; visible: heatBar.visible }
+        // Heatmap: click = seek, drag = mark (0.7). Taller bar (0.5.45)
+        // so mark/align is usable; wheel zooms like the curve lanes.
+        HeatmapItem {
+            id: heatBar
+            objectName: "heatBar"
+            width: parent.width; height: 28
+            opacity: 0.9
+            visible: !root.empty
+            viewStartMs: ctrl.viewStartMs; viewEndMs: ctrl.viewEndMs
+            markerStartMs: dragArea.dragging ? Math.min(dragArea.fromMs, dragArea.toMs) : ctrl.markerStartMs
+            markerEndMs: dragArea.dragging ? Math.max(dragArea.fromMs, dragArea.toMs) : ctrl.markerEndMs
+            Component.onCompleted: ctrl.attachHeatmap(heatBar)
+            WheelHandler {
+                acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                onWheel: (e) => ctrl.zoomAt(e.angleDelta.y > 0 ? 1.25 : 1 / 1.25, point.position.x / heatBar.width)
+            }
+            MouseArea {
+                id: dragArea
+                anchors.fill: parent
+                hoverEnabled: true
+                property real fromMs: 0
+                property real toMs: 0
+                property bool dragging: false
+                function msAt(x) { return ctrl.msAtFraction(x / width) }
+                onPressed: (m) => { fromMs = msAt(m.x); toMs = fromMs; dragging = false }
+                onPositionChanged: (m) => {
+                    if (pressed) {
+                        toMs = msAt(m.x)
+                        dragging = Math.abs(toMs - fromMs) > 150
+                        root.tipRequested(null, 0, 0, "")
+                    } else {
+                        root.tipRequested(heatBar, m.x, m.y, ctrl.heatTooltip(msAt(m.x)))
+                    }
+                }
+                onReleased: (m) => { dragging = false; root.seekRequested(ctrl.finishHeatmapDrag(fromMs, msAt(m.x))) }
+                onExited: root.tipRequested(null, 0, 0, "")
+            }
+        }
+        Row {
+            id: markRow
+            height: 34; spacing: 10
+            visible: ctrl.hasScript
+            Text {
+                textFormat: Text.PlainText
+                anchors.verticalCenter: parent.verticalCenter
+                text: ctrl.markerLabel
+                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+            }
+            FlowButton {
+                anchors.verticalCenter: parent.verticalCenter; implicitHeight: 28
+                text: qsTr("Zoom selection"); enabled: ctrl.hasMarker
+                onClicked: ctrl.zoomToSelection()
+            }
+            FlowButton {
+                anchors.verticalCenter: parent.verticalCenter; implicitHeight: 28
+                text: qsTr("Clear selection"); enabled: ctrl.hasMarker
+                onClicked: ctrl.clearMarker()
+            }
+            // Zoom (0.7 zoom row): wheel on the curve, buttons around the playhead.
+            IconButton { anchors.verticalCenter: parent.verticalCenter; width: 28; height: 28; icon: "minus"; tip: qsTr("Zoom out"); onClicked: ctrl.zoomBy(1 / 1.6) }
+            Text {
+                textFormat: Text.PlainText
+                anchors.verticalCenter: parent.verticalCenter
+                text: ctrl.zoomLabel; color: ctrl.zoomed ? Theme.cyan : Theme.textDim
+                font.family: Theme.fontSoft; font.pixelSize: 12
+            }
+            IconButton { anchors.verticalCenter: parent.verticalCenter; width: 28; height: 28; icon: "plus"; tip: qsTr("Zoom in"); onClicked: ctrl.zoomBy(1.6) }
+            FlowButton { anchors.verticalCenter: parent.verticalCenter; text: qsTr("Reset zoom"); visible: ctrl.zoomed; implicitHeight: 28; onClicked: ctrl.resetZoom() }
+        }
+    }
+    // Chapters (0.7 bottom tab): add from the marked range, seek, rename, remove.
+    Item {
+        visible: bottomTabs.current === 1
+        x: 16; y: 46; width: parent.width - 32; height: parent.height - 58
+        Row {
+            id: chapterAdd
+            spacing: 8
+            FlowTextField { id: chapterName; width: 220; placeholder: qsTr("Chapter name"); onAccepted: addChapter.clicked() }
+            FlowButton {
+                id: addChapter
+                text: qsTr("Add from selection"); enabled: ctrl.hasMarker
+                onClicked: if (ctrl.addChapterFromSelection(chapterName.text)) chapterName.text = ""
+            }
+            Text {
+                textFormat: Text.PlainText
+                anchors.verticalCenter: parent.verticalCenter
+                text: ctrl.markerLabel
+                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+            }
+        }
+        MarkList {
+            anchors.top: chapterAdd.bottom; anchors.topMargin: 10
+            width: parent.width; height: parent.height - chapterAdd.height - 10
+            model: ctrl.chapters
+            emptyText: qsTr("No chapters yet. Mark a range on the heatmap, then add it.")
+            onSeek: (i) => root.seekRequested(ctrl.chapterVideoMs(i))
+            onRename: (i, name) => ctrl.renameChapter(i, name)
+            onRemove: (i) => ctrl.removeChapter(i)
+        }
+    }
+    // Bookmarks (0.7 bottom tab).
+    Item {
+        visible: bottomTabs.current === 2
+        x: 16; y: 46; width: parent.width - 32; height: parent.height - 58
+        Row {
+            id: bookmarkAdd
+            spacing: 8
+            FlowTextField { id: bookmarkName; width: 220; placeholder: qsTr("Bookmark"); onAccepted: addBookmark.clicked() }
+            FlowButton {
+                id: addBookmark
+                text: qsTr("Add at playhead"); enabled: ctrl.hasScript
+                onClicked: if (ctrl.addBookmark(bookmarkName.text, root.playheadPosition)) bookmarkName.text = ""
+            }
+        }
+        MarkList {
+            anchors.top: bookmarkAdd.bottom; anchors.topMargin: 10
+            width: parent.width; height: parent.height - bookmarkAdd.height - 10
+            model: ctrl.bookmarks
+            emptyText: qsTr("No bookmarks yet.")
+            onSeek: (i) => root.seekRequested(ctrl.bookmarkVideoMs(i))
+            onRename: (i, name) => ctrl.renameBookmark(i, name)
+            onRemove: (i) => ctrl.removeBookmark(i)
+        }
+    }
+    // The Scene Map lives in the Editor (D-145): the way there.
+    Item {
+        visible: bottomTabs.current === 3
+        x: 16; y: 46; width: parent.width - 32; height: parent.height - 58
+        Column {
+            anchors.centerIn: parent; spacing: 10
+            Text {
+                textFormat: Text.PlainText
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: qsTr("Scenes with their frame, feel and suggestions are in the Editor (Generator → Scenes).")
+                color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 13
+            }
+            FlowButton {
+                objectName: "openScenes"
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: qsTr("Open the scenes in the Editor")
+                enabled: ctrl.hasScript
+                onClicked: root.editScenesRequested()
+            }
+        }
+    }
+    // Audio Analysis (0.7): the whole video's sound with the beat grid; click seeks.
+    Item {
+        visible: bottomTabs.current === 4
+        x: 16; y: 46; width: parent.width - 32; height: parent.height - 58
+        Row {
+            id: bpmRow
+            spacing: 10
+            Text {
+                objectName: "audioAnalysisBpm"
+                textFormat: Text.PlainText
+                anchors.verticalCenter: parent.verticalCenter
+                text: ctrl.effectiveBpm > 0 ? qsTr("%1 BPM").arg(ctrl.effectiveBpm) : qsTr("— BPM")
+                color: Theme.text; font.family: Theme.font; font.pixelSize: 14
+            }
+            FlowTextField {
+                width: 90
+                placeholder: ctrl.bpm > 0 ? String(ctrl.bpm)
+                           : ctrl.effectiveBpm > 0 ? qsTr("auto %1").arg(ctrl.effectiveBpm)
+                                                  : qsTr("BPM")
+                onAccepted: ctrl.bpm = parseFloat(text) || 0
+            }
+            FlowButton {
+                text: qsTr("BPM grid"); checked: ctrl.bpmGrid
+                onClicked: ctrl.bpmGrid = !ctrl.bpmGrid
+            }
+            FlowButton {
+                objectName: "bpmFromStrokeTab"
+                text: qsTr("Guess from stroke")
+                enabled: ctrl.hasScript
+                onClicked: ctrl.guessBpmFromStroke()
+            }
+            FlowButton {
+                objectName: "bpmFromAudioTab"
+                text: qsTr("From audio")
+                enabled: ctrl.videoName !== ""
+                onClicked: ctrl.guessBpmFromAudio()
+            }
+            FlowButton {
+                objectName: "soundCurveWrite"
+                text: qsTr("Sound curve")
+                enabled: ctrl.hasScript && ctrl.videoName !== ""
+                onClicked: ctrl.proposeSoundCurve()
+            }
+            FlowButton {
+                objectName: "soundCurveUndo"
+                text: qsTr("Undo sound curve")
+                visible: ctrl.canUndoSoundCurve
+                onClicked: ctrl.undoSoundCurve()
+            }
+            Text {
+                textFormat: Text.PlainText
+                anchors.verticalCenter: parent.verticalCenter
+                text: qsTr("Blank BPM uses the stroke tempo when the grid is on.")
+                color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
+            }
+        }
+        MessageDialog {
+            id: soundCurveDialog
+            title: qsTr("Sound Curve")
+            text: qsTr("Write the sound as the Vibration curve (%1 points)? Undo brings the old curve back.")
+                   .arg(ctrl.pendingSoundCurvePoints)
+            buttons: MessageDialog.Ok | MessageDialog.Cancel
+            onAccepted: ctrl.confirmSoundCurve()
+            onRejected: ctrl.cancelSoundCurve()
+        }
+        Connections {
+            target: ctrl
+            function onSoundCurveReady(points) {
+                if (points >= 2) soundCurveDialog.open()
+            }
+        }
+        AudioLevelItem {
+            id: wholeAudio
+            anchors.top: bpmRow.bottom; anchors.topMargin: 10
+            width: parent.width; height: 72
+            source: ctrl.videoUrl
+            viewStartMs: 0; viewEndMs: root.mediaDuration > 0 ? root.mediaDuration : -1
+            playheadMs: root.mediaPosition
+            label: ""
+            MouseArea {
+                anchors.fill: parent
+                onClicked: (m) => root.seekRequested(Math.round(m.x / width * root.mediaDuration))
+            }
+        }
+        Text {
+            textFormat: Text.PlainText
+            anchors.centerIn: wholeAudio
+            visible: wholeAudio.empty
+            text: wholeAudio.loading ? qsTr("Reading the sound…") : qsTr("Link a video to see its sound.")
+            color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 13
+        }
+    }
+}
