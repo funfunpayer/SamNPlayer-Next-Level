@@ -120,8 +120,8 @@ std::vector<SceneDef> Scenes() {
     const cv::Rect kBoxX(100, 60, 120, 120);
     std::vector<SceneDef> v;
     auto add = [&](SceneDef d) { v.push_back(std::move(d)); };
-    constexpr int kSec = 12;
-    constexpr int kFr = int(tc::kFps * kSec);
+    static constexpr int kSec = 12;
+    static constexpr int kFr = int(tc::kFps * kSec);
     add({"clean", "1 Hz disc, amp 80, textured background", false, {100, 40, 120, 160}, TrackAxis::kAuto, false,
          [](const fs::path& p) { return Wrap(tc::WriteMoving(p, kSec, 80, 1.0), kFr, 80); }});
     add({"pan_y", "camera pan, Y stroke (WritePanning)", false, {100, 40, 120, 160}, TrackAxis::kAuto, false,
