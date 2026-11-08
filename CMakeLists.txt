@@ -12,18 +12,22 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-include(FetchContent)
-# Prefer git over the Releases .tar.xz: GitHub Releases edges often 504 in CI
-# (configure never starts). Same pin v3.11.3; shallow clone, no json tests.
-FetchContent_Declare(
-  nlohmann_json
-  GIT_REPOSITORY https://github.com/nlohmann/json.git
-  GIT_TAG        v3.11.3
-  GIT_SHALLOW    TRUE
-)
-set(JSON_BuildTests OFF CACHE INTERNAL "")
-set(JSON_Install OFF CACHE INTERNAL "")
-FetchContent_MakeAvailable(nlohmann_json)
+# nlohmann_json: a system or vcpkg copy first (no network at configure time).
+# Otherwise a shallow git clone of the pinned tag: GitHub's Releases edge often
+# answers 504 in CI, which stopped the configure step before it began.
+include(FetchContent) # also used by vision/ (ONNX Runtime)
+find_package(nlohmann_json 3.11 QUIET)
+if(NOT nlohmann_json_FOUND)
+  FetchContent_Declare(
+    nlohmann_json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG        v3.11.3
+    GIT_SHALLOW    TRUE
+  )
+  set(JSON_BuildTests OFF CACHE INTERNAL "")
+  set(JSON_Install OFF CACHE INTERNAL "")
+  FetchContent_MakeAvailable(nlohmann_json)
+endif()
 
 add_subdirectory(core)
 if(SAMN_BUILD_VISION)

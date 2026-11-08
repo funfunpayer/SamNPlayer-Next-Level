@@ -2,8 +2,15 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-code-tidy-635a`: Split PlayerController .cpp (no API change). Stay off #168 / Speech-Hold.
+**Last update:** 8 Nov 2026, Claude, branch `claude/samn2-json-fallback`: nlohmann_json comes from the system package first, then the git-clone fallback main already had (handover below). No code behaviour changed. Cursor, same day: probe-on-link warning box (#191). Earlier: 7 Nov 2026, Claude, branch `claude/samn2-vision-bench`: `samn_bench`, the detection benchmark, and its baseline (handover below). No engine behaviour changed. Before: the video playhead extrapolation (D-164, `claude/samn2-playhead`, #163) and the `DeviceWorker` move (#166) are merged.
 
+## Handover: `claude/samn2-json-fallback` (8 Nov, CI: nlohmann_json from the system first)
+
+On 8 Nov GitHub returned HTTP 504 for the release download of `json.tar.xz` for hours, so every job died in the CMake configure step before any code was built (#168 failed four re-runs for this reason alone).
+
+- **CMake:** `find_package(nlohmann_json 3.11 QUIET)` first; only if nothing is found, the shallow git clone of the pinned tag v3.11.3 that main already used instead of the Releases archive. No change for a developer machine without the package.
+- **CI:** the three Linux jobs install `nlohmann-json3-dev` (3.11.3 on Ubuntu 24.04) together with OpenCV. Verified: configure and build `core_tests` against the system package, 491/491 pass; without the package the fallback branch is taken. First CI run of this PR failed because `include(FetchContent)` had moved into the fallback branch (vision/ needs it for ONNX Runtime): fixed, it stays unconditional.
+- **Not changed:** the Windows job still fetches nlohmann_json (git clone) from github.com. Adding `nlohmann-json` to `ci/vcpkg/vcpkg.json` would change the hash that keys the vcpkg and the FFmpeg-dav1d caches and force an expensive rebuild; do it as its own PR if the outage returns.
 ## Handover: `cursor/player-code-tidy-635a` (8 Nov, Player code tidy)
 
 Owner: clean Player code — same class, split translation units.
