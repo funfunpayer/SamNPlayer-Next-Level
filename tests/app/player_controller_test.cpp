@@ -1124,11 +1124,23 @@ private slots:
         ch.contact_curve = std::string("peak");
         QCOMPARE(now(600), expectedAt(path, ch, 600));
         QVERIFY(now(600).first > full.first);
+        // Feel probe follows the live knobs; Save to script persists them.
+        const QVariantMap probe = c.contactFeelProbe();
+        QVERIFY(probe.value("activePct").toDouble() > 0);
+        QVERIFY(probe.value("stroke").toList().size() >= 2);
+        QVERIFY(c.saveContactToScript());
+        QVERIFY(c.toolNote().contains("Contact settings saved"));
+        QCOMPARE(c.mapping()->contactSpan(), 0.5);
+        QCOMPARE(c.mapping()->contactCurve(), QString("peak"));
+        const samn::Document saved = samn::LoadDocument(std::filesystem::u8path(c.scriptPath().toStdString()));
+        QVERIFY(saved.recipe.contact_vibration);
+        QCOMPARE(saved.recipe.contact_vibration_span, 0.5);
+        QCOMPARE(saved.recipe.contact_vibration_curve, std::string("peak"));
         m->setContactIntensity(0.25);
-        // A new script starts from its own recipe; the strength is kept.
-        QVERIFY(c.openPath(path));
-        QCOMPARE(m->contactSpan(), 0.75);
-        QCOMPARE(m->contactCurve(), QString("linear"));
+        // Reopen keeps the saved recipe; live strength is remembered.
+        QVERIFY(c.openPath(c.scriptPath()));
+        QCOMPARE(m->contactSpan(), 0.5);
+        QCOMPARE(m->contactCurve(), QString("peak"));
         QCOMPARE(m->contactIntensity(), 0.25);
         // A plain script has none; an axes script has the controls but the
         // knobs do not act (baked curves).

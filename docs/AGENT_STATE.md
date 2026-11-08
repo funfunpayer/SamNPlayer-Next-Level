@@ -2,7 +2,16 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-bake-share-635a`: Player Bake & share card. #175 Invert merged. Stay off intensity-arc (#168).
+**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-contact-save-635a`: Contact feel probe + Save to script (on top of bake-share). Stay off intensity-arc (#168).
+
+## Handover: `cursor/player-contact-save-635a` (8 Nov, Player contact feel probe + Save)
+
+Owner: Player/Editor GUI — Neo 2 contact feel after Adapt. Completes PARITY §3.1 feel probe / Save to script.
+
+- **Inspector → Playback → Contact:** Feel probe canvas (PreviewContactVibration) + Save to script (`saveContactToScript` → `ApplyContactRecipe` + reload).
+- **C++:** `contactFeelProbe` property; strength follows live intensity knob.
+- **Tests:** `contactControlsFollowTheScript` save+probe; `playbackTabMappingControls` UI.
+- **Stay off:** Claude #168. Stacked on bake-share until #176 merges.
 
 ## Handover: `cursor/player-bake-share-635a` (8 Nov, Player Bake & share)
 

@@ -207,9 +207,13 @@ private slots:
                 if (!it) qWarning("no %s", name);
                 return it;
             };
-            for (const char* n : {"fxPreset", "fxName", "fxSave", "fxDelete", "syncMode", "contactOff", "contactCurve", "strengthPreset"}) {
+            for (const char* n : {"fxPreset", "fxName", "fxSave", "fxDelete", "syncMode", "contactOff",
+                                  "contactCurve", "strengthPreset", "contactFeelProbe", "saveContactToScript",
+                                  "playerFeelProbeCanvas"}) {
                 QVERIFY2(item(n) && item(n)->isVisible(), n);
             }
+            QVERIFY(item("saveContactToScript")->isEnabled());
+            QVERIFY(player->contactFeelProbe().value("activePct").toDouble() > 0);
             // Sync mode: the combo's choice reaches the controller.
             QVERIFY(QMetaObject::invokeMethod(item("syncMode"), "activated", Q_ARG(int, 5)));
             QCOMPARE(m->syncMode(), QString("suction_position"));
@@ -222,6 +226,8 @@ private slots:
             QVERIFY(item("contactCurve")->isEnabled());  // recipe mode with contact vibration
             QVERIFY(QMetaObject::invokeMethod(item("contactCurve"), "activated", Q_ARG(int, 2)));
             QCOMPARE(m->contactCurve(), QString("peak"));
+            QVERIFY(player->saveContactToScript());
+            QVERIFY(player->toolNote().contains("Contact settings saved"));
             QCOMPARE(item("strengthPreset")->property("currentIndex").toInt(), 2);  // —, soft, normal
             QVERIFY(QMetaObject::invokeMethod(item("strengthPreset"), "activated", Q_ARG(int, 3)));
             QCOMPARE(player->activeStrength(), QString("strong"));

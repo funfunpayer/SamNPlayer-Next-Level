@@ -21,6 +21,7 @@
 #include "curve_item.h"
 #include "device_controller.h"
 #include "qt_paths.h"
+#include "samn/contact_preview.h"
 #include "samn/fileio.h"
 #include "samn/heatmap_image.h"
 #include "samn/improve.h"
@@ -784,6 +785,69 @@ QString PlayerController::exportFunscript(const QString& destPath) {
     toolNote_ = tr("Shared for other apps · %1").arg(QFileInfo(dest).fileName());
     emit toolNoteChanged();
     return dest;
+}
+
+QVariantMap PlayerController::contactFeelProbe() const {
+    const samn::ContactVibrationPreview p = samn::PreviewContactVibration(
+        mapping_.contactSpan(), mapping_.contactCurve().toStdString(), mapping_.contactIntensity());
+    QVariantList stroke, vib, peaks;
+    stroke.reserve(int(p.stroke.size()));
+    vib.reserve(int(p.vib.size()));
+    peaks.reserve(int(p.peaks.size()));
+    for (const auto& pt : p.stroke) stroke << QVariantMap{{"x", pt.x}, {"y", pt.y}};
+    for (const auto& pt : p.vib) vib << QVariantMap{{"x", pt.x}, {"y", pt.y}};
+    for (const auto& pt : p.peaks) peaks << QVariantMap{{"x", pt.x}, {"y", pt.y}};
+    return {{"activePct", p.active_pct},
+            {"peak", p.peak},
+            {"hint", QString::fromStdString(p.hint)},
+            {"stroke", stroke},
+            {"vib", vib},
+            {"peaks", peaks}};
+}
+
+bool PlayerController::saveContactToScript() {
+    if (scriptPath_.isEmpty() || stroke_.size() < 2) {
+        setError(tr("Open a script first."));
+        return false;
+    }
+    if (!contactControls_) {
+        setError(tr("This script has no contact vibration to save."));
+        return false;
+    }
+    namespace fs = std::filesystem;
+    const std::string openedU8 = U8(scriptPath_);
+    const fs::path opened = fs::u8path(openedU8);
+    const bool wasSamn = samn::IsSamnPath(openedU8);
+    const std::string funscriptU8 = wasSamn ? samn::CompanionFunscriptPath(openedU8) : openedU8;
+    const fs::path funscript = fs::u8path(funscriptU8);
+    const fs::path samnPath = fs::u8path(samn::CompanionSamnPath(funscriptU8));
+
+    try {
+        samn::Document doc;
+        if (wasSamn || fs::exists(samnPath)) {
+            doc = samn::LoadDocument(wasSamn ? opened : samnPath);
+        } else {
+            doc = samn::LoadFunscriptFile(funscript);
+        }
+        if (doc.general.size() < 2) doc.general = stroke_;
+        const bool on = !mapping_.contactOff();
+        doc.ApplyContactRecipe(on, mapping_.contactSpan(), mapping_.contactCurve().toStdString());
+        if (doc.version == 0) doc.version = samn::SamnCurrentVersion;
+        if (doc.kind.empty()) doc.kind = samn::SamnKind;
+        if (doc.creator.empty()) doc.creator = "SamNPlayer";
+        samn::SaveDocument(wasSamn ? opened : samnPath, doc);
+        if (fs::exists(funscript) || !wasSamn) doc.ExportFunscript(funscript);
+    } catch (const std::exception& e) {
+        setFailure(tr("Save contact: %1").arg(FromU8(e.what())));
+        return false;
+    }
+
+    const QString reload = wasSamn ? scriptPath_ : FromU8(samnPath.u8string());
+    if (!openScript(reload, videoPath_)) return false;
+    toolNote_ = tr("Contact settings saved to the script.");
+    emit toolNoteChanged();
+    emit scriptEdited(scriptPath_);
+    return true;
 }
 
 void PlayerController::setCapIntensity(double v) {
