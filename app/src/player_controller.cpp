@@ -188,9 +188,18 @@ QStringList PlayerController::axisLanes() const {
     if (stroke_.empty()) return out;
     const bool connected = device_ && device_->connected();
     const QStringList has = connected ? device_->axes() : QStringList{};
-    for (const char* axis : {"surge", "sway", "twist", "roll", "pitch"}) {
+    for (const char* axis : samn::kCompanionAxes) {
         const QString name = QString::fromLatin1(axis);
         if (axisActions_.count(axis) && (!connected || has.contains(name))) out << name;
+    }
+    return out;
+}
+
+QStringList PlayerController::missingAxisChoices() const {
+    QStringList out;
+    if (stroke_.empty()) return out;
+    for (const char* axis : samn::kCompanionAxes) {
+        if (!axisActions_.count(axis)) out << QString::fromLatin1(axis);
     }
     return out;
 }
@@ -899,6 +908,48 @@ bool PlayerController::setPlaybackSource(const QString& sourceIn) {
     emit toolNoteChanged();
     emit scriptEdited(scriptPath_);
     return true;
+}
+
+QString PlayerController::createCompanionAxis(const QString& axisIn) {
+    if (scriptPath_.isEmpty() || stroke_.size() < 2) {
+        setError(tr("Open a script with at least 2 stroke points first."));
+        return {};
+    }
+    const std::string axis = axisIn.toLower().toStdString();
+    if (!samn::is_companion_axis(axis)) {
+        setError(tr("Unknown axis: %1").arg(axisIn));
+        return {};
+    }
+    if (axisActions_.count(axis)) {
+        setError(tr("Axis file already exists."));
+        return {};
+    }
+    const int64_t duration = stroke_.back().at;
+    std::string err;
+    const auto created = samn::create_companion_axis(U8(scriptPath_), axis, duration, &err);
+    if (!created) {
+        setFailure(tr("+ Axis: %1").arg(FromU8(err.empty() ? "could not create" : err)));
+        return {};
+    }
+    try {
+        auto actions = samn::LoadFunscript(std::filesystem::u8path(*created)).actions;
+        if (actions.empty()) {
+            setFailure(tr("+ Axis: created file has no points."));
+            return {};
+        }
+        axisActions_[axis] = std::move(actions);
+    } catch (const std::exception& e) {
+        setFailure(tr("+ Axis: %1").arg(FromU8(e.what())));
+        return {};
+    }
+    emit lanesChanged();
+    pushToViews();
+    setActiveLane(QString::fromStdString(axis));
+    const QString path = FromU8(*created);
+    toolNote_ = tr("+ Axis · %1").arg(QFileInfo(path).fileName());
+    emit toolNoteChanged();
+    setError({});
+    return path;
 }
 
 QString PlayerController::saveAsEmotionScript() {

@@ -41,6 +41,8 @@ class EditorController : public QObject {
     Q_PROPERTY(QString playPath READ playPath NOTIFY scriptChanged)
     Q_PROPERTY(bool hasScript READ hasScript NOTIFY scriptChanged)
     Q_PROPERTY(QStringList lanes READ lanes NOTIFY lanesChanged)
+    // Companion axes without a file / empty session lane (0.7 "+ Axis…").
+    Q_PROPERTY(QStringList missingAxisChoices READ missingAxisChoices NOTIFY lanesChanged)
     // The video the script belongs to: the sound for "Vibration from the sound".
     Q_PROPERTY(QString videoPath READ videoPath WRITE setVideoPath NOTIFY videoPathChanged)
     // A create tool is working (decoding the sound, reading the beat bar).
@@ -90,6 +92,7 @@ public:
     QString playPath() const { return samn_path_.isEmpty() ? path_ : samn_path_; }
     bool hasScript() const { return !path_.isEmpty(); }
     QStringList lanes() const;
+    QStringList missingAxisChoices() const;
     QString videoPath() const { return video_path_; }
     void setVideoPath(const QString& path);
     bool busy() const { return busy_; }
@@ -156,6 +159,9 @@ public:
     // seeds it with the stroke's times at 0, so the dots are there to pull
     // up. One undo step; false when the lane already has points.
     Q_INVOKABLE bool addLane(const QString& lane);
+    // 0.7 CreateScriptAxis / "+ Axis…": create <stem>.<axis>.funscript centred
+    // at 50, load it into the session and switch to it. Path or "" on failure.
+    Q_INVOKABLE QString createCompanionAxis(const QString& axis);
     // "Optimize for" (0.8 OptimizeLoadedFor, D-156): "general" heals the
     // tracker-loss windows and fills long gaps in the stroke so the script works
     // on any device; "neo2" also turns contact vibration on (soft, 0.75) and

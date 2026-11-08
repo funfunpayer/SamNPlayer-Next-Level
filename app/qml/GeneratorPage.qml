@@ -131,7 +131,11 @@ Item {
         else if (name === "tool_invert") { if (edit.hasMarker) edit.invert(); else invertAllDialog.open() }
     }
     function laneTitle(lane) {
-        return lane === "vibration" ? qsTr("Vibration") : lane === "suction" ? qsTr("Suction") : qsTr("Stroke")
+        return ({
+            stroke: qsTr("Stroke"), vibration: qsTr("Vibration"), suction: qsTr("Suction"),
+            surge: qsTr("Surge"), sway: qsTr("Sway"), twist: qsTr("Twist"),
+            roll: qsTr("Roll"), pitch: qsTr("Pitch")
+        })[lane] || qsTr("Stroke")
     }
     MessageDialog {
         id: overwriteDialog
@@ -989,6 +993,14 @@ Item {
                                             text: qsTr("+ Suction lane"); icon: "plus"
                                             onClicked: { toolsMenu.close(); edit.addLane("suction") }
                                         }
+                                        Repeater {
+                                            model: edit.missingAxisChoices
+                                            FlowButton {
+                                                objectName: "tool_addAxis_" + modelData
+                                                text: qsTr("+ %1").arg(page.laneTitle(modelData)); icon: "plus"
+                                                onClicked: { toolsMenu.close(); edit.createCompanionAxis(modelData) }
+                                            }
+                                        }
                                     }
                                     // FPS snap (0.7 FPS-Snap): new and dragged points land on frame boundaries.
                                     RowLayout {
@@ -1170,8 +1182,11 @@ Item {
                                 // 0.7: feel lanes 34 px, so their dots can be drawn.
                                 Layout.minimumHeight: modelData === "stroke" ? 60 : 34
                                 lane: modelData
-                                label: modelData === "stroke" ? "" : (modelData === "vibration" ? qsTr("Vibration") : qsTr("Suction"))
-                                lineColor: modelData === "stroke" ? Theme.orange : (modelData === "vibration" ? Theme.laneVibration : Theme.laneSuction)
+                                label: modelData === "stroke" ? "" : page.laneTitle(modelData)
+                                lineColor: modelData === "stroke" ? Theme.orange
+                                         : modelData === "vibration" ? Theme.laneVibration
+                                         : modelData === "suction" ? Theme.laneSuction
+                                         : ({ surge: "#e5c07b", sway: "#98c379", twist: "#e06c9f", roll: "#61afef", pitch: "#d19a66" })[modelData] || Theme.textDim
                                 showGrid: modelData === "stroke"
                                 editMode: true
                                 // Paint-friendly: crisp line, little glow, clear dots (CurveItem).

@@ -156,6 +156,8 @@ class PlayerController : public QObject {
     // as read lanes, in the order surge, sway, twist, roll, pitch; with a
     // device connected only the axes it has. They also drive those axes.
     Q_PROPERTY(QStringList axisLanes READ axisLanes NOTIFY lanesChanged)
+    // Companion axes that have no file yet (0.7 "+ Axis…" picker).
+    Q_PROPERTY(QStringList missingAxisChoices READ missingAxisChoices NOTIFY lanesChanged)
     // 0.7 lane / legend selection: the axis the main curve shows (its lane
     // is bound to this; "stroke",
     // "vibration", "suction" or a companion axis), picked from laneChoices
@@ -295,6 +297,9 @@ public:
     Q_INVOKABLE bool setPlaybackSource(const QString& source);
     // 0.7 Save Emotion Script: ensure a companion .samn and reload it.
     Q_INVOKABLE QString saveAsEmotionScript();
+    // 0.7 CreateScriptAxis / "+ Axis…": create <stem>.<axis>.funscript centred
+    // at 50 over the stroke length; never overwrites. Path or "" with lastError.
+    Q_INVOKABLE QString createCompanionAxis(const QString& axis);
     // Curve edit on the heatmap selection (0.7 Cap / Scale / Delete / Invert):
     // rewrites the active script lane (stroke, or baked vibration/suction),
     // saves and reloads. Cap/Scale/Delete and invertSelection need a mark;
@@ -437,6 +442,7 @@ public:
     bool showVibrationLane() const;
     bool showSuctionLane() const;
     QStringList axisLanes() const;
+    QStringList missingAxisChoices() const;
     QString activeLane() const { return activeLane_; }
     void setActiveLane(const QString& lane);
     QStringList laneChoices() const;

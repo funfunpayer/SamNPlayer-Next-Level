@@ -22,6 +22,15 @@ GlassCard {
     Behavior on width { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
     clip: true
 
+    function laneTitle(lane) {
+        return ({
+            stroke: qsTr("Stroke"), vibration: qsTr("Vibration"), suction: qsTr("Suction"),
+            surge: qsTr("Surge"), sway: qsTr("Sway"), twist: qsTr("Twist"),
+            roll: qsTr("Roll"), pitch: qsTr("Pitch")
+        })[lane] || lane
+    }
+    function axisTitle(axis) { return laneTitle(axis) }
+
     component Card: Rectangle {
         id: card
         default property alias content: body.data
@@ -688,6 +697,48 @@ GlassCard {
                             textFormat: Text.PlainText
                             anchors.verticalCenter: parent.verticalCenter
                             width: 78
+                            text: qsTr("Curve")
+                            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                        }
+                        FlowCombo {
+                            objectName: "curveSelect"
+                            width: scriptTools.width - 24 - 86
+                            enabled: root.ctrl.hasScript && root.ctrl.laneChoices.length > 0
+                            model: root.ctrl.laneChoices.map((l) => root.laneTitle(l))
+                            currentIndex: Math.max(0, root.ctrl.laneChoices.indexOf(root.ctrl.activeLane))
+                            onActivated: (i) => root.ctrl.activeLane = root.ctrl.laneChoices[i]
+                        }
+                    }
+                    Row {
+                        spacing: 8
+                        Text {
+                            textFormat: Text.PlainText
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 78
+                            text: qsTr("+ Axis…")
+                            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                        }
+                        FlowCombo {
+                            objectName: "plusAxis"
+                            width: scriptTools.width - 24 - 86
+                            enabled: root.ctrl.hasScript && root.ctrl.missingAxisChoices.length > 0
+                            model: [qsTr("Choose axis…")].concat(root.ctrl.missingAxisChoices.map((a) => root.axisTitle(a)))
+                            currentIndex: 0
+                            onActivated: (i) => {
+                                if (i <= 0) return
+                                const axis = root.ctrl.missingAxisChoices[i - 1]
+                                const path = root.ctrl.createCompanionAxis(axis)
+                                currentIndex = 0
+                                if (path === "") root.projectStatus = root.ctrl.lastError
+                            }
+                        }
+                    }
+                    Row {
+                        spacing: 8
+                        Text {
+                            textFormat: Text.PlainText
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 78
                             text: qsTr("Drive")
                             color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
                         }
@@ -710,7 +761,7 @@ GlassCard {
                             if (path === "") root.projectStatus = root.ctrl.lastError
                         }
                     }
-                    Note { text: qsTr("Recipe = contact vibration from the stroke. Axes = baked vibration / suction lanes (Bake & share above). Save Emotion Script writes the companion .samn.") }
+                    Note { text: qsTr("Curve picks the lane the main curve shows. + Axis… creates a centred companion file (surge/sway/twist/roll/pitch) beside the script. Drive Recipe/Axes and Save Emotion Script write the .samn.") }
                     Note { objectName: "bakeNote"; visible: root.ctrl.toolNote !== ""; text: root.ctrl.toolNote }
                 }
                 // Effects (0.7 Player Inspector → Effects and "Playback &

@@ -343,6 +343,42 @@ private slots:
         QCOMPARE(e.lanes(), QStringList{"stroke"});
     }
 
+    // 0.7 CreateScriptAxis: Editor "+ Axis…" creates a centred companion and
+    // edits it; reopen loads the file; save keeps other fields via PatchActions.
+    void createCompanionAxisIsEditableAndSaved() {
+        const QString path = script("axis.funscript");
+        const QString surgePath = dir_.filePath("axis.surge.funscript");
+        EditorController e;
+        QVERIFY(e.open(path));
+        QCOMPARE(e.missingAxisChoices().size(), 5);
+        const QString created = e.createCompanionAxis(QStringLiteral("surge"));
+        QVERIFY2(!created.isEmpty(), qPrintable(e.status()));
+        QCOMPARE(created, surgePath);
+        QVERIFY(e.lanes().contains(QStringLiteral("surge")));
+        QCOMPARE(e.activeLane(), QStringLiteral("surge"));
+        QCOMPARE(e.session().Axis("surge").size(), size_t(2));
+        QCOMPARE(e.session().Axis("surge")[0].pos, 50);
+        // Drag the first point up and save.
+        CurveItem curve;
+        lane(curve, "surge");
+        e.attachCurve(&curve);
+        curve.setViewStartMs(e.viewStartMs());
+        curve.setViewEndMs(e.viewEndMs());
+        e.setActiveLane(QStringLiteral("surge"));
+        QVERIFY(e.press(&curve, X(0), Y(80)) >= 0);
+        e.dragTo(X(0), Y(80));
+        e.release();
+        QCOMPARE(e.session().Axis("surge")[0].pos, 80);
+        const auto onDisk = samn::LoadFunscript(Fs(surgePath)).actions;
+        QCOMPARE(onDisk[0].pos, 80);
+        // Reopen picks the companion up.
+        EditorController again;
+        QVERIFY(again.open(path));
+        QVERIFY(again.lanes().contains(QStringLiteral("surge")));
+        QCOMPARE(again.session().Axis("surge")[0].pos, 80);
+        QVERIFY(again.createCompanionAxis(QStringLiteral("surge")).isEmpty());  // already open
+    }
+
     // D-156 (0.8 OptimizeLoadedFor): "Any device" heals the tracker-loss
     // windows and fills long holes; "Sam Neo 2" also writes vibration and
     // suction; each is one undo step and saved at once.
