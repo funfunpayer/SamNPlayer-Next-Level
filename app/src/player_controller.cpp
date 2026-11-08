@@ -30,6 +30,7 @@
 #include "samn/project.h"
 #include "samn/range_edit.h"
 #include "samn/script_quality.h"
+#include "samn/sound_vibration.h"
 #include "heatmap_item.h"
 #include "samn/mapper.h"
 #include "samn/marks.h"
@@ -1163,6 +1164,17 @@ bool PlayerController::applySelectionEdit(const QString& label,
 bool PlayerController::openScript(const QString& pathIn, const QString& videoIn) {
     // A .samn beside a .funscript of the same name wins (as in 0.7).
     const QString path = FromU8(samn::PreferSamnCompanion(U8(toLocalPath(pathIn))));
+    {
+        const std::string opened = U8(path);
+        const std::string fun = samn::IsSamnPath(opened) ? samn::CompanionFunscriptPath(opened) : opened;
+        const QString key = FromU8(samn::CompanionSamnPath(fun));
+        if (!soundCurveUndoPath_.isEmpty() && key != soundCurveUndoPath_) {
+            soundCurveUndo_.reset();
+            soundCurveUndoPath_.clear();
+        }
+        if (!pendingSoundCurve_.empty()) pendingSoundCurve_.clear();
+        emit soundCurveChanged();
+    }
     samn::Document doc;
     try {
         doc = samn::IsSamnPath(U8(path)) ? samn::LoadDocument(std::filesystem::u8path(U8(path)))
@@ -1662,6 +1674,143 @@ bool PlayerController::guessBpmFromAudio() {
     emit toolNoteChanged();
     setError({});
     bpmAudio_->start(videoPath_);
+    return true;
+}
+
+bool PlayerController::proposeSoundCurve() {
+    if (scriptPath_.isEmpty() || stroke_.size() < 2) {
+        setError(tr("Open a script first."));
+        return false;
+    }
+    if (videoPath_.isEmpty()) {
+        setError(tr("Link a video to write the sound as a Vibration curve."));
+        toolNote_ = tr("Sound Curve: link a video first.");
+        emit toolNoteChanged();
+        return false;
+    }
+    if (!soundCurveAudio_) {
+        soundCurveAudio_ = new AudioLevelDecoder(this);
+        connect(soundCurveAudio_, &AudioLevelDecoder::finished, this, [this](const std::vector<double>& env) {
+            pendingSoundCurve_ = samn::VibrationCurveFromSound(env, samn::kAudioLevelStepMs, offsetMs_);
+            emit soundCurveChanged();
+            if (pendingSoundCurve_.size() < 2) {
+                toolNote_ = tr("The sound is too short for a curve.");
+                emit toolNoteChanged();
+                setError(toolNote_);
+                return;
+            }
+            toolNote_ = tr("Sound Curve ready · %1 points.").arg(int(pendingSoundCurve_.size()));
+            emit toolNoteChanged();
+            setError({});
+            emit soundCurveReady(int(pendingSoundCurve_.size()));
+        });
+        connect(soundCurveAudio_, &AudioLevelDecoder::failed, this, [this](const QString& error) {
+            pendingSoundCurve_.clear();
+            emit soundCurveChanged();
+            toolNote_ = tr("Sound Curve: %1").arg(error);
+            emit toolNoteChanged();
+            setFailure(toolNote_);
+        });
+    }
+    if (soundCurveAudio_->busy()) {
+        setError(tr("Still reading the sound…"));
+        return false;
+    }
+    toolNote_ = tr("Reading the sound…");
+    emit toolNoteChanged();
+    setError({});
+    soundCurveAudio_->start(videoPath_);
+    return true;
+}
+
+void PlayerController::cancelSoundCurve() {
+    pendingSoundCurve_.clear();
+    emit soundCurveChanged();
+}
+
+bool PlayerController::canUndoSoundCurve() const {
+    if (!soundCurveUndo_ || soundCurveUndoPath_.isEmpty() || scriptPath_.isEmpty()) return false;
+    const std::string opened = U8(scriptPath_);
+    const std::string fun = samn::IsSamnPath(opened) ? samn::CompanionFunscriptPath(opened) : opened;
+    return FromU8(samn::CompanionSamnPath(fun)) == soundCurveUndoPath_;
+}
+
+bool PlayerController::confirmSoundCurve() {
+    if (pendingSoundCurve_.size() < 2) {
+        setError(tr("Nothing to write — propose a Sound Curve first."));
+        return false;
+    }
+    auto curve = std::move(pendingSoundCurve_);
+    pendingSoundCurve_.clear();
+    emit soundCurveChanged();
+    return applyVibrationLane(std::move(curve), tr("Sound Curve"), true);
+}
+
+bool PlayerController::undoSoundCurve() {
+    if (!canUndoSoundCurve()) {
+        setError(tr("Nothing to undo for the Sound Curve."));
+        return false;
+    }
+    auto prev = std::move(*soundCurveUndo_);
+    soundCurveUndo_.reset();
+    soundCurveUndoPath_.clear();
+    emit soundCurveChanged();
+    return applyVibrationLane(std::move(prev), tr("Undo Sound Curve"), false);
+}
+
+bool PlayerController::applyVibrationLane(std::vector<samn::Action> vibration, const QString& label, bool recordUndo) {
+    if (scriptPath_.isEmpty() || stroke_.size() < 2) {
+        setError(tr("Open a script first."));
+        return false;
+    }
+    // Write needs ≥2 points; undo may restore an empty prior lane.
+    if (recordUndo && vibration.size() < 2) {
+        setError(tr("The sound is too short for a curve."));
+        return false;
+    }
+    const int nPoints = int(vibration.size());
+    namespace fs = std::filesystem;
+    const std::string openedU8 = U8(scriptPath_);
+    const fs::path opened = fs::u8path(openedU8);
+    const bool wasSamn = samn::IsSamnPath(openedU8);
+    const std::string funscriptU8 = wasSamn ? samn::CompanionFunscriptPath(openedU8) : openedU8;
+    const fs::path funscript = fs::u8path(funscriptU8);
+    const fs::path samnPath = fs::u8path(samn::CompanionSamnPath(funscriptU8));
+    const QString undoKey = FromU8(samnPath.u8string());
+    std::vector<samn::Action> previous;
+
+    try {
+        samn::Document doc;
+        if (wasSamn || fs::exists(samnPath)) {
+            doc = samn::LoadDocument(wasSamn ? opened : samnPath);
+        } else {
+            doc = samn::LoadFunscriptFile(funscript);
+        }
+        if (doc.general.size() < 2) doc.general = stroke_;
+        if (recordUndo) previous = doc.vibration;
+        doc.vibration = std::move(vibration);
+        if (doc.version == 0) doc.version = samn::SamnCurrentVersion;
+        if (doc.kind.empty()) doc.kind = samn::SamnKind;
+        if (doc.creator.empty()) doc.creator = "SamNPlayer";
+        const char* source = samn::PlaybackAxes;
+        doc.playback_source = source;
+        doc.recipe.playback_source = source;
+        samn::SaveDocument(samnPath, doc);
+    } catch (const std::exception& e) {
+        setFailure(tr("%1: %2").arg(label, FromU8(e.what())));
+        return false;
+    }
+
+    const QString reload = wasSamn ? scriptPath_ : FromU8(samnPath.u8string());
+    if (!openScript(reload, videoPath_)) return false;
+    if (recordUndo) {
+        soundCurveUndo_ = std::move(previous);
+        soundCurveUndoPath_ = undoKey;
+    }
+    toolNote_ = nPoints > 0 ? tr("%1 · %2 points.").arg(label).arg(nPoints) : tr("%1 · vibration cleared.").arg(label);
+    emit toolNoteChanged();
+    emit soundCurveChanged();
+    emit scriptEdited(scriptPath_);
     return true;
 }
 

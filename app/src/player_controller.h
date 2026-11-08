@@ -56,6 +56,8 @@ class PlayerController : public QObject {
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
     // What the last script tool did (Bake offset), for the Script Tools card.
     Q_PROPERTY(QString toolNote READ toolNote NOTIFY toolNoteChanged)
+    Q_PROPERTY(bool canUndoSoundCurve READ canUndoSoundCurve NOTIFY soundCurveChanged)
+    Q_PROPERTY(int pendingSoundCurvePoints READ pendingSoundCurvePoints NOTIFY soundCurveChanged)
     Q_PROPERTY(QVariantList variants READ variants NOTIFY variantsChanged)
     Q_PROPERTY(int variantIndex READ variantIndex NOTIFY variantsChanged)
     // Marks of the script ({name, startMs, endMs, label}, {name, timeMs,
@@ -397,6 +399,15 @@ public:
     // loudness (first 10 min), set BPM + grid. Async; returns false when it
     // cannot start (no video / already busy). Result lands in toolNote.
     Q_INVOKABLE bool guessBpmFromAudio();
+    // 0.7 Sound Curve: decode loudness → propose VibrationCurveFromSound;
+    // confirm writes the Vibration lane into the .samn (axes). Undo restores
+    // the previous vibration for this script (one step).
+    Q_INVOKABLE bool proposeSoundCurve();
+    Q_INVOKABLE bool confirmSoundCurve();
+    Q_INVOKABLE void cancelSoundCurve();
+    Q_INVOKABLE bool undoSoundCurve();
+    bool canUndoSoundCurve() const;
+    int pendingSoundCurvePoints() const { return int(pendingSoundCurve_.size()); }
     double capIntensity() const { return capIntensity_; }
     void setCapIntensity(double v);
     bool scaleSoftEdges() const { return scaleSoftEdges_; }
@@ -495,6 +506,9 @@ signals:
     void videoChanged();
     void offsetMsChanged();
     void toolNoteChanged();
+    // Sound Curve: proposed point count ready for the confirm dialog.
+    void soundCurveReady(int points);
+    void soundCurveChanged();
     void curveEditChanged();
     void playheadMsChanged();
     void lastErrorChanged();
@@ -604,6 +618,12 @@ private:
     std::vector<QPointer<CurveItem>> curves_;
     QPointer<HeatmapItem> heatmap_;
     AudioLevelDecoder* bpmAudio_ = nullptr;
+    AudioLevelDecoder* soundCurveAudio_ = nullptr;
+    std::vector<samn::Action> pendingSoundCurve_;
+    // Previous vibration before the last Sound Curve write (may be empty).
+    std::optional<std::vector<samn::Action>> soundCurveUndo_;
+    QString soundCurveUndoPath_;
+    bool applyVibrationLane(std::vector<samn::Action> vibration, const QString& label, bool recordUndo);
 };
 
 }  // namespace samn::ui

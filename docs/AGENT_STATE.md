@@ -2,9 +2,18 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 8 Nov 2026, Cursor: Player/Editor everyday path largely shipped (#169–#183). Stay off intensity-arc (#168) and Speech-Hold/feel-bands (P3.6 audio segments — Claude/larger).
+**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-sound-curve-635a`: Player Sound Curve. Stay off intensity-arc (#168) and Speech-Hold/feel-bands (P3.6 audio segments — Claude/larger).
 
-## Shipped this stream (8 Nov, #178–#183)
+## Handover: `cursor/player-sound-curve-635a` (8 Nov, Sound Curve)
+
+Owner: finish Player/Editor GUI except Claude #168.
+
+- **Core:** `VibrationCurveFromSound` (250 ms avg, Δ≥4 / 2 s, always last).
+- **Player:** `proposeSoundCurve` / `confirmSoundCurve` / `undoSoundCurve`; Audio Analysis + Inspector.
+- **Tests:** core decimate + `soundCurveWritesVibrationAndUndoes` (skips without decoder).
+- **Stay off:** Claude #168.
+
+## Shipped this stream (8 Nov, #178–#184)
 
 - Typed offset, Drive/Recipe, Save Emotion Script (#178)
 - CreateScriptAxis / + Axis… + Curve select (#179)
@@ -12,13 +21,13 @@
 - Stage keys hint (#181)
 - Scene markers toggle (#182)
 - BPM From audio (#183)
+- Parity settings docs refresh (#184)
 - CI: Linux `--parallel` capped to nproc/2 (OOM kills)
 
 ## Still open (non-Claude, Player/Editor)
 
 - Speech-Hold / Feel segment strip + heatmap bands (needs `audio_check` segments)
-- Auto sync; Sound curve write from Player Audio card
-- "Make playable" / dedicated video warning chrome leftovers
+- Auto sync; "Make playable" / dedicated video warning chrome leftovers
 - Scene strip thumbnails in Player (markers done; thumbs Generator-side)
 
 ## Handover: `cursor/player-bpm-audio-635a` (8 Nov, BPM From audio) — merged #183

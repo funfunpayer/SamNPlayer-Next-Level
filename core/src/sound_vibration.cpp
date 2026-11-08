@@ -60,4 +60,35 @@ std::vector<Action> SoundVibrationLane(const std::vector<Frame>& mapped, const s
     return FramesToLane(sound, true);
 }
 
+std::vector<Action> VibrationCurveFromSound(const std::vector<double>& envelope, int step_ms, int64_t offset_ms) {
+    if (envelope.empty() || step_ms <= 0) return {};
+    const size_t per = size_t(std::max(1, (kSoundCurveBucketMs + step_ms - 1) / step_ms));
+    std::vector<Action> buckets;
+    buckets.reserve((envelope.size() + per - 1) / per);
+    for (size_t i = 0; i < envelope.size(); i += per) {
+        const size_t end = std::min(envelope.size(), i + per);
+        double sum = 0;
+        for (size_t j = i; j < end; ++j) sum += envelope[j];
+        const double mean = sum / double(end - i);
+        const int64_t at = int64_t(i) * int64_t(step_ms) - offset_ms;
+        if (at < 0) continue;
+        const int pos = int(std::lround(std::clamp(mean, 0.0, 1.0) * 100.0));
+        buckets.push_back(Action{at, pos});
+    }
+    if (buckets.size() < 2) return {};
+
+    std::vector<Action> out;
+    out.reserve(buckets.size());
+    out.push_back(buckets.front());
+    for (size_t i = 1; i + 1 < buckets.size(); ++i) {
+        const Action& a = buckets[i];
+        const Action& prev = out.back();
+        if (std::abs(a.pos - prev.pos) >= kSoundCurveMinDelta || a.at - prev.at >= kSoundCurveForceMs)
+            out.push_back(a);
+    }
+    if (out.back().at != buckets.back().at || out.back().pos != buckets.back().pos) out.push_back(buckets.back());
+    if (out.size() < 2) return {};
+    return out;
+}
+
 }  // namespace samn

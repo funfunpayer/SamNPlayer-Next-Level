@@ -301,6 +301,40 @@ private slots:
         QVERIFY(c.toolNote().contains("video") || c.lastError().contains("video"));
     }
 
+    // 0.7 Sound Curve: loudness → Vibration lane in the companion .samn.
+    void soundCurveWritesVibrationAndUndoes() {
+        QTemporaryDir d;
+        const QString path = d.filePath("sound.funscript");
+        writeFile(path, zigzag(41, 250));
+        PlayerController bare;
+        QVERIFY(bare.openScript(path));
+        QVERIFY(!bare.proposeSoundCurve());
+        QVERIFY(bare.lastError().contains("video") || bare.toolNote().contains("video"));
+
+        const QString wav = writeToneWav(d.path());
+        PlayerController c;
+        QVERIFY(c.openScript(path, wav));
+        QSignalSpy ready(&c, &PlayerController::soundCurveReady);
+        QVERIFY(c.proposeSoundCurve());
+        QTRY_VERIFY_WITH_TIMEOUT(ready.count() > 0 || c.toolNote().contains(QStringLiteral("short"))
+                                     || c.toolNote().startsWith(QStringLiteral("Sound Curve:")),
+                                 20000);
+        if (ready.isEmpty()) QSKIP("No readable sound track in this environment");
+        QVERIFY(c.pendingSoundCurvePoints() >= 2);
+        QVERIFY(c.confirmSoundCurve());
+        QVERIFY(c.toolNote().contains(QStringLiteral("Sound Curve")));
+        QVERIFY(c.canUndoSoundCurve());
+        const QString samnPath = d.filePath("sound.samn");
+        QVERIFY(QFileInfo::exists(samnPath));
+        const samn::Document doc = samn::LoadDocument(std::filesystem::u8path(samnPath.toStdString()));
+        QVERIFY(doc.vibration.size() >= 2);
+        QCOMPARE(QString::fromStdString(doc.playback_source), QStringLiteral("axes"));
+        QVERIFY(c.undoSoundCurve());
+        QVERIFY(!c.canUndoSoundCurve());
+        const samn::Document after = samn::LoadDocument(std::filesystem::u8path(samnPath.toStdString()));
+        QVERIFY(after.vibration.empty());
+    }
+
     // 0.7 Scene markers strip (pb.scenes): off by default in the Player.
     void showScenesDefaultsOffAndRemembers() {
         PlayerController c;

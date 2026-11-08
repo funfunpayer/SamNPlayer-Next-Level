@@ -39,4 +39,15 @@ enum class SoundVibrationMode {
 std::vector<Action> SoundVibrationLane(const std::vector<Frame>& mapped, const std::vector<double>& envelope,
                                        int64_t offsetMs, SoundVibrationMode mode);
 
+// Player "Sound Curve" (0.7 playback.js): 250 ms averages of the 0..1 envelope,
+// then keep a point when |Δpos| >= 4 or every 2 s; always keep the last.
+// Script time is video time minus offsetMs (same sign as ApplyAudioVibration).
+// Empty when fewer than 2 points ("The sound is too short for a curve.").
+constexpr int kSoundCurveBucketMs = 250;
+constexpr int kSoundCurveMinDelta = 4;
+constexpr int kSoundCurveForceMs = 2000;
+
+std::vector<Action> VibrationCurveFromSound(const std::vector<double>& envelope, int step_ms = int(kSoundVibStepMs),
+                                            int64_t offset_ms = 0);
+
 }  // namespace samn
