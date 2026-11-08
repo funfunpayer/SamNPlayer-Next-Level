@@ -350,6 +350,29 @@ private slots:
         QCOMPARE(spy.count(), 2);
     }
 
+    // 0.7 "Video play starts device" (playback.video_play_autostart).
+    void videoPlayAutostartDefaultsOnAndGatesDevice() {
+        QTemporaryDir d;
+        const QString path = d.filePath("auto.funscript");
+        writeFile(path, zigzag(21, 100));
+        PlayerController c;
+        QVERIFY(c.openScript(path));
+        QVERIFY(c.videoPlayAutostart());
+        c.setMediaPlaying(true);
+        QVERIFY(c.output()->playing());
+        c.setMediaPlaying(false);
+        QVERIFY(!c.output()->playing());
+        c.setVideoPlayAutostart(false);
+        QVERIFY(!c.videoPlayAutostart());
+        c.setMediaPlaying(true);
+        QVERIFY(!c.output()->playing());  // film without the toy
+        c.setPlaying(true);              // explicit script Play still drives
+        QVERIFY(c.output()->playing());
+        c.setPlaying(false);
+        PlayerController again;
+        QVERIFY(!again.videoPlayAutostart());  // remembered in this config dir
+    }
+
     // 0.7 CreateScriptAxis / "+ Axis…": centred companion file, never overwrite.
     void createCompanionAxisAddsLane() {
         QTemporaryDir d;

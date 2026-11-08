@@ -2,9 +2,18 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-sound-curve-635a`: Player Sound Curve. Stay off intensity-arc (#168) and Speech-Hold/feel-bands (P3.6 audio segments — Claude/larger).
+**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-video-autostart-635a`: Video play starts device toggle. Stay off #168 / Speech-Hold.
 
-## Handover: `cursor/player-sound-curve-635a` (8 Nov, Sound Curve)
+## Handover: `cursor/player-video-autostart-635a` (8 Nov, Video play autostart)
+
+Owner: finish Player/Editor GUI except Claude #168.
+
+- **Player:** `videoPlayAutostart` / `playback.video_play_autostart` (default on); gates `setMediaPlaying` → device.
+- **UI:** Inspector → View → "Video play starts device".
+- **Tests:** `videoPlayAutostartDefaultsOnAndGatesDevice`.
+- **Stay off:** Claude #168.
+
+## Handover: `cursor/player-sound-curve-635a` (8 Nov, Sound Curve) — merged #185
 
 Owner: finish Player/Editor GUI except Claude #168.
 
@@ -27,7 +36,7 @@ Owner: finish Player/Editor GUI except Claude #168.
 ## Still open (non-Claude, Player/Editor)
 
 - Speech-Hold / Feel segment strip + heatmap bands (needs `audio_check` segments)
-- Auto sync; "Make playable" / dedicated video warning chrome leftovers
+- Auto sync + Make playable (PRs in flight); live Audio vibration; Mock checkbox leftover
 - Scene strip thumbnails in Player (markers done; thumbs Generator-side)
 
 ## Handover: `cursor/player-bpm-audio-635a` (8 Nov, BPM From audio) — merged #183
