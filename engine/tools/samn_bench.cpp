@@ -130,6 +130,23 @@ std::vector<SceneDef> Scenes() {
          [](const fs::path& p) { return tc::WritePanningX(p, kSec, 80); }});
     add({"zoom", "camera zoom 1.0 -> 1.4, Y stroke", false, {100, 40, 120, 160}, TrackAxis::kAuto, false,
          [](const fs::path& p) { return tc::WriteZoomRamp(p, kSec, 80, 1.4); }});
+    // Faster than the 3 s default detrend window removes (0.25 Hz), and just
+    // below the speed (about 3 px per frame) at which the fixed scene-cut
+    // test starts to fire on this texture.
+    add({"pan_x_fast", "camera pan x +-45 px at 0.25 Hz, X stroke, axis X", false, kBoxX, TrackAxis::kX, false,
+         [](const fs::path& p) {
+             tc::CameraScene c;
+             c.stroke_x = true;
+             c.camera.pan_x = tc::Sine(45, 0.25);
+             return tc::WriteCameraScene(p, kSec, c);
+         }});
+    add({"pan_zoom", "pan x +-40 px at 0.2 Hz, zoom 1 +- 0.25 at 0.15 Hz, Y stroke", false, {100, 40, 120, 160},
+         TrackAxis::kAuto, false, [](const fs::path& p) {
+             tc::CameraScene c;
+             c.camera.pan_x = tc::Sine(40, 0.2);
+             c.camera.zoom = [](double t) { return 1 + 0.25 * std::sin(2 * tc::kPi * 0.15 * t); };
+             return tc::WriteCameraScene(p, kSec, c);
+         }});
     for (const double len : {0.5, 2.0, 4.0}) {
         char name[32];
         std::snprintf(name, sizeof name, "occl_%gs", len);
