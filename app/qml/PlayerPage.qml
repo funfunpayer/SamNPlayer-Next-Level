@@ -156,12 +156,24 @@ Item {
         onConverted: (path) => ctrl.openPath(path)
         onToolChanged: if (page.convertWhenReady && ffmpegReady) {
             page.convertWhenReady = false
-            convertCtl.convertForPlayback(ctrl.localPath(media.source.toString()), media.duration / 1000)
+            page.convertVideo()
         }
+    }
+    // Duration for convert: Qt may report 0 on FormatError; fall back to the
+    // controller's last known length (script / prior metadata).
+    function convertDurationS() {
+        const ms = Math.max(media.duration, ctrl.videoDurationMs)
+        return ms > 0 ? ms / 1000 : 0
     }
     function convertVideo() {
         media.pause()
-        if (convertCtl.ffmpegReady) convertCtl.convertForPlayback(ctrl.localPath(media.source.toString()), media.duration / 1000)
+        const secs = page.convertDurationS()
+        if (secs <= 0) {
+            ctrl.reportMediaError(MediaPlayer.FormatError,
+                                  qsTr("unknown length — open a playable copy first, or use Clip prep"))
+            return
+        }
+        if (convertCtl.ffmpegReady) convertCtl.convertForPlayback(ctrl.localPath(media.source.toString()), secs)
         else { page.convertWhenReady = true; convertCtl.fetchFfmpeg() }
     }
 
@@ -432,11 +444,14 @@ Item {
             }
         }
 
-        // Errors stay visible until the next successful open.
+        // Errors stay visible until the next successful open. Make playable
+        // appears for media failures and for no-picture (same H.264 convert).
         Rectangle {
             id: errorBar
+            readonly property bool offerPlayable: ctrl.videoName !== "" && (ctrl.mediaError || page.noPicture)
             anchors.top: header.bottom; anchors.topMargin: ctrl.lastError !== "" ? 8 : 0
-            width: parent.width; height: ctrl.lastError !== "" ? errText.implicitHeight + 16 : 0
+            width: parent.width
+            height: ctrl.lastError !== "" ? Math.max(errText.implicitHeight, offerPlayable ? 36 : 0) + 16 : 0
             visible: height > 0; clip: true
             radius: Theme.radiusSmall
             color: Qt.rgba(1, 0.35, 0.3, 0.12); border.color: Qt.rgba(1, 0.4, 0.35, 0.5)
@@ -444,9 +459,24 @@ Item {
             Text {
                 textFormat: Text.PlainText
                 id: errText
-                anchors.verticalCenter: parent.verticalCenter; x: 14; width: parent.width - 28
+                anchors.verticalCenter: parent.verticalCenter
+                x: 14
+                width: parent.width - 28 - (errorBar.offerPlayable ? makePlayableBtn.width + 16 : 0)
                 text: ctrl.lastError; wrapMode: Text.Wrap
                 color: "#ffd0c8"; font.family: Theme.fontSoft; font.pixelSize: 13
+            }
+            FlowButton {
+                id: makePlayableBtn
+                objectName: "makePlayable"
+                anchors.right: parent.right; anchors.rightMargin: 10
+                anchors.verticalCenter: parent.verticalCenter
+                visible: errorBar.offerPlayable
+                primary: true
+                enabled: !convertCtl.cutting && !convertCtl.fetching
+                text: convertCtl.cutting ? (qsTr("%1 %").arg(convertCtl.progress))
+                      : convertCtl.fetching ? qsTr("Getting ffmpeg…")
+                      : qsTr("Make playable")
+                onClicked: page.convertVideo()
             }
         }
 
@@ -595,7 +625,7 @@ Item {
                                 objectName: "convertVideo"
                                 primary: true
                                 enabled: !convertCtl.cutting && !convertCtl.fetching
-                                text: qsTr("Convert to H.264")
+                                text: qsTr("Make playable")
                                 onClicked: page.convertVideo()
                             }
                             FlowButton {

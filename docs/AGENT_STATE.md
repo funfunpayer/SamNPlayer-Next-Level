@@ -2,9 +2,17 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-sound-curve-635a`: Player Sound Curve. Stay off intensity-arc (#168) and Speech-Hold/feel-bands (P3.6 audio segments — Claude/larger).
+**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-make-playable-635a`: Make playable on media error. Stay off #168 / Speech-Hold.
 
-## Handover: `cursor/player-sound-curve-635a` (8 Nov, Sound Curve)
+## Handover: `cursor/player-make-playable-635a` (8 Nov, Make playable)
+
+Owner: finish Player/Editor GUI except Claude #168.
+
+- **Player:** error-bar + no-picture **Make playable** → `ClipPrepController::convertForPlayback` (`<stem>-h264.mp4`).
+- **Messages:** `reportMediaError` / `reportNoPicture`; `mediaError` + `videoDurationMs` for QML.
+- **Stay off:** Claude #168. Full ffprobe/proxy naming still open.
+
+## Handover: `cursor/player-sound-curve-635a` (8 Nov, Sound Curve) — merged #185
 
 Owner: finish Player/Editor GUI except Claude #168.
 
@@ -13,7 +21,7 @@ Owner: finish Player/Editor GUI except Claude #168.
 - **Tests:** core decimate + `soundCurveWritesVibrationAndUndoes` (skips without decoder).
 - **Stay off:** Claude #168.
 
-## Shipped this stream (8 Nov, #178–#184)
+## Shipped this stream (8 Nov, #178–#185)
 
 - Typed offset, Drive/Recipe, Save Emotion Script (#178)
 - CreateScriptAxis / + Axis… + Curve select (#179)
@@ -22,12 +30,14 @@ Owner: finish Player/Editor GUI except Claude #168.
 - Scene markers toggle (#182)
 - BPM From audio (#183)
 - Parity settings docs refresh (#184)
+- Sound Curve (#185)
 - CI: Linux `--parallel` capped to nproc/2 (OOM kills)
 
 ## Still open (non-Claude, Player/Editor)
 
 - Speech-Hold / Feel segment strip + heatmap bands (needs `audio_check` segments)
-- Auto sync; "Make playable" / dedicated video warning chrome leftovers
+- Auto sync (PR in flight); probe-on-link warning (Make playable button ✅)
+- Mock, Video play autostart, live Audio vibration toggle
 - Scene strip thumbnails in Player (markers done; thumbs Generator-side)
 
 ## Handover: `cursor/player-bpm-audio-635a` (8 Nov, BPM From audio) — merged #183

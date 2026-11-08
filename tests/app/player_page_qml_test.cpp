@@ -444,9 +444,11 @@ private:
         QVERIFY(media->position() >= 1500);
         QTRY_VERIFY(card->isVisible());
         QVERIFY2(ctrl->lastError().startsWith("No picture"), qPrintable(ctrl->lastError()));
-        QVERIFY(ctrl->lastError().contains("Convert to H.264"));
+        QVERIFY(ctrl->lastError().contains("Make playable"));
         auto* convert = page->findChild<QQuickItem*>(QStringLiteral("convertVideo"));
         QVERIFY(convert && convert->isVisible());
+        auto* makePlayable = page->findChild<QQuickItem*>(QStringLiteral("makePlayable"));
+        QVERIFY(makePlayable && makePlayable->isVisible());
         media->stop();
     }
 
