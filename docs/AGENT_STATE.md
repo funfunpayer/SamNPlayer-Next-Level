@@ -2,9 +2,18 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-scenes-toggle-635a`: Scene markers toggle (`showScenes`). #178–#181 on main. Stay off intensity-arc (#168).
+**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-bpm-audio-635a`: BPM From audio. #178–#182 on main. Stay off intensity-arc (#168).
 
-## Handover: `cursor/player-scenes-toggle-635a` (8 Nov, Scene markers toggle)
+## Handover: `cursor/player-bpm-audio-635a` (8 Nov, BPM From audio)
+
+Owner: finish Player/Editor GUI except Claude #168.
+
+- **Core:** `EstimateBpmFromLoudness` / `FoldBpmIntoRange` (first 10 min, 20–240).
+- **Player:** `guessBpmFromAudio` via `AudioLevelDecoder`; Inspector Audio → From audio.
+- **Tests:** envelope BPM + `guessBpmFromAudioNeedsVideo`.
+- **Stay off:** Claude #168.
+
+## Handover: `cursor/player-scenes-toggle-635a` (8 Nov, Scene markers toggle) — merged #182
 
 Owner: finish Player/Editor GUI except Claude #168.
 

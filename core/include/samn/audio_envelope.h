@@ -50,4 +50,13 @@ private:
 // range.
 std::vector<double> NormalizeLoudness(const std::vector<double>& rms);
 
+// Fold a raw tempo into the 20–240 BPM input range by octaves (0.7
+// BpmFromHz / app_bpm.go). Values <= 0 stay 0.
+double FoldBpmIntoRange(double bpm);
+
+// Playback BPM from a loudness envelope (0..1 per step_ms). Peaks above 0.35
+// that are local maxima, median gap → BPM, then FoldBpmIntoRange. Uses at
+// most the first 10 minutes. 0 when unclear (fewer than 2 usable gaps).
+double EstimateBpmFromLoudness(const std::vector<double>& loudness, int step_ms = kAudioLevelStepMs);
+
 }  // namespace samn
