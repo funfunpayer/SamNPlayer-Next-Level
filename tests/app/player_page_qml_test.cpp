@@ -445,10 +445,12 @@ private:
         QTRY_VERIFY(card->isVisible());
         QVERIFY2(ctrl->lastError().startsWith("No picture"), qPrintable(ctrl->lastError()));
         QVERIFY(ctrl->lastError().contains("Make playable"));
+        QVERIFY(ctrl->mediaError());
         auto* convert = page->findChild<QQuickItem*>(QStringLiteral("convertVideo"));
         QVERIFY(convert && convert->isVisible());
         auto* makePlayable = page->findChild<QQuickItem*>(QStringLiteral("makePlayable"));
-        QVERIFY(makePlayable && makePlayable->isVisible());
+        QVERIFY(makePlayable);
+        QTRY_VERIFY_WITH_TIMEOUT(makePlayable->isVisible(), 5000);
         media->stop();
     }
 

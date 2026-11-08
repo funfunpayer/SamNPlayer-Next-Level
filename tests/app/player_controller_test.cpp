@@ -301,6 +301,23 @@ private slots:
         QVERIFY(c.toolNote().contains("video") || c.lastError().contains("video"));
     }
 
+    // 0.7 Auto sync: needs script + video; Apply sets offset from suggestion.
+    void autoSyncNeedsScriptAndVideo() {
+        QTemporaryDir d;
+        const QString path = d.filePath("sync.funscript");
+        writeFile(path, zigzag(21, 100));
+        PlayerController c;
+        QVERIFY(!c.suggestAudioSync());
+        QVERIFY(c.openScript(path));
+        QVERIFY(!c.suggestAudioSync());
+        QVERIFY(c.autoSyncNote().contains("video") || c.lastError().contains("video"));
+        QVERIFY(!c.autoSyncCanApply());
+        QVERIFY(!c.applyAudioSyncSuggestion());
+        // Synthetic suggestion path: set offset manually after a fake high-confidence state
+        // is not exposed; Apply with none stays false.
+        QCOMPARE(c.autoSyncConfidence(), QStringLiteral("none"));
+    }
+
     // 0.7 Sound Curve: loudness → Vibration lane in the companion .samn.
     void soundCurveWritesVibrationAndUndoes() {
         QTemporaryDir d;
@@ -1019,6 +1036,7 @@ private slots:
         c.reportMediaError(QMediaPlayer::FormatError, QStringLiteral("no decoder"));
         QVERIFY(c.lastError().contains(QStringLiteral("format not supported")));
         QVERIFY(c.lastError().contains(QStringLiteral("no decoder")));
+        QVERIFY(c.lastError().contains(QStringLiteral("cannot be played")));
         QVERIFY(c.lastError().contains(QStringLiteral("Make playable")));
         QVERIFY(c.mediaError());
         c.setPlaying(false);

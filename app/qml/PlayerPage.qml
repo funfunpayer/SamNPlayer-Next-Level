@@ -448,7 +448,9 @@ Item {
         // appears for media failures and for no-picture (same H.264 convert).
         Rectangle {
             id: errorBar
-            readonly property bool offerPlayable: ctrl.videoName !== "" && (ctrl.mediaError || page.noPicture)
+            readonly property bool offerPlayable: ctrl.videoName !== "" && ctrl.lastError !== ""
+                                                 && (ctrl.mediaError || page.noPicture
+                                                     || ctrl.lastError.indexOf("Make playable") >= 0)
             anchors.top: header.bottom; anchors.topMargin: ctrl.lastError !== "" ? 8 : 0
             width: parent.width
             height: ctrl.lastError !== "" ? Math.max(errText.implicitHeight, offerPlayable ? 36 : 0) + 16 : 0

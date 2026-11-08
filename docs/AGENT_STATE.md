@@ -12,6 +12,15 @@ Owner: finish Player/Editor GUI except Claude #168.
 - **Messages:** `reportMediaError` / `reportNoPicture`; `mediaError` + `videoDurationMs` for QML.
 - **Stay off:** Claude #168. Full ffprobe/proxy naming still open.
 
+## Handover: `cursor/player-auto-sync-635a` (8 Nov, Auto sync) — merged #186
+
+Owner: finish Player/Editor GUI except Claude #168.
+
+- **Core:** `EstimateAudioSyncOffset` (loudness vs stroke impulses, ±3 s, high/low/none).
+- **Player:** `suggestAudioSync` / `applyAudioSyncSuggestion`; Script Tools Auto sync + Apply.
+- **Tests:** `TestEstimateSyncLag*`, `autoSyncNeedsScriptAndVideo`.
+- **Stay off:** Claude #168.
+
 ## Handover: `cursor/player-sound-curve-635a` (8 Nov, Sound Curve) — merged #185
 
 Owner: finish Player/Editor GUI except Claude #168.
@@ -36,8 +45,8 @@ Owner: finish Player/Editor GUI except Claude #168.
 ## Still open (non-Claude, Player/Editor)
 
 - Speech-Hold / Feel segment strip + heatmap bands (needs `audio_check` segments)
-- Auto sync (PR in flight); probe-on-link warning (Make playable button ✅)
-- Mock, Video play autostart, live Audio vibration toggle
+- Probe-on-link warning leftover (Make playable button ✅ on error / no-picture)
+- Video play autostart (PR in flight); live Audio vibration; Mock checkbox leftover
 - Scene strip thumbnails in Player (markers done; thumbs Generator-side)
 
 ## Handover: `cursor/player-bpm-audio-635a` (8 Nov, BPM From audio) — merged #183
