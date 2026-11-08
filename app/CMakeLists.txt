@@ -94,6 +94,15 @@ qt_add_qml_module(samn_app
     qml/PositionGauge.qml
     qml/LibraryPanel.qml
     qml/InspectorPanel.qml
+    qml/InspectorCard.qml
+    qml/InspectorNote.qml
+    qml/InspectorOutputRow.qml
+    qml/InspectorSliderRow.qml
+    qml/InspectorChannel.qml
+    qml/InspectorDevices.qml
+    qml/InspectorAudio.qml
+    qml/InspectorPlayback.qml
+    qml/InspectorView.qml
     qml/ToolTipText.qml
     qml/SettingsPage.qml
   RESOURCES
