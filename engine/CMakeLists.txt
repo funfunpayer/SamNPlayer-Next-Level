@@ -17,3 +17,11 @@ target_link_libraries(samn_compare PRIVATE samn_engine)
 # The self-checking engine on the command line (docs/P3_SELF_CHECK_ENGINE.md).
 add_executable(samn_selfcheck tools/samn_selfcheck.cpp)
 target_link_libraries(samn_selfcheck PRIVATE samn_engine)
+
+# The detection benchmark: the real Generate pipeline on synthetic scenes with
+# known ground truth (docs/benchmarks/). Built with the project; ctest runs
+# only its one-scene smoke check (tests/CMakeLists.txt). The scene generators
+# are the tests' own (tests/engine/synthetic_*.h).
+add_executable(samn_bench tools/samn_bench.cpp)
+target_include_directories(samn_bench PRIVATE ${PROJECT_SOURCE_DIR}/tests/engine)
+target_link_libraries(samn_bench PRIVATE samn_engine)
