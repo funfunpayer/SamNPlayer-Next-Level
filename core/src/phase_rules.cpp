@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 #include "samn/intensity_arc.h"
 
@@ -24,7 +25,10 @@ double Mean(const std::vector<double>& v, size_t a, size_t b) {
 std::vector<LabelPhase> SuggestPhases(const PhaseSignals& s, const PhaseRuleOptions& o) {
     const size_t n = std::min(s.luma.size(), s.motion.size());
     if (n == 0 || s.step_ms <= 0) return {};
-    const auto steps = [&](int64_t ms) { return std::max<size_t>(1, size_t((ms + s.step_ms - 1) / s.step_ms)); };
+    const auto steps = [&](int64_t ms) {
+        const int64_t m = std::clamp<int64_t>(ms, 0, std::numeric_limits<int64_t>::max() - s.step_ms);
+        return std::max<size_t>(1, size_t((m + s.step_ms - 1) / s.step_ms));
+    };
     const auto at = [&](size_t i) { return int64_t(i) * s.step_ms; };
     const auto index = [&](int64_t ms) { return std::min(n, size_t(std::max<int64_t>(0, ms) / s.step_ms)); };
     const bool has_sound = s.loudness.size() >= n;
@@ -55,27 +59,32 @@ std::vector<LabelPhase> SuggestPhases(const PhaseSignals& s, const PhaseRuleOpti
     };
     if (std::all_of(in_empty.begin(), in_empty.end(), [](bool e) { return e; })) return add_empty();
 
-    PhaseSignals clip;  // the arc sees the stretch the picture covers
+    // The arc sees the pictures from the first to the last one that is not
+    // empty; its times are from `first` on. Empty stretches between have no
+    // motion and no sound, and the arc leaves such samples out of its
+    // statistics.
+    size_t first = 0, last = n;
+    while (first < n && in_empty[first]) ++first;
+    while (last > first && in_empty[last - 1]) --last;
+    PhaseSignals clip;
     clip.step_ms = s.step_ms;
-    clip.motion.assign(s.motion.begin(), s.motion.begin() + std::ptrdiff_t(n));
-    if (has_sound) clip.loudness.assign(s.loudness.begin(), s.loudness.begin() + std::ptrdiff_t(n));
+    clip.motion.assign(s.motion.begin() + std::ptrdiff_t(first), s.motion.begin() + std::ptrdiff_t(last));
+    if (has_sound) clip.loudness.assign(s.loudness.begin() + std::ptrdiff_t(first), s.loudness.begin() + std::ptrdiff_t(last));
     ArcOptions ao;
     ao.steady_ms = o.steady_ms;
     ao.min_gain = o.climax_gain;
     const IntensityArc arc = ComputeArc(clip, ao);
+    const int64_t shift = at(first);
+    const auto detail_mean = [&](size_t a, size_t b) { return Mean(arc.detail, a - first, b - first); };
 
     // Intro: from the first picture until the action begins.
-    size_t first = 0;
-    while (first < n && in_empty[first]) ++first;
-    size_t action = std::max(first, index(arc.intro_end_ms));
+    size_t action = std::max(first, index(shift + arc.intro_end_ms));
     // A short clip has a short intro: the minimum scales like the arc.
-    const int64_t min_intro_ms = std::llround(double(o.min_intro_ms) * ArcScale(at(n)));
+    const int64_t min_intro_ms = std::llround(double(o.min_intro_ms) * ArcScale(at(last) - shift));
     if (action > first && at(action) - at(first) >= min_intro_ms)
         p.SetPhase(at(first), at(action), "intro", false, "rules");
     else
         action = first;
-    size_t last = n;
-    while (last > action && in_empty[last - 1]) --last;
 
     // Climaxes: the arc's peaks in rank order, each one stretch of free
     // pictures (no empty stretch, a step away from every other climax, so
@@ -86,7 +95,7 @@ std::vector<LabelPhase> SuggestPhases(const PhaseSignals& s, const PhaseRuleOpti
     const auto free = [&](size_t i) { return i >= action && i < last && !taken[i]; };
     size_t latest_a = 0, latest_b = 0;
     for (const auto& peak : arc.peaks) {
-        const size_t from = std::max(action, index(peak.start_ms)), to = std::min(last, index(peak.end_ms) + 1);
+        const size_t from = std::max(action, index(shift + peak.start_ms)), to = std::min(last, index(shift + peak.end_ms) + 1);
         if (from >= to) continue;
         // The longest free piece of its stretch (an empty stretch may cut it);
         // its top is the peak's own when that is free, else the piece's middle.
@@ -105,7 +114,7 @@ std::vector<LabelPhase> SuggestPhases(const PhaseSignals& s, const PhaseRuleOpti
             i = j;
         }
         if (a == b) continue;
-        const size_t peak_top = index(peak.t_ms);
+        const size_t peak_top = index(shift + peak.t_ms);
         const size_t top = peak_top >= a && peak_top < b ? peak_top : a + (b - a) / 2;
         const size_t lo = steps(o.climax_min_ms), hi = steps(o.climax_max_ms);
         while (b - a < lo && (free(a - 1) || free(b))) {
@@ -132,9 +141,9 @@ std::vector<LabelPhase> SuggestPhases(const PhaseSignals& s, const PhaseRuleOpti
     if (latest_b > 0) {
         size_t c = latest_b;
         while (c < last && !in_empty[c]) ++c;
-        const double after = Mean(arc.detail, latest_b, c), during = Mean(arc.detail, latest_a, latest_b);
-        const double end = Mean(arc.detail, c - (c - latest_b) / 3, c);
-        const bool ends_calmer = latest_a == action || end < kCalmer * Mean(arc.detail, action, latest_a);
+        const double after = detail_mean(latest_b, c), during = detail_mean(latest_a, latest_b);
+        const double end = detail_mean(c - (c - latest_b) / 3, c);
+        const bool ends_calmer = latest_a == action || end < kCalmer * detail_mean(action, latest_a);
         if (at(c) - at(latest_b) >= o.min_cooldown_ms && after < kCalmer * during && ends_calmer)
             p.SetPhase(at(latest_b), at(c), "cool-down", false, "rules");
     }

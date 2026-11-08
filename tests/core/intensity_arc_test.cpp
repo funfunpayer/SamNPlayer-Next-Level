@@ -139,6 +139,27 @@ samn::PhaseSignals Walk(uint32_t seed, double step, bool intro) {
     for (auto& v : s.loudness) v /= top;
     return s;
 }
+// A clip of `seconds` at 500 ms per step: steady action (motion 0.2 +-30 %,
+// loudness 0.3 +-20 %) wherever `blank(t)` is false; there the picture is
+// black (luma 0) or still (luma 0.5, motion 0) and silent.
+template <typename F>
+samn::PhaseSignals WithBlanks(double seconds, uint32_t seed, bool black, F blank) {
+    samn::PhaseSignals s;
+    s.step_ms = 500;
+    uint32_t state = seed;
+    const auto u = [&] {
+        state = state * 1103515245u + 12345u;
+        return double((state >> 16) % 1000) / 1000.0;
+    };
+    for (int i = 0; i < int(seconds * 2); ++i) {
+        const bool b = blank(i / 2.0);
+        const double m = 0.2 * (1 + 0.6 * (u() - 0.5)), l = 0.3 * (1 + 0.4 * (u() - 0.5));
+        s.luma.push_back(b && black ? 0.0 : 0.5);
+        s.motion.push_back(b ? 0.0 : m);
+        s.loudness.push_back(b ? 0.0 : l);
+    }
+    return s;
+}
 // The loudness divided by its loudest step, as the label editor does.
 samn::PhaseSignals Normalised(samn::PhaseSignals s) {
     const double top = *std::max_element(s.loudness.begin(), s.loudness.end());
@@ -312,10 +333,15 @@ TEST_CASE("arc: confidence is a bounded ranking value") {
     REQUIRE(weak.peaks.size() == 1);
     REQUIRE(strong.peaks.size() == 1);
     CHECK(strong.peaks[0].confidence > weak.peaks[0].confidence);
-    // Motion tops out at 60-72 s, the sound at 70-82 s: one climax, 10 s apart inside it.
-    const auto apart = samn::ComputeArc(Clip({{10, .02, .2}, {50, .2, .3}, {10, .4, .3}, {2, .4, .9}, {10, .2, .9}, {38, .2, .3}}));
+    // Motion tops out at 70-84 s, the sound at 80-94 s: one climax at full
+    // strength, its inputs 10 s apart, 0.7 x the confidence of the same climax
+    // with sound and motion topping out together.
+    const auto apart = samn::ComputeArc(Clip({{10, .02, .1}, {60, .12, .15}, {10, .6, .15}, {4, .6, .95}, {10, .12, .95}, {40, .12, .15}}));
+    const auto together = samn::ComputeArc(Clip({{10, .02, .1}, {60, .12, .15}, {14, .6, .95}, {10, .12, .15}, {40, .12, .15}}));
     REQUIRE(apart.peaks.size() == 1);
-    CHECK(apart.peaks[0].confidence <= 0.7 + 1e-9);
+    REQUIRE(together.peaks.size() == 1);
+    CHECK(together.peaks[0].confidence == doctest::Approx(1.0));
+    CHECK(apart.peaks[0].confidence == doctest::Approx(0.7 * together.peaks[0].confidence));
 }
 
 TEST_CASE("arc: secondary climaxes must be high enough, far enough and few") {
@@ -407,12 +433,12 @@ TEST_CASE("phases: climaxes never merge past climax_max_ms") {
 
 TEST_CASE("phases: random walks get few climaxes") {
     // 40 clips of 600 s per step size, half of them with a calm intro. The
-    // bounds are absolute, per clip: 0.05, 0.15 and 0.7, with margin over
-    // what was measured when they were set (0, 0.05 and 0.475; the rules
+    // bounds are absolute, per clip: 0.05, 0.15 and 0.55, with margin over
+    // what was measured when they were set (0, 0.075 and 0.45; the rules
     // before D-165 gave 0, 0.05 and 0.525 on these clips). Step 0.02 is the
     // regime where both rule sets are unreliable
     // (docs/benchmarks/INTENSITY_ARC_2026-11-06.md).
-    const std::pair<double, double> bounds[] = {{0.005, 0.05}, {0.01, 0.15}, {0.02, 0.7}};
+    const std::pair<double, double> bounds[] = {{0.005, 0.05}, {0.01, 0.15}, {0.02, 0.55}};
     for (const auto& bound : bounds) {
         const double step = bound.first, per_clip = bound.second;  // plain locals for CAPTURE
         CAPTURE(step);
@@ -505,4 +531,113 @@ TEST_CASE("phases: a climax boxed in by black cuts takes its longest free piece"
             CHECK(p.end_ms <= 98000);  // the 6 s piece before the first cut, not the 4 s one between them
             CHECK(p.end_ms - p.start_ms >= 6000);
         }
+}
+
+TEST_CASE("phases: long empty stretches are no climax") {
+    // Steady action with black or still and silent stretches: nothing rises
+    // within the action, whatever the share of empty pictures.
+    for (uint32_t seed = 1; seed <= 4; ++seed) {
+        CAPTURE(seed);
+        for (double share : {0.5, 0.6, 0.8}) {
+            CAPTURE(share);
+            const auto middle = [share](double t) { return std::abs(t - 300) < share * 300; };
+            CHECK(Count(samn::SuggestPhases(WithBlanks(600, seed, true, middle)), "climax") == 0);
+            CHECK(Count(samn::SuggestPhases(WithBlanks(600, seed, false, middle)), "climax") == 0);
+        }
+        CHECK(Count(samn::SuggestPhases(WithBlanks(600, seed, true, [](double t) { return t >= 240; })), "climax") == 0);
+        CHECK(Count(samn::SuggestPhases(WithBlanks(600, seed, true, [](double t) { return t < 360; })), "climax") == 0);
+    }
+}
+
+TEST_CASE("phases: a peak beside a long black stretch is still found") {
+    auto s = WithBlanks(600, 3, true, [](double t) { return t >= 300; });
+    for (size_t i = 0; i < 600; ++i) {
+        const double t = i / 2.0;
+        if (t < 15) {
+            s.motion[i] *= 0.1;
+            s.loudness[i] *= 0.33;
+        } else if (std::abs(t - 150) < 6) {
+            s.motion[i] *= 1.9;
+            s.loudness[i] = std::min(0.95, s.loudness[i] * 1.9);
+        }
+    }
+    const auto phases = samn::SuggestPhases(s);
+    CHECK(Count(phases, "climax") == 1);
+    CHECK(Near(ClimaxMids(phases), 150, 5));
+}
+
+TEST_CASE("phases: scene cuts in a clip without sound are no climax") {
+    // No sound; a calm intro, then steady motion (knots +-10 %, about
+    // Gaussian jitter of sd 0.15), and a cut (one frame of 3x motion) on 2 %
+    // of the samples, about one every 25 s.
+    int climaxes = 0;
+    for (uint32_t seed = 1; seed <= 20; ++seed) {
+        uint32_t state = seed * 2654435761u;
+        const auto u = [&] {
+            state = state * 1103515245u + 12345u;
+            return double((state >> 16) % 1000) / 1000.0;
+        };
+        samn::PhaseSignals s;
+        s.step_ms = 500;
+        const double base = 0.1 + 0.2 * u(), intro = 15 + 25 * u();
+        const double k1 = 1 + 0.2 * (u() - 0.5), k2 = 1 + 0.2 * (u() - 0.5);
+        for (int i = 0; i < 1200; ++i) {
+            const double t = i / 2.0, knot = k1 + (k2 - k1) * t / 600;
+            double m = base * knot * (t < intro ? 0.2 : 1.0) * (1 + 0.3 * (u() + u() + u() - 1.5));
+            if (u() < 0.02) m *= 3;
+            s.luma.push_back(0.5);
+            s.motion.push_back(std::max(0.0, m));
+        }
+        climaxes += Count(samn::SuggestPhases(s), "climax");
+    }
+    CHECK(climaxes == 0);
+    // A cut (20x) on the clip's first or last two samples is no climax either,
+    // also where the action slowly rises 20 % towards it; the calm 30 s are at
+    // the other end.
+    for (uint32_t seed : {3u, 4u})
+        for (int at : {0, 1, 1198, 1199}) {
+            CAPTURE(seed);
+            CAPTURE(at);
+            samn::PhaseSignals s;
+            s.step_ms = 500;
+            uint32_t state = seed;
+            for (int i = 0; i < 1200; ++i) {
+                state = state * 1103515245u + 12345u;
+                const double j = double((state >> 16) % 1000) / 1000.0 - 0.5;
+                const bool late = at > 600;
+                const bool calm = late ? i < 60 : i >= 1140;
+                const double level = 0.2 * (1 + 0.2 * (late ? i : 1199 - i) / 1199.0);
+                s.luma.push_back(0.5);
+                s.motion.push_back((calm ? 0.04 : level) * (1 + 0.3 * j));
+            }
+            s.motion[size_t(at)] *= 20;
+            CHECK(Count(samn::SuggestPhases(s), "climax") == 0);
+        }
+}
+
+TEST_CASE("phases: a loud opening is no climax, also under heavy jitter") {
+    // A loud, busy opening (2x motion, 2.2x loudness) for 20-60 s, then steady
+    // action with one real climax late in the clip; +-35 % jitter.
+    for (uint32_t seed = 1; seed <= 8; ++seed) {
+        CAPTURE(seed);
+        const double opening = 20 + 5 * seed;
+        samn::PhaseSignals noisy;
+        noisy.step_ms = 500;
+        uint32_t state = seed;
+        const auto u = [&] {
+            state = state * 1103515245u + 12345u;
+            return double((state >> 16) % 1000) / 1000.0;
+        };
+        for (int i = 0; i < 800; ++i) {
+            const double t = i / 2.0;
+            const double m = t < opening ? .4 : std::abs(t - 320) < 7 ? .4 : .2;
+            const double l = t < opening ? .66 : std::abs(t - 320) < 7 ? .6 : .3;
+            noisy.luma.push_back(0.5);
+            noisy.motion.push_back(m * (1 + 0.7 * (u() - 0.5)));
+            noisy.loudness.push_back(std::min(1.0, l * (1 + 0.7 * (u() - 0.5))));
+        }
+        const auto mids = ClimaxMids(samn::SuggestPhases(Normalised(noisy)));
+        for (double m : mids) CHECK(m > opening + 5);
+        CHECK(Near(mids, 320, 5));
+    }
 }

@@ -331,11 +331,13 @@ Clip Make(Kind kind, Lcg& r) {
 
 // Random arcs, drawn from a family (a stronger test than hand-made shapes).
 // The action is piecewise linear through 3-8 knots that vary +-15 %; jitter
-// is +-5 to +-25 % per clip (+-50 % in the two noisy families); the loudness
-// is divided by its loudest step, as the label editor does.
+// is +-5 to +-25 % per clip (+-50 % in the two noisy families, +-35 % with
+// the loud opening); the loudness is divided by its loudest step, as the
+// label editor does.
 enum class Family {
-    kMixed, kMotionPeak, kSoundPeak, kStairTop, kMixedNoisy,  // one known strongest peak
+    kMixed, kMotionPeak, kSoundPeak, kStairTop, kMixedNoisy, kPeakBesideBlack, kLoudOpening,  // one peak
     kIntroFlat, kFlatTail, kWalkSlow, kWalkMid, kWalkFast, kWalkNoisy, kBeats,  // no peak
+    kEmptyMiddle, kEmptyEdge, kCutsNoSound,
     kCount
 };
 const char* Name(Family f) {
@@ -345,6 +347,8 @@ const char* Name(Family f) {
         case Family::kSoundPeak: return "peak in the sound only";
         case Family::kStairTop: return "staircase up to a top";
         case Family::kMixedNoisy: return "peak in motion and sound, jitter +-50 %";
+        case Family::kPeakBesideBlack: return "peak, then a long black and silent end";
+        case Family::kLoudOpening: return "loud opening, later peak, jitter +-35 %";
         case Family::kIntroFlat: return "no peak: calm intro, even action";
         case Family::kFlatTail: return "no peak: even action, calm end";
         case Family::kWalkSlow: return "no peak: random walk, step 0.005";
@@ -352,11 +356,14 @@ const char* Name(Family f) {
         case Family::kWalkFast: return "no peak: random walk, step 0.02";
         case Family::kWalkNoisy: return "no peak: random walk, step 0.01, jitter +-50 %";
         case Family::kBeats: return "no peak: 1 Hz beats in the sound";
+        case Family::kEmptyMiddle: return "no peak: 50-80 % black or still and silent between";
+        case Family::kEmptyEdge: return "no peak: 40-60 % black at the start or end";
+        case Family::kCutsNoSound: return "no peak: scene cuts, no sound";
         case Family::kCount: break;
     }
     return "";
 }
-bool HasPeak(Family f) { return int(f) <= int(Family::kMixedNoisy); }
+bool HasPeak(Family f) { return int(f) <= int(Family::kLoudOpening); }
 
 // xorshift64: the families' own generator, seeded per family and split.
 struct Xs {
@@ -374,10 +381,13 @@ Clip MakeFamily(Family f, Xs& r) {
     Clip c;
     c.s.step_ms = 500;
     const bool noisy = f == Family::kMixedNoisy || f == Family::kWalkNoisy;
-    const double length = r.In(90, 900), base_m = r.In(.15, .25), base_l = r.In(.25, .4);
-    const double jitter = noisy ? 1.0 : r.In(.1, .5);
-    const bool has_intro = f == Family::kIntroFlat || (f != Family::kFlatTail && r.U() < .5);
+    const bool empty_family = f == Family::kEmptyMiddle || f == Family::kEmptyEdge || f == Family::kPeakBesideBlack;
+    const double length = empty_family ? r.In(300, 900) : r.In(90, 900), base_m = r.In(.15, .25), base_l = r.In(.25, .4);
+    const double jitter = noisy ? 1.0 : f == Family::kLoudOpening ? .7 : r.In(.1, .5);
+    const bool has_intro = f == Family::kIntroFlat || f == Family::kCutsNoSound ||
+                           (f != Family::kFlatTail && f != Family::kLoudOpening && !empty_family && r.U() < .5);
     const double intro = has_intro ? r.In(5, 30) : 0;
+    const double opening = f == Family::kLoudOpening ? r.In(20, 60) : 0;
     const bool tail = f == Family::kFlatTail || (HasPeak(f) && f != Family::kStairTop && r.U() < .3);
     const int knots = 3 + int(r.U() * 6);
     std::vector<double> kt, km, kl;
@@ -388,7 +398,10 @@ Clip MakeFamily(Family f, Xs& r) {
     }
     // The peak: a top of half-width w with ramps of ra / rb seconds.
     const double w = r.In(4, 15), ra = r.In(1, 15), rb = r.In(1, 15);
-    const double centre = r.In(intro + w + ra + 5, std::max(intro + w + ra + 6, length - w - rb - 3));
+    const double peak_end = f == Family::kPeakBesideBlack ? length * .45 : length - w - rb - 3;
+    const double centre = f == Family::kLoudOpening ? length * r.In(.6, .9)
+                                                     : r.In(std::max(intro, opening) + w + ra + 5,
+                                                            std::max(std::max(intro, opening) + w + ra + 6, peak_end));
     const double gain_m = f == Family::kSoundPeak ? r.In(1.0, 1.1) : r.In(1.5, 2.3);
     const double peak_l = f == Family::kMotionPeak ? -1 : r.In(.7, .95);
     const double tail_from = f == Family::kFlatTail ? length - r.In(15, 60) : centre + w + rb + r.In(5, 30);
@@ -397,7 +410,23 @@ Clip MakeFamily(Family f, Xs& r) {
     const double top_len = r.In(15, 40), step_gain = r.In(1.15, 1.4);
     const double step_len = (length - intro - top_len) / (steps - 1);
     const double walk = f == Family::kWalkSlow ? .005 : f == Family::kWalkFast ? .02 : .01;
-    const bool no_sound = f == Family::kMotionPeak && r.U() < .5;
+    const bool no_sound = (f == Family::kMotionPeak && r.U() < .5) || f == Family::kCutsNoSound;
+    // Empty stretches: [blank_from, blank_to) is black (or still) and silent.
+    double blank_from = -1, blank_to = -1;
+    bool blank_black = true;
+    if (f == Family::kEmptyMiddle) {
+        const double share = r.In(.5, .8);
+        blank_from = length * (1 - share) / 2;
+        blank_to = blank_from + length * share;
+        blank_black = r.U() < .5;
+    } else if (f == Family::kEmptyEdge) {
+        const double share = r.In(.4, .6);
+        if (r.U() < .5) blank_to = length * share, blank_from = 0;
+        else blank_from = length * (1 - share), blank_to = length;
+    } else if (f == Family::kPeakBesideBlack) {
+        blank_from = length * r.In(.5, .6);
+        blank_to = length;
+    }
     if (has_intro) c.intro_s = intro;
     if (f == Family::kStairTop) c.climaxes.push_back({length - top_len / 2});
     else if (HasPeak(f)) c.climaxes.push_back({centre});
@@ -438,9 +467,18 @@ Clip MakeFamily(Family f, Xs& r) {
             m = .1 * base_m;
             l = .6 * base_l;
         }
-        c.s.luma.push_back(0.5);
-        c.s.motion.push_back(std::max(0.0, m * (1 + jitter * (r.U() - .5))));
-        c.s.loudness.push_back(std::clamp(l * (1 + jitter * (r.U() - .5)), 0.0, 1.0));
+        if (t < opening) {
+            m = 2 * base_m;
+            l = std::min(.95, 2.2 * base_l);
+        }
+        double motion = std::max(0.0, m * (1 + jitter * (r.U() - .5)));
+        double loud = std::clamp(l * (1 + jitter * (r.U() - .5)), 0.0, 1.0);
+        if (f == Family::kCutsNoSound && t >= intro && r.U() < .02) motion *= 3 + 17 * r.U();
+        const bool blank = t >= blank_from && t < blank_to;
+        if (blank) motion = loud = 0;
+        c.s.luma.push_back(blank && blank_black ? 0.0 : 0.5);
+        c.s.motion.push_back(motion);
+        c.s.loudness.push_back(loud);
     }
     if (no_sound) c.s.loudness.clear();
     const double top = c.s.loudness.empty() ? 0 : *std::max_element(c.s.loudness.begin(), c.s.loudness.end());
@@ -461,7 +499,8 @@ constexpr double kIntroTolerance = 0.02;
 // kUnusableTolerance. Suggestions are never applied without the user.
 constexpr double kUnusableRate = 0.25, kUnusableTolerance = 0.10;
 // The families' seeds: constants were chosen on the train set; the held-out
-// set was looked at once, for the final report.
+// set is only looked at for a round's final report (the benchmark doc says
+// when it was).
 constexpr uint64_t kTrainSeed = 0x7a11e5ull, kHeldOutSeed = 0x4e1d0a7ull;
 
 struct Score {

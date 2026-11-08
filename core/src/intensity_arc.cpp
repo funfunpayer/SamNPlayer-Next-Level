@@ -1,8 +1,10 @@
 #include "samn/intensity_arc.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdlib>
+#include <limits>
 
 namespace samn {
 
@@ -10,6 +12,9 @@ namespace {
 
 // Motion over twice the busy level is a glitch or a cut, not more action.
 constexpr double kMotionCap = 2.0;
+// Motion spikes shorter than about half of this many steps are cuts or
+// flashes: the running median's width (2.5 s at 500 ms steps).
+constexpr size_t kCutMedian = 5;
 // A climax stands out against the action within half a minute on either side
 // of its top; lows farther away (the intro, black ends) say nothing about it.
 constexpr int64_t kProminenceReachMs = 30000;
@@ -257,10 +262,21 @@ bool SuddenEdge(const std::vector<double>& detail, size_t edge, int dir, size_t 
     return i != to && j != to && detail[j] < low && (dir < 0 ? i - j : j - i) <= limit;
 }
 
-// The median of detail[from, to), or -1 when that is shorter than min_len.
-double FlankMedian(const std::vector<double>& detail, size_t from, size_t to, size_t min_len) {
-    if (to <= from || to - from < min_len) return -1;
-    return Percentile(std::vector<double>(detail.begin() + std::ptrdiff_t(from), detail.begin() + std::ptrdiff_t(to)), 0.5);
+// The values of detail[from, to) that are not empty (live).
+std::vector<double> LiveOf(const std::vector<double>& detail, const std::vector<bool>& live, size_t from, size_t to) {
+    std::vector<double> v;
+    for (size_t i = from; i < to; ++i)
+        if (live[i]) v.push_back(detail[i]);
+    return v;
+}
+
+// The median of the live part of detail[from, to), or -1 when that is
+// shorter than min_len.
+double FlankMedian(const std::vector<double>& detail, const std::vector<bool>& live, size_t from, size_t to,
+                   size_t min_len) {
+    std::vector<double> v = LiveOf(detail, live, from, std::max(from, to));
+    if (v.empty() || v.size() < min_len) return -1;
+    return Percentile(std::move(v), 0.5);
 }
 
 // How far one input rises on a climax: the mean of its detail over the top
@@ -268,19 +284,20 @@ double FlankMedian(const std::vector<double>& detail, size_t from, size_t to, si
 // action after the intro without the climax's stretch [a, b)) and against
 // the action beside it (the lower median of `flank` steps on either side,
 // within the action; a side shorter than a quarter of that does not count).
+// Empty samples (no motion, no sound: black or still and silent) are no
+// part of the action and count nowhere.
 struct Rise {
     double over_rest = 1, over_flank = 1;
 };
-Rise RiseOf(const std::vector<double>& detail, const std::vector<double>& sorted_action, size_t intro, size_t a, size_t b,
-            size_t top_first, size_t top_last, size_t flank) {
-    const auto begin = detail.begin();
+Rise RiseOf(const std::vector<double>& detail, const std::vector<bool>& live, const std::vector<double>& sorted_action,
+            size_t intro, size_t a, size_t b, size_t top_first, size_t top_last, size_t flank) {
     const double top = MeanOf(detail, top_first, top_last);
     const auto ratio = [&](double level) { return level > 0 ? std::min(kMaxRatio, top / level) : top > 0 ? kMaxRatio : 1.0; };
     Rise rise;
-    const double rest = MedianWithout(sorted_action, std::vector<double>(begin + std::ptrdiff_t(a), begin + std::ptrdiff_t(b)));
+    const double rest = MedianWithout(sorted_action, LiveOf(detail, live, a, b));
     if (rest >= 0) rise.over_rest = ratio(rest);
-    const double left = FlankMedian(detail, std::max(intro, a - std::min(a, flank)), a, flank / 4);
-    const double right = FlankMedian(detail, b, std::min(detail.size(), b + flank), flank / 4);
+    const double left = FlankMedian(detail, live, std::max(intro, a - std::min(a, flank)), a, flank / 4);
+    const double right = FlankMedian(detail, live, b, std::min(detail.size(), b + flank), flank / 4);
     const double low = left < 0 ? right : right < 0 ? left : std::min(left, right);
     if (low >= 0) rise.over_flank = ratio(low);
     return rise;
@@ -292,14 +309,8 @@ Rise RiseOf(const std::vector<double>& detail, const std::vector<double>& sorted
 // long plateau is one top), then at most `reach` steps further. A side that
 // runs into the clip's end or the action's start does not count (the curve
 // flattens at an edge, and the intro is no part of the action); when neither
-// side stops inside, the lower one counts. `opening`: the clip has no intro
-// and the left side ran into its start without falling off the top band, so
-// nothing shows a rise to the peak.
-struct Prominence {
-    double value = 0;
-    bool opening = false;
-};
-Prominence ProminenceOf(const std::vector<double>& arc, size_t p, size_t from, size_t reach, double top) {
+// side stops inside, the lower one counts.
+double ProminenceOf(const std::vector<double>& arc, size_t p, size_t from, size_t reach, double top) {
     struct Side {
         double low;
         bool inside;
@@ -322,7 +333,16 @@ Prominence ProminenceOf(const std::vector<double>& arc, size_t p, size_t from, s
                         : l.inside           ? l.low
                         : r.inside           ? r.low
                                              : std::min(l.low, r.low);
-    return {arc[p] - base, from == 0 && !l.inside && l.low >= arc[p] - top};
+    return arc[p] - base;
+}
+
+// Whether the peak at p is the clip's opening: walking left, the arc never
+// falls more than `band` below it (higher samples on the way are allowed)
+// before the clip's start, so nothing shows a real rise to it.
+bool OpensAtTop(const std::vector<double>& arc, size_t p, double band) {
+    for (size_t i = p; i-- > 0;)
+        if (arc[i] < arc[p] - band) return false;
+    return true;
 }
 
 }  // namespace
@@ -334,7 +354,10 @@ IntensityArc ComputeArc(const PhaseSignals& s, const ArcOptions& o) {
     out.step_ms = s.step_ms;
     const size_t n = !s.motion.empty() ? s.motion.size() : s.loudness.size();
     if (n == 0 || s.step_ms <= 0) return out;
-    const auto steps = [&](int64_t ms) { return std::max<size_t>(1, size_t((ms + s.step_ms - 1) / s.step_ms)); };
+    const auto steps = [&](int64_t ms) {
+        const int64_t m = std::clamp<int64_t>(ms, 0, std::numeric_limits<int64_t>::max() - s.step_ms);
+        return std::max<size_t>(1, size_t((m + s.step_ms - 1) / s.step_ms));
+    };
     const double duration = double(n) * double(s.step_ms);
     const double scale = ArcScale(int64_t(duration));
     const auto scaled = [&](int64_t ms) { return steps(std::llround(double(ms) * scale)); };
@@ -349,6 +372,24 @@ IntensityArc ComputeArc(const PhaseSignals& s, const ArcOptions& o) {
         return c;
     };
     std::vector<double> motion = input(s.motion), loud = input(s.loudness);
+    if (motion.size() >= kCutMedian) {
+        // A scene cut or a flash is a frame or two of motion, no action: a
+        // running median over kCutMedian steps takes such spikes out (also
+        // two close together) and leaves anything that lasts. Near the clip's
+        // ends the window is the part inside the clip, and of an even count
+        // the lower middle value counts.
+        std::vector<double> m = motion;
+        const size_t half = kCutMedian / 2;
+        for (size_t i = 0; i < m.size(); ++i) {
+            const size_t from = i < half ? 0 : i - half, to = std::min(m.size(), i + half + 1);
+            std::array<double, kCutMedian> window{};
+            std::copy(motion.begin() + std::ptrdiff_t(from), motion.begin() + std::ptrdiff_t(to), window.begin());
+            const std::ptrdiff_t count = std::ptrdiff_t(to - from), mid = (count - 1) / 2;
+            std::nth_element(window.begin(), window.begin() + mid, window.begin() + count);
+            m[i] = window[size_t(mid)];
+        }
+        motion = std::move(m);
+    }
     if (!motion.empty()) {
         // Against the busy level of the moving part: black stretches do not lower it.
         std::vector<double> moving;
@@ -363,6 +404,15 @@ IntensityArc ComputeArc(const PhaseSignals& s, const ArcOptions& o) {
     std::vector<double> intensity(n, 0.0);
     for (size_t i = 0; i < n; ++i)
         intensity[i] = (motion.empty() ? 0 : wm * motion[i]) + (loud.empty() ? 0 : wl * loud[i]);
+    // Empty samples (neither motion nor sound) count in no statistic of the
+    // action; an input that is exactly 0 at a sample is absent there and
+    // counts in none of its own.
+    std::vector<bool> live(n), motion_live(n, false), loud_live(n, false);
+    for (size_t i = 0; i < n; ++i) {
+        live[i] = intensity[i] > 0;
+        if (!motion.empty()) motion_live[i] = motion[i] > 0;
+        if (!loud.empty()) loud_live[i] = loud[i] > 0;
+    }
     out.detail = Smooth(intensity, scaled(o.detail_ms));
     out.arc = Smooth(intensity, scaled(o.arc_ms));
     if (motion.empty() && loud.empty()) return out;
@@ -373,12 +423,13 @@ IntensityArc ComputeArc(const PhaseSignals& s, const ArcOptions& o) {
     out.intro_end_ms = int64_t(intro) * s.step_ms;
 
     // Climax candidates over the whole action after the intro.
-    const auto sorted_action = [intro](const std::vector<double>& d) {
-        std::vector<double> v(d.begin() + std::ptrdiff_t(std::min(intro, d.size())), d.end());
+    const auto sorted_action = [&](const std::vector<double>& d, const std::vector<bool>& mask) {
+        std::vector<double> v = d.empty() ? d : LiveOf(d, mask, std::min(intro, n), n);
         std::sort(v.begin(), v.end());
         return v;
     };
-    const auto motion_action = sorted_action(motion_detail), loud_action = sorted_action(loud_detail);
+    const auto motion_action = sorted_action(motion_detail, motion_live);
+    const auto loud_action = sorted_action(loud_detail, loud_live);
     const int64_t gap_ms = std::llround(double(o.secondary_gap_ms) * scale);
     const size_t half_arc = scaled(o.arc_ms) / 2, flank = scaled(kFlankMs);
     const size_t gap = scaled(o.detail_ms), sudden_steps = scaled(kSuddenMs);
@@ -389,7 +440,8 @@ IntensityArc ComputeArc(const PhaseSignals& s, const ArcOptions& o) {
     {
         std::vector<double> bends;
         for (size_t i = intro + gap; i + gap < n; ++i)
-            bends.push_back(std::abs(out.detail[i - gap] - 2 * out.detail[i] + out.detail[i + gap]));
+            if (live[i - gap] && live[i] && live[i + gap])
+                bends.push_back(std::abs(out.detail[i - gap] - 2 * out.detail[i] + out.detail[i + gap]));
         noise = Percentile(std::move(bends), 0.5) / std::sqrt(3.0);
     }
     struct Candidate {
@@ -399,11 +451,11 @@ IntensityArc ComputeArc(const PhaseSignals& s, const ArcOptions& o) {
     };
     std::vector<Candidate> candidates;
     for (size_t p : LocalMaxima(out.arc, intro)) {
-        const auto [prominence, opening] = ProminenceOf(out.arc, p, intro, scaled(kProminenceReachMs), kMinProminence);
+        const double prominence = ProminenceOf(out.arc, p, intro, scaled(kProminenceReachMs), kMinProminence);
         // A clip that opens at its top has an opening (a cold open, a loud
         // title) or was cut inside the climax: nothing shows it rising. A
         // conservative choice: no climax is suggested there.
-        if (opening || prominence < kMinProminence) continue;
+        if (prominence < kMinProminence) continue;
         // The climax's stretch: from the detail's top near the arc's peak (the
         // arc fuses close bursts and may peak in the dip between them), where
         // the detail stays above half the prominence, within the action.
@@ -422,12 +474,12 @@ IntensityArc ComputeArc(const PhaseSignals& s, const ArcOptions& o) {
         const Top top = TopOf(out.detail, a, b, gap, noise);
         double over_rest = 0, over_flank = 0;
         if (!motion.empty()) {
-            const Rise r = RiseOf(motion_detail, motion_action, intro, a, b, top.first, top.last, flank);
+            const Rise r = RiseOf(motion_detail, motion_live, motion_action, intro, a, b, top.first, top.last, flank);
             over_rest += wm * r.over_rest;
             over_flank += wm * r.over_flank;
         }
         if (!loud.empty()) {
-            const Rise r = RiseOf(loud_detail, loud_action, intro, a, b, top.first, top.last, flank);
+            const Rise r = RiseOf(loud_detail, loud_live, loud_action, intro, a, b, top.first, top.last, flank);
             over_rest += wl * r.over_rest;
             over_flank += wl * r.over_flank;
         }
@@ -436,8 +488,21 @@ IntensityArc ComputeArc(const PhaseSignals& s, const ArcOptions& o) {
         // It stands min_gain over the rest of the action and kFlankGain over
         // the action beside it, or min_gain there too behind a sudden edge.
         const double top_level = MeanOf(out.detail, top.first, top.last);
-        const double left = FlankMedian(out.detail, std::max(intro, a - std::min(a, flank)), a, flank / 4);
-        const double right = FlankMedian(out.detail, b, std::min(n, b + flank), flank / 4);
+        const double left = FlankMedian(out.detail, live, std::max(intro, a - std::min(a, flank)), a, flank / 4);
+        const double right = FlankMedian(out.detail, live, b, std::min(n, b + flank), flank / 4);
+        // A clip without an intro that opens at its top: no clear rise from
+        // the action before the peak (its left flank, by half its prominence
+        // and clear of the noise), and the arc never falls halfway down to
+        // the action beside it before the clip's start; also a wiggle on a
+        // loud opening.
+        if (intro == 0) {
+            const double rise = std::max({kMinProminence, 2 * noise, 0.5 * prominence});
+            if (left < 0 || out.arc[p] - left < rise) {
+                const double low = left < 0 ? right : right < 0 ? left : std::min(left, right);
+                const double band = low >= 0 ? std::max(rise, 0.5 * (out.arc[p] - low)) : rise;
+                if (OpensAtTop(out.arc, p, band)) continue;
+            }
+        }
         const auto above_noise = [&](double base) { return top_level - base >= kSuddenNoise * noise; };
         const bool sudden_left = left >= 0 && above_noise(left) &&
                                  SuddenEdge(out.detail, top.first, -1, intro, n, left, top_level, sudden_steps);
@@ -473,7 +538,7 @@ IntensityArc ComputeArc(const PhaseSignals& s, const ArcOptions& o) {
         for (const auto& c : candidates) std::fill(inside.begin() + std::ptrdiff_t(c.a), inside.begin() + std::ptrdiff_t(c.b), true);
         std::vector<double> outside;
         for (size_t i = intro; i < n; ++i)
-            if (!inside[i]) outside.push_back(out.detail[i]);
+            if (!inside[i] && live[i]) outside.push_back(out.detail[i]);
         if (!outside.empty()) {
             const double spread = Percentile(outside, 0.9) - Percentile(outside, 0.1);
             calm = spread <= kCalmSpread * (candidates.front().top_level - Percentile(outside, 0.5));

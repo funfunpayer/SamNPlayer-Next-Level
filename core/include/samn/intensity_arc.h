@@ -43,15 +43,21 @@ struct IntensityArc {
     std::vector<ArcPeak> peaks;  // the primary climax first, then the others by rank (only in a calm clip)
 };
 
-// Motion counts against the clip's busy level (its 90th percentile), the
-// loudness as given (0..1). Missing, negative and NaN values count as 0; an
-// input that is shorter than the clip or all 0 is missing. The clip's length
+// Motion counts against the clip's busy level (its 90th percentile) after a
+// running median that takes out scene cuts, the loudness as given (0..1).
+// Missing, negative and NaN values count as 0; an input that is shorter than
+// the clip or all 0 is missing. Empty steps (both inputs 0: black, or still
+// and silent) are left out of the action's levels, the flanks and the noise
+// estimate, and an input's 0 steps out of its own level. The clip's length
 // is the motion's, or the loudness's without motion. A climax is a rise
 // within the action after the intro, measured per input against that
-// input's own level, so one in the sound alone counts like one in the
-// picture alone; drift, an even action after a calm intro and a clip that
-// opens at its top give none. The thresholds are fitted on synthetic clips
-// (docs/benchmarks/INTENSITY_ARC_2026-11-06.md).
+// input's own level. The arc still blends the inputs 0.6 / 0.4, so a climax
+// in the sound alone needs a much larger rise than one in the picture alone:
+// on synthetic clips about 2x the rest of the action or more, where the
+// picture is found from about 1.5x. Drift, an even action after a calm intro
+// and a clip that opens at its top give none. The thresholds are fitted on
+// synthetic clips only, and real clips are the test that counts; the known
+// limits are in docs/benchmarks/INTENSITY_ARC_2026-11-06.md.
 IntensityArc ComputeArc(const PhaseSignals& s, const ArcOptions& o = {});
 
 // The factor the time scales shrink by for a clip of duration_ms: 1 from two
