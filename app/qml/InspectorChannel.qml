@@ -3,10 +3,10 @@ import SamN
 
 Item {
     id: ch
-    required property var ctrl
     property string name
     property color dot
     property int value
+    property bool hasScript: false
     width: parent ? parent.width : 260; height: 26
     Rectangle {
         y: 9; width: 8; height: 8; radius: 4; color: ch.dot
@@ -36,7 +36,6 @@ Item {
     Text {
         textFormat: Text.PlainText
         anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
-        text: ctrl.hasScript ? ch.value : "–"; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+        text: ch.hasScript ? ch.value : "–"; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
     }
 }
-

@@ -188,16 +188,16 @@ Column {
     InspectorCard {
         title: qsTr("Channels")
         InspectorChannel {
-            ctrl: ctrl
-            name: qsTr("Stroke"); dot: Theme.orange; value: ctrl.strokeNow 
+            name: qsTr("Stroke"); dot: Theme.orange
+            value: root.ctrl.strokeNow; hasScript: root.ctrl.hasScript
         }
         InspectorChannel {
-            ctrl: ctrl
-            name: qsTr("Vibration"); dot: Theme.laneVibration; value: ctrl.vibrationNow 
+            name: qsTr("Vibration"); dot: Theme.laneVibration
+            value: root.ctrl.vibrationNow; hasScript: root.ctrl.hasScript
         }
         InspectorChannel {
-            ctrl: ctrl
-            name: qsTr("Suction"); dot: Theme.laneSuction; value: ctrl.suctionNow 
+            name: qsTr("Suction"); dot: Theme.laneSuction
+            value: root.ctrl.suctionNow; hasScript: root.ctrl.hasScript
         }
         InspectorNote { text: device.connected ? qsTr("Live values at the playhead. The lanes show the channels this device can use.")
                                           : qsTr("Live values at the playhead. Connect a device to send them.") }
