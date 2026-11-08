@@ -88,8 +88,19 @@ jobs:
             -DPython_EXECUTABLE="$(python -c 'import sys; print(sys.executable)')" \
             -Dpybind11_DIR="$(python -m pybind11 --cmakedir)"
 
+      # Full --parallel OOMs ubuntu-latest (cc1plus Killed / runner exit 143)
+      # when the Qt app + engine_tests link at once. Cap Linux; Windows keeps
+      # unlimited parallelism.
       - name: Build
-        run: cmake --build build --config Release --parallel
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            jobs=$(( $(nproc) / 2 ))
+            [ "$jobs" -lt 1 ] && jobs=1
+            cmake --build build --config Release --parallel "$jobs"
+          else
+            cmake --build build --config Release --parallel
+          fi
 
       # The package's FFmpeg: Qt's version and options plus dav1d, so AV1
       # plays without a GPU AV1 decoder (ci/windows/build_ffmpeg_dav1d.sh).
