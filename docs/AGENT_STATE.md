@@ -2,9 +2,18 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-curve-invert-635a`: Invert on Player Curve edit. #173 Cap/Scale/Delete merged. Stay off intensity-arc (#168).
+**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-bake-share-635a`: Player Bake & share card. #175 Invert merged. Stay off intensity-arc (#168).
 
-## Handover: `cursor/player-curve-invert-635a` (8 Nov, Player Invert on Curve edit)
+## Handover: `cursor/player-bake-share-635a` (8 Nov, Player Bake & share)
+
+Owner: Player/Editor GUI — Adapt / convert finished scripts. Unbury 0.7 Bake & share.
+
+- **Inspector → Playback → Bake & share:** Bake feel channels (`axesFromStroke`) + Share for other apps (`exportFunscript` → community `.funscript`).
+- **Adapt** card slimmed to Optimize + Editor link (bake moved here).
+- **Tests:** `axesFromStrokeWritesNeoLanes` covers share; `playbackTabAdaptForDevice` asserts bakeShareCard.
+- **Stay off:** Claude #168 intensity arc.
+
+## Handover: `cursor/player-curve-invert-635a` (8 Nov, Player Invert on Curve edit) — merged #175
 
 Owner: Player/Editor curves · optimize · align. Completes Curve edit after #173.
 

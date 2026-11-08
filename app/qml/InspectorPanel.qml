@@ -596,20 +596,13 @@ GlassCard {
                         }
                     }
                     FlowButton {
-                        objectName: "adaptAxes"
-                        text: qsTr("Vibration & suction from stroke")
-                        icon: "effects"
-                        enabled: root.ctrl.hasScript
-                        onClicked: axesConfirm.open()
-                    }
-                    FlowButton {
                         objectName: "adaptEditTools"
                         text: qsTr("More tools in the Editor…")
                         icon: "edit"
                         enabled: root.ctrl.hasScript
                         onClicked: root.editRequested(false)
                     }
-                    Note { text: qsTr("Optimize saves into the script (and a .samn Emotion Script for Neo 2). Effects below stay live playback feel only.") }
+                    Note { text: qsTr("Optimize saves into the script (and a .samn Emotion Script for Neo 2). Bake & share below writes feel channels or a community .funscript. Effects stay live playback feel only.") }
                     Note { objectName: "adaptNote"; visible: root.ctrl.toolNote !== ""; text: root.ctrl.toolNote }
                     MessageDialog {
                         id: adaptConfirm
@@ -620,9 +613,42 @@ GlassCard {
                         buttons: MessageDialog.Ok | MessageDialog.Cancel
                         onAccepted: root.ctrl.optimizeFor(adapt.targets[adaptTarget.currentIndex])
                     }
+                }
+                // 0.7 Tools "Bake & share": bake Neo feel channels + community export.
+                Card {
+                    id: bakeShare
+                    objectName: "bakeShareCard"
+                    title: qsTr("Bake & share")
+                    help: "pb-bake-share"
+                    Text {
+                        textFormat: Text.PlainText
+                        width: parent.width
+                        wrapMode: Text.WordWrap
+                        text: qsTr("Bake writes Neo vibration and suction into the Emotion Script. Share exports a community .funscript other apps can open.")
+                        color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                    }
+                    FlowButton {
+                        objectName: "bakeFeelChannels"
+                        text: qsTr("Bake feel channels")
+                        icon: "effects"
+                        enabled: root.ctrl.hasScript
+                        onClicked: bakeFeelConfirm.open()
+                    }
+                    FlowButton {
+                        objectName: "shareForApps"
+                        text: qsTr("Share for other apps")
+                        icon: "download"
+                        enabled: root.ctrl.hasScript
+                        onClicked: {
+                            const path = root.ctrl.exportFunscript()
+                            if (path === "") root.projectStatus = root.ctrl.lastError
+                        }
+                    }
+                    Note { objectName: "bakeShareNote"; visible: root.ctrl.toolNote !== ""; text: root.ctrl.toolNote }
                     MessageDialog {
-                        id: axesConfirm
-                        title: qsTr("Vibration & suction")
+                        id: bakeFeelConfirm
+                        objectName: "bakeFeelConfirm"
+                        title: qsTr("Bake feel channels")
                         text: qsTr("Write vibration and suction lanes from the stroke into the Emotion Script (.samn) beside this file?")
                         buttons: MessageDialog.Ok | MessageDialog.Cancel
                         onAccepted: root.ctrl.axesFromStroke()
