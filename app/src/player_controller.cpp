@@ -30,6 +30,7 @@
 #include "samn/project.h"
 #include "samn/range_edit.h"
 #include "samn/script_quality.h"
+#include "samn/audio_autosync.h"
 #include "samn/sound_vibration.h"
 #include "heatmap_item.h"
 #include "samn/mapper.h"
@@ -1164,6 +1165,7 @@ bool PlayerController::applySelectionEdit(const QString& label,
 bool PlayerController::openScript(const QString& pathIn, const QString& videoIn) {
     // A .samn beside a .funscript of the same name wins (as in 0.7).
     const QString path = FromU8(samn::PreferSamnCompanion(U8(toLocalPath(pathIn))));
+    clearAutoSyncSuggestion();
     {
         const std::string opened = U8(path);
         const std::string fun = samn::IsSamnPath(opened) ? samn::CompanionFunscriptPath(opened) : opened;
@@ -1811,6 +1813,104 @@ bool PlayerController::applyVibrationLane(std::vector<samn::Action> vibration, c
     emit toolNoteChanged();
     emit soundCurveChanged();
     emit scriptEdited(scriptPath_);
+    return true;
+}
+
+void PlayerController::clearAutoSyncSuggestion() {
+    autoSyncBusy_ = false;
+    autoSyncNote_.clear();
+    autoSyncConfidence_ = QStringLiteral("none");
+    autoSyncOffsetMs_ = 0;
+    emit autoSyncChanged();
+}
+
+bool PlayerController::autoSyncCanApply() const {
+    if (autoSyncConfidence_ == QLatin1String("none") || autoSyncBusy_) return false;
+    return autoSyncOffsetMs_ != offsetMs_;
+}
+
+bool PlayerController::suggestAudioSync() {
+    if (scriptPath_.isEmpty() || stroke_.size() < 2) {
+        setError(tr("Open a script first."));
+        autoSyncNote_ = tr("Auto sync needs a script.");
+        emit autoSyncChanged();
+        return false;
+    }
+    if (videoPath_.isEmpty()) {
+        setError(tr("Link a video to compare its sound with the script."));
+        autoSyncNote_ = tr("Auto sync: link a video first.");
+        emit autoSyncChanged();
+        return false;
+    }
+    if (!autoSyncAudio_) {
+        autoSyncAudio_ = new AudioLevelDecoder(this);
+        connect(autoSyncAudio_, &AudioLevelDecoder::finished, this, [this](const std::vector<double>& env) {
+            autoSyncBusy_ = false;
+            const auto sug = samn::EstimateAudioSyncOffset(env, samn::kAudioLevelStepMs, stroke_);
+            autoSyncOffsetMs_ = int(sug.offset_ms);
+            switch (sug.confidence) {
+                case samn::AudioSyncConfidence::High:
+                    autoSyncConfidence_ = QStringLiteral("high");
+                    break;
+                case samn::AudioSyncConfidence::Low:
+                    autoSyncConfidence_ = QStringLiteral("low");
+                    break;
+                default:
+                    autoSyncConfidence_ = QStringLiteral("none");
+                    break;
+            }
+            if (sug.confidence != samn::AudioSyncConfidence::None && autoSyncOffsetMs_ == offsetMs_) {
+                autoSyncNote_ = tr("That is the offset in use.");
+            } else {
+                autoSyncNote_ = QString::fromStdString(sug.note);
+            }
+            toolNote_ = autoSyncNote_;
+            emit toolNoteChanged();
+            emit autoSyncChanged();
+            if (sug.confidence == samn::AudioSyncConfidence::None) setError(autoSyncNote_);
+            else setError({});
+        });
+        connect(autoSyncAudio_, &AudioLevelDecoder::failed, this, [this](const QString& error) {
+            autoSyncBusy_ = false;
+            autoSyncConfidence_ = QStringLiteral("none");
+            autoSyncOffsetMs_ = 0;
+            autoSyncNote_ = tr("Auto sync: %1").arg(error);
+            toolNote_ = autoSyncNote_;
+            emit toolNoteChanged();
+            emit autoSyncChanged();
+            setFailure(autoSyncNote_);
+        });
+    }
+    if (autoSyncAudio_->busy() || autoSyncBusy_) {
+        setError(tr("Still listening…"));
+        return false;
+    }
+    autoSyncBusy_ = true;
+    autoSyncNote_ = tr("Listening…");
+    emit autoSyncChanged();
+    toolNote_ = autoSyncNote_;
+    emit toolNoteChanged();
+    setError({});
+    autoSyncAudio_->start(videoPath_);
+    return true;
+}
+
+bool PlayerController::applyAudioSyncSuggestion() {
+    if (!autoSyncCanApply()) {
+        if (autoSyncConfidence_ != QLatin1String("none") && autoSyncOffsetMs_ == offsetMs_) {
+            autoSyncNote_ = tr("That is the offset in use.");
+            emit autoSyncChanged();
+        } else {
+            setError(tr("Nothing to apply — run Auto sync first."));
+        }
+        return false;
+    }
+    setOffsetMs(autoSyncOffsetMs_);
+    autoSyncNote_ = tr("Applied %1 ms — Bake offset keeps it for other players.").arg(autoSyncOffsetMs_);
+    toolNote_ = autoSyncNote_;
+    emit toolNoteChanged();
+    emit autoSyncChanged();
+    setError({});
     return true;
 }
 
