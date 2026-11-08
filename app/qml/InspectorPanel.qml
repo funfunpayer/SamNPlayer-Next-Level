@@ -740,6 +740,31 @@ GlassCard {
                     Note { text: qsTr("Positive: the script comes later. Type a value (step 10 ms, ±10 000) or use ±50. Bake writes it into the script's times; the offset goes back to 0.") }
                     Row {
                         spacing: 8
+                        FlowButton {
+                            objectName: "autoSyncSuggest"
+                            text: root.ctrl.autoSyncBusy ? qsTr("Listening…") : qsTr("Auto sync")
+                            enabled: root.ctrl.hasScript && root.ctrl.videoName !== "" && !root.ctrl.autoSyncBusy
+                            onClicked: root.ctrl.suggestAudioSync()
+                        }
+                        FlowButton {
+                            objectName: "autoSyncApply"
+                            text: root.ctrl.autoSyncConfidence !== "none"
+                                  ? qsTr("Apply %1 ms").arg(root.ctrl.autoSyncOffsetMs >= 0
+                                        ? ("+" + root.ctrl.autoSyncOffsetMs)
+                                        : String(root.ctrl.autoSyncOffsetMs))
+                                  : qsTr("Apply")
+                            enabled: root.ctrl.autoSyncCanApply
+                            onClicked: root.ctrl.applyAudioSyncSuggestion()
+                        }
+                    }
+                    Note {
+                        objectName: "autoSyncNote"
+                        visible: root.ctrl.autoSyncNote !== ""
+                        text: root.ctrl.autoSyncNote
+                    }
+                    Note { text: qsTr("Auto sync compares the video's sound (first 10 min) with the stroke and suggests an offset. Apply only changes the offset here; Bake writes it into the script.") }
+                    Row {
+                        spacing: 8
                         Text {
                             textFormat: Text.PlainText
                             anchors.verticalCenter: parent.verticalCenter
