@@ -267,6 +267,30 @@ private slots:
         QCOMPARE(c.playbackSource(), QString("recipe"));
     }
 
+    // 0.7 CreateScriptAxis / "+ Axis…": centred companion file, never overwrite.
+    void createCompanionAxisAddsLane() {
+        QTemporaryDir d;
+        const QString path = d.filePath("multi.funscript");
+        writeFile(path, zigzag(21, 100));
+        PlayerController c;
+        QVERIFY(c.openScript(path));
+        QCOMPARE(c.missingAxisChoices().size(), 5);
+        QVERIFY(!c.axisLanes().contains(QStringLiteral("surge")));
+        const QString created = c.createCompanionAxis(QStringLiteral("surge"));
+        QVERIFY2(!created.isEmpty(), qPrintable(c.lastError()));
+        QVERIFY(created.endsWith(QStringLiteral("multi.surge.funscript")));
+        QVERIFY(c.axisLanes().contains(QStringLiteral("surge")));
+        QCOMPARE(c.activeLane(), QStringLiteral("surge"));
+        QCOMPARE(c.missingAxisChoices().size(), 4);
+        const auto actions = samn::LoadFunscript(std::filesystem::u8path(created.toStdString())).actions;
+        QCOMPARE(actions.size(), size_t(2));
+        QCOMPARE(actions[0].pos, 50);
+        QCOMPARE(actions[1].pos, 50);
+        QCOMPARE(actions[1].at, int64_t(2000));
+        QVERIFY(c.createCompanionAxis(QStringLiteral("surge")).isEmpty());  // no overwrite
+        QVERIFY(c.lastError().contains("already exists") || c.toolNote().contains("Axis"));
+    }
+
     void bakeOffsetWritesItIntoTheScript() {
         QTemporaryDir d;
         const QString path = d.filePath("Bake.funscript");

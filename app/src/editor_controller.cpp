@@ -18,6 +18,7 @@
 #include "samn/funscript.h"
 #include "samn/improve.h"
 #include "samn/marks.h"
+#include "samn/playback.h"
 #include "samn/range_edit.h"
 #include "samn/samn_file.h"
 #include "samn/scenes.h"
@@ -33,6 +34,11 @@ namespace {
 QString LaneTitle(const std::string& lane) {
     if (lane == "vibration") return QObject::tr("Vibration");
     if (lane == "suction") return QObject::tr("Suction");
+    if (lane == "surge") return QObject::tr("Surge");
+    if (lane == "sway") return QObject::tr("Sway");
+    if (lane == "twist") return QObject::tr("Twist");
+    if (lane == "roll") return QObject::tr("Roll");
+    if (lane == "pitch") return QObject::tr("Pitch");
     return QObject::tr("Stroke");
 }
 
@@ -88,6 +94,16 @@ QStringList EditorController::lanes() const {
     QStringList out;
     for (const char* lane : {"stroke", "vibration", "suction"})
         if (!session_.Axis(lane).empty()) out << QString::fromLatin1(lane);
+    for (const char* axis : samn::kCompanionAxes)
+        if (!session_.Axis(axis).empty()) out << QString::fromLatin1(axis);
+    return out;
+}
+
+QStringList EditorController::missingAxisChoices() const {
+    QStringList out;
+    if (!hasScript()) return out;
+    for (const char* axis : samn::kCompanionAxes)
+        if (session_.Axis(axis).empty()) out << QString::fromLatin1(axis);
     return out;
 }
 
@@ -205,6 +221,15 @@ bool EditorController::open(const QString& pathIn) {
         }
     } else {
         samn_path.clear();
+    }
+    // 0.7 companion axis files beside the script (editable in the Editor).
+    for (const auto& [axis, file] : samn::companion_axis_files(U8(funscript))) {
+        try {
+            auto actions = samn::LoadFunscript(std::filesystem::u8path(file)).actions;
+            if (!actions.empty()) axes[axis] = std::move(actions);
+        } catch (const std::exception&) {
+            // Unreadable companion: leave that axis out.
+        }
     }
     // A tool still running was started for the script before (or none).
     cancelTool();
@@ -499,6 +524,56 @@ bool EditorController::addLane(const QString& lane) {
     return true;
 }
 
+QString EditorController::createCompanionAxis(const QString& axisIn) {
+    if (!hasScript() || drag_index_ >= 0 || busy_) return {};
+    const std::string axis = axisIn.toLower().toStdString();
+    if (!samn::is_companion_axis(axis)) {
+        setStatus(tr("Unknown axis: %1").arg(axisIn));
+        return {};
+    }
+    if (!session_.Axis(axis).empty()) {
+        setStatus(tr("Axis already open: %1").arg(LaneTitle(axis)));
+        return {};
+    }
+    const std::vector<samn::Action>& stroke = session_.Axis("stroke");
+    if (stroke.size() < 2) {
+        setStatus(tr("The stroke needs at least 2 points."));
+        return {};
+    }
+    const std::string pathU8 = samn::companion_axis_path(U8(path_), axis);
+    const std::filesystem::path file = std::filesystem::u8path(pathU8);
+    std::error_code ec;
+    const bool existed = std::filesystem::exists(file, ec);
+    if (!existed) {
+        std::string err;
+        if (!samn::create_companion_axis(U8(path_), axis, stroke.back().at, &err)) {
+            setStatus(tr("+ Axis: %1").arg(QString::fromUtf8(err.empty() ? "could not create" : err.c_str())));
+            return {};
+        }
+    }
+    std::vector<samn::Action> actions;
+    try {
+        actions = samn::LoadFunscript(file).actions;
+    } catch (const std::exception& e) {
+        setStatus(tr("+ Axis: %1").arg(QString::fromUtf8(e.what())));
+        return {};
+    }
+    if (actions.size() < 2) {
+        setStatus(tr("+ Axis: created file has no points."));
+        return {};
+    }
+    session_.Begin(existed ? "open " + axis + " axis" : "new " + axis + " axis");
+    session_.Replace(axis, std::move(actions), {});
+    if (!session_.Commit()) return {};
+    setActiveLane(QString::fromStdString(axis));
+    pushCurves();
+    emit lanesChanged();
+    const QString path = FromU8(pathU8);
+    setStatus(existed ? tr("+ Axis · %1 opened.").arg(QFileInfo(path).fileName())
+                      : tr("+ Axis · %1 centred at 50 — drag the points.").arg(QFileInfo(path).fileName()));
+    return path;
+}
+
 QString EditorController::optimizeFor(const QString& target) {
     if (!hasScript() || drag_index_ >= 0 || busy_) return {};
     const bool neo2 = target == QLatin1String("neo2");
@@ -757,6 +832,15 @@ bool EditorController::save() {
             doc.playback_source = source;
             doc.recipe.playback_source = source;
             samn::SaveDocument(FsPath(samn_path_), doc);
+        }
+        // 0.7 companion axis files: keep other fields / inverted via PatchActions.
+        for (const char* axis : samn::kCompanionAxes) {
+            const auto& actions = session_.Axis(axis);
+            if (actions.empty()) continue;
+            const std::filesystem::path file = std::filesystem::u8path(samn::companion_axis_path(U8(path_), axis));
+            std::error_code ec;
+            if (!std::filesystem::exists(file, ec)) continue;
+            samn::PatchActions(file, actions);
         }
     } catch (const std::exception& e) {
         setStatus(tr("Not saved: %1").arg(QString::fromUtf8(e.what())));
