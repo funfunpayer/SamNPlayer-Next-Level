@@ -276,8 +276,12 @@ public:
     // Sam Neo 2 (also contact recipe + baked vibration/suction). Rewrites the
     // file(s) and reloads — same core path as the Editor's Optimize for.
     Q_INVOKABLE QString optimizeFor(const QString& target);
-    // Write Neo vibration & suction lanes from the stroke into the .samn.
+    // Write Neo vibration & suction lanes from the stroke into the .samn
+    // (0.7 Bake feel channels / BakeNeoAxesOnLoaded).
     Q_INVOKABLE bool axesFromStroke();
+    // 0.7 Share for other apps: community .funscript (no Neo axes embedded).
+    // Empty dest → companion .funscript beside the open script. Path or "".
+    Q_INVOKABLE QString exportFunscript(const QString& destPath = {});
     // Curve edit on the heatmap selection (0.7 Cap / Scale / Delete / Invert):
     // rewrites the active script lane (stroke, or baked vibration/suction),
     // saves and reloads. Cap/Scale/Delete and invertSelection need a mark;

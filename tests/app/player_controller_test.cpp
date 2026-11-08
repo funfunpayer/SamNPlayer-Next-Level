@@ -455,10 +455,19 @@ private slots:
         QVERIFY(c.openScript(path));
         QVERIFY(c.axesFromStroke());
         QVERIFY(c.scriptPath().endsWith(QStringLiteral(".samn")));
-        QVERIFY(c.toolNote().contains("Vibration and suction"));
+        QVERIFY(c.toolNote().contains("Feel channels baked"));
         const samn::Document doc = samn::LoadDocument(std::filesystem::u8path(c.scriptPath().toStdString()));
         QVERIFY(doc.vibration.size() >= 2);
         QVERIFY(doc.suction.size() >= 2);
+
+        // Share for other apps: community .funscript beside the .samn.
+        const QString shared = c.exportFunscript();
+        QVERIFY2(!shared.isEmpty(), qPrintable(c.lastError()));
+        QCOMPARE(shared, d.filePath("axes.funscript"));
+        QVERIFY(c.toolNote().contains("Shared for other apps"));
+        const auto view = samn::LoadFunscript(std::filesystem::u8path(shared.toStdString()));
+        QVERIFY(view.actions.size() >= 2);
+        QVERIFY(!view.inverted);
     }
 
     void loopOverMarkedRange() {

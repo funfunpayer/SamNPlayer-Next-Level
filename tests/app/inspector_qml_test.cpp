@@ -291,7 +291,8 @@ private slots:
             auto* player = root->property("player").value<PlayerController*>();
             QVERIFY(player);
             QVERIFY(player->openPath(src));
-            for (const char* n : {"adaptCard", "adaptTarget", "adaptOptimize", "adaptAxes", "adaptEditTools"}) {
+            for (const char* n : {"adaptCard", "adaptTarget", "adaptOptimize", "adaptEditTools",
+                                  "bakeShareCard", "bakeFeelChannels", "shareForApps"}) {
                 auto* it = root->findChild<QQuickItem*>(n);
                 QVERIFY2(it && it->isVisible(), n);
             }
@@ -301,6 +302,11 @@ private slots:
             QTRY_VERIFY(root->findChild<QQuickItem*>("adaptNote")->isVisible());
             QCOMPARE(root->findChild<QQuickItem*>("adaptNote")->property("text").toString(), msg);
             QVERIFY(player->axesFromStroke());
+            QVERIFY(player->toolNote().contains("Feel channels baked"));
+            const QString shared = player->exportFunscript();
+            QVERIFY2(!shared.isEmpty(), qPrintable(player->lastError()));
+            QVERIFY(shared.endsWith(QStringLiteral(".funscript")));
+            QVERIFY(QFileInfo::exists(shared));
             QTest::qWait(50);
         }
         qInstallMessageHandler(g_previous);

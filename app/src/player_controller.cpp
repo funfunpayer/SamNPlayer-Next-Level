@@ -746,10 +746,44 @@ bool PlayerController::axesFromStroke() {
     }
 
     if (!openScript(FromU8(samnPath.u8string()), videoPath_)) return false;
-    toolNote_ = tr("Vibration and suction written from the stroke.");
+    toolNote_ = tr("Feel channels baked · vibration and suction from the stroke.");
     emit toolNoteChanged();
     emit scriptEdited(scriptPath_);
     return true;
+}
+
+QString PlayerController::exportFunscript(const QString& destPath) {
+    if (scriptPath_.isEmpty() || stroke_.size() < 2) {
+        setError(tr("Share: open a script with at least 2 stroke points first."));
+        return {};
+    }
+    namespace fs = std::filesystem;
+    const std::string openedU8 = U8(scriptPath_);
+    const fs::path opened = fs::u8path(openedU8);
+    const bool wasSamn = samn::IsSamnPath(openedU8);
+    const std::string companionU8 = wasSamn ? samn::CompanionFunscriptPath(openedU8) : openedU8;
+    const QString dest = toLocalPath(destPath.isEmpty() ? FromU8(companionU8) : destPath);
+    if (dest.isEmpty()) {
+        setError(tr("Share: no destination path."));
+        return {};
+    }
+    const fs::path out = fs::u8path(U8(dest));
+    try {
+        samn::Document doc;
+        if (wasSamn || fs::exists(fs::u8path(samn::CompanionSamnPath(companionU8)))) {
+            doc = samn::LoadDocument(wasSamn ? opened : fs::u8path(samn::CompanionSamnPath(companionU8)));
+        } else {
+            doc = samn::LoadFunscriptFile(opened);
+        }
+        if (doc.general.size() < 2) doc.general = stroke_;
+        doc.ExportFunscript(out);
+    } catch (const std::exception& e) {
+        setFailure(tr("Share: %1").arg(FromU8(e.what())));
+        return {};
+    }
+    toolNote_ = tr("Shared for other apps · %1").arg(QFileInfo(dest).fileName());
+    emit toolNoteChanged();
+    return dest;
 }
 
 void PlayerController::setCapIntensity(double v) {

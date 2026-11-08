@@ -245,6 +245,7 @@ const texts = {
     "pb-omarker-hint": "O-markers are saved in the script (not local only). Primary = peak; secondary = softer spots. Mark a range first, then apply.",
     // src/playback.js:241 (Optimize for)
     "pb-optimize-target": "Any device: fill and heal gaps, the stroke stays usable everywhere. Sam Neo 2: also contact vibration and baked vibration + suction, saved as Emotion Script.",
+    "pb-bake-share": "Bake feel channels writes Neo vibration and suction into the .samn Emotion Script. Share for other apps writes a community .funscript (stroke only) other players can open.",
     // src/playback.js:217
     "pb-pos-overlay-row": "0–100 stroke gauge over the video. Follows playhead. Turn off anytime.",
     // src/playback.js:336 (Soft edges)
