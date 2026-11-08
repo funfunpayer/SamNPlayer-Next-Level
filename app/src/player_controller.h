@@ -110,6 +110,8 @@ class PlayerController : public QObject {
     Q_PROPERTY(int vibrationNow READ vibrationNow NOTIFY playheadMsChanged)
     // Audio Level lane under the curve (0.7: on by default, remembered).
     Q_PROPERTY(bool audioLane READ audioLane WRITE setAudioLane NOTIFY viewOptionsChanged)
+    // 0.7 Scene markers + thumbnails strip (pb.scenes); default off in Player.
+    Q_PROPERTY(bool showScenes READ showScenes WRITE setShowScenes NOTIFY viewOptionsChanged)
     // 0-100 position gauge on the video (0.7: on by default, remembered).
     Q_PROPERTY(bool posOverlay READ posOverlay WRITE setPosOverlay NOTIFY viewOptionsChanged)
     // The script's contact marks on the video (0.7 "Show contact areas", on
@@ -410,6 +412,8 @@ public:
     int vibrationNow() const;
     bool audioLane() const;
     void setAudioLane(bool on);
+    bool showScenes() const;
+    void setShowScenes(bool on);
     bool posOverlay() const;
     void setPosOverlay(bool on);
     QVariantMap contactMarks() const { return contactMarks_; }
