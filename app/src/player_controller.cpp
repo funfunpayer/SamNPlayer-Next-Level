@@ -25,6 +25,7 @@
 #include "samn/heatmap_image.h"
 #include "samn/improve.h"
 #include "samn/project.h"
+#include "samn/range_edit.h"
 #include "samn/script_quality.h"
 #include "heatmap_item.h"
 #include "samn/mapper.h"
@@ -122,6 +123,12 @@ PlayerController::PlayerController(QObject* parent)
     playlist_.SetRepeat(flag("ui.player.playlist.repeat", false));
     if (flag("ui.player.playlist.shuffle", false)) playlist_.SetShuffle(true, rng_);
     bpmGrid_ = flag("playback.bpm_grid", false);
+    scaleSoftEdges_ = flag("playback.scale_soft_edges", false);
+    {
+        const auto v = settings().get("playback.cap_intensity", 400.0);
+        const double c = v.is_number() ? v.get<double>() : 400.0;
+        capIntensity_ = (std::isfinite(c) && c > 0) ? std::clamp(c, 150.0, 800.0) : 400.0;
+    }
 }
 PlayerController::~PlayerController() = default;
 
@@ -740,6 +747,138 @@ bool PlayerController::axesFromStroke() {
 
     if (!openScript(FromU8(samnPath.u8string()), videoPath_)) return false;
     toolNote_ = tr("Vibration and suction written from the stroke.");
+    emit toolNoteChanged();
+    emit scriptEdited(scriptPath_);
+    return true;
+}
+
+void PlayerController::setCapIntensity(double v) {
+    v = (std::isfinite(v) && v > 0) ? std::clamp(v, 150.0, 800.0) : 400.0;
+    v = std::round(v / 25.0) * 25.0;
+    if (v == capIntensity_) return;
+    capIntensity_ = v;
+    try {
+        settings().set("playback.cap_intensity", capIntensity_);
+    } catch (const std::exception&) {
+    }
+    emit curveEditChanged();
+}
+
+void PlayerController::setScaleSoftEdges(bool on) {
+    if (on == scaleSoftEdges_) return;
+    scaleSoftEdges_ = on;
+    try {
+        settings().set("playback.scale_soft_edges", on);
+    } catch (const std::exception&) {
+    }
+    emit curveEditChanged();
+}
+
+namespace {
+
+enum class EditLane { Stroke, Vibration, Suction };
+
+std::optional<EditLane> ParseEditLane(const QString& lane, bool vibFromScript, bool sucFromScript) {
+    if (lane == QLatin1String("stroke")) return EditLane::Stroke;
+    if (lane == QLatin1String("vibration") && vibFromScript) return EditLane::Vibration;
+    if (lane == QLatin1String("suction") && sucFromScript) return EditLane::Suction;
+    return std::nullopt;
+}
+
+}  // namespace
+
+bool PlayerController::capSelection() {
+    return applySelectionEdit(tr("Cap speed"), [this](const std::vector<samn::Action>& a) {
+        return samn::CapSpeedRange(a, marker_.start_ms, marker_.end_ms, capIntensity_);
+    });
+}
+
+bool PlayerController::scaleSelection(double factor) {
+    return applySelectionEdit(tr("Scale range"), [this, factor](const std::vector<samn::Action>& a) {
+        return samn::ScaleRangePosFade(a, marker_.start_ms, marker_.end_ms, factor, scaleSoftEdges_);
+    });
+}
+
+bool PlayerController::deleteSelection() {
+    const bool ok = applySelectionEdit(tr("Delete range"), [this](const std::vector<samn::Action>& a) {
+        return samn::DeleteRange(a, marker_.start_ms, marker_.end_ms);
+    });
+    if (ok) clearMarker();
+    return ok;
+}
+
+bool PlayerController::applySelectionEdit(const QString& label,
+                                         const std::function<std::vector<samn::Action>(const std::vector<samn::Action>&)>& op) {
+    if (scriptPath_.isEmpty() || stroke_.size() < 2) {
+        setError(tr("Open a script first."));
+        return false;
+    }
+    if (!hasMarker()) {
+        setError(tr("Mark a range on the heatmap first."));
+        return false;
+    }
+    const auto lane = ParseEditLane(activeLane_, vibrationFromScript_, suctionFromScript_);
+    if (!lane) {
+        setError(tr("Pick the Stroke lane, or Adapt for Sam Neo 2 so vibration/suction are in the script."));
+        return false;
+    }
+
+    namespace fs = std::filesystem;
+    const std::string openedU8 = U8(scriptPath_);
+    const fs::path opened = fs::u8path(openedU8);
+    const bool wasSamn = samn::IsSamnPath(openedU8);
+    const std::string funscriptU8 = wasSamn ? samn::CompanionFunscriptPath(openedU8) : openedU8;
+    const fs::path funscript = fs::u8path(funscriptU8);
+    const fs::path samnPath = fs::u8path(samn::CompanionSamnPath(funscriptU8));
+
+    try {
+        samn::Document doc;
+        if (wasSamn || fs::exists(samnPath)) {
+            doc = samn::LoadDocument(wasSamn ? opened : samnPath);
+        } else {
+            doc = samn::LoadFunscriptFile(funscript);
+        }
+        if (doc.general.size() < 2) doc.general = stroke_;
+
+        std::vector<samn::Action>* target = &doc.general;
+        if (*lane == EditLane::Vibration) target = &doc.vibration;
+        else if (*lane == EditLane::Suction) target = &doc.suction;
+        if (target->size() < 2) {
+            setError(tr("%1: the lane has too few points.").arg(label));
+            return false;
+        }
+        *target = op(*target);
+
+        if (*lane == EditLane::Stroke) {
+            if (fs::exists(funscript)) samn::PatchActions(funscript, doc.general);
+            if (wasSamn || fs::exists(samnPath)) {
+                if (doc.version == 0) doc.version = samn::SamnCurrentVersion;
+                if (doc.kind.empty()) doc.kind = samn::SamnKind;
+                samn::SaveDocument(wasSamn ? opened : samnPath, doc);
+            } else if (!fs::exists(funscript)) {
+                samn::SaveDocument(opened, doc);
+            }
+        } else {
+            if (doc.version == 0) doc.version = samn::SamnCurrentVersion;
+            if (doc.kind.empty()) doc.kind = samn::SamnKind;
+            const char* source = samn::PlaybackAxes;
+            doc.playback_source = source;
+            doc.recipe.playback_source = source;
+            samn::SaveDocument(samnPath, doc);
+        }
+    } catch (const std::exception& e) {
+        setFailure(tr("%1: %2").arg(label, FromU8(e.what())));
+        return false;
+    }
+
+    const QString laneTitle = *lane == EditLane::Stroke       ? tr("Stroke")
+                              : *lane == EditLane::Vibration ? tr("Vibration")
+                                                             : tr("Suction");
+    const QString reload = (wasSamn || fs::exists(samnPath) || *lane != EditLane::Stroke)
+                               ? FromU8(samnPath.u8string())
+                               : scriptPath_;
+    if (!openScript(reload, videoPath_)) return false;
+    toolNote_ = tr("%1 · %2").arg(label, laneTitle);
     emit toolNoteChanged();
     emit scriptEdited(scriptPath_);
     return true;

@@ -2,9 +2,19 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 7 Nov 2026, Claude, branch `claude/samn2-vision-bench`: `samn_bench`, the detection benchmark, and its baseline (handover below). No engine behaviour changed. Before: the video playhead extrapolation (D-164, `claude/samn2-playhead`, #163) and the `DeviceWorker` move (#166) are merged.
+**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-curve-edit-635a`: Player Cap/Scale/Delete on heatmap selection (rebasing onto main after #172 vision-bench). Stay off intensity-arc (#168).
 
-## Handover: `claude/samn2-vision-bench` (7 Nov, detection benchmark, measurement only)
+## Handover: `cursor/player-curve-edit-635a` (8 Nov, Player curve edit on mark)
+
+Owner: Player/Editor curves · optimize · align. Cap / Softer / Stronger / Delete in the Player (PARITY §3.1).
+
+- **Inspector → View → Curve edit:** Cap slider (150–800, `playback.cap_intensity`), Soft edges, Speed-cap / Softer / Stronger / Delete on the heatmap mark; active script lane (stroke, or baked vib/suction).
+- **C++:** `PlayerController::{cap,scale,delete}Selection` via `range_edit.h`; rewrite+reload; Delete clears the mark.
+- **CI:** FetchContent for nlohmann/json uses shallow `GIT_TAG v3.11.3` (Releases `.tar.xz` was 504ing configure).
+- **Tests:** `curveEditOnHeatmapSelection`; `viewTabCurveEdit`.
+- **Stay off:** Claude #168 intensity arc. Vision-bench (#172) is on main — leave it alone.
+
+## Handover: `claude/samn2-vision-bench` (7 Nov, detection benchmark, measurement only) — merged #172
 
 Owner: the Generator's video detection must become cinema-grade accurate and lean, and every change is accepted or rejected by numbers. The harness comes first. **No engine behaviour was changed.**
 
@@ -15,7 +25,6 @@ Owner: the Generator's video detection must become cinema-grade accurate and lea
 - **Baseline:** `docs/benchmarks/DETECTION_BASELINE_2026-11-06.md` + `.csv`; load averages and three timing repeats in it. Full run about 33 min. Findings: **pan X raw track r 0.797** (pan Y and clean 0.999): the 0.81 reproduces on the track, but the script r is 0.989 because the default detrend removes this slow pan; occlusion 2 s / 4 s r 0.77 / 0.72 with the lost flag exact; 30 % dropped frames give 4 false cuts; the lighting cut with a jump leaves the tracker lost for the whole second half (r 0.66); fast_small has half its frames flagged lost. ms/frame is about 22 to 37 here (unoptimised build) with up to 25 % spread between runs: time on a quiet machine, median of 3 or more.
 - **Next slices (each judged by this bench):** PR-2 full 2-D camera compensation (`camera_motion.cpp` returns only `t(1,2)`, `track_box.cpp` about line 456 shifts only ys; measured: pan clip Y stroke 0.888 -> 1.000 with compensation, X stroke 0.812 -> 0.812; the Owner's clip uses X; judge on `pan_x` track r); PR-3 forward-backward LK loss flag + confirmed scene cuts (drop30, light_cut_jump); PR-4 phase-locked periodic bridge (occlusion scenes); PR-5 sub-sample peaks (peak error vs the 40 ms frame); PR-6 FR-8 640 px downscale 90 -> 35 ms/frame. CPU / RAM: chunked label-tracking decode, `grab()` for skipped frames.
 - **Not done:** an automatic baseline-vs-candidate comparison of two CSVs (the rule is applied by hand); Windows (RSS 0 there, not built); real clips (Owner gate).
-
 
 
 ## Handover: `claude/samn2-playhead` (5 Nov, video playhead extrapolation) — merged #163

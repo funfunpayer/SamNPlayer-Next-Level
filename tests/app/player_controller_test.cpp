@@ -608,6 +608,44 @@ private slots:
         QVERIFY(again.bpmGrid());
     }
 
+    void curveEditOnHeatmapSelection() {
+        QTemporaryDir d;
+        const QString path = d.filePath("edit.funscript");
+        // Fast 0↔100 jumps (intensity 5000) so Cap at 150 stretches time.
+        writeFile(path, R"({"actions":[{"at":0,"pos":0},{"at":10,"pos":100},{"at":20,"pos":0},{"at":30,"pos":100},{"at":40,"pos":0}]})");
+        PlayerController c;
+        QVERIFY(c.openScript(path));
+        QCOMPARE(c.capIntensity(), 400.0);
+        QVERIFY(!c.capSelection());
+        QVERIFY(c.lastError().contains("Mark a range"));
+        c.setMarker(0, 40);
+        c.setCapIntensity(150);
+        QCOMPARE(c.capIntensity(), 150.0);
+        QVERIFY(c.capSelection());
+        QVERIFY(c.toolNote().contains("Cap speed"));
+        const auto capped = samn::LoadFunscript(std::filesystem::u8path(path.toStdString())).actions;
+        QVERIFY(capped.back().at > 40);
+        QCOMPARE(c.pointCount(), 5);
+
+        PlayerController s;
+        QVERIFY(s.openScript(path));
+        // Scale around mid points (still at original pos 100 / 0 after cap).
+        s.setMarker(capped[1].at - 1, capped[2].at + 1);
+        s.setScaleSoftEdges(false);
+        QVERIFY(s.scaleSelection(0.5));
+        const auto scaled = samn::LoadFunscript(std::filesystem::u8path(path.toStdString())).actions;
+        QCOMPARE(scaled[1].pos, 75);  // 100 -> 50 + 50*0.5
+        QCOMPARE(scaled[2].pos, 25);  // 0 -> 50 + (0-50)*0.5
+
+        PlayerController del;
+        QVERIFY(del.openScript(path));
+        const int before = del.pointCount();
+        del.setMarker(scaled[1].at - 1, scaled[2].at + 1);
+        QVERIFY(del.deleteSelection());
+        QVERIFY(del.pointCount() < before);
+        QVERIFY(!del.hasMarker());
+    }
+
     void speedHighlights() {
         QTemporaryDir d;
         writeFile(d.filePath("S.funscript"), zigzag());

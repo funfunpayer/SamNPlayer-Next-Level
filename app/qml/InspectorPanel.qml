@@ -1045,7 +1045,84 @@ GlassCard {
                         }
                         Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; text: Math.round(root.ctrl.speedHighlightThresh); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
                     }
-                    Note { text: qsTr("Heatmap: click = seek, drag = mark. Wheel on the curve zooms.") }
+                    Note { text: qsTr("Heatmap: click = seek, drag = mark. Wheel on the heatmap zooms. Curve edit below uses the marked range.") }
+                }
+                // Curve edit on the heatmap selection (0.7 Cap · Scale · Delete).
+                Card {
+                    id: curveEdit
+                    objectName: "curveEditCard"
+                    title: qsTr("Curve edit")
+                    help: "playback.cap"
+                    Text {
+                        textFormat: Text.PlainText
+                        width: parent.width
+                        wrapMode: Text.WordWrap
+                        text: qsTr("Rewrite the picked lane inside the marked heatmap range. Stroke always; vibration/suction when the script carries those lanes.")
+                        color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                    }
+                    Row {
+                        spacing: 8
+                        Text {
+                            textFormat: Text.PlainText
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 78
+                            text: qsTr("Cap")
+                            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                        }
+                        FlowSlider {
+                            objectName: "curveCapSlider"
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: curveEdit.width - 24 - 78 - 40
+                            from: 150; to: 800; value: root.ctrl.capIntensity
+                            onMoved: (v) => root.ctrl.capIntensity = Math.round(v / 25) * 25
+                        }
+                        Text {
+                            textFormat: Text.PlainText
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: Math.round(root.ctrl.capIntensity)
+                            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                        }
+                    }
+                    FlowButton {
+                        objectName: "curveCap"
+                        text: qsTr("Speed-cap selection")
+                        enabled: root.ctrl.hasScript && root.ctrl.hasMarker
+                        onClicked: root.ctrl.capSelection()
+                    }
+                    FlowButton {
+                        objectName: "curveSoftEdges"
+                        text: qsTr("Soft edges"); checked: root.ctrl.scaleSoftEdges
+                        onClicked: root.ctrl.scaleSoftEdges = !root.ctrl.scaleSoftEdges
+                    }
+                    Row {
+                        spacing: 8
+                        FlowButton {
+                            objectName: "curveSofter"
+                            text: qsTr("Softer")
+                            enabled: root.ctrl.hasScript && root.ctrl.hasMarker
+                            onClicked: root.ctrl.scaleSelection(0.8)
+                        }
+                        FlowButton {
+                            objectName: "curveStronger"
+                            text: qsTr("Stronger")
+                            enabled: root.ctrl.hasScript && root.ctrl.hasMarker
+                            onClicked: root.ctrl.scaleSelection(1.25)
+                        }
+                        FlowButton {
+                            objectName: "curveDelete"
+                            text: qsTr("Delete range")
+                            enabled: root.ctrl.hasScript && root.ctrl.hasMarker
+                            onClicked: root.ctrl.deleteSelection()
+                        }
+                    }
+                    Note { visible: !root.ctrl.hasMarker; text: qsTr("Mark a range on the heatmap first.") }
+                    Note { objectName: "curveEditNote"; visible: root.ctrl.toolNote !== ""; text: root.ctrl.toolNote }
+                    FlowButton {
+                        objectName: "editScriptFromCurve"
+                        text: qsTr("More editing in the Editor…"); icon: "edit"
+                        enabled: root.ctrl.hasScript
+                        onClicked: root.editRequested(false)
+                    }
                 }
                 // Project & heatmap export (0.7 Tools "Project & heatmap export").
                 Card {
@@ -1116,8 +1193,8 @@ GlassCard {
                     }
                 }
                 Card {
-                    title: qsTr("Curve editing")
-                    Note { text: qsTr("Points, range tools, undo and the scenes are edited in the Generator, which is the Editor.") }
+                    title: qsTr("Full curve editing")
+                    Note { text: qsTr("Point drag, undo and scenes are in the Generator (the Editor). Cap / Softer / Stronger / Delete on a heatmap mark are under Curve edit above.") }
                     FlowButton { objectName: "editScript"; text: qsTr("Edit this script"); icon: "edit"; enabled: root.ctrl.hasScript; onClicked: root.editRequested(false) }
                 }
             }
