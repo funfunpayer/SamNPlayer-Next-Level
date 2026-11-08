@@ -58,6 +58,11 @@ class PlayerController : public QObject {
     Q_PROPERTY(QString toolNote READ toolNote NOTIFY toolNoteChanged)
     Q_PROPERTY(bool canUndoSoundCurve READ canUndoSoundCurve NOTIFY soundCurveChanged)
     Q_PROPERTY(int pendingSoundCurvePoints READ pendingSoundCurvePoints NOTIFY soundCurveChanged)
+    Q_PROPERTY(bool autoSyncBusy READ autoSyncBusy NOTIFY autoSyncChanged)
+    Q_PROPERTY(QString autoSyncNote READ autoSyncNote NOTIFY autoSyncChanged)
+    Q_PROPERTY(QString autoSyncConfidence READ autoSyncConfidence NOTIFY autoSyncChanged)
+    Q_PROPERTY(int autoSyncOffsetMs READ autoSyncOffsetMs NOTIFY autoSyncChanged)
+    Q_PROPERTY(bool autoSyncCanApply READ autoSyncCanApply NOTIFY autoSyncChanged)
     Q_PROPERTY(QVariantList variants READ variants NOTIFY variantsChanged)
     Q_PROPERTY(int variantIndex READ variantIndex NOTIFY variantsChanged)
     // Marks of the script ({name, startMs, endMs, label}, {name, timeMs,
@@ -408,6 +413,14 @@ public:
     Q_INVOKABLE bool undoSoundCurve();
     bool canUndoSoundCurve() const;
     int pendingSoundCurvePoints() const { return int(pendingSoundCurve_.size()); }
+    // 0.7 Auto sync: correlate video loudness with stroke speed → suggest offset.
+    Q_INVOKABLE bool suggestAudioSync();
+    Q_INVOKABLE bool applyAudioSyncSuggestion();
+    bool autoSyncBusy() const { return autoSyncBusy_; }
+    QString autoSyncNote() const { return autoSyncNote_; }
+    QString autoSyncConfidence() const { return autoSyncConfidence_; }
+    int autoSyncOffsetMs() const { return autoSyncOffsetMs_; }
+    bool autoSyncCanApply() const;
     double capIntensity() const { return capIntensity_; }
     void setCapIntensity(double v);
     bool scaleSoftEdges() const { return scaleSoftEdges_; }
@@ -509,6 +522,7 @@ signals:
     // Sound Curve: proposed point count ready for the confirm dialog.
     void soundCurveReady(int points);
     void soundCurveChanged();
+    void autoSyncChanged();
     void curveEditChanged();
     void playheadMsChanged();
     void lastErrorChanged();
@@ -624,6 +638,12 @@ private:
     std::optional<std::vector<samn::Action>> soundCurveUndo_;
     QString soundCurveUndoPath_;
     bool applyVibrationLane(std::vector<samn::Action> vibration, const QString& label, bool recordUndo);
+    AudioLevelDecoder* autoSyncAudio_ = nullptr;
+    bool autoSyncBusy_ = false;
+    QString autoSyncNote_;
+    QString autoSyncConfidence_ = QStringLiteral("none");
+    int autoSyncOffsetMs_ = 0;
+    void clearAutoSyncSuggestion();
 };
 
 }  // namespace samn::ui
