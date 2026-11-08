@@ -156,7 +156,20 @@ GlassCard {
         width: 28; height: 28; radius: 14
         color: tg.containsMouse ? Qt.rgba(1, 1, 1, 0.08) : "transparent"
         Icon { anchors.centerIn: parent; name: root.collapsed ? "chevronLeft" : "chevronRight"; width: 16; height: 16; color: Theme.textDim }
-        MouseArea { id: tg; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.collapsed = !root.collapsed }
+        MouseArea {
+            id: tg
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: root.collapsed = !root.collapsed
+            HoverHandler { id: collapseHover }
+            ToolTipText {
+                shown: collapseHover.hovered
+                text: root.collapsed
+                      ? qsTr("Show Inspector — or press T for theatre (panels away)")
+                      : qsTr("Hide Inspector — bigger video (T = theatre, panels away)")
+            }
+        }
     }
     Text {
         textFormat: Text.PlainText

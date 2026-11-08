@@ -2,9 +2,17 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-fps-snap-635a`: Player FPS-Snap seeks; stacks on plus-axis #179. Stay off intensity-arc (#168).
+**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-keys-635a`: stage keys hint + Inspector collapse tip. #178–#180 on main. Stay off intensity-arc (#168).
 
-## Handover: `cursor/player-fps-snap-635a` (8 Nov, Player FPS-Snap)
+## Handover: `cursor/player-keys-635a` (8 Nov, Player keys hint)
+
+Owner: finish Player/Editor GUI except Claude #168.
+
+- **Stage:** `keysHint` line (Space / seek / offset / E / T theatre / Esc).
+- **Inspector:** collapse tooltip points at theatre (T) for bigger video.
+- **Stay off:** Claude #168.
+
+## Handover: `cursor/player-fps-snap-635a` (8 Nov, Player FPS-Snap) — merged #180
 
 Owner: finish Player/Editor GUI except Claude #168.
 
