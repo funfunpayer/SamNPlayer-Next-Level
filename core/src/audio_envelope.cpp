@@ -59,4 +59,39 @@ std::vector<double> NormalizeLoudness(const std::vector<double>& rms) {
     return out;
 }
 
+double FoldBpmIntoRange(double bpm) {
+    if (!(bpm > 0) || !std::isfinite(bpm)) return 0;
+    while (bpm < 20.0) bpm *= 2.0;
+    while (bpm > 240.0) bpm /= 2.0;
+    if (bpm < 20.0 || bpm > 240.0) return 0;
+    return std::round(bpm);
+}
+
+double EstimateBpmFromLoudness(const std::vector<double>& loudness, int step_ms) {
+    if (step_ms <= 0 || loudness.size() < 4) return 0;
+    // First 10 minutes (0.7 EstimatePlaybackAudioBPM).
+    const size_t max_n = size_t(10 * 60 * 1000) / size_t(step_ms);
+    const size_t n = std::min(loudness.size(), max_n);
+    std::vector<double> peaks_ms;
+    peaks_ms.reserve(n / 4);
+    constexpr double kPeak = 0.35;
+    for (size_t i = 1; i + 1 < n; ++i) {
+        const double v = loudness[i];
+        if (v < kPeak) continue;
+        if (v >= loudness[i - 1] && v > loudness[i + 1]) peaks_ms.push_back(double(i) * double(step_ms));
+    }
+    if (peaks_ms.size() < 2) return 0;
+    std::vector<double> gaps;
+    gaps.reserve(peaks_ms.size() - 1);
+    for (size_t i = 1; i < peaks_ms.size(); ++i) {
+        const double g = peaks_ms[i] - peaks_ms[i - 1];
+        if (g >= 250.0 && g <= 3000.0) gaps.push_back(g);  // 20–240 BPM
+    }
+    if (gaps.empty()) return 0;
+    std::nth_element(gaps.begin(), gaps.begin() + static_cast<std::ptrdiff_t>(gaps.size() / 2), gaps.end());
+    const double period = gaps[gaps.size() / 2];
+    if (!(period > 0)) return 0;
+    return FoldBpmIntoRange(60000.0 / period);
+}
+
 }  // namespace samn

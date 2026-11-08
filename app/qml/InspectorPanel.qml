@@ -566,14 +566,23 @@ GlassCard {
                             onClicked: root.ctrl.bpmGrid = !root.ctrl.bpmGrid
                         }
                     }
-                    FlowButton {
-                        objectName: "bpmFromStroke"
-                        text: qsTr("Guess from stroke")
-                        enabled: root.ctrl.hasScript
-                        onClicked: root.ctrl.guessBpmFromStroke()
+                    Row {
+                        spacing: 8
+                        FlowButton {
+                            objectName: "bpmFromStroke"
+                            text: qsTr("Guess from stroke")
+                            enabled: root.ctrl.hasScript
+                            onClicked: root.ctrl.guessBpmFromStroke()
+                        }
+                        FlowButton {
+                            objectName: "bpmFromAudio"
+                            text: qsTr("From audio")
+                            enabled: root.ctrl.videoName !== ""
+                            onClicked: root.ctrl.guessBpmFromAudio()
+                        }
                     }
-                    Note { text: qsTr("Beat lines on the curve (every 4th is a bar). Display only. Leave BPM blank to use the stroke's own tempo when the grid is on. Detecting BPM from the video sound comes later.") }
-                    Note { objectName: "bpmNote"; visible: root.ctrl.toolNote !== "" && root.ctrl.toolNote.indexOf("BPM") >= 0; text: root.ctrl.toolNote }
+                    Note { text: qsTr("Beat lines on the curve (every 4th is a bar). Display only. Leave BPM blank to use the stroke's own tempo when the grid is on. From audio measures the linked video's sound (first 10 min).") }
+                    Note { objectName: "bpmNote"; visible: root.ctrl.toolNote !== "" && (root.ctrl.toolNote.indexOf("BPM") >= 0 || root.ctrl.toolNote.indexOf("audio") >= 0 || root.ctrl.toolNote.indexOf("sound") >= 0); text: root.ctrl.toolNote }
                 }
                 Card {
                     title: qsTr("Audio Vibration")

@@ -290,6 +290,17 @@ private slots:
         QCOMPARE(c.fpsSnap(), 30.0);
     }
 
+    // 0.7 From audio BPM: needs a linked video; refuses cleanly without one.
+    void guessBpmFromAudioNeedsVideo() {
+        QTemporaryDir d;
+        const QString path = d.filePath("bpm.funscript");
+        writeFile(path, zigzag(21, 100));
+        PlayerController c;
+        QVERIFY(c.openScript(path));
+        QVERIFY(!c.guessBpmFromAudio());
+        QVERIFY(c.toolNote().contains("video") || c.lastError().contains("video"));
+    }
+
     // 0.7 Scene markers strip (pb.scenes): off by default in the Player.
     void showScenesDefaultsOffAndRemembers() {
         PlayerController c;

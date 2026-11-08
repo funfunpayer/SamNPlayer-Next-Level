@@ -29,6 +29,7 @@
 
 namespace samn::ui {
 
+class AudioLevelDecoder;
 class CurveItem;
 class HeatmapItem;
 
@@ -392,6 +393,10 @@ public:
     // Fill BPM from the open stroke's peak spacing and turn the grid on.
     // Returns the BPM set, or 0 with lastError / toolNote when unclear.
     Q_INVOKABLE double guessBpmFromStroke();
+    // 0.7 EstimatePlaybackAudioBPM / "From audio": decode the linked video's
+    // loudness (first 10 min), set BPM + grid. Async; returns false when it
+    // cannot start (no video / already busy). Result lands in toolNote.
+    Q_INVOKABLE bool guessBpmFromAudio();
     double capIntensity() const { return capIntensity_; }
     void setCapIntensity(double v);
     bool scaleSoftEdges() const { return scaleSoftEdges_; }
@@ -598,6 +603,7 @@ private:
     QTimer sleepTimer_;
     std::vector<QPointer<CurveItem>> curves_;
     QPointer<HeatmapItem> heatmap_;
+    AudioLevelDecoder* bpmAudio_ = nullptr;
 };
 
 }  // namespace samn::ui

@@ -18,9 +18,11 @@
 #include <iterator>
 
 #include "app_log.h"
+#include "audio_level.h"
 #include "curve_item.h"
 #include "device_controller.h"
 #include "qt_paths.h"
+#include "samn/audio_envelope.h"
 #include "samn/contact_preview.h"
 #include "samn/fileio.h"
 #include "samn/heatmap_image.h"
@@ -1621,6 +1623,46 @@ double PlayerController::guessBpmFromStroke() {
     emit toolNoteChanged();
     setError({});
     return bpm;
+}
+
+bool PlayerController::guessBpmFromAudio() {
+    if (videoPath_.isEmpty()) {
+        setError(tr("Link a video to measure BPM from its sound."));
+        toolNote_ = tr("No audio tempo: link a video first.");
+        emit toolNoteChanged();
+        return false;
+    }
+    if (!bpmAudio_) {
+        bpmAudio_ = new AudioLevelDecoder(this);
+        connect(bpmAudio_, &AudioLevelDecoder::finished, this, [this](const std::vector<double>& env) {
+            const double bpm = samn::EstimateBpmFromLoudness(env);
+            if (bpm <= 0) {
+                toolNote_ = tr("No clear beat in the sound.");
+                emit toolNoteChanged();
+                setError(tr("No clear beat in the sound."));
+                return;
+            }
+            setBpm(bpm);
+            setBpmGrid(true);
+            toolNote_ = tr("%1 BPM from audio.").arg(int(bpm));
+            emit toolNoteChanged();
+            setError({});
+        });
+        connect(bpmAudio_, &AudioLevelDecoder::failed, this, [this](const QString& error) {
+            toolNote_ = tr("No audio tempo: %1").arg(error);
+            emit toolNoteChanged();
+            setFailure(toolNote_);
+        });
+    }
+    if (bpmAudio_->busy()) {
+        setError(tr("Still measuring the sound…"));
+        return false;
+    }
+    toolNote_ = tr("Measuring BPM from the sound…");
+    emit toolNoteChanged();
+    setError({});
+    bpmAudio_->start(videoPath_);
+    return true;
 }
 
 bool PlayerController::attachVideo(const QString& pathOrUrl) {
