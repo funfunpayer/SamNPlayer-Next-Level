@@ -1047,7 +1047,15 @@ GlassCard {
                     }
                     Note { text: qsTr("Heatmap: click = seek, drag = mark. Wheel on the heatmap zooms. Curve edit below uses the marked range.") }
                 }
-                // Curve edit on the heatmap selection (0.7 Cap · Scale · Delete).
+                // Curve edit on the heatmap selection (0.7 Cap · Scale · Delete · Invert).
+                MessageDialog {
+                    id: invertAllDialog
+                    objectName: "curveInvertAllDialog"
+                    title: qsTr("Invert the curve?")
+                    text: qsTr("Invert the whole lane? There is no undo here — open the Editor if you need one.")
+                    buttons: MessageDialog.Ok | MessageDialog.Cancel
+                    onAccepted: root.ctrl.invertAll()
+                }
                 Card {
                     id: curveEdit
                     objectName: "curveEditCard"
@@ -1057,7 +1065,7 @@ GlassCard {
                         textFormat: Text.PlainText
                         width: parent.width
                         wrapMode: Text.WordWrap
-                        text: qsTr("Rewrite the picked lane inside the marked heatmap range. Stroke always; vibration/suction when the script carries those lanes.")
+                        text: qsTr("Rewrite the picked lane inside the marked heatmap range. Stroke always; vibration/suction when the script carries those lanes. Invert without a mark flips the whole lane.")
                         color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                     }
                     Row {
@@ -1114,8 +1122,17 @@ GlassCard {
                             enabled: root.ctrl.hasScript && root.ctrl.hasMarker
                             onClicked: root.ctrl.deleteSelection()
                         }
+                        FlowButton {
+                            objectName: "curveInvert"
+                            text: root.ctrl.hasMarker ? qsTr("Invert range") : qsTr("Invert all")
+                            enabled: root.ctrl.hasScript
+                            onClicked: {
+                                if (root.ctrl.hasMarker) root.ctrl.invertSelection()
+                                else invertAllDialog.open()
+                            }
+                        }
                     }
-                    Note { visible: !root.ctrl.hasMarker; text: qsTr("Mark a range on the heatmap first.") }
+                    Note { visible: !root.ctrl.hasMarker; text: qsTr("Mark a range for Cap / Scale / Delete. Invert all works without one.") }
                     Note { objectName: "curveEditNote"; visible: root.ctrl.toolNote !== ""; text: root.ctrl.toolNote }
                     FlowButton {
                         objectName: "editScriptFromCurve"
@@ -1194,7 +1211,7 @@ GlassCard {
                 }
                 Card {
                     title: qsTr("Full curve editing")
-                    Note { text: qsTr("Point drag, undo and scenes are in the Generator (the Editor). Cap / Softer / Stronger / Delete on a heatmap mark are under Curve edit above.") }
+                    Note { text: qsTr("Point drag, undo and scenes are in the Generator (the Editor). Cap / Softer / Stronger / Delete / Invert on a heatmap mark are under Curve edit above.") }
                     FlowButton { objectName: "editScript"; text: qsTr("Edit this script"); icon: "edit"; enabled: root.ctrl.hasScript; onClicked: root.editRequested(false) }
                 }
             }

@@ -807,13 +807,32 @@ bool PlayerController::deleteSelection() {
     return ok;
 }
 
+bool PlayerController::invertSelection() {
+    return applySelectionEdit(tr("Invert range"), [this](std::vector<samn::Action> a) {
+        for (auto& x : a)
+            if (x.at >= marker_.start_ms && x.at <= marker_.end_ms) x.pos = 100 - x.pos;
+        return a;
+    });
+}
+
+bool PlayerController::invertAll() {
+    return applySelectionEdit(
+        tr("Invert curve"),
+        [](std::vector<samn::Action> a) {
+            for (auto& x : a) x.pos = 100 - x.pos;
+            return a;
+        },
+        false);
+}
+
 bool PlayerController::applySelectionEdit(const QString& label,
-                                         const std::function<std::vector<samn::Action>(const std::vector<samn::Action>&)>& op) {
+                                         const std::function<std::vector<samn::Action>(const std::vector<samn::Action>&)>& op,
+                                         bool needMarker) {
     if (scriptPath_.isEmpty() || stroke_.size() < 2) {
         setError(tr("Open a script first."));
         return false;
     }
-    if (!hasMarker()) {
+    if (needMarker && !hasMarker()) {
         setError(tr("Mark a range on the heatmap first."));
         return false;
     }

@@ -2,9 +2,18 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-curve-edit-635a`: Player Cap/Scale/Delete on heatmap selection (rebasing onto main after #172 vision-bench). Stay off intensity-arc (#168).
+**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-curve-invert-635a`: Invert on Player Curve edit. #173 Cap/Scale/Delete merged. Stay off intensity-arc (#168).
 
-## Handover: `cursor/player-curve-edit-635a` (8 Nov, Player curve edit on mark)
+## Handover: `cursor/player-curve-invert-635a` (8 Nov, Player Invert on Curve edit)
+
+Owner: Player/Editor curves · optimize · align. Completes Curve edit after #173.
+
+- **Inspector → View → Curve edit:** Invert range (with mark) / Invert all (asks first, no undo in Player).
+- **C++:** `invertSelection` / `invertAll` via `applySelectionEdit` (`needMarker` flag).
+- **Tests:** `invertOnHeatmapSelectionAndAll`; `viewTabCurveEdit` covers Invert button.
+- **Stay off:** Claude #168 intensity arc.
+
+## Handover: `cursor/player-curve-edit-635a` (8 Nov, Player curve edit on mark) — merged #173
 
 Owner: Player/Editor curves · optimize · align. Cap / Softer / Stronger / Delete in the Player (PARITY §3.1).
 
