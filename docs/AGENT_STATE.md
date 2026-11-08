@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-curve-edit-635a`: Player Cap/Scale/Delete on heatmap selection. #171 Align bar merged. Stay off intensity-arc (#168) / vision-bench (#172).
+**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-curve-edit-635a`: Player Cap/Scale/Delete on heatmap selection (rebasing onto main after #172 vision-bench). Stay off intensity-arc (#168).
 
 ## Handover: `cursor/player-curve-edit-635a` (8 Nov, Player curve edit on mark)
 
@@ -10,8 +10,22 @@ Owner: Player/Editor curves · optimize · align. Cap / Softer / Stronger / Dele
 
 - **Inspector → View → Curve edit:** Cap slider (150–800, `playback.cap_intensity`), Soft edges, Speed-cap / Softer / Stronger / Delete on the heatmap mark; active script lane (stroke, or baked vib/suction).
 - **C++:** `PlayerController::{cap,scale,delete}Selection` via `range_edit.h`; rewrite+reload; Delete clears the mark.
+- **CI:** FetchContent for nlohmann/json uses shallow `GIT_TAG v3.11.3` (Releases `.tar.xz` was 504ing configure).
 - **Tests:** `curveEditOnHeatmapSelection`; `viewTabCurveEdit`.
-- **Stay off:** Claude #168 intensity arc / #172 vision bench.
+- **Stay off:** Claude #168 intensity arc. Vision-bench (#172) is on main — leave it alone.
+
+## Handover: `claude/samn2-vision-bench` (7 Nov, detection benchmark, measurement only) — merged #172
+
+Owner: the Generator's video detection must become cinema-grade accurate and lean, and every change is accepted or rejected by numbers. The harness comes first. **No engine behaviour was changed.**
+
+- **Tool:** `engine/tools/samn_bench.cpp`, target `samn_bench` (built with the project, not in ctest except `samn_bench_smoke`, about 10 s: `--quick --no-track --scenes clean --require-r 0.9`). It runs the real `Generate` (Recommended profile, no tip hint) on 17 fixed-seed synthetic scenes (`--list`): clean, pan Y, pan X, zoom, occlusion 0.5 / 2 / 4 s, blur, noise + JPEG, 30 % dropped frames, anti-phase and quarter-phase distractor, hard cut, lighting cut with a jump, fast 256x144, still disc, 300 s drift. Flags `--scenes`, `--out`, `--runs`, `--warmups`, `--quick`, `--no-track`, `--timing-only`, `--keep-clips`, `--require-r`. Output: `samn_bench.csv` (scene, metric, value), `samn_bench.md`, `clips/<scene>_truth.csv`. One process per scene on Linux, so the peak RSS (`wait4` rusage) is the scene's own; 0 elsewhere.
+- **Scenes:** `tests/engine/synthetic_scenes.h` (new, on the untouched `synthetic_clips.h`; the tool gets the include path). Synthetic only: moving discs and test patterns.
+- **Metrics:** 10 s windowed r (median, min, spread over runs) on the script and on the raw track (`track_r_*`), peak timing error (median, p95), extrema-count error, amplitude ratio, scene cuts found and false, lost share and loss precision / recall against the occlusion mask, jumps over 60 px, ms/frame (median of 5 after 3 warm-ups), RSS. Cuts, lost flags and jumps come from one extra untimed `TrackBox` run with the options `Generate` uses (`Generate` itself exposes none of them).
+- **Acceptance rule** (also in `--help` and the baseline doc): no scene's r drops by more than max(0.01, its 5-run spread); median r rises or median peak error falls by 2 ms or more; ms/frame up by at most 10 %, RSS by at most 10 %; before a default changes, the Owner gate through `samn_compare` on his private clips (numbers only).
+- **Baseline:** `docs/benchmarks/DETECTION_BASELINE_2026-11-06.md` + `.csv`; load averages and three timing repeats in it. Full run about 33 min. Findings: **pan X raw track r 0.797** (pan Y and clean 0.999): the 0.81 reproduces on the track, but the script r is 0.989 because the default detrend removes this slow pan; occlusion 2 s / 4 s r 0.77 / 0.72 with the lost flag exact; 30 % dropped frames give 4 false cuts; the lighting cut with a jump leaves the tracker lost for the whole second half (r 0.66); fast_small has half its frames flagged lost. ms/frame is about 22 to 37 here (unoptimised build) with up to 25 % spread between runs: time on a quiet machine, median of 3 or more.
+- **Next slices (each judged by this bench):** PR-2 full 2-D camera compensation (`camera_motion.cpp` returns only `t(1,2)`, `track_box.cpp` about line 456 shifts only ys; measured: pan clip Y stroke 0.888 -> 1.000 with compensation, X stroke 0.812 -> 0.812; the Owner's clip uses X; judge on `pan_x` track r); PR-3 forward-backward LK loss flag + confirmed scene cuts (drop30, light_cut_jump); PR-4 phase-locked periodic bridge (occlusion scenes); PR-5 sub-sample peaks (peak error vs the 40 ms frame); PR-6 FR-8 640 px downscale 90 -> 35 ms/frame. CPU / RAM: chunked label-tracking decode, `grab()` for skipped frames.
+- **Not done:** an automatic baseline-vs-candidate comparison of two CSVs (the rule is applied by hand); Windows (RSS 0 there, not built); real clips (Owner gate).
+
 
 ## Handover: `claude/samn2-playhead` (5 Nov, video playhead extrapolation) — merged #163
 
