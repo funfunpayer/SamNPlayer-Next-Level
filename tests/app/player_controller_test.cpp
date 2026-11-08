@@ -1055,13 +1055,18 @@ private slots:
         PlayerController c;
         c.reportMediaError(QMediaPlayer::NoError, QString());
         QVERIFY(c.lastError().isEmpty());
+        QVERIFY(!c.mediaError());
         c.reportMediaError(QMediaPlayer::FormatError, QStringLiteral("no decoder"));
         QVERIFY(c.lastError().contains(QStringLiteral("format not supported")));
         QVERIFY(c.lastError().contains(QStringLiteral("no decoder")));
+        QVERIFY(c.lastError().contains(QStringLiteral("cannot be played")));
+        QVERIFY(c.lastError().contains(QStringLiteral("Make playable")));
+        QVERIFY(c.mediaError());
         c.setPlaying(false);
         QVERIFY(!c.lastError().isEmpty());
         c.setPlaying(true);
         QVERIFY(c.lastError().isEmpty());
+        QVERIFY(!c.mediaError());  // cleared with the error text on play
         c.setPlaying(false);
         // A script error is not cleared by playing.
         QTemporaryDir d;

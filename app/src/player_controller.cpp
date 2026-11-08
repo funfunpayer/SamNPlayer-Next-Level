@@ -2334,6 +2334,7 @@ void PlayerController::reportMediaError(int error, const QString& detail) {
     QString msg = tr("Video cannot be played (%1)").arg(kind);
     if (!videoName().isEmpty()) msg += QStringLiteral(": ") + videoName();
     if (!detail.isEmpty()) msg += QStringLiteral(" ") + QChar(0x2014) + QStringLiteral(" ") + detail;
+    msg += tr(". “Make playable” creates an H.264 copy.");
     setFailure(msg);
     mediaError_ = true;
 }
@@ -2348,8 +2349,9 @@ void PlayerController::reportNoPicture(const QString& codec) {
     QString msg = codec.isEmpty() ? tr("No picture: this PC cannot decode the video")
                                   : tr("No picture: this PC cannot decode %1 video").arg(codec);
     if (!videoName().isEmpty()) msg += QStringLiteral(": ") + videoName();
-    msg += tr(". Convert to H.264 makes a copy that plays everywhere.");
+    msg += tr(". “Make playable” creates an H.264 copy that plays everywhere.");
     setFailure(msg);
+    mediaError_ = true;
 }
 
 bool PlayerController::videoPlayAutostart() const {

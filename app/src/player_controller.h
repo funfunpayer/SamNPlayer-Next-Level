@@ -54,6 +54,9 @@ class PlayerController : public QObject {
     Q_PROPERTY(int offsetMs READ offsetMs WRITE setOffsetMs NOTIFY offsetMsChanged)
     Q_PROPERTY(qint64 playheadMs READ playheadMs NOTIFY playheadMsChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
+    // True while lastError_ came from reportMediaError (offer Make playable).
+    Q_PROPERTY(bool mediaError READ mediaError NOTIFY lastErrorChanged)
+    Q_PROPERTY(qint64 videoDurationMs READ videoDurationMs NOTIFY videoChanged)
     // What the last script tool did (Bake offset), for the Script Tools card.
     Q_PROPERTY(QString toolNote READ toolNote NOTIFY toolNoteChanged)
     Q_PROPERTY(bool canUndoSoundCurve READ canUndoSoundCurve NOTIFY soundCurveChanged)
@@ -380,6 +383,8 @@ public:
     void setOffsetMs(int ms);
     qint64 playheadMs() const { return playheadMs_; }
     QString lastError() const { return lastError_; }
+    bool mediaError() const { return mediaError_; }
+    qint64 videoDurationMs() const { return videoDurationMs_; }
     QVariantList variants() const { return variants_; }
     int variantIndex() const { return variantIndex_; }
     QVariantList chapters() const;
