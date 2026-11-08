@@ -913,6 +913,19 @@ Item {
                     color: "white"; font.family: Theme.fontSoft; font.pixelSize: 13
                     visible: ctrl.videoName !== "" || page.scriptOnly
                 }
+                // 0.7 keys hint on the stage (playback.js chrome).
+                Text {
+                    id: keysHint
+                    objectName: "keysHint"
+                    textFormat: Text.PlainText
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: 14
+                    visible: !page.empty && !page.fullStage
+                    opacity: 0.55
+                    text: qsTr("Space play/pause · ←/→ seek · ,/. fine · +/- offset · E Extended-O · T theatre · Esc leave fullscreen")
+                    color: "white"; font.family: Theme.fontSoft; font.pixelSize: 11
+                }
             }
             VideoTransport {
                 id: transport
