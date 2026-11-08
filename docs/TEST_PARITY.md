@@ -368,7 +368,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 | `app_audio_level_test.go` | `TestSetPeakReduceStored` | todo-later | P2 (Reduce peaks): not ported. |
 | `app_audio_level_test.go` | `TestSetStrokeOutputStoresClampedRange` | covered | tests/app/playback_output_test.cpp `rangeKeepsTenPercentApart`, `outputChoicesAreRemembered` |
 | `app_audio_segments_test.go` | `TestLoadFunscriptExposesAudioCheckSegments`, `TestFillScriptInfoAudioCheckFromCompanion`, `TestFillScriptInfoAudioCheckNilSafe` | todo-later | P3.6 (audio check segments). |
-| `app_audio_vibration_test.go` | `TestAudioVibrationSettingSwapsVibrationOnly`, `TestAudioVibrationFallsBackToScript` | todo-later | P2/P3 (vibration from the video's sound swaps the vibration channel). |
+| `app_audio_vibration_test.go` | `TestAudioVibrationSettingSwapsVibrationOnly`, `TestAudioVibrationFallsBackToScript` | ported | `tests/app/player_controller_test.cpp` `audioVibrationDefaultsOffAndSwapsOnPlay` (injected envelope; no video / empty env keeps script). |
 | `app_autosync_test.go` | `TestEstimateSyncLagFindsDelay`, `TestEstimateSyncLagNoMatch`, `TestEstimateSyncLagPeriodicIsNotHigh`, `TestEstimateAudioSyncOffsetNeedsScriptAndVideo` | ported | `tests/core/audio_autosync_test.cpp` + Player `autoSyncNeedsScriptAndVideo`. |
 | `app_beatbar_test.go` | `TestCreateBeatBarScript` | todo-later | P3 (needs the video frame reader P3.0): `CreateBeatBarScript`; the pure parts `FindBeatBar`/`BeatStrokes` are ported. |
 | `app_benchmark_cancel_test.go` | `TestBenchmarkRunClaimCancel`, `TestBenchmarkRunClaimIsExclusive` | todo-later | P4 (Bench, Suite) / P3.8. |
