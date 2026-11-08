@@ -2027,11 +2027,46 @@ void PlayerController::setVideo(const QString& path) {
     mediaHead_.clear();
     mediaHead_.setDurationMs(0);
     clearPlayEnvelope();
+    refreshVideoLinkWarning(path);
     emit videoChanged();
     if (!path.isEmpty()) emit videoLinked(path);
     emit scriptChanged();  // noScriptForVideo depends on the video too
     if (audioVibration() && !path.isEmpty()) warmPlayAudio();
 }
+
+void PlayerController::refreshVideoLinkWarning(const QString& path) {
+    // Lightweight 0.7 ProbePlaybackVideo stand-in: container + name tags.
+    // Qt Multimedia plays more codecs than Chromium did; we still warn on
+    // mkv/avi and obvious HEVC/AV1 name tags before play fails.
+    QString warn;
+    bool suggest = false;
+    if (!path.isEmpty()) {
+        const QFileInfo fi(path);
+        const QString suf = fi.suffix().toLower();
+        const QString name = fi.fileName().toLower();
+        if (suf == QLatin1String("mkv") || suf == QLatin1String("avi")) {
+            warn = tr("Container often problematic in the player — H.264 MP4 copy recommended.");
+            suggest = true;
+        } else if (name.contains(QLatin1String("hevc")) || name.contains(QLatin1String("x265")) ||
+                   name.contains(QLatin1String("h265")) || name.contains(QLatin1String("av1"))) {
+            warn = tr("Codec hint in the file name — playback may fail.");
+            suggest = true;
+        }
+    }
+    if (warn == videoLinkWarning_ && suggest == videoLinkSuggestPlayable_) return;
+    videoLinkWarning_ = warn;
+    videoLinkSuggestPlayable_ = suggest;
+    emit videoLinkWarningChanged();
+}
+
+void PlayerController::clearVideoLinkWarning() {
+    if (videoLinkWarning_.isEmpty() && !videoLinkSuggestPlayable_) return;
+    videoLinkWarning_.clear();
+    videoLinkSuggestPlayable_ = false;
+    emit videoLinkWarningChanged();
+}
+
+void PlayerController::dismissVideoLinkWarning() { clearVideoLinkWarning(); }
 
 void PlayerController::setError(const QString& e) {
     mediaError_ = false;
@@ -2345,6 +2380,7 @@ void PlayerController::reportMediaError(int error, const QString& detail) {
 }
 
 void PlayerController::reportFirstPicture(const QString& codec) {
+    clearVideoLinkWarning();  // it played — drop the soft probe hint
     qInfo().noquote() << QStringLiteral("Video: first picture%1%2")
                              .arg(codec.isEmpty() ? QString() : QStringLiteral(" (%1)").arg(codec))
                              .arg(videoName().isEmpty() ? QString() : QStringLiteral(": ") + videoName());

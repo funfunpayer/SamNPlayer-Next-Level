@@ -2,9 +2,17 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-audio-vib-635a`: Live Audio vibration + Settings mirror (rebased on Mock #190). Stay off #168 / Speech-Hold.
+**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-probe-link-635a`: Probe-on-link warning box. Stay off #168 / Speech-Hold.
 
-## Handover: `cursor/player-audio-vib-635a` (8 Nov, Audio vibration)
+## Handover: `cursor/player-probe-link-635a` (8 Nov, Probe on link)
+
+Owner: finish Player/Editor GUI except Claude #168.
+
+- **Player:** soft `videoLinkWarning` on attach (mkv/avi / HEVC·AV1 name tags); amber bar + Make playable + Dismiss; cleared on first picture.
+- **Tests:** `videoLinkWarningOnProbeContainers`.
+- **Stay off:** Claude #168. Full ffprobe codec probe still optional later.
+
+## Handover: `cursor/player-audio-vib-635a` (8 Nov, Audio vibration) — merged #189
 
 Owner: finish Player/Editor GUI except Claude #168.
 
@@ -72,8 +80,6 @@ Owner: finish Player/Editor GUI except Claude #168.
 ## Still open (non-Claude, Player/Editor)
 
 - Speech-Hold / Feel segment strip + heatmap bands (needs `audio_check` segments)
-- Probe-on-link warning leftover (Make playable button ✅ on error / no-picture)
-- Live Audio vibration (PR #189 in flight)
 - Scene strip thumbnails in Player (markers done; thumbs Generator-side)
 
 ## Handover: `cursor/player-bpm-audio-635a` (8 Nov, BPM From audio) — merged #183

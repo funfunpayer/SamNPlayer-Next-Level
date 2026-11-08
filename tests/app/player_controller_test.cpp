@@ -1131,6 +1131,32 @@ private slots:
 
     // 0.7 0.5.41: a video decode failure names its class and the file, and
     // goes away once the video plays; other errors stay.
+    // 0.7 ProbePlaybackVideo (light): warn on mkv/avi / codec name tags.
+    void videoLinkWarningOnProbeContainers() {
+        QTemporaryDir d;
+        const QString script = d.filePath("probe.funscript");
+        writeFile(script, zigzag(11, 100));
+        writeFile(d.filePath("clip.mp4"), "x");
+        writeFile(d.filePath("clip.mkv"), "x");
+        writeFile(d.filePath("movie.hevc.mp4"), "x");
+        PlayerController c;
+        QVERIFY(c.openScript(script, d.filePath("clip.mp4")));
+        QVERIFY(c.videoLinkWarning().isEmpty());
+        QVERIFY(!c.videoLinkSuggestPlayable());
+
+        QVERIFY(c.attachVideo(d.filePath("clip.mkv")));
+        QVERIFY(c.videoLinkWarning().contains(QStringLiteral("Container")));
+        QVERIFY(c.videoLinkSuggestPlayable());
+        c.dismissVideoLinkWarning();
+        QVERIFY(c.videoLinkWarning().isEmpty());
+
+        QVERIFY(c.attachVideo(d.filePath("movie.hevc.mp4")));
+        QVERIFY(c.videoLinkWarning().contains(QStringLiteral("Codec")));
+        QVERIFY(c.videoLinkSuggestPlayable());
+        c.reportFirstPicture(QStringLiteral("hevc"));
+        QVERIFY(c.videoLinkWarning().isEmpty());  // first frame clears the soft hint
+    }
+
     void mediaErrorsAreReportedAndClearOnPlay() {
         PlayerController c;
         c.reportMediaError(QMediaPlayer::NoError, QString());

@@ -56,6 +56,10 @@ class PlayerController : public QObject {
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
     // True while lastError_ came from reportMediaError (offer Make playable).
     Q_PROPERTY(bool mediaError READ mediaError NOTIFY lastErrorChanged)
+    // Soft warning after linking a video that may not play (container/codec
+    // heuristics; 0.7 ProbePlaybackVideo). Distinct from lastError / toast.
+    Q_PROPERTY(QString videoLinkWarning READ videoLinkWarning NOTIFY videoLinkWarningChanged)
+    Q_PROPERTY(bool videoLinkSuggestPlayable READ videoLinkSuggestPlayable NOTIFY videoLinkWarningChanged)
     Q_PROPERTY(qint64 videoDurationMs READ videoDurationMs NOTIFY videoChanged)
     // What the last script tool did (Bake offset), for the Script Tools card.
     Q_PROPERTY(QString toolNote READ toolNote NOTIFY toolNoteChanged)
@@ -391,6 +395,9 @@ public:
     qint64 playheadMs() const { return playheadMs_; }
     QString lastError() const { return lastError_; }
     bool mediaError() const { return mediaError_; }
+    QString videoLinkWarning() const { return videoLinkWarning_; }
+    bool videoLinkSuggestPlayable() const { return videoLinkSuggestPlayable_; }
+    Q_INVOKABLE void dismissVideoLinkWarning();
     qint64 videoDurationMs() const { return videoDurationMs_; }
     QVariantList variants() const { return variants_; }
     int variantIndex() const { return variantIndex_; }
@@ -549,6 +556,7 @@ signals:
     void curveEditChanged();
     void playheadMsChanged();
     void lastErrorChanged();
+    void videoLinkWarningChanged();
     void variantsChanged();
     void scriptFoldersChanged();
     void autoCreateChanged();
@@ -624,6 +632,10 @@ private:
     int variantIndex_ = -1;
     QString scriptPath_, videoPath_, lastError_;
     bool mediaError_ = false;  // lastError_ came from reportMediaError
+    QString videoLinkWarning_;
+    bool videoLinkSuggestPlayable_ = false;
+    void refreshVideoLinkWarning(const QString& path);
+    void clearVideoLinkWarning();
     bool loadPlaylistCurrent();
     samn::Playlist playlist_;
     std::mt19937 rng_{std::random_device{}()};
