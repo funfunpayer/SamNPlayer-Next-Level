@@ -137,6 +137,22 @@ Item {
                             }
                             RowLayout {
                                 Layout.fillWidth: true
+                                enabled: root.player !== null
+                                Text {
+                                    textFormat: Text.PlainText
+                                    Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                    text: qsTr("Audio vibration — during Play, vibration follows the video's sound; suction stays on the script")
+                                    color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                                }
+                                HelpChip { key: "st-audio-vibration" }
+                                FlowToggle {
+                                    objectName: "st-audio-vibration"
+                                    checked: root.player ? root.player.audioVibration : false
+                                    onToggled: (c) => { if (root.player) root.player.audioVibration = c }
+                                }
+                            }
+                            RowLayout {
+                                Layout.fillWidth: true
                                 Text {
                                     textFormat: Text.PlainText
                                     Layout.fillWidth: true; wrapMode: Text.WordWrap

@@ -6,7 +6,9 @@
 #include <QPointer>
 #include <QUrl>
 #include <QVariantList>
+#include <QVariantMap>
 #include <QtQml/qqmlregistration.h>
+#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
@@ -27,6 +29,7 @@
 
 namespace samn::ui {
 
+class AudioLevelDecoder;
 class CurveItem;
 class HeatmapItem;
 
@@ -51,8 +54,22 @@ class PlayerController : public QObject {
     Q_PROPERTY(int offsetMs READ offsetMs WRITE setOffsetMs NOTIFY offsetMsChanged)
     Q_PROPERTY(qint64 playheadMs READ playheadMs NOTIFY playheadMsChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
+    // True while lastError_ came from reportMediaError (offer Make playable).
+    Q_PROPERTY(bool mediaError READ mediaError NOTIFY lastErrorChanged)
+    // Soft warning after linking a video that may not play (container/codec
+    // heuristics; 0.7 ProbePlaybackVideo). Distinct from lastError / toast.
+    Q_PROPERTY(QString videoLinkWarning READ videoLinkWarning NOTIFY videoLinkWarningChanged)
+    Q_PROPERTY(bool videoLinkSuggestPlayable READ videoLinkSuggestPlayable NOTIFY videoLinkWarningChanged)
+    Q_PROPERTY(qint64 videoDurationMs READ videoDurationMs NOTIFY videoChanged)
     // What the last script tool did (Bake offset), for the Script Tools card.
     Q_PROPERTY(QString toolNote READ toolNote NOTIFY toolNoteChanged)
+    Q_PROPERTY(bool canUndoSoundCurve READ canUndoSoundCurve NOTIFY soundCurveChanged)
+    Q_PROPERTY(int pendingSoundCurvePoints READ pendingSoundCurvePoints NOTIFY soundCurveChanged)
+    Q_PROPERTY(bool autoSyncBusy READ autoSyncBusy NOTIFY autoSyncChanged)
+    Q_PROPERTY(QString autoSyncNote READ autoSyncNote NOTIFY autoSyncChanged)
+    Q_PROPERTY(QString autoSyncConfidence READ autoSyncConfidence NOTIFY autoSyncChanged)
+    Q_PROPERTY(int autoSyncOffsetMs READ autoSyncOffsetMs NOTIFY autoSyncChanged)
+    Q_PROPERTY(bool autoSyncCanApply READ autoSyncCanApply NOTIFY autoSyncChanged)
     Q_PROPERTY(QVariantList variants READ variants NOTIFY variantsChanged)
     Q_PROPERTY(int variantIndex READ variantIndex NOTIFY variantsChanged)
     // Marks of the script ({name, startMs, endMs, label}, {name, timeMs,
@@ -108,6 +125,8 @@ class PlayerController : public QObject {
     Q_PROPERTY(int vibrationNow READ vibrationNow NOTIFY playheadMsChanged)
     // Audio Level lane under the curve (0.7: on by default, remembered).
     Q_PROPERTY(bool audioLane READ audioLane WRITE setAudioLane NOTIFY viewOptionsChanged)
+    // 0.7 Scene markers + thumbnails strip (pb.scenes); default off in Player.
+    Q_PROPERTY(bool showScenes READ showScenes WRITE setShowScenes NOTIFY viewOptionsChanged)
     // 0-100 position gauge on the video (0.7: on by default, remembered).
     Q_PROPERTY(bool posOverlay READ posOverlay WRITE setPosOverlay NOTIFY viewOptionsChanged)
     // The script's contact marks on the video (0.7 "Show contact areas", on
@@ -122,6 +141,15 @@ class PlayerController : public QObject {
     // partner polylines when the script recorded a path. Off by default.
     Q_PROPERTY(bool hasTrajectory READ hasTrajectory NOTIFY scriptChanged)
     Q_PROPERTY(bool trajectoryOverlay READ trajectoryOverlay WRITE setTrajectoryOverlay NOTIFY viewOptionsChanged)
+    // 0.7 "Video play starts device" (playback.video_play_autostart, default on).
+    Q_PROPERTY(bool videoPlayAutostart READ videoPlayAutostart WRITE setVideoPlayAutostart NOTIFY viewOptionsChanged)
+    // 0.7 "Audio vibration" (playback.audio_vibration, default off): at the next
+    // Play start, vibration follows video loudness; suction stays on the script.
+    Q_PROPERTY(bool audioVibration READ audioVibration WRITE setAudioVibration NOTIFY viewOptionsChanged)
+    Q_PROPERTY(bool audioVibrationReady READ audioVibrationReady NOTIFY audioVibrationReadyChanged)
+    // 0.7 "Mock (no device)" (playback.mock, default on): Play auto-connects the
+    // Mock transport when nothing is connected yet.
+    Q_PROPERTY(bool playbackMock READ playbackMock WRITE setPlaybackMock NOTIFY viewOptionsChanged)
     Q_PROPERTY(int suctionNow READ suctionNow NOTIFY playheadMsChanged)
     // The device the script plays on (one DeviceController for the app) and
     // what goes to it while playing (the stroke filter, safety range ...).
@@ -136,6 +164,9 @@ class PlayerController : public QObject {
     // vibration, 0.7 StartPlayback contactOn).
     Q_PROPERTY(bool contactControls READ contactControls NOTIFY mappedChanged)
     Q_PROPERTY(bool contactKnobsLive READ contactKnobsLive NOTIFY mappedChanged)
+    // Live Feel probe (0.7 PreviewContactVibration) for Sensitivity / Curve /
+    // Strength: {activePct, peak, hint, stroke, vib, peaks}.
+    Q_PROPERTY(QVariantMap contactFeelProbe READ contactFeelProbe NOTIFY mappedChanged)
     // Strength presets of an Emotion Script (.samn): the names and the one
     // in use ("" = none). Choosing one saves it in the file (0.7).
     Q_PROPERTY(QStringList strengthPresets READ strengthPresets NOTIFY mappedChanged)
@@ -151,6 +182,8 @@ class PlayerController : public QObject {
     // as read lanes, in the order surge, sway, twist, roll, pitch; with a
     // device connected only the axes it has. They also drive those axes.
     Q_PROPERTY(QStringList axisLanes READ axisLanes NOTIFY lanesChanged)
+    // Companion axes that have no file yet (0.7 "+ Axis…" picker).
+    Q_PROPERTY(QStringList missingAxisChoices READ missingAxisChoices NOTIFY lanesChanged)
     // 0.7 lane / legend selection: the axis the main curve shows (its lane
     // is bound to this; "stroke",
     // "vibration", "suction" or a companion axis), picked from laneChoices
@@ -275,8 +308,37 @@ public:
     // Sam Neo 2 (also contact recipe + baked vibration/suction). Rewrites the
     // file(s) and reloads — same core path as the Editor's Optimize for.
     Q_INVOKABLE QString optimizeFor(const QString& target);
-    // Write Neo vibration & suction lanes from the stroke into the .samn.
+    // Write Neo vibration & suction lanes from the stroke into the .samn
+    // (0.7 Bake feel channels / BakeNeoAxesOnLoaded).
     Q_INVOKABLE bool axesFromStroke();
+    // 0.7 Share for other apps: community .funscript (no Neo axes embedded).
+    // Empty dest → companion .funscript beside the open script. Path or "".
+    Q_INVOKABLE QString exportFunscript(const QString& destPath = {});
+    // 0.7 SaveContactSettings: write live contact on/off, Sensitivity and
+    // Curve into the Emotion Script recipe and reload.
+    Q_INVOKABLE bool saveContactToScript();
+    // 0.7 Drive select: "recipe" (contact path) or "axes" (baked vib/suction).
+    // Writes playbackSource into the Emotion Script and reloads.
+    Q_PROPERTY(QString playbackSource READ playbackSource NOTIFY mappedChanged)
+    Q_INVOKABLE bool setPlaybackSource(const QString& source);
+    // 0.7 Save Emotion Script: ensure a companion .samn and reload it.
+    Q_INVOKABLE QString saveAsEmotionScript();
+    // 0.7 CreateScriptAxis / "+ Axis…": create <stem>.<axis>.funscript centred
+    // at 50 over the stroke length; never overwrites. Path or "" with lastError.
+    Q_INVOKABLE QString createCompanionAxis(const QString& axis);
+    // Curve edit on the heatmap selection (0.7 Cap / Scale / Delete / Invert):
+    // rewrites the active script lane (stroke, or baked vibration/suction),
+    // saves and reloads. Cap/Scale/Delete and invertSelection need a mark;
+    // invertAll flips the whole lane (Player asks first in QML).
+    Q_PROPERTY(double capIntensity READ capIntensity WRITE setCapIntensity NOTIFY curveEditChanged)
+    Q_PROPERTY(bool scaleSoftEdges READ scaleSoftEdges WRITE setScaleSoftEdges NOTIFY curveEditChanged)
+    // 0.7 FPS-Snap: seeks land on frame boundaries when > 0 (0 = off).
+    Q_PROPERTY(double fpsSnap READ fpsSnap WRITE setFpsSnap NOTIFY curveEditChanged)
+    Q_INVOKABLE bool capSelection();
+    Q_INVOKABLE bool scaleSelection(double factor);
+    Q_INVOKABLE bool deleteSelection();
+    Q_INVOKABLE bool invertSelection();
+    Q_INVOKABLE bool invertAll();
     // 0.7 ExportScriptHeatmapPNG: "<script>.heatmap.png" beside the script,
     // 960 x 56 with chapter ticks. The path, or "" with lastError.
     Q_INVOKABLE QString exportHeatmapPng();
@@ -332,6 +394,11 @@ public:
     void setOffsetMs(int ms);
     qint64 playheadMs() const { return playheadMs_; }
     QString lastError() const { return lastError_; }
+    bool mediaError() const { return mediaError_; }
+    QString videoLinkWarning() const { return videoLinkWarning_; }
+    bool videoLinkSuggestPlayable() const { return videoLinkSuggestPlayable_; }
+    Q_INVOKABLE void dismissVideoLinkWarning();
+    qint64 videoDurationMs() const { return videoDurationMs_; }
     QVariantList variants() const { return variants_; }
     int variantIndex() const { return variantIndex_; }
     QVariantList chapters() const;
@@ -354,6 +421,33 @@ public:
     // Fill BPM from the open stroke's peak spacing and turn the grid on.
     // Returns the BPM set, or 0 with lastError / toolNote when unclear.
     Q_INVOKABLE double guessBpmFromStroke();
+    // 0.7 EstimatePlaybackAudioBPM / "From audio": decode the linked video's
+    // loudness (first 10 min), set BPM + grid. Async; returns false when it
+    // cannot start (no video / already busy). Result lands in toolNote.
+    Q_INVOKABLE bool guessBpmFromAudio();
+    // 0.7 Sound Curve: decode loudness → propose VibrationCurveFromSound;
+    // confirm writes the Vibration lane into the .samn (axes). Undo restores
+    // the previous vibration for this script (one step).
+    Q_INVOKABLE bool proposeSoundCurve();
+    Q_INVOKABLE bool confirmSoundCurve();
+    Q_INVOKABLE void cancelSoundCurve();
+    Q_INVOKABLE bool undoSoundCurve();
+    bool canUndoSoundCurve() const;
+    int pendingSoundCurvePoints() const { return int(pendingSoundCurve_.size()); }
+    // 0.7 Auto sync: correlate video loudness with stroke speed → suggest offset.
+    Q_INVOKABLE bool suggestAudioSync();
+    Q_INVOKABLE bool applyAudioSyncSuggestion();
+    bool autoSyncBusy() const { return autoSyncBusy_; }
+    QString autoSyncNote() const { return autoSyncNote_; }
+    QString autoSyncConfidence() const { return autoSyncConfidence_; }
+    int autoSyncOffsetMs() const { return autoSyncOffsetMs_; }
+    bool autoSyncCanApply() const;
+    double capIntensity() const { return capIntensity_; }
+    void setCapIntensity(double v);
+    bool scaleSoftEdges() const { return scaleSoftEdges_; }
+    void setScaleSoftEdges(bool on);
+    double fpsSnap() const { return fpsSnap_; }
+    void setFpsSnap(double fps);
     QStringList scriptFolders() const;
     bool hasMarker() const { return marker_.Valid(); }
     double markerStartMs() const { return double(marker_.start_ms); }
@@ -368,6 +462,8 @@ public:
     int vibrationNow() const;
     bool audioLane() const;
     void setAudioLane(bool on);
+    bool showScenes() const;
+    void setShowScenes(bool on);
     bool posOverlay() const;
     void setPosOverlay(bool on);
     QVariantMap contactMarks() const { return contactMarks_; }
@@ -376,6 +472,15 @@ public:
     bool hasTrajectory() const { return !tipPath_.empty() || !partnerPath_.empty(); }
     bool trajectoryOverlay() const;
     void setTrajectoryOverlay(bool on);
+    bool videoPlayAutostart() const;
+    void setVideoPlayAutostart(bool on);
+    bool audioVibration() const;
+    void setAudioVibration(bool on);
+    bool audioVibrationReady() const { return !playEnvelope_.empty(); }
+    // Tests: inject a loudness envelope without Qt Multimedia decode.
+    void setPlayAudioEnvelopeForTest(std::vector<double> envelope);
+    bool playbackMock() const;
+    void setPlaybackMock(bool on);
     // Tip / partner / extra place at a script time (the playhead) from the
     // recorded paths ({x, y} in video pixels), empty when no sample is near.
     Q_INVOKABLE QVariantMap tipAt(double scriptMs) const;
@@ -395,6 +500,8 @@ public:
     MappingSettings* mapping() { return &mapping_; }
     bool contactControls() const { return contactControls_; }
     bool contactKnobsLive() const { return contactKnobsLive_; }
+    QVariantMap contactFeelProbe() const;
+    QString playbackSource() const { return playbackSource_; }
     QStringList strengthPresets() const;
     QString activeStrength() const { return QString::fromStdString(activeStrength_); }
     void setActiveStrength(const QString& name);
@@ -402,6 +509,7 @@ public:
     bool showVibrationLane() const;
     bool showSuctionLane() const;
     QStringList axisLanes() const;
+    QStringList missingAxisChoices() const;
     QString activeLane() const { return activeLane_; }
     void setActiveLane(const QString& lane);
     QStringList laneChoices() const;
@@ -441,8 +549,14 @@ signals:
     void videoChanged();
     void offsetMsChanged();
     void toolNoteChanged();
+    // Sound Curve: proposed point count ready for the confirm dialog.
+    void soundCurveReady(int points);
+    void soundCurveChanged();
+    void autoSyncChanged();
+    void curveEditChanged();
     void playheadMsChanged();
     void lastErrorChanged();
+    void videoLinkWarningChanged();
     void variantsChanged();
     void scriptFoldersChanged();
     void autoCreateChanged();
@@ -452,6 +566,7 @@ signals:
     void marksChanged();
     void bpmChanged();
     void viewOptionsChanged();
+    void audioVibrationReadyChanged();
     // For the Library: a script was opened, a video linked, marks edited.
     void mappedChanged();
     void scriptOpened(const QString& path);
@@ -477,6 +592,11 @@ private:
     void setView(samn::ViewWindow v);
     void clearScript();
     void pushToViews();
+    // Cap / Scale / Delete / Invert for the active script lane.
+    // needMarker: Cap/Scale/Delete/invertSelection require a heatmap mark.
+    bool applySelectionEdit(const QString& label,
+                            const std::function<std::vector<samn::Action>(const std::vector<samn::Action>&)>& op,
+                            bool needMarker = true);
     // Maps the script with the settings (0.7 StartPlayback): the vibration
     // and suction lanes and what the device gets. `fresh`: a new script.
     void remap(bool fresh);
@@ -512,12 +632,17 @@ private:
     int variantIndex_ = -1;
     QString scriptPath_, videoPath_, lastError_;
     bool mediaError_ = false;  // lastError_ came from reportMediaError
+    QString videoLinkWarning_;
+    bool videoLinkSuggestPlayable_ = false;
+    void refreshVideoLinkWarning(const QString& path);
+    void clearVideoLinkWarning();
     bool loadPlaylistCurrent();
     samn::Playlist playlist_;
     std::mt19937 rng_{std::random_device{}()};
     int offsetMs_ = 0;
     QString toolNote_;
     bool vibrationFromScript_ = false, suctionFromScript_ = false;
+    QString playbackSource_ = QStringLiteral("recipe");
     std::map<std::string, std::vector<samn::Action>> axisActions_;
     QString activeLane_ = QStringLiteral("stroke");
     qint64 videoDurationMs_ = 0;
@@ -526,6 +651,9 @@ private:
     samn::RangeMarker marker_;
     double oMarkerIntensity_ = 0.5, bpm_ = 0;
     double scriptTempoBpm_ = 0;  // from stroke peaks when the script opens
+    double capIntensity_ = 400;
+    bool scaleSoftEdges_ = false;
+    double fpsSnap_ = 0;
     bool speedHL_ = true;
     double speedHLThresh_ = 400;
     bool bpmGrid_ = false;
@@ -539,6 +667,28 @@ private:
     QTimer sleepTimer_;
     std::vector<QPointer<CurveItem>> curves_;
     QPointer<HeatmapItem> heatmap_;
+    AudioLevelDecoder* bpmAudio_ = nullptr;
+    AudioLevelDecoder* soundCurveAudio_ = nullptr;
+    std::vector<samn::Action> pendingSoundCurve_;
+    // Previous vibration before the last Sound Curve write (may be empty).
+    std::optional<std::vector<samn::Action>> soundCurveUndo_;
+    QString soundCurveUndoPath_;
+    bool applyVibrationLane(std::vector<samn::Action> vibration, const QString& label, bool recordUndo);
+    AudioLevelDecoder* autoSyncAudio_ = nullptr;
+    bool autoSyncBusy_ = false;
+    QString autoSyncNote_;
+    QString autoSyncConfidence_ = QStringLiteral("none");
+    int autoSyncOffsetMs_ = 0;
+    void clearAutoSyncSuggestion();
+    AudioLevelDecoder* playAudio_ = nullptr;
+    std::vector<double> playEnvelope_;
+    bool audioVibApplied_ = false;
+    void ensurePlayAudioDecoder();
+    void warmPlayAudio();
+    void clearPlayEnvelope();
+    void applyLiveAudioVibrationIfReady();
+    void restoreScriptVibrationIfNeeded();
+    double activeVibrationScale() const;
 };
 
 }  // namespace samn::ui

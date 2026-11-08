@@ -100,3 +100,30 @@ TEST_CASE("TestBakeSoundVibrationWithContactKeepsScriptVibration") {
     for (const Action& p : soundOnly) CHECK(p.pos == 0);
     CHECK(samn::SoundVibrationLane({}, env, 0, samn::SoundVibrationMode::kSound).empty());
 }
+
+// Player Sound Curve (0.7): 250 ms averages, Δ≥4 or every 2 s, always last.
+TEST_CASE("VibrationCurveFromSound averages and decimates") {
+    CHECK(samn::VibrationCurveFromSound({}).empty());
+    CHECK(samn::VibrationCurveFromSound({1.0}).empty());  // one bucket → <2 points
+
+    // 5 s of silence then 5 s of full: 50 ms steps → 200 samples.
+    std::vector<double> env(200, 0.0);
+    std::fill(env.begin() + 100, env.end(), 1.0);
+    const auto lane = samn::VibrationCurveFromSound(env);
+    REQUIRE(lane.size() >= 2);
+    CHECK(lane.front().at == 0);
+    CHECK(lane.front().pos == 0);
+    CHECK(lane.back().at == 9750);  // last 250 ms bucket starts at 9750
+    CHECK(lane.back().pos == 100);
+    // Transition around 5 s must appear (Δ≥4).
+    bool saw_rise = false;
+    for (const Action& a : lane)
+        if (a.at >= 4500 && a.at <= 5500 && a.pos >= 90) saw_rise = true;
+    CHECK(saw_rise);
+
+    // Offset shifts script time (video − offset).
+    const auto shifted = samn::VibrationCurveFromSound(env, 50, 500);
+    REQUIRE(shifted.size() >= 2);
+    CHECK(shifted.front().at == 0);  // video 500 → script 0 (earlier buckets skipped)
+    CHECK(shifted.back().at == 9250);
+}

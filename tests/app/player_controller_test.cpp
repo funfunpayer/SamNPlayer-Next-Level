@@ -18,16 +18,19 @@
 
 #include "audio_level.h"
 #include "curve_item.h"
+#include "device_controller.h"
 #include "heatmap_item.h"
 #include "player_controller.h"
 #include "samn/marks.h"
 #include "samn/playback_mapping.h"
+#include "samn/range_edit.h"
 #include "samn/contact_marks.h"
 #include "samn/samn_file.h"
 #include "samn/settings.h"
 
 using samn::ui::AudioLevelDecoder;
 using samn::ui::CurveItem;
+using samn::ui::DeviceController;
 using samn::ui::HeatmapItem;
 using samn::ui::PlayerController;
 
@@ -229,6 +232,8 @@ private slots:
             QVERIFY(c.openScript(d.filePath("A.funscript")));
             c.setOffsetMs(25000);  // clamped to ±10 s
             QCOMPARE(c.offsetMs(), 10000);
+            c.setOffsetMs(-10001);
+            QCOMPARE(c.offsetMs(), -10000);
             c.setOffsetMs(300);
             c.setVideoPositionMs(5000);
             QCOMPARE(c.playheadMs(), qint64(4700));
@@ -241,6 +246,252 @@ private slots:
         QCOMPARE(c2.offsetMs(), 300);
         QVERIFY(c2.openScript(d.filePath("B.funscript")));
         QCOMPARE(c2.offsetMs(), 0);
+    }
+
+    void driveSourceAndEmotionScript() {
+        QTemporaryDir d;
+        const QString path = d.filePath("drive.funscript");
+        writeFile(path, zigzag(21, 100));
+        PlayerController c;
+        QVERIFY(c.openScript(path));
+        QCOMPARE(c.playbackSource(), QString("recipe"));
+        const QString samn = c.saveAsEmotionScript();
+        QVERIFY2(!samn.isEmpty(), qPrintable(c.lastError()));
+        QVERIFY(samn.endsWith(QStringLiteral(".samn")));
+        QVERIFY(c.toolNote().contains("Emotion Script saved"));
+        QVERIFY(c.setPlaybackSource("axes"));
+        QCOMPARE(c.playbackSource(), QString("axes"));
+        QVERIFY(c.toolNote().contains("Axes"));
+        QVERIFY(!c.contactKnobsLive());  // axes mode: contact path off
+        const samn::Document doc = samn::LoadDocument(std::filesystem::u8path(c.scriptPath().toStdString()));
+        QCOMPARE(doc.playback_source, std::string(samn::PlaybackAxes));
+        QVERIFY(doc.vibration.size() >= 2);
+        QVERIFY(c.setPlaybackSource("recipe"));
+        QCOMPARE(c.playbackSource(), QString("recipe"));
+    }
+
+    // 0.7 FPS-Snap: seeks land on frame boundaries; 0 = off; remembered.
+    void fpsSnapSeeksToFrameBoundaries() {
+        QTemporaryDir d;
+        const QString path = d.filePath("snap.funscript");
+        writeFile(path, zigzag(21, 100));
+        PlayerController c;
+        QVERIFY(c.openScript(path));
+        QCOMPARE(c.fpsSnap(), 0.0);
+        c.setVideoPositionMs(666);
+        QCOMPARE(c.playheadMs(), qint64(666));
+        c.setFpsSnap(25);
+        QCOMPARE(c.fpsSnap(), 25.0);
+        c.setVideoPositionMs(666);
+        // 25 fps → 40 ms frames; 666 → 680 (16.65 → 17 frames).
+        QCOMPARE(c.playheadMs(), qint64(samn::SnapMs(666, 25)));
+        c.setFpsSnap(0);
+        c.setVideoPositionMs(666);
+        QCOMPARE(c.playheadMs(), qint64(666));
+        c.setFpsSnap(30);
+        QCOMPARE(c.fpsSnap(), 30.0);
+    }
+
+    // 0.7 From audio BPM: needs a linked video; refuses cleanly without one.
+    void guessBpmFromAudioNeedsVideo() {
+        QTemporaryDir d;
+        const QString path = d.filePath("bpm.funscript");
+        writeFile(path, zigzag(21, 100));
+        PlayerController c;
+        QVERIFY(c.openScript(path));
+        QVERIFY(!c.guessBpmFromAudio());
+        QVERIFY(c.toolNote().contains("video") || c.lastError().contains("video"));
+    }
+
+    // 0.7 Auto sync: needs script + video; Apply sets offset from suggestion.
+    void autoSyncNeedsScriptAndVideo() {
+        QTemporaryDir d;
+        const QString path = d.filePath("sync.funscript");
+        writeFile(path, zigzag(21, 100));
+        PlayerController c;
+        QVERIFY(!c.suggestAudioSync());
+        QVERIFY(c.openScript(path));
+        QVERIFY(!c.suggestAudioSync());
+        QVERIFY(c.autoSyncNote().contains("video") || c.lastError().contains("video"));
+        QVERIFY(!c.autoSyncCanApply());
+        QVERIFY(!c.applyAudioSyncSuggestion());
+        // Synthetic suggestion path: set offset manually after a fake high-confidence state
+        // is not exposed; Apply with none stays false.
+        QCOMPARE(c.autoSyncConfidence(), QStringLiteral("none"));
+    }
+
+    // 0.7 Sound Curve: loudness → Vibration lane in the companion .samn.
+    void soundCurveWritesVibrationAndUndoes() {
+        QTemporaryDir d;
+        const QString path = d.filePath("sound.funscript");
+        writeFile(path, zigzag(41, 250));
+        PlayerController bare;
+        QVERIFY(bare.openScript(path));
+        QVERIFY(!bare.proposeSoundCurve());
+        QVERIFY(bare.lastError().contains("video") || bare.toolNote().contains("video"));
+
+        const QString wav = writeToneWav(d.path());
+        PlayerController c;
+        QVERIFY(c.openScript(path, wav));
+        QSignalSpy ready(&c, &PlayerController::soundCurveReady);
+        QVERIFY(c.proposeSoundCurve());
+        QTRY_VERIFY_WITH_TIMEOUT(ready.count() > 0 || c.toolNote().contains(QStringLiteral("short"))
+                                     || c.toolNote().startsWith(QStringLiteral("Sound Curve:")),
+                                 20000);
+        if (ready.isEmpty()) QSKIP("No readable sound track in this environment");
+        QVERIFY(c.pendingSoundCurvePoints() >= 2);
+        QVERIFY(c.confirmSoundCurve());
+        QVERIFY(c.toolNote().contains(QStringLiteral("Sound Curve")));
+        QVERIFY(c.canUndoSoundCurve());
+        const QString samnPath = d.filePath("sound.samn");
+        QVERIFY(QFileInfo::exists(samnPath));
+        const samn::Document doc = samn::LoadDocument(std::filesystem::u8path(samnPath.toStdString()));
+        QVERIFY(doc.vibration.size() >= 2);
+        QCOMPARE(QString::fromStdString(doc.playback_source), QStringLiteral("axes"));
+        QVERIFY(c.undoSoundCurve());
+        QVERIFY(!c.canUndoSoundCurve());
+        const samn::Document after = samn::LoadDocument(std::filesystem::u8path(samnPath.toStdString()));
+        QVERIFY(after.vibration.empty());
+    }
+
+    // 0.7 Scene markers strip (pb.scenes): off by default in the Player.
+    void showScenesDefaultsOffAndRemembers() {
+        PlayerController c;
+        QVERIFY(!c.showScenes());
+        QSignalSpy spy(&c, &PlayerController::viewOptionsChanged);
+        c.setShowScenes(true);
+        QVERIFY(c.showScenes());
+        QCOMPARE(spy.count(), 1);
+        c.setShowScenes(true);  // no-op
+        QCOMPARE(spy.count(), 1);
+        c.setShowScenes(false);
+        QVERIFY(!c.showScenes());
+        QCOMPARE(spy.count(), 2);
+    }
+
+    // 0.7 "Audio vibration" (playback.audio_vibration): live vib from loudness.
+    void audioVibrationDefaultsOffAndSwapsOnPlay() {
+        QTemporaryDir d;
+        const QString path = d.filePath("avib.funscript");
+        writeFile(path, zigzag(41, 100));
+        const QString wav = writeToneWav(d.path());
+        PlayerController c;
+        QVERIFY(c.openScript(path, wav));
+        QVERIFY(!c.audioVibration());
+        QVERIFY(!c.audioVibrationReady());
+
+        // Setting on without an envelope yet: Play keeps script vibration.
+        c.setAudioVibration(true);
+        QVERIFY(c.audioVibration());
+        c.setVideoPositionMs(0);
+        const int scriptVib = c.vibrationNow();
+        const int scriptSuc = c.suctionNow();
+        c.setPlayAudioEnvelopeForTest({});  // ignore warm race; force empty
+        QVERIFY(!c.audioVibrationReady());
+        c.setPlaying(true);
+        QCOMPARE(c.vibrationNow(), scriptVib);
+        QCOMPARE(c.suctionNow(), scriptSuc);
+        c.setPlaying(false);
+
+        // Inject silence→loud envelope — vibration follows; suction stays.
+        std::vector<double> env(80, 0.0);
+        for (size_t i = 40; i < env.size(); ++i) env[i] = 1.0;
+        c.setPlayAudioEnvelopeForTest(env);
+        QVERIFY(c.audioVibrationReady());
+        c.setVideoPositionMs(0);
+        c.setPlaying(true);
+        QCOMPARE(c.suctionNow(), scriptSuc);
+        QVERIFY(c.vibrationNow() <= 5);       // silent region
+        c.setVideoPositionMs(2500);           // loud region (~50 * 50 ms)
+        QVERIFY(c.vibrationNow() >= 90);
+        c.setPlaying(false);
+        c.setVideoPositionMs(0);
+        QCOMPARE(c.vibrationNow(), scriptVib);  // script lanes restored
+
+        PlayerController remembered;
+        QVERIFY(remembered.audioVibration());  // persisted
+        c.setAudioVibration(false);            // leave shared settings clean
+    }
+
+    // 0.7 "Mock (no device)" (playback.mock): Play auto-connects Mock.
+    void playbackMockDefaultsOnAndConnectsOnPlay() {
+        QTemporaryDir d;
+        const QString path = d.filePath("mock.funscript");
+        writeFile(path, zigzag(21, 100));
+        DeviceController dev;
+        PlayerController c;
+        c.setDevice(&dev);
+        QVERIFY(c.openScript(path));
+        QVERIFY(c.playbackMock());
+        QVERIFY(!dev.connected());
+        c.setPlaying(true);
+        QTRY_COMPARE_WITH_TIMEOUT(dev.state(), QStringLiteral("connected"), 5000);
+        QVERIFY(dev.isMock());
+        QVERIFY(c.output()->playing());
+        c.setPlaying(false);
+        c.setPlaybackMock(false);
+        QVERIFY(!c.playbackMock());
+        PlayerController remembered;
+        QVERIFY(!remembered.playbackMock());
+        // Off: Play does not auto-connect (disconnect first).
+        dev.disconnectDevice();
+        QTRY_COMPARE(dev.state(), QStringLiteral("disconnected"));
+        PlayerController off;
+        off.setDevice(&dev);
+        QVERIFY(off.openScript(path));
+        QVERIFY(!off.playbackMock());
+        off.setPlaying(true);
+        QVERIFY(!dev.connected());
+        QVERIFY(!dev.connecting());
+        off.setPlaying(false);
+        off.setPlaybackMock(true);  // leave shared settings at the 0.7 default
+    }
+
+    // 0.7 "Video play starts device" (playback.video_play_autostart).
+    void videoPlayAutostartDefaultsOnAndGatesDevice() {
+        QTemporaryDir d;
+        const QString path = d.filePath("auto.funscript");
+        writeFile(path, zigzag(21, 100));
+        PlayerController c;
+        QVERIFY(c.openScript(path));
+        QVERIFY(c.videoPlayAutostart());
+        c.setMediaPlaying(true);
+        QVERIFY(c.output()->playing());
+        c.setMediaPlaying(false);
+        QVERIFY(!c.output()->playing());
+        c.setVideoPlayAutostart(false);
+        QVERIFY(!c.videoPlayAutostart());
+        c.setMediaPlaying(true);
+        QVERIFY(!c.output()->playing());  // film without the toy
+        c.setPlaying(true);              // explicit script Play still drives
+        QVERIFY(c.output()->playing());
+        c.setPlaying(false);
+        PlayerController again;
+        QVERIFY(!again.videoPlayAutostart());  // remembered in this config dir
+    }
+
+    // 0.7 CreateScriptAxis / "+ Axis…": centred companion file, never overwrite.
+    void createCompanionAxisAddsLane() {
+        QTemporaryDir d;
+        const QString path = d.filePath("multi.funscript");
+        writeFile(path, zigzag(21, 100));
+        PlayerController c;
+        QVERIFY(c.openScript(path));
+        QCOMPARE(c.missingAxisChoices().size(), 5);
+        QVERIFY(!c.axisLanes().contains(QStringLiteral("surge")));
+        const QString created = c.createCompanionAxis(QStringLiteral("surge"));
+        QVERIFY2(!created.isEmpty(), qPrintable(c.lastError()));
+        QVERIFY(created.endsWith(QStringLiteral("multi.surge.funscript")));
+        QVERIFY(c.axisLanes().contains(QStringLiteral("surge")));
+        QCOMPARE(c.activeLane(), QStringLiteral("surge"));
+        QCOMPARE(c.missingAxisChoices().size(), 4);
+        const auto actions = samn::LoadFunscript(std::filesystem::u8path(created.toStdString())).actions;
+        QCOMPARE(actions.size(), size_t(2));
+        QCOMPARE(actions[0].pos, 50);
+        QCOMPARE(actions[1].pos, 50);
+        QCOMPARE(actions[1].at, int64_t(2000));
+        QVERIFY(c.createCompanionAxis(QStringLiteral("surge")).isEmpty());  // no overwrite
+        QVERIFY(c.lastError().contains("already exists") || c.toolNote().contains("Axis"));
     }
 
     void bakeOffsetWritesItIntoTheScript() {
@@ -455,10 +706,19 @@ private slots:
         QVERIFY(c.openScript(path));
         QVERIFY(c.axesFromStroke());
         QVERIFY(c.scriptPath().endsWith(QStringLiteral(".samn")));
-        QVERIFY(c.toolNote().contains("Vibration and suction"));
+        QVERIFY(c.toolNote().contains("Feel channels baked"));
         const samn::Document doc = samn::LoadDocument(std::filesystem::u8path(c.scriptPath().toStdString()));
         QVERIFY(doc.vibration.size() >= 2);
         QVERIFY(doc.suction.size() >= 2);
+
+        // Share for other apps: community .funscript beside the .samn.
+        const QString shared = c.exportFunscript();
+        QVERIFY2(!shared.isEmpty(), qPrintable(c.lastError()));
+        QCOMPARE(shared, d.filePath("axes.funscript"));
+        QVERIFY(c.toolNote().contains("Shared for other apps"));
+        const auto view = samn::LoadFunscript(std::filesystem::u8path(shared.toStdString()));
+        QVERIFY(view.actions.size() >= 2);
+        QVERIFY(!view.inverted);
     }
 
     void loopOverMarkedRange() {
@@ -606,6 +866,72 @@ private slots:
         // Grid preference is remembered.
         PlayerController again;
         QVERIFY(again.bpmGrid());
+    }
+
+    void curveEditOnHeatmapSelection() {
+        QTemporaryDir d;
+        const QString path = d.filePath("edit.funscript");
+        // Fast 0↔100 jumps (intensity 5000) so Cap at 150 stretches time.
+        writeFile(path, R"({"actions":[{"at":0,"pos":0},{"at":10,"pos":100},{"at":20,"pos":0},{"at":30,"pos":100},{"at":40,"pos":0}]})");
+        PlayerController c;
+        QVERIFY(c.openScript(path));
+        QCOMPARE(c.capIntensity(), 400.0);
+        QVERIFY(!c.capSelection());
+        QVERIFY(c.lastError().contains("Mark a range"));
+        c.setMarker(0, 40);
+        c.setCapIntensity(150);
+        QCOMPARE(c.capIntensity(), 150.0);
+        QVERIFY(c.capSelection());
+        QVERIFY(c.toolNote().contains("Cap speed"));
+        const auto capped = samn::LoadFunscript(std::filesystem::u8path(path.toStdString())).actions;
+        QVERIFY(capped.back().at > 40);
+        QCOMPARE(c.pointCount(), 5);
+
+        PlayerController s;
+        QVERIFY(s.openScript(path));
+        // Scale around mid points (still at original pos 100 / 0 after cap).
+        s.setMarker(capped[1].at - 1, capped[2].at + 1);
+        s.setScaleSoftEdges(false);
+        QVERIFY(s.scaleSelection(0.5));
+        const auto scaled = samn::LoadFunscript(std::filesystem::u8path(path.toStdString())).actions;
+        QCOMPARE(scaled[1].pos, 75);  // 100 -> 50 + 50*0.5
+        QCOMPARE(scaled[2].pos, 25);  // 0 -> 50 + (0-50)*0.5
+
+        PlayerController del;
+        QVERIFY(del.openScript(path));
+        const int before = del.pointCount();
+        del.setMarker(scaled[1].at - 1, scaled[2].at + 1);
+        QVERIFY(del.deleteSelection());
+        QVERIFY(del.pointCount() < before);
+        QVERIFY(!del.hasMarker());
+    }
+
+    void invertOnHeatmapSelectionAndAll() {
+        QTemporaryDir d;
+        const QString path = d.filePath("inv.funscript");
+        writeFile(path, R"({"actions":[{"at":0,"pos":10},{"at":1000,"pos":90},{"at":2000,"pos":20},{"at":3000,"pos":80}]})");
+        PlayerController range;
+        QVERIFY(range.openScript(path));
+        range.setMarker(500, 1500);
+        QVERIFY(range.invertSelection());
+        QVERIFY(range.toolNote().contains("Invert range"));
+        const auto mid = samn::LoadFunscript(std::filesystem::u8path(path.toStdString())).actions;
+        QCOMPARE(mid[0].pos, 10);
+        QCOMPARE(mid[1].pos, 10);  // 90 inverted
+        QCOMPARE(mid[2].pos, 20);
+        QCOMPARE(mid[3].pos, 80);
+        range.clearMarker();  // drop the sidecar so Invert all is exercised without a mark
+
+        PlayerController all;
+        QVERIFY(all.openScript(path));
+        QVERIFY(!all.hasMarker());
+        QVERIFY(all.invertAll());
+        QVERIFY(all.toolNote().contains("Invert curve"));
+        const auto flipped = samn::LoadFunscript(std::filesystem::u8path(path.toStdString())).actions;
+        QCOMPARE(flipped[0].pos, 90);
+        QCOMPARE(flipped[1].pos, 90);
+        QCOMPARE(flipped[2].pos, 80);
+        QCOMPARE(flipped[3].pos, 20);
     }
 
     void speedHighlights() {
@@ -805,17 +1131,48 @@ private slots:
 
     // 0.7 0.5.41: a video decode failure names its class and the file, and
     // goes away once the video plays; other errors stay.
+    // 0.7 ProbePlaybackVideo (light): warn on mkv/avi / codec name tags.
+    void videoLinkWarningOnProbeContainers() {
+        QTemporaryDir d;
+        const QString script = d.filePath("probe.funscript");
+        writeFile(script, zigzag(11, 100));
+        writeFile(d.filePath("clip.mp4"), "x");
+        writeFile(d.filePath("clip.mkv"), "x");
+        writeFile(d.filePath("movie.hevc.mp4"), "x");
+        PlayerController c;
+        QVERIFY(c.openScript(script, d.filePath("clip.mp4")));
+        QVERIFY(c.videoLinkWarning().isEmpty());
+        QVERIFY(!c.videoLinkSuggestPlayable());
+
+        QVERIFY(c.attachVideo(d.filePath("clip.mkv")));
+        QVERIFY(c.videoLinkWarning().contains(QStringLiteral("Container")));
+        QVERIFY(c.videoLinkSuggestPlayable());
+        c.dismissVideoLinkWarning();
+        QVERIFY(c.videoLinkWarning().isEmpty());
+
+        QVERIFY(c.attachVideo(d.filePath("movie.hevc.mp4")));
+        QVERIFY(c.videoLinkWarning().contains(QStringLiteral("Codec")));
+        QVERIFY(c.videoLinkSuggestPlayable());
+        c.reportFirstPicture(QStringLiteral("hevc"));
+        QVERIFY(c.videoLinkWarning().isEmpty());  // first frame clears the soft hint
+    }
+
     void mediaErrorsAreReportedAndClearOnPlay() {
         PlayerController c;
         c.reportMediaError(QMediaPlayer::NoError, QString());
         QVERIFY(c.lastError().isEmpty());
+        QVERIFY(!c.mediaError());
         c.reportMediaError(QMediaPlayer::FormatError, QStringLiteral("no decoder"));
         QVERIFY(c.lastError().contains(QStringLiteral("format not supported")));
         QVERIFY(c.lastError().contains(QStringLiteral("no decoder")));
+        QVERIFY(c.lastError().contains(QStringLiteral("cannot be played")));
+        QVERIFY(c.lastError().contains(QStringLiteral("Make playable")));
+        QVERIFY(c.mediaError());
         c.setPlaying(false);
         QVERIFY(!c.lastError().isEmpty());
         c.setPlaying(true);
         QVERIFY(c.lastError().isEmpty());
+        QVERIFY(!c.mediaError());  // cleared with the error text on play
         c.setPlaying(false);
         // A script error is not cleared by playing.
         QTemporaryDir d;
@@ -1049,11 +1406,23 @@ private slots:
         ch.contact_curve = std::string("peak");
         QCOMPARE(now(600), expectedAt(path, ch, 600));
         QVERIFY(now(600).first > full.first);
+        // Feel probe follows the live knobs; Save to script persists them.
+        const QVariantMap probe = c.contactFeelProbe();
+        QVERIFY(probe.value("activePct").toDouble() > 0);
+        QVERIFY(probe.value("stroke").toList().size() >= 2);
+        QVERIFY(c.saveContactToScript());
+        QVERIFY(c.toolNote().contains("Contact settings saved"));
+        QCOMPARE(c.mapping()->contactSpan(), 0.5);
+        QCOMPARE(c.mapping()->contactCurve(), QString("peak"));
+        const samn::Document saved = samn::LoadDocument(std::filesystem::u8path(c.scriptPath().toStdString()));
+        QVERIFY(saved.recipe.contact_vibration);
+        QCOMPARE(saved.recipe.contact_vibration_span, 0.5);
+        QCOMPARE(saved.recipe.contact_vibration_curve, std::string("peak"));
         m->setContactIntensity(0.25);
-        // A new script starts from its own recipe; the strength is kept.
-        QVERIFY(c.openPath(path));
-        QCOMPARE(m->contactSpan(), 0.75);
-        QCOMPARE(m->contactCurve(), QString("linear"));
+        // Reopen keeps the saved recipe; live strength is remembered.
+        QVERIFY(c.openPath(c.scriptPath()));
+        QCOMPARE(m->contactSpan(), 0.5);
+        QCOMPARE(m->contactCurve(), QString("peak"));
         QCOMPARE(m->contactIntensity(), 0.25);
         // A plain script has none; an axes script has the controls but the
         // knobs do not act (baked curves).

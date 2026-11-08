@@ -22,6 +22,15 @@ GlassCard {
     Behavior on width { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
     clip: true
 
+    function laneTitle(lane) {
+        return ({
+            stroke: qsTr("Stroke"), vibration: qsTr("Vibration"), suction: qsTr("Suction"),
+            surge: qsTr("Surge"), sway: qsTr("Sway"), twist: qsTr("Twist"),
+            roll: qsTr("Roll"), pitch: qsTr("Pitch")
+        })[lane] || lane
+    }
+    function axisTitle(axis) { return laneTitle(axis) }
+
     component Card: Rectangle {
         id: card
         default property alias content: body.data
@@ -147,7 +156,20 @@ GlassCard {
         width: 28; height: 28; radius: 14
         color: tg.containsMouse ? Qt.rgba(1, 1, 1, 0.08) : "transparent"
         Icon { anchors.centerIn: parent; name: root.collapsed ? "chevronLeft" : "chevronRight"; width: 16; height: 16; color: Theme.textDim }
-        MouseArea { id: tg; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.collapsed = !root.collapsed }
+        MouseArea {
+            id: tg
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: root.collapsed = !root.collapsed
+            HoverHandler { id: collapseHover }
+            ToolTipText {
+                shown: collapseHover.hovered
+                text: root.collapsed
+                      ? qsTr("Show Inspector — or press T for theatre (panels away)")
+                      : qsTr("Hide Inspector — bigger video (T = theatre, panels away)")
+            }
+        }
     }
     Text {
         textFormat: Text.PlainText
@@ -544,18 +566,65 @@ GlassCard {
                             onClicked: root.ctrl.bpmGrid = !root.ctrl.bpmGrid
                         }
                     }
-                    FlowButton {
-                        objectName: "bpmFromStroke"
-                        text: qsTr("Guess from stroke")
-                        enabled: root.ctrl.hasScript
-                        onClicked: root.ctrl.guessBpmFromStroke()
+                    Row {
+                        spacing: 8
+                        FlowButton {
+                            objectName: "bpmFromStroke"
+                            text: qsTr("Guess from stroke")
+                            enabled: root.ctrl.hasScript
+                            onClicked: root.ctrl.guessBpmFromStroke()
+                        }
+                        FlowButton {
+                            objectName: "bpmFromAudio"
+                            text: qsTr("From audio")
+                            enabled: root.ctrl.videoName !== ""
+                            onClicked: root.ctrl.guessBpmFromAudio()
+                        }
                     }
-                    Note { text: qsTr("Beat lines on the curve (every 4th is a bar). Display only. Leave BPM blank to use the stroke's own tempo when the grid is on. Detecting BPM from the video sound comes later.") }
-                    Note { objectName: "bpmNote"; visible: root.ctrl.toolNote !== "" && root.ctrl.toolNote.indexOf("BPM") >= 0; text: root.ctrl.toolNote }
+                    Note { text: qsTr("Beat lines on the curve (every 4th is a bar). Display only. Leave BPM blank to use the stroke's own tempo when the grid is on. From audio measures the linked video's sound (first 10 min).") }
+                    Note { objectName: "bpmNote"; visible: root.ctrl.toolNote !== "" && (root.ctrl.toolNote.indexOf("BPM") >= 0 || root.ctrl.toolNote.indexOf("audio") >= 0 || root.ctrl.toolNote.indexOf("sound") >= 0); text: root.ctrl.toolNote }
+                }
+                Card {
+                    title: qsTr("Sound Curve")
+                    help: "pb-aa-write"
+                    Note { text: qsTr("Write the video's loudness into the script as the Vibration curve (smoothed). Playback then uses axes mode. Undo restores the previous vibration for this script.") }
+                    Row {
+                        spacing: 8
+                        FlowButton {
+                            objectName: "soundCurveWriteInspector"
+                            text: qsTr("Sound curve")
+                            enabled: root.ctrl.hasScript && root.ctrl.videoName !== ""
+                            onClicked: root.ctrl.proposeSoundCurve()
+                        }
+                        FlowButton {
+                            objectName: "soundCurveUndoInspector"
+                            text: qsTr("Undo")
+                            visible: root.ctrl.canUndoSoundCurve
+                            onClicked: root.ctrl.undoSoundCurve()
+                        }
+                    }
+                    Note {
+                        objectName: "soundCurveNote"
+                        visible: root.ctrl.toolNote !== "" && root.ctrl.toolNote.indexOf("Sound") >= 0
+                        text: root.ctrl.toolNote
+                    }
                 }
                 Card {
                     title: qsTr("Audio Vibration")
-                    Note { text: qsTr("Vibration from the video's sound is written into the script in the Editor (\"Vibration from the sound\"). For Sam Neo 2 feel lanes from the stroke, use Playback → Adapt for device.") }
+                    help: "pb-audio-vibration"
+                    FlowButton {
+                        objectName: "pb-audio-vibration"
+                        text: qsTr("Audio vibration")
+                        checked: root.ctrl.audioVibration
+                        onClicked: root.ctrl.audioVibration = !root.ctrl.audioVibration
+                    }
+                    Note {
+                        text: root.ctrl.audioVibration
+                              ? (root.ctrl.audioVibrationReady
+                                 ? qsTr("On: at the next Play start, vibration follows the video's sound. Suction stays on the script. Files are not changed.")
+                                 : qsTr("On: reading the sound… Play keeps script vibration until the envelope is ready."))
+                              : qsTr("Off (default). For a denser bake into the file, use the Editor (“Vibration from the sound”).")
+                    }
                     FlowButton { objectName: "editForSound"; text: qsTr("Open in the Editor"); enabled: root.ctrl.hasScript; onClicked: root.editRequested(false) }
                 }
             }
@@ -596,20 +665,13 @@ GlassCard {
                         }
                     }
                     FlowButton {
-                        objectName: "adaptAxes"
-                        text: qsTr("Vibration & suction from stroke")
-                        icon: "effects"
-                        enabled: root.ctrl.hasScript
-                        onClicked: axesConfirm.open()
-                    }
-                    FlowButton {
                         objectName: "adaptEditTools"
                         text: qsTr("More tools in the Editor…")
                         icon: "edit"
                         enabled: root.ctrl.hasScript
                         onClicked: root.editRequested(false)
                     }
-                    Note { text: qsTr("Optimize saves into the script (and a .samn Emotion Script for Neo 2). Effects below stay live playback feel only.") }
+                    Note { text: qsTr("Optimize saves into the script (and a .samn Emotion Script for Neo 2). Bake & share below writes feel channels or a community .funscript. Effects stay live playback feel only.") }
                     Note { objectName: "adaptNote"; visible: root.ctrl.toolNote !== ""; text: root.ctrl.toolNote }
                     MessageDialog {
                         id: adaptConfirm
@@ -620,15 +682,49 @@ GlassCard {
                         buttons: MessageDialog.Ok | MessageDialog.Cancel
                         onAccepted: root.ctrl.optimizeFor(adapt.targets[adaptTarget.currentIndex])
                     }
+                }
+                // 0.7 Tools "Bake & share": bake Neo feel channels + community export.
+                Card {
+                    id: bakeShare
+                    objectName: "bakeShareCard"
+                    title: qsTr("Bake & share")
+                    help: "pb-bake-share"
+                    Text {
+                        textFormat: Text.PlainText
+                        width: parent.width
+                        wrapMode: Text.WordWrap
+                        text: qsTr("Bake writes Neo vibration and suction into the Emotion Script. Share exports a community .funscript other apps can open.")
+                        color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                    }
+                    FlowButton {
+                        objectName: "bakeFeelChannels"
+                        text: qsTr("Bake feel channels")
+                        icon: "effects"
+                        enabled: root.ctrl.hasScript
+                        onClicked: bakeFeelConfirm.open()
+                    }
+                    FlowButton {
+                        objectName: "shareForApps"
+                        text: qsTr("Share for other apps")
+                        icon: "download"
+                        enabled: root.ctrl.hasScript
+                        onClicked: {
+                            const path = root.ctrl.exportFunscript()
+                            if (path === "") root.projectStatus = root.ctrl.lastError
+                        }
+                    }
+                    Note { objectName: "bakeShareNote"; visible: root.ctrl.toolNote !== ""; text: root.ctrl.toolNote }
                     MessageDialog {
-                        id: axesConfirm
-                        title: qsTr("Vibration & suction")
+                        id: bakeFeelConfirm
+                        objectName: "bakeFeelConfirm"
+                        title: qsTr("Bake feel channels")
                         text: qsTr("Write vibration and suction lanes from the stroke into the Emotion Script (.samn) beside this file?")
                         buttons: MessageDialog.Ok | MessageDialog.Cancel
                         onAccepted: root.ctrl.axesFromStroke()
                     }
                 }
                 Card {
+                    id: scriptTools
                     title: qsTr("Script Tools")
                     help: "playback.script-offset"
                     Row {
@@ -654,7 +750,103 @@ GlassCard {
                             onAccepted: root.ctrl.bakeOffset()
                         }
                     }
-                    Note { text: qsTr("Positive: the script comes later. Saved per script. Bake writes it into the script's times (all channels, bookmarks and chapters), so other players get it too; the offset goes back to 0.") }
+                    Note { text: qsTr("Positive: the script comes later. Type a value (step 10 ms, ±10 000) or use ±50. Bake writes it into the script's times; the offset goes back to 0.") }
+                    Row {
+                        spacing: 8
+                        FlowButton {
+                            objectName: "autoSyncSuggest"
+                            text: root.ctrl.autoSyncBusy ? qsTr("Listening…") : qsTr("Auto sync")
+                            enabled: root.ctrl.hasScript && root.ctrl.videoName !== "" && !root.ctrl.autoSyncBusy
+                            onClicked: root.ctrl.suggestAudioSync()
+                        }
+                        FlowButton {
+                            objectName: "autoSyncApply"
+                            text: root.ctrl.autoSyncConfidence !== "none"
+                                  ? qsTr("Apply %1 ms").arg(root.ctrl.autoSyncOffsetMs >= 0
+                                        ? ("+" + root.ctrl.autoSyncOffsetMs)
+                                        : String(root.ctrl.autoSyncOffsetMs))
+                                  : qsTr("Apply")
+                            enabled: root.ctrl.autoSyncCanApply
+                            onClicked: root.ctrl.applyAudioSyncSuggestion()
+                        }
+                    }
+                    Note {
+                        objectName: "autoSyncNote"
+                        visible: root.ctrl.autoSyncNote !== ""
+                        text: root.ctrl.autoSyncNote
+                    }
+                    Note { text: qsTr("Auto sync compares the video's sound (first 10 min) with the stroke and suggests an offset. Apply only changes the offset here; Bake writes it into the script.") }
+                    Row {
+                        spacing: 8
+                        Text {
+                            textFormat: Text.PlainText
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 78
+                            text: qsTr("Curve")
+                            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                        }
+                        FlowCombo {
+                            objectName: "curveSelect"
+                            width: scriptTools.width - 24 - 86
+                            enabled: root.ctrl.hasScript && root.ctrl.laneChoices.length > 0
+                            model: root.ctrl.laneChoices.map((l) => root.laneTitle(l))
+                            currentIndex: Math.max(0, root.ctrl.laneChoices.indexOf(root.ctrl.activeLane))
+                            onActivated: (i) => root.ctrl.activeLane = root.ctrl.laneChoices[i]
+                        }
+                    }
+                    Row {
+                        spacing: 8
+                        Text {
+                            textFormat: Text.PlainText
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 78
+                            text: qsTr("+ Axis…")
+                            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                        }
+                        FlowCombo {
+                            objectName: "plusAxis"
+                            width: scriptTools.width - 24 - 86
+                            enabled: root.ctrl.hasScript && root.ctrl.missingAxisChoices.length > 0
+                            model: [qsTr("Choose axis…")].concat(root.ctrl.missingAxisChoices.map((a) => root.axisTitle(a)))
+                            currentIndex: 0
+                            onActivated: (i) => {
+                                if (i <= 0) return
+                                const axis = root.ctrl.missingAxisChoices[i - 1]
+                                const path = root.ctrl.createCompanionAxis(axis)
+                                currentIndex = 0
+                                if (path === "") root.projectStatus = root.ctrl.lastError
+                            }
+                        }
+                    }
+                    Row {
+                        spacing: 8
+                        Text {
+                            textFormat: Text.PlainText
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 78
+                            text: qsTr("Drive")
+                            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                        }
+                        FlowCombo {
+                            objectName: "driveSource"
+                            width: scriptTools.width - 24 - 86
+                            enabled: root.ctrl.hasScript
+                            model: [qsTr("Recipe"), qsTr("Axes")]
+                            currentIndex: root.ctrl.playbackSource === "axes" ? 1 : 0
+                            onActivated: (i) => root.ctrl.setPlaybackSource(i === 1 ? "axes" : "recipe")
+                        }
+                    }
+                    FlowButton {
+                        objectName: "saveEmotionScript"
+                        text: qsTr("Save Emotion Script")
+                        icon: "save"
+                        enabled: root.ctrl.hasScript
+                        onClicked: {
+                            const path = root.ctrl.saveAsEmotionScript()
+                            if (path === "") root.projectStatus = root.ctrl.lastError
+                        }
+                    }
+                    Note { text: qsTr("Curve picks the lane the main curve shows. + Axis… creates a centred companion file (surge/sway/twist/roll/pitch) beside the script. Drive Recipe/Axes and Save Emotion Script write the .samn.") }
                     Note { objectName: "bakeNote"; visible: root.ctrl.toolNote !== ""; text: root.ctrl.toolNote }
                 }
                 // Effects (0.7 Player Inspector → Effects and "Playback &
@@ -763,18 +955,20 @@ GlassCard {
                 Card {
                     id: contact
                     title: qsTr("Contact vibration & strength")
-                    visible: root.ctrl.contactControls || root.ctrl.strengthPresets.length > 0
+                    visible: (root.ctrl.contactControls && root.ctrl.playbackSource !== "axes") || root.ctrl.strengthPresets.length > 0
                     readonly property var mapping: root.ctrl.mapping
+                    readonly property var probe: root.ctrl.contactFeelProbe
+                    readonly property bool contactLive: root.ctrl.contactControls && root.ctrl.playbackSource !== "axes"
                     FlowButton {
                         objectName: "contactOff"
-                        visible: root.ctrl.contactControls
+                        visible: contact.contactLive
                         text: qsTr("Contact vibration off"); checked: contact.mapping.contactOff
                         onClicked: contact.mapping.contactOff = !contact.mapping.contactOff
                         HoverHandler { id: offHover }
                         ToolTipText { shown: offHover.hovered; text: qsTr("Turns off the contact vibration the script carries, without changing the file.") }
                     }
                     SliderRow {
-                        visible: root.ctrl.contactControls
+                        visible: contact.contactLive
                         label: qsTr("Strength")
                         help: "playback.contact-strength"
                         tip: qsTr("Live scaling of the contact vibration without rewriting the file. 1 = as created, 0 = off, up to 2 = stronger.")
@@ -783,17 +977,17 @@ GlassCard {
                         onPicked: (v) => contact.mapping.contactIntensity = Math.round(v * 20) / 20
                     }
                     SliderRow {
-                        visible: root.ctrl.contactControls
+                        visible: contact.contactLive
                         active: root.ctrl.contactKnobsLive
                         label: qsTr("Sensitivity")
                         help: "playback.sensitivity"
-                        tip: qsTr("Lower = the vibration starts earlier in the stroke. Starts from the script's recipe; not saved.")
+                        tip: qsTr("Lower = the vibration starts earlier in the stroke. Starts from the script's recipe; Save to script keeps it.")
                         from: 0.4; to: 0.95; value: contact.mapping.contactSpan
                         valueText: contact.mapping.contactSpan.toFixed(2)
                         onPicked: (v) => contact.mapping.contactSpan = Math.round(v * 20) / 20
                     }
                     Row {
-                        visible: root.ctrl.contactControls
+                        visible: contact.contactLive
                         spacing: 8
                         Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; width: 78; text: qsTr("Curve"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13 }
                         FlowCombo {
@@ -805,8 +999,107 @@ GlassCard {
                             onActivated: (i) => contact.mapping.contactCurve = contact.mapping.contactCurves[i]
                         }
                     }
+                    // 0.7 Contact feel probe: synthetic bounce through Sensitivity / Curve / Strength.
+                    Column {
+                        objectName: "contactFeelProbe"
+                        visible: contact.contactLive
+                        width: parent.width
+                        spacing: 4
+                        Row {
+                            spacing: 8
+                            width: parent.width
+                            Text {
+                                textFormat: Text.PlainText
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: qsTr("Feel probe")
+                                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                            HelpChip { key: "gen-feel-probe"; anchors.verticalCenter: parent.verticalCenter }
+                            Item { width: Math.max(0, parent.width - 200); height: 1 }
+                            Text {
+                                objectName: "playerFeelProbeActive"
+                                textFormat: Text.PlainText
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: qsTr("%1% active").arg(Math.round(contact.probe.activePct || 0))
+                                color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                            Text {
+                                objectName: "playerFeelProbePeak"
+                                textFormat: Text.PlainText
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: qsTr("peak %1").arg(Math.round(contact.probe.peak || 0))
+                                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                        }
+                        Canvas {
+                            id: playerFeelProbeCanvas
+                            objectName: "playerFeelProbeCanvas"
+                            width: parent.width
+                            height: 72
+                            property var probe: contact.probe
+                            onProbeChanged: requestPaint()
+                            onWidthChanged: requestPaint()
+                            onHeightChanged: requestPaint()
+                            onPaint: {
+                                const ctx = getContext("2d")
+                                ctx.reset()
+                                const w = width, h = height
+                                ctx.fillStyle = Qt.rgba(1, 1, 1, 0.04)
+                                ctx.fillRect(0, 0, w, h)
+                                const stroke = probe.stroke || []
+                                const vib = probe.vib || []
+                                const peaks = probe.peaks || []
+                                function poly(pts, color, width) {
+                                    if (pts.length < 2) return
+                                    ctx.beginPath()
+                                    ctx.strokeStyle = color
+                                    ctx.lineWidth = width
+                                    ctx.lineJoin = "round"
+                                    for (let i = 0; i < pts.length; ++i) {
+                                        const x = pts[i].x * w
+                                        const y = (1 - pts[i].y) * h
+                                        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
+                                    }
+                                    ctx.stroke()
+                                }
+                                poly(stroke, Theme.orange, 1.5)
+                                poly(vib, Theme.cyan, 1.75)
+                                ctx.fillStyle = Theme.cyan
+                                for (let i = 0; i < peaks.length; ++i) {
+                                    const x = peaks[i].x * w
+                                    const y = (1 - peaks[i].y) * h
+                                    ctx.beginPath()
+                                    ctx.arc(x, y, 2.5, 0, Math.PI * 2)
+                                    ctx.fill()
+                                }
+                            }
+                        }
+                        Text {
+                            objectName: "playerFeelProbeHint"
+                            width: parent.width
+                            textFormat: Text.PlainText
+                            wrapMode: Text.WordWrap
+                            text: contact.probe.hint || ""
+                            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11
+                        }
+                    }
+                    FlowButton {
+                        objectName: "saveContactToScript"
+                        visible: contact.contactLive
+                        text: qsTr("Save to script")
+                        icon: "save"
+                        enabled: root.ctrl.hasScript && root.ctrl.contactKnobsLive
+                        onClicked: root.ctrl.saveContactToScript()
+                        HoverHandler { id: saveContactHover }
+                        ToolTipText { shown: saveContactHover.hovered; text: qsTr("Write Contact on/off, Sensitivity and Curve into the Emotion Script recipe.") }
+                    }
                     Note {
-                        visible: root.ctrl.contactControls && !root.ctrl.contactKnobsLive
+                        objectName: "contactSaveNote"
+                        visible: root.ctrl.toolNote !== "" && root.ctrl.toolNote.indexOf("Contact settings") === 0
+                        text: root.ctrl.toolNote
+                    }
+                    Note {
+                        visible: contact.contactLive && !root.ctrl.contactKnobsLive
                         text: qsTr("Sensitivity and curve act when the script plays from its recipe with contact vibration on.")
                     }
                     Row {
@@ -984,6 +1277,14 @@ GlassCard {
                             onClicked: root.ctrl.audioLane = !root.ctrl.audioLane
                         }
                         FlowButton {
+                            objectName: "showScenes"
+                            text: qsTr("Scene markers"); checked: root.ctrl.showScenes
+                            onClicked: root.ctrl.showScenes = !root.ctrl.showScenes
+                        }
+                    }
+                    Row {
+                        spacing: 8
+                        FlowButton {
                             text: qsTr("0–100 on video"); checked: root.ctrl.posOverlay
                             onClicked: root.ctrl.posOverlay = !root.ctrl.posOverlay
                         }
@@ -1002,6 +1303,36 @@ GlassCard {
                         width: parent.width; wrapMode: Text.WordWrap
                         text: root.ctrl.contactMarks.hint !== undefined ? root.ctrl.contactMarks.hint : ""
                         color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 11
+                    }
+                    FlowButton {
+                        objectName: "videoPlayAutostart"
+                        text: qsTr("Video play starts device")
+                        checked: root.ctrl.videoPlayAutostart
+                        onClicked: root.ctrl.videoPlayAutostart = !root.ctrl.videoPlayAutostart
+                    }
+                    Note { text: qsTr("When off, the film can play without moving the toy. Script Play (no video) still starts the device.") }
+                    Row {
+                        spacing: 8
+                        FlowButton {
+                            objectName: "pb-audio-vibration-view"
+                            text: qsTr("Audio vibration")
+                            checked: root.ctrl.audioVibration
+                            onClicked: root.ctrl.audioVibration = !root.ctrl.audioVibration
+                        }
+                        HelpChip { key: "pb-audio-vibration"; anchors.verticalCenter: parent.verticalCenter }
+                    }
+                    Row {
+                        spacing: 8
+                        FlowButton {
+                            objectName: "pb-mock"
+                            text: qsTr("Mock (no device)")
+                            checked: root.ctrl.playbackMock
+                            onClicked: root.ctrl.playbackMock = !root.ctrl.playbackMock
+                        }
+                        HelpChip { key: "pb-mock"; anchors.verticalCenter: parent.verticalCenter }
+                    }
+                    Note {
+                        text: qsTr("On (default): Play connects a simulated device when nothing is connected. Off: connect a real toy in Devices first.")
                     }
                     // MT-Debug tip/partner path (0.7 Show tip path).
                     Row {
@@ -1045,7 +1376,125 @@ GlassCard {
                         }
                         Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; text: Math.round(root.ctrl.speedHighlightThresh); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
                     }
-                    Note { text: qsTr("Heatmap: click = seek, drag = mark. Wheel on the curve zooms.") }
+                    Note { text: qsTr("Heatmap: click = seek, drag = mark. Wheel on the heatmap zooms. Curve edit below uses the marked range.") }
+                }
+                // Curve edit on the heatmap selection (0.7 Cap · Scale · Delete · Invert).
+                MessageDialog {
+                    id: invertAllDialog
+                    objectName: "curveInvertAllDialog"
+                    title: qsTr("Invert the curve?")
+                    text: qsTr("Invert the whole lane? There is no undo here — open the Editor if you need one.")
+                    buttons: MessageDialog.Ok | MessageDialog.Cancel
+                    onAccepted: root.ctrl.invertAll()
+                }
+                Card {
+                    id: curveEdit
+                    objectName: "curveEditCard"
+                    title: qsTr("Curve edit")
+                    help: "playback.cap"
+                    Text {
+                        textFormat: Text.PlainText
+                        width: parent.width
+                        wrapMode: Text.WordWrap
+                        text: qsTr("Rewrite the picked lane inside the marked heatmap range. Stroke always; vibration/suction when the script carries those lanes. Invert without a mark flips the whole lane.")
+                        color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                    }
+                    Row {
+                        spacing: 8
+                        Text {
+                            textFormat: Text.PlainText
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 78
+                            text: qsTr("Cap")
+                            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                        }
+                        FlowSlider {
+                            objectName: "curveCapSlider"
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: curveEdit.width - 24 - 78 - 40
+                            from: 150; to: 800; value: root.ctrl.capIntensity
+                            onMoved: (v) => root.ctrl.capIntensity = Math.round(v / 25) * 25
+                        }
+                        Text {
+                            textFormat: Text.PlainText
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: Math.round(root.ctrl.capIntensity)
+                            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                        }
+                    }
+                    FlowButton {
+                        objectName: "curveCap"
+                        text: qsTr("Speed-cap selection")
+                        enabled: root.ctrl.hasScript && root.ctrl.hasMarker
+                        onClicked: root.ctrl.capSelection()
+                    }
+                    FlowButton {
+                        objectName: "curveSoftEdges"
+                        text: qsTr("Soft edges"); checked: root.ctrl.scaleSoftEdges
+                        onClicked: root.ctrl.scaleSoftEdges = !root.ctrl.scaleSoftEdges
+                    }
+                    Row {
+                        spacing: 8
+                        FlowButton {
+                            objectName: "curveSofter"
+                            text: qsTr("Softer")
+                            enabled: root.ctrl.hasScript && root.ctrl.hasMarker
+                            onClicked: root.ctrl.scaleSelection(0.8)
+                        }
+                        FlowButton {
+                            objectName: "curveStronger"
+                            text: qsTr("Stronger")
+                            enabled: root.ctrl.hasScript && root.ctrl.hasMarker
+                            onClicked: root.ctrl.scaleSelection(1.25)
+                        }
+                        FlowButton {
+                            objectName: "curveDelete"
+                            text: qsTr("Delete range")
+                            enabled: root.ctrl.hasScript && root.ctrl.hasMarker
+                            onClicked: root.ctrl.deleteSelection()
+                        }
+                        FlowButton {
+                            objectName: "curveInvert"
+                            text: root.ctrl.hasMarker ? qsTr("Invert range") : qsTr("Invert all")
+                            enabled: root.ctrl.hasScript
+                            onClicked: {
+                                if (root.ctrl.hasMarker) root.ctrl.invertSelection()
+                                else invertAllDialog.open()
+                            }
+                        }
+                    }
+                    Row {
+                        spacing: 8
+                        Text {
+                            textFormat: Text.PlainText
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 78
+                            text: qsTr("FPS-Snap")
+                            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                        }
+                        FlowSlider {
+                            objectName: "fpsSnap"
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: curveEdit.width - 24 - 78 - 48
+                            from: 0; to: 60; value: root.ctrl.fpsSnap
+                            onMoved: (v) => root.ctrl.fpsSnap = Math.round(v)
+                        }
+                        Text {
+                            textFormat: Text.PlainText
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: root.ctrl.fpsSnap > 0 ? qsTr("%1").arg(Math.round(root.ctrl.fpsSnap)) : qsTr("off")
+                            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                        }
+                    }
+                    Note { text: qsTr("Seeks snap to frame boundaries when FPS-Snap is on (0 = off).") }
+                    Note { visible: !root.ctrl.hasMarker; text: qsTr("Mark a range for Cap / Scale / Delete. Invert all works without one.") }
+                    Note { objectName: "curveEditNote"; visible: root.ctrl.toolNote !== ""; text: root.ctrl.toolNote }
+                    FlowButton {
+                        objectName: "editScriptFromCurve"
+                        text: qsTr("More editing in the Editor…"); icon: "edit"
+                        enabled: root.ctrl.hasScript
+                        onClicked: root.editRequested(false)
+                    }
                 }
                 // Project & heatmap export (0.7 Tools "Project & heatmap export").
                 Card {
@@ -1116,8 +1565,8 @@ GlassCard {
                     }
                 }
                 Card {
-                    title: qsTr("Curve editing")
-                    Note { text: qsTr("Points, range tools, undo and the scenes are edited in the Generator, which is the Editor.") }
+                    title: qsTr("Full curve editing")
+                    Note { text: qsTr("Point drag, undo and scenes are in the Generator (the Editor). Cap / Softer / Stronger / Delete / Invert on a heatmap mark are under Curve edit above.") }
                     FlowButton { objectName: "editScript"; text: qsTr("Edit this script"); icon: "edit"; enabled: root.ctrl.hasScript; onClicked: root.editRequested(false) }
                 }
             }

@@ -7,8 +7,10 @@
 #include <random>
 
 #include "samn/curve_geometry.h"
+#include "samn/funscript.h"
 #include "samn/marks.h"
 #include "samn/playback.h"
+#include "samn/samn_file.h"
 #include "samn/settings.h"
 
 namespace fs = std::filesystem;
@@ -88,6 +90,31 @@ TEST_CASE("companion axis scripts beside a script, in 0.7's order") {
     CHECK(got[1].first == "roll");
     // A .samn finds the same files.
     CHECK(companion_axis_files((t.path / "Clip.samn").string()).size() == 2);
+}
+
+TEST_CASE("create_companion_axis centres at 50 and never overwrites") {
+    TempDir t;
+    fs::path s = t.path / "Clip.funscript";
+    std::ofstream(s) << R"({"actions":[{"at":0,"pos":0},{"at":2000,"pos":100}]})";
+    CHECK(is_companion_axis("surge"));
+    CHECK_FALSE(is_companion_axis("lube"));
+    CHECK(companion_axis_path(s.string(), "surge") == (t.path / "Clip.surge.funscript").string());
+
+    std::string err;
+    auto created = create_companion_axis(s.string(), "surge", 2000, &err);
+    REQUIRE(created.has_value());
+    CHECK(*created == (t.path / "Clip.surge.funscript").string());
+    const auto got = LoadFunscript(fs::u8path(*created)).actions;
+    REQUIRE(got.size() == 2);
+    CHECK(got[0].at == 0);
+    CHECK(got[0].pos == 50);
+    CHECK(got[1].at == 2000);
+    CHECK(got[1].pos == 50);
+
+    err.clear();
+    CHECK_FALSE(create_companion_axis(s.string(), "surge", 2000, &err).has_value());
+    CHECK(err.find("already exists") != std::string::npos);
+    CHECK_FALSE(create_companion_axis(s.string(), "lube", 2000, &err).has_value());
 }
 
 TEST_CASE("offset saved per script") {

@@ -207,9 +207,13 @@ private slots:
                 if (!it) qWarning("no %s", name);
                 return it;
             };
-            for (const char* n : {"fxPreset", "fxName", "fxSave", "fxDelete", "syncMode", "contactOff", "contactCurve", "strengthPreset"}) {
+            for (const char* n : {"fxPreset", "fxName", "fxSave", "fxDelete", "syncMode", "contactOff",
+                                  "contactCurve", "strengthPreset", "contactFeelProbe", "saveContactToScript",
+                                  "playerFeelProbeCanvas"}) {
                 QVERIFY2(item(n) && item(n)->isVisible(), n);
             }
+            QVERIFY(item("saveContactToScript")->isEnabled());
+            QVERIFY(player->contactFeelProbe().value("activePct").toDouble() > 0);
             // Sync mode: the combo's choice reaches the controller.
             QVERIFY(QMetaObject::invokeMethod(item("syncMode"), "activated", Q_ARG(int, 5)));
             QCOMPARE(m->syncMode(), QString("suction_position"));
@@ -222,6 +226,8 @@ private slots:
             QVERIFY(item("contactCurve")->isEnabled());  // recipe mode with contact vibration
             QVERIFY(QMetaObject::invokeMethod(item("contactCurve"), "activated", Q_ARG(int, 2)));
             QCOMPARE(m->contactCurve(), QString("peak"));
+            QVERIFY(player->saveContactToScript());
+            QVERIFY(player->toolNote().contains("Contact settings saved"));
             QCOMPARE(item("strengthPreset")->property("currentIndex").toInt(), 2);  // —, soft, normal
             QVERIFY(QMetaObject::invokeMethod(item("strengthPreset"), "activated", Q_ARG(int, 3)));
             QCOMPARE(player->activeStrength(), QString("strong"));
@@ -291,17 +297,88 @@ private slots:
             auto* player = root->property("player").value<PlayerController*>();
             QVERIFY(player);
             QVERIFY(player->openPath(src));
-            for (const char* n : {"adaptCard", "adaptTarget", "adaptOptimize", "adaptAxes", "adaptEditTools"}) {
+            for (const char* n : {"adaptCard", "adaptTarget", "adaptOptimize", "adaptEditTools",
+                                  "bakeShareCard", "bakeFeelChannels", "shareForApps",
+                                  "driveSource", "saveEmotionScript", "offsetField", "offsetInput"}) {
                 auto* it = root->findChild<QQuickItem*>(n);
                 QVERIFY2(it && it->isVisible(), n);
             }
+            QCOMPARE(player->playbackSource(), QStringLiteral("recipe"));
+            QVERIFY(player->setPlaybackSource(QStringLiteral("axes")));
+            QTRY_COMPARE(root->findChild<QQuickItem*>("driveSource")->property("currentIndex").toInt(), 1);
             const QString msg = player->optimizeFor(QStringLiteral("neo2"));
             QVERIFY2(msg.startsWith("Neo 2 ready"), qPrintable(msg));
             QVERIFY(player->scriptPath().endsWith(QStringLiteral(".samn")));
             QTRY_VERIFY(root->findChild<QQuickItem*>("adaptNote")->isVisible());
             QCOMPARE(root->findChild<QQuickItem*>("adaptNote")->property("text").toString(), msg);
             QVERIFY(player->axesFromStroke());
+            QVERIFY(player->toolNote().contains("Feel channels baked"));
+            const QString shared = player->exportFunscript();
+            QVERIFY2(!shared.isEmpty(), qPrintable(player->lastError()));
+            QVERIFY(shared.endsWith(QStringLiteral(".funscript")));
+            QVERIFY(QFileInfo::exists(shared));
             QTest::qWait(50);
+        }
+        qInstallMessageHandler(g_previous);
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
+
+    // View tab: Curve edit card on the heatmap selection.
+    void viewTabCurveEdit() {
+        QTemporaryDir files;
+        const QString src = files.filePath("curve.funscript");
+        {
+            QFile f(src);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(R"({"actions":[{"at":0,"pos":10},{"at":1000,"pos":90},{"at":2000,"pos":10},{"at":3000,"pos":90},{"at":4000,"pos":10}]})");
+        }
+        g_messages.clear();
+        g_previous = qInstallMessageHandler(capture);
+        {
+            QQmlEngine engine;
+            engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
+            engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+            QQmlComponent comp(&engine);
+            comp.setData(R"(
+                import QtQuick
+                import SamN
+                Item {
+                    width: 360; height: 1700
+                    property alias player: pc
+                    DeviceController { id: dev }
+                    PlayerController { id: pc; device: dev }
+                    InspectorPanel { anchors.fill: parent; ctrl: pc; device: dev; tab: 3 }
+                })",
+                         QUrl("qrc:/test/WrapperCurveEdit.qml"));
+            QVERIFY2(comp.status() == QQmlComponent::Ready, qPrintable(comp.errorString()));
+            QQuickWindow window;
+            window.resize(360, 1700);
+            std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
+            QVERIFY(root);
+            root->setParentItem(window.contentItem());
+            window.show();
+            QVERIFY(QTest::qWaitForWindowExposed(&window));
+            auto* player = root->property("player").value<PlayerController*>();
+            QVERIFY(player);
+            QVERIFY(player->openPath(src));
+            for (const char* n : {"curveEditCard", "curveCap", "curveSoftEdges", "curveSofter",
+                                  "curveStronger", "curveDelete", "curveInvert"}) {
+                auto* it = root->findChild<QQuickItem*>(n);
+                QVERIFY2(it && it->isVisible(), n);
+            }
+            QVERIFY(!root->findChild<QQuickItem*>("curveCap")->isEnabled());
+            QVERIFY(!root->findChild<QQuickItem*>("curveSofter")->isEnabled());
+            QVERIFY(root->findChild<QQuickItem*>("curveInvert")->isEnabled());  // Invert all without mark
+            QCOMPARE(root->findChild<QQuickItem*>("curveInvert")->property("text").toString(),
+                     QStringLiteral("Invert all"));
+            QVERIFY(root->findChild<QQuickItem*>("curveSoftEdges")->isEnabled());  // preference only
+            player->setMarker(0, 4000);
+            QTRY_VERIFY(root->findChild<QQuickItem*>("curveCap")->isEnabled());
+            QTRY_COMPARE(root->findChild<QQuickItem*>("curveInvert")->property("text").toString(),
+                         QStringLiteral("Invert range"));
+            QVERIFY(player->invertSelection());
+            QTRY_VERIFY(root->findChild<QQuickItem*>("curveEditNote")->isVisible());
+            QVERIFY(player->toolNote().contains("Invert range"));
         }
         qInstallMessageHandler(g_previous);
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));

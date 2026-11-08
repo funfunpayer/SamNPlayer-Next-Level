@@ -18,14 +18,20 @@
 #include <iterator>
 
 #include "app_log.h"
+#include "audio_level.h"
 #include "curve_item.h"
 #include "device_controller.h"
 #include "qt_paths.h"
+#include "samn/audio_envelope.h"
+#include "samn/contact_preview.h"
 #include "samn/fileio.h"
 #include "samn/heatmap_image.h"
 #include "samn/improve.h"
 #include "samn/project.h"
+#include "samn/range_edit.h"
 #include "samn/script_quality.h"
+#include "samn/audio_autosync.h"
+#include "samn/sound_vibration.h"
 #include "heatmap_item.h"
 #include "samn/mapper.h"
 #include "samn/marks.h"
@@ -122,6 +128,17 @@ PlayerController::PlayerController(QObject* parent)
     playlist_.SetRepeat(flag("ui.player.playlist.repeat", false));
     if (flag("ui.player.playlist.shuffle", false)) playlist_.SetShuffle(true, rng_);
     bpmGrid_ = flag("playback.bpm_grid", false);
+    scaleSoftEdges_ = flag("playback.scale_soft_edges", false);
+    {
+        const auto v = settings().get("playback.cap_intensity", 400.0);
+        const double c = v.is_number() ? v.get<double>() : 400.0;
+        capIntensity_ = (std::isfinite(c) && c > 0) ? std::clamp(c, 150.0, 800.0) : 400.0;
+    }
+    {
+        const auto v = settings().get("playback.fps_snap", 0.0);
+        const double f = v.is_number() ? v.get<double>() : 0.0;
+        fpsSnap_ = (std::isfinite(f) && f > 0) ? std::clamp(f, 0.0, 240.0) : 0.0;
+    }
 }
 PlayerController::~PlayerController() = default;
 
@@ -180,9 +197,18 @@ QStringList PlayerController::axisLanes() const {
     if (stroke_.empty()) return out;
     const bool connected = device_ && device_->connected();
     const QStringList has = connected ? device_->axes() : QStringList{};
-    for (const char* axis : {"surge", "sway", "twist", "roll", "pitch"}) {
+    for (const char* axis : samn::kCompanionAxes) {
         const QString name = QString::fromLatin1(axis);
         if (axisActions_.count(axis) && (!connected || has.contains(name))) out << name;
+    }
+    return out;
+}
+
+QStringList PlayerController::missingAxisChoices() const {
+    QStringList out;
+    if (stroke_.empty()) return out;
+    for (const char* axis : samn::kCompanionAxes) {
+        if (!axisActions_.count(axis)) out << QString::fromLatin1(axis);
     }
     return out;
 }
@@ -739,7 +765,398 @@ bool PlayerController::axesFromStroke() {
     }
 
     if (!openScript(FromU8(samnPath.u8string()), videoPath_)) return false;
-    toolNote_ = tr("Vibration and suction written from the stroke.");
+    toolNote_ = tr("Feel channels baked · vibration and suction from the stroke.");
+    emit toolNoteChanged();
+    emit scriptEdited(scriptPath_);
+    return true;
+}
+
+QString PlayerController::exportFunscript(const QString& destPath) {
+    if (scriptPath_.isEmpty() || stroke_.size() < 2) {
+        setError(tr("Share: open a script with at least 2 stroke points first."));
+        return {};
+    }
+    namespace fs = std::filesystem;
+    const std::string openedU8 = U8(scriptPath_);
+    const fs::path opened = fs::u8path(openedU8);
+    const bool wasSamn = samn::IsSamnPath(openedU8);
+    const std::string companionU8 = wasSamn ? samn::CompanionFunscriptPath(openedU8) : openedU8;
+    const QString dest = toLocalPath(destPath.isEmpty() ? FromU8(companionU8) : destPath);
+    if (dest.isEmpty()) {
+        setError(tr("Share: no destination path."));
+        return {};
+    }
+    const fs::path out = fs::u8path(U8(dest));
+    try {
+        samn::Document doc;
+        if (wasSamn || fs::exists(fs::u8path(samn::CompanionSamnPath(companionU8)))) {
+            doc = samn::LoadDocument(wasSamn ? opened : fs::u8path(samn::CompanionSamnPath(companionU8)));
+        } else {
+            doc = samn::LoadFunscriptFile(opened);
+        }
+        if (doc.general.size() < 2) doc.general = stroke_;
+        doc.ExportFunscript(out);
+    } catch (const std::exception& e) {
+        setFailure(tr("Share: %1").arg(FromU8(e.what())));
+        return {};
+    }
+    toolNote_ = tr("Shared for other apps · %1").arg(QFileInfo(dest).fileName());
+    emit toolNoteChanged();
+    return dest;
+}
+
+QVariantMap PlayerController::contactFeelProbe() const {
+    const samn::ContactVibrationPreview p = samn::PreviewContactVibration(
+        mapping_.contactSpan(), mapping_.contactCurve().toStdString(), mapping_.contactIntensity());
+    QVariantList stroke, vib, peaks;
+    stroke.reserve(int(p.stroke.size()));
+    vib.reserve(int(p.vib.size()));
+    peaks.reserve(int(p.peaks.size()));
+    for (const auto& pt : p.stroke) stroke << QVariantMap{{"x", pt.x}, {"y", pt.y}};
+    for (const auto& pt : p.vib) vib << QVariantMap{{"x", pt.x}, {"y", pt.y}};
+    for (const auto& pt : p.peaks) peaks << QVariantMap{{"x", pt.x}, {"y", pt.y}};
+    return {{"activePct", p.active_pct},
+            {"peak", p.peak},
+            {"hint", QString::fromStdString(p.hint)},
+            {"stroke", stroke},
+            {"vib", vib},
+            {"peaks", peaks}};
+}
+
+bool PlayerController::saveContactToScript() {
+    if (scriptPath_.isEmpty() || stroke_.size() < 2) {
+        setError(tr("Open a script first."));
+        return false;
+    }
+    if (!contactControls_) {
+        setError(tr("This script has no contact vibration to save."));
+        return false;
+    }
+    namespace fs = std::filesystem;
+    const std::string openedU8 = U8(scriptPath_);
+    const fs::path opened = fs::u8path(openedU8);
+    const bool wasSamn = samn::IsSamnPath(openedU8);
+    const std::string funscriptU8 = wasSamn ? samn::CompanionFunscriptPath(openedU8) : openedU8;
+    const fs::path funscript = fs::u8path(funscriptU8);
+    const fs::path samnPath = fs::u8path(samn::CompanionSamnPath(funscriptU8));
+
+    try {
+        samn::Document doc;
+        if (wasSamn || fs::exists(samnPath)) {
+            doc = samn::LoadDocument(wasSamn ? opened : samnPath);
+        } else {
+            doc = samn::LoadFunscriptFile(funscript);
+        }
+        if (doc.general.size() < 2) doc.general = stroke_;
+        const bool on = !mapping_.contactOff();
+        doc.ApplyContactRecipe(on, mapping_.contactSpan(), mapping_.contactCurve().toStdString());
+        if (doc.version == 0) doc.version = samn::SamnCurrentVersion;
+        if (doc.kind.empty()) doc.kind = samn::SamnKind;
+        if (doc.creator.empty()) doc.creator = "SamNPlayer";
+        samn::SaveDocument(wasSamn ? opened : samnPath, doc);
+        if (fs::exists(funscript) || !wasSamn) doc.ExportFunscript(funscript);
+    } catch (const std::exception& e) {
+        setFailure(tr("Save contact: %1").arg(FromU8(e.what())));
+        return false;
+    }
+
+    const QString reload = wasSamn ? scriptPath_ : FromU8(samnPath.u8string());
+    if (!openScript(reload, videoPath_)) return false;
+    toolNote_ = tr("Contact settings saved to the script.");
+    emit toolNoteChanged();
+    emit scriptEdited(scriptPath_);
+    return true;
+}
+
+bool PlayerController::setPlaybackSource(const QString& sourceIn) {
+    if (scriptPath_.isEmpty() || stroke_.size() < 2) {
+        setError(tr("Open a script first."));
+        return false;
+    }
+    const std::string source = samn::NormalizePlaybackSource(U8(sourceIn));
+    if (QString::fromStdString(source) == playbackSource_ && samn::IsSamnPath(U8(scriptPath_))) {
+        toolNote_ = tr("Drive already set to %1.").arg(playbackSource_ == QLatin1String("axes") ? tr("Axes")
+                                                                                                 : tr("Recipe"));
+        emit toolNoteChanged();
+        return true;
+    }
+    namespace fs = std::filesystem;
+    const std::string openedU8 = U8(scriptPath_);
+    const fs::path opened = fs::u8path(openedU8);
+    const bool wasSamn = samn::IsSamnPath(openedU8);
+    const std::string funscriptU8 = wasSamn ? samn::CompanionFunscriptPath(openedU8) : openedU8;
+    const fs::path funscript = fs::u8path(funscriptU8);
+    const fs::path samnPath = fs::u8path(samn::CompanionSamnPath(funscriptU8));
+
+    try {
+        samn::Document doc;
+        if (wasSamn || fs::exists(samnPath)) {
+            doc = samn::LoadDocument(wasSamn ? opened : samnPath);
+        } else {
+            doc = samn::LoadFunscriptFile(funscript);
+        }
+        if (doc.general.size() < 2) doc.general = stroke_;
+        if (source == samn::PlaybackAxes && doc.vibration.size() < 2 && doc.suction.size() < 2) {
+            doc.BakeNeoAxes();
+        }
+        doc.playback_source = source;
+        doc.recipe.playback_source = source;
+        if (doc.version == 0) doc.version = samn::SamnCurrentVersion;
+        if (doc.kind.empty()) doc.kind = samn::SamnKind;
+        if (doc.creator.empty()) doc.creator = "SamNPlayer";
+        samn::SaveDocument(wasSamn ? opened : samnPath, doc);
+        if (fs::exists(funscript) || !wasSamn) doc.ExportFunscript(funscript);
+    } catch (const std::exception& e) {
+        setFailure(tr("Drive: %1").arg(FromU8(e.what())));
+        return false;
+    }
+
+    const QString reload = wasSamn ? scriptPath_ : FromU8(samnPath.u8string());
+    if (!openScript(reload, videoPath_)) return false;
+    toolNote_ = tr("Drive · %1").arg(playbackSource_ == QLatin1String("axes") ? tr("Axes") : tr("Recipe"));
+    emit toolNoteChanged();
+    emit scriptEdited(scriptPath_);
+    return true;
+}
+
+QString PlayerController::createCompanionAxis(const QString& axisIn) {
+    if (scriptPath_.isEmpty() || stroke_.size() < 2) {
+        setError(tr("Open a script with at least 2 stroke points first."));
+        return {};
+    }
+    const std::string axis = axisIn.toLower().toStdString();
+    if (!samn::is_companion_axis(axis)) {
+        setError(tr("Unknown axis: %1").arg(axisIn));
+        return {};
+    }
+    if (axisActions_.count(axis)) {
+        setError(tr("Axis file already exists."));
+        return {};
+    }
+    const int64_t duration = stroke_.back().at;
+    std::string err;
+    const auto created = samn::create_companion_axis(U8(scriptPath_), axis, duration, &err);
+    if (!created) {
+        setFailure(tr("+ Axis: %1").arg(FromU8(err.empty() ? "could not create" : err)));
+        return {};
+    }
+    try {
+        auto actions = samn::LoadFunscript(std::filesystem::u8path(*created)).actions;
+        if (actions.empty()) {
+            setFailure(tr("+ Axis: created file has no points."));
+            return {};
+        }
+        axisActions_[axis] = std::move(actions);
+    } catch (const std::exception& e) {
+        setFailure(tr("+ Axis: %1").arg(FromU8(e.what())));
+        return {};
+    }
+    emit lanesChanged();
+    pushToViews();
+    setActiveLane(QString::fromStdString(axis));
+    const QString path = FromU8(*created);
+    toolNote_ = tr("+ Axis · %1").arg(QFileInfo(path).fileName());
+    emit toolNoteChanged();
+    setError({});
+    return path;
+}
+
+QString PlayerController::saveAsEmotionScript() {
+    if (scriptPath_.isEmpty() || stroke_.size() < 2) {
+        setError(tr("Open a script first."));
+        return {};
+    }
+    namespace fs = std::filesystem;
+    const std::string openedU8 = U8(scriptPath_);
+    const fs::path opened = fs::u8path(openedU8);
+    const bool wasSamn = samn::IsSamnPath(openedU8);
+    const std::string funscriptU8 = wasSamn ? samn::CompanionFunscriptPath(openedU8) : openedU8;
+    const fs::path funscript = fs::u8path(funscriptU8);
+    const fs::path samnPath = fs::u8path(samn::CompanionSamnPath(funscriptU8));
+    const QString outPath = FromU8(samnPath.u8string());
+
+    try {
+        samn::Document doc;
+        if (wasSamn || fs::exists(samnPath)) {
+            doc = samn::LoadDocument(wasSamn ? opened : samnPath);
+        } else {
+            doc = samn::LoadFunscriptFile(funscript);
+        }
+        if (doc.general.size() < 2) doc.general = stroke_;
+        if (doc.version == 0) doc.version = samn::SamnCurrentVersion;
+        if (doc.kind.empty()) doc.kind = samn::SamnKind;
+        if (doc.creator.empty()) doc.creator = "SamNPlayer";
+        samn::SaveDocument(samnPath, doc);
+        if (fs::exists(funscript) || !wasSamn) doc.ExportFunscript(funscript);
+    } catch (const std::exception& e) {
+        setFailure(tr("Emotion Script: %1").arg(FromU8(e.what())));
+        return {};
+    }
+
+    if (!openScript(outPath, videoPath_)) return {};
+    toolNote_ = tr("Emotion Script saved · %1").arg(QFileInfo(outPath).fileName());
+    emit toolNoteChanged();
+    emit scriptEdited(scriptPath_);
+    return outPath;
+}
+
+void PlayerController::setCapIntensity(double v) {
+    v = (std::isfinite(v) && v > 0) ? std::clamp(v, 150.0, 800.0) : 400.0;
+    v = std::round(v / 25.0) * 25.0;
+    if (v == capIntensity_) return;
+    capIntensity_ = v;
+    try {
+        settings().set("playback.cap_intensity", capIntensity_);
+    } catch (const std::exception&) {
+    }
+    emit curveEditChanged();
+}
+
+void PlayerController::setScaleSoftEdges(bool on) {
+    if (on == scaleSoftEdges_) return;
+    scaleSoftEdges_ = on;
+    try {
+        settings().set("playback.scale_soft_edges", on);
+    } catch (const std::exception&) {
+    }
+    emit curveEditChanged();
+}
+
+void PlayerController::setFpsSnap(double fps) {
+    fps = std::isfinite(fps) ? std::clamp(fps, 0.0, 240.0) : 0.0;
+    if (fps == fpsSnap_) return;
+    fpsSnap_ = fps;
+    try {
+        settings().set("playback.fps_snap", fpsSnap_);
+    } catch (const std::exception&) {
+    }
+    emit curveEditChanged();
+}
+
+namespace {
+
+enum class EditLane { Stroke, Vibration, Suction };
+
+std::optional<EditLane> ParseEditLane(const QString& lane, bool vibFromScript, bool sucFromScript) {
+    if (lane == QLatin1String("stroke")) return EditLane::Stroke;
+    if (lane == QLatin1String("vibration") && vibFromScript) return EditLane::Vibration;
+    if (lane == QLatin1String("suction") && sucFromScript) return EditLane::Suction;
+    return std::nullopt;
+}
+
+}  // namespace
+
+bool PlayerController::capSelection() {
+    return applySelectionEdit(tr("Cap speed"), [this](const std::vector<samn::Action>& a) {
+        return samn::CapSpeedRange(a, marker_.start_ms, marker_.end_ms, capIntensity_);
+    });
+}
+
+bool PlayerController::scaleSelection(double factor) {
+    return applySelectionEdit(tr("Scale range"), [this, factor](const std::vector<samn::Action>& a) {
+        return samn::ScaleRangePosFade(a, marker_.start_ms, marker_.end_ms, factor, scaleSoftEdges_);
+    });
+}
+
+bool PlayerController::deleteSelection() {
+    const bool ok = applySelectionEdit(tr("Delete range"), [this](const std::vector<samn::Action>& a) {
+        return samn::DeleteRange(a, marker_.start_ms, marker_.end_ms);
+    });
+    if (ok) clearMarker();
+    return ok;
+}
+
+bool PlayerController::invertSelection() {
+    return applySelectionEdit(tr("Invert range"), [this](std::vector<samn::Action> a) {
+        for (auto& x : a)
+            if (x.at >= marker_.start_ms && x.at <= marker_.end_ms) x.pos = 100 - x.pos;
+        return a;
+    });
+}
+
+bool PlayerController::invertAll() {
+    return applySelectionEdit(
+        tr("Invert curve"),
+        [](std::vector<samn::Action> a) {
+            for (auto& x : a) x.pos = 100 - x.pos;
+            return a;
+        },
+        false);
+}
+
+bool PlayerController::applySelectionEdit(const QString& label,
+                                         const std::function<std::vector<samn::Action>(const std::vector<samn::Action>&)>& op,
+                                         bool needMarker) {
+    if (scriptPath_.isEmpty() || stroke_.size() < 2) {
+        setError(tr("Open a script first."));
+        return false;
+    }
+    if (needMarker && !hasMarker()) {
+        setError(tr("Mark a range on the heatmap first."));
+        return false;
+    }
+    const auto lane = ParseEditLane(activeLane_, vibrationFromScript_, suctionFromScript_);
+    if (!lane) {
+        setError(tr("Pick the Stroke lane, or Adapt for Sam Neo 2 so vibration/suction are in the script."));
+        return false;
+    }
+
+    namespace fs = std::filesystem;
+    const std::string openedU8 = U8(scriptPath_);
+    const fs::path opened = fs::u8path(openedU8);
+    const bool wasSamn = samn::IsSamnPath(openedU8);
+    const std::string funscriptU8 = wasSamn ? samn::CompanionFunscriptPath(openedU8) : openedU8;
+    const fs::path funscript = fs::u8path(funscriptU8);
+    const fs::path samnPath = fs::u8path(samn::CompanionSamnPath(funscriptU8));
+
+    try {
+        samn::Document doc;
+        if (wasSamn || fs::exists(samnPath)) {
+            doc = samn::LoadDocument(wasSamn ? opened : samnPath);
+        } else {
+            doc = samn::LoadFunscriptFile(funscript);
+        }
+        if (doc.general.size() < 2) doc.general = stroke_;
+
+        std::vector<samn::Action>* target = &doc.general;
+        if (*lane == EditLane::Vibration) target = &doc.vibration;
+        else if (*lane == EditLane::Suction) target = &doc.suction;
+        if (target->size() < 2) {
+            setError(tr("%1: the lane has too few points.").arg(label));
+            return false;
+        }
+        *target = op(*target);
+
+        if (*lane == EditLane::Stroke) {
+            if (fs::exists(funscript)) samn::PatchActions(funscript, doc.general);
+            if (wasSamn || fs::exists(samnPath)) {
+                if (doc.version == 0) doc.version = samn::SamnCurrentVersion;
+                if (doc.kind.empty()) doc.kind = samn::SamnKind;
+                samn::SaveDocument(wasSamn ? opened : samnPath, doc);
+            } else if (!fs::exists(funscript)) {
+                samn::SaveDocument(opened, doc);
+            }
+        } else {
+            if (doc.version == 0) doc.version = samn::SamnCurrentVersion;
+            if (doc.kind.empty()) doc.kind = samn::SamnKind;
+            const char* source = samn::PlaybackAxes;
+            doc.playback_source = source;
+            doc.recipe.playback_source = source;
+            samn::SaveDocument(samnPath, doc);
+        }
+    } catch (const std::exception& e) {
+        setFailure(tr("%1: %2").arg(label, FromU8(e.what())));
+        return false;
+    }
+
+    const QString laneTitle = *lane == EditLane::Stroke       ? tr("Stroke")
+                              : *lane == EditLane::Vibration ? tr("Vibration")
+                                                             : tr("Suction");
+    const QString reload = (wasSamn || fs::exists(samnPath) || *lane != EditLane::Stroke)
+                               ? FromU8(samnPath.u8string())
+                               : scriptPath_;
+    if (!openScript(reload, videoPath_)) return false;
+    toolNote_ = tr("%1 · %2").arg(label, laneTitle);
     emit toolNoteChanged();
     emit scriptEdited(scriptPath_);
     return true;
@@ -748,6 +1165,18 @@ bool PlayerController::axesFromStroke() {
 bool PlayerController::openScript(const QString& pathIn, const QString& videoIn) {
     // A .samn beside a .funscript of the same name wins (as in 0.7).
     const QString path = FromU8(samn::PreferSamnCompanion(U8(toLocalPath(pathIn))));
+    clearAutoSyncSuggestion();
+    {
+        const std::string opened = U8(path);
+        const std::string fun = samn::IsSamnPath(opened) ? samn::CompanionFunscriptPath(opened) : opened;
+        const QString key = FromU8(samn::CompanionSamnPath(fun));
+        if (!soundCurveUndoPath_.isEmpty() && key != soundCurveUndoPath_) {
+            soundCurveUndo_.reset();
+            soundCurveUndoPath_.clear();
+        }
+        if (!pendingSoundCurve_.empty()) pendingSoundCurve_.clear();
+        emit soundCurveChanged();
+    }
     samn::Document doc;
     try {
         doc = samn::IsSamnPath(U8(path)) ? samn::LoadDocument(std::filesystem::u8path(U8(path)))
@@ -788,6 +1217,7 @@ bool PlayerController::openScript(const QString& pathIn, const QString& videoIn)
     } catch (const std::exception&) {
     }
     profile_ = doc.profile;
+    playbackSource_ = QString::fromStdString(samn::NormalizePlaybackSource(doc.playback_source));
     recipeHasContact_ = doc.recipe.contact_vibration;
     contactMarks_ = doc.contact_marks && (samn::HasAnyArea(*doc.contact_marks) || !doc.contact_marks->tip_class.empty())
                         ? MarksInfo(*doc.contact_marks, doc.trajectory)
@@ -893,6 +1323,7 @@ void PlayerController::remap(bool fresh) {
     // these frames), on the device tick.
     vibration_ = laneFrom(frames, false);
     suction_ = laneFrom(frames, true);
+    audioVibApplied_ = false;
     if (fresh)
         output_.setScript(stroke_, vibration_, suction_, axisActions_);
     else
@@ -906,6 +1337,8 @@ void PlayerController::remap(bool fresh) {
                 c->setActions(c->lane() == QLatin1String("vibration") ? vibration_ : suction_);
         emit playheadMsChanged();  // the live values at the playhead
     }
+    // Live audio vibration: re-apply after a mid-play remap when ready.
+    if (output_.playing()) applyLiveAudioVibrationIfReady();
 }
 
 QStringList PlayerController::strengthPresets() const {
@@ -1209,6 +1642,281 @@ double PlayerController::guessBpmFromStroke() {
     return bpm;
 }
 
+bool PlayerController::guessBpmFromAudio() {
+    if (videoPath_.isEmpty()) {
+        setError(tr("Link a video to measure BPM from its sound."));
+        toolNote_ = tr("No audio tempo: link a video first.");
+        emit toolNoteChanged();
+        return false;
+    }
+    if (!bpmAudio_) {
+        bpmAudio_ = new AudioLevelDecoder(this);
+        connect(bpmAudio_, &AudioLevelDecoder::finished, this, [this](const std::vector<double>& env) {
+            const double bpm = samn::EstimateBpmFromLoudness(env);
+            if (bpm <= 0) {
+                toolNote_ = tr("No clear beat in the sound.");
+                emit toolNoteChanged();
+                setError(tr("No clear beat in the sound."));
+                return;
+            }
+            setBpm(bpm);
+            setBpmGrid(true);
+            toolNote_ = tr("%1 BPM from audio.").arg(int(bpm));
+            emit toolNoteChanged();
+            setError({});
+        });
+        connect(bpmAudio_, &AudioLevelDecoder::failed, this, [this](const QString& error) {
+            toolNote_ = tr("No audio tempo: %1").arg(error);
+            emit toolNoteChanged();
+            setFailure(toolNote_);
+        });
+    }
+    if (bpmAudio_->busy()) {
+        setError(tr("Still measuring the sound…"));
+        return false;
+    }
+    toolNote_ = tr("Measuring BPM from the sound…");
+    emit toolNoteChanged();
+    setError({});
+    bpmAudio_->start(videoPath_);
+    return true;
+}
+
+bool PlayerController::proposeSoundCurve() {
+    if (scriptPath_.isEmpty() || stroke_.size() < 2) {
+        setError(tr("Open a script first."));
+        return false;
+    }
+    if (videoPath_.isEmpty()) {
+        setError(tr("Link a video to write the sound as a Vibration curve."));
+        toolNote_ = tr("Sound Curve: link a video first.");
+        emit toolNoteChanged();
+        return false;
+    }
+    if (!soundCurveAudio_) {
+        soundCurveAudio_ = new AudioLevelDecoder(this);
+        connect(soundCurveAudio_, &AudioLevelDecoder::finished, this, [this](const std::vector<double>& env) {
+            pendingSoundCurve_ = samn::VibrationCurveFromSound(env, samn::kAudioLevelStepMs, offsetMs_);
+            emit soundCurveChanged();
+            if (pendingSoundCurve_.size() < 2) {
+                toolNote_ = tr("The sound is too short for a curve.");
+                emit toolNoteChanged();
+                setError(toolNote_);
+                return;
+            }
+            toolNote_ = tr("Sound Curve ready · %1 points.").arg(int(pendingSoundCurve_.size()));
+            emit toolNoteChanged();
+            setError({});
+            emit soundCurveReady(int(pendingSoundCurve_.size()));
+        });
+        connect(soundCurveAudio_, &AudioLevelDecoder::failed, this, [this](const QString& error) {
+            pendingSoundCurve_.clear();
+            emit soundCurveChanged();
+            toolNote_ = tr("Sound Curve: %1").arg(error);
+            emit toolNoteChanged();
+            setFailure(toolNote_);
+        });
+    }
+    if (soundCurveAudio_->busy()) {
+        setError(tr("Still reading the sound…"));
+        return false;
+    }
+    toolNote_ = tr("Reading the sound…");
+    emit toolNoteChanged();
+    setError({});
+    soundCurveAudio_->start(videoPath_);
+    return true;
+}
+
+void PlayerController::cancelSoundCurve() {
+    pendingSoundCurve_.clear();
+    emit soundCurveChanged();
+}
+
+bool PlayerController::canUndoSoundCurve() const {
+    if (!soundCurveUndo_ || soundCurveUndoPath_.isEmpty() || scriptPath_.isEmpty()) return false;
+    const std::string opened = U8(scriptPath_);
+    const std::string fun = samn::IsSamnPath(opened) ? samn::CompanionFunscriptPath(opened) : opened;
+    return FromU8(samn::CompanionSamnPath(fun)) == soundCurveUndoPath_;
+}
+
+bool PlayerController::confirmSoundCurve() {
+    if (pendingSoundCurve_.size() < 2) {
+        setError(tr("Nothing to write — propose a Sound Curve first."));
+        return false;
+    }
+    auto curve = std::move(pendingSoundCurve_);
+    pendingSoundCurve_.clear();
+    emit soundCurveChanged();
+    return applyVibrationLane(std::move(curve), tr("Sound Curve"), true);
+}
+
+bool PlayerController::undoSoundCurve() {
+    if (!canUndoSoundCurve()) {
+        setError(tr("Nothing to undo for the Sound Curve."));
+        return false;
+    }
+    auto prev = std::move(*soundCurveUndo_);
+    soundCurveUndo_.reset();
+    soundCurveUndoPath_.clear();
+    emit soundCurveChanged();
+    return applyVibrationLane(std::move(prev), tr("Undo Sound Curve"), false);
+}
+
+bool PlayerController::applyVibrationLane(std::vector<samn::Action> vibration, const QString& label, bool recordUndo) {
+    if (scriptPath_.isEmpty() || stroke_.size() < 2) {
+        setError(tr("Open a script first."));
+        return false;
+    }
+    // Write needs ≥2 points; undo may restore an empty prior lane.
+    if (recordUndo && vibration.size() < 2) {
+        setError(tr("The sound is too short for a curve."));
+        return false;
+    }
+    const int nPoints = int(vibration.size());
+    namespace fs = std::filesystem;
+    const std::string openedU8 = U8(scriptPath_);
+    const fs::path opened = fs::u8path(openedU8);
+    const bool wasSamn = samn::IsSamnPath(openedU8);
+    const std::string funscriptU8 = wasSamn ? samn::CompanionFunscriptPath(openedU8) : openedU8;
+    const fs::path funscript = fs::u8path(funscriptU8);
+    const fs::path samnPath = fs::u8path(samn::CompanionSamnPath(funscriptU8));
+    const QString undoKey = FromU8(samnPath.u8string());
+    std::vector<samn::Action> previous;
+
+    try {
+        samn::Document doc;
+        if (wasSamn || fs::exists(samnPath)) {
+            doc = samn::LoadDocument(wasSamn ? opened : samnPath);
+        } else {
+            doc = samn::LoadFunscriptFile(funscript);
+        }
+        if (doc.general.size() < 2) doc.general = stroke_;
+        if (recordUndo) previous = doc.vibration;
+        doc.vibration = std::move(vibration);
+        if (doc.version == 0) doc.version = samn::SamnCurrentVersion;
+        if (doc.kind.empty()) doc.kind = samn::SamnKind;
+        if (doc.creator.empty()) doc.creator = "SamNPlayer";
+        const char* source = samn::PlaybackAxes;
+        doc.playback_source = source;
+        doc.recipe.playback_source = source;
+        samn::SaveDocument(samnPath, doc);
+    } catch (const std::exception& e) {
+        setFailure(tr("%1: %2").arg(label, FromU8(e.what())));
+        return false;
+    }
+
+    const QString reload = wasSamn ? scriptPath_ : FromU8(samnPath.u8string());
+    if (!openScript(reload, videoPath_)) return false;
+    if (recordUndo) {
+        soundCurveUndo_ = std::move(previous);
+        soundCurveUndoPath_ = undoKey;
+    }
+    toolNote_ = nPoints > 0 ? tr("%1 · %2 points.").arg(label).arg(nPoints) : tr("%1 · vibration cleared.").arg(label);
+    emit toolNoteChanged();
+    emit soundCurveChanged();
+    emit scriptEdited(scriptPath_);
+    return true;
+}
+
+void PlayerController::clearAutoSyncSuggestion() {
+    autoSyncBusy_ = false;
+    autoSyncNote_.clear();
+    autoSyncConfidence_ = QStringLiteral("none");
+    autoSyncOffsetMs_ = 0;
+    emit autoSyncChanged();
+}
+
+bool PlayerController::autoSyncCanApply() const {
+    if (autoSyncConfidence_ == QLatin1String("none") || autoSyncBusy_) return false;
+    return autoSyncOffsetMs_ != offsetMs_;
+}
+
+bool PlayerController::suggestAudioSync() {
+    if (scriptPath_.isEmpty() || stroke_.size() < 2) {
+        setError(tr("Open a script first."));
+        autoSyncNote_ = tr("Auto sync needs a script.");
+        emit autoSyncChanged();
+        return false;
+    }
+    if (videoPath_.isEmpty()) {
+        setError(tr("Link a video to compare its sound with the script."));
+        autoSyncNote_ = tr("Auto sync: link a video first.");
+        emit autoSyncChanged();
+        return false;
+    }
+    if (!autoSyncAudio_) {
+        autoSyncAudio_ = new AudioLevelDecoder(this);
+        connect(autoSyncAudio_, &AudioLevelDecoder::finished, this, [this](const std::vector<double>& env) {
+            autoSyncBusy_ = false;
+            const auto sug = samn::EstimateAudioSyncOffset(env, samn::kAudioLevelStepMs, stroke_);
+            autoSyncOffsetMs_ = int(sug.offset_ms);
+            switch (sug.confidence) {
+                case samn::AudioSyncConfidence::High:
+                    autoSyncConfidence_ = QStringLiteral("high");
+                    break;
+                case samn::AudioSyncConfidence::Low:
+                    autoSyncConfidence_ = QStringLiteral("low");
+                    break;
+                default:
+                    autoSyncConfidence_ = QStringLiteral("none");
+                    break;
+            }
+            if (sug.confidence != samn::AudioSyncConfidence::None && autoSyncOffsetMs_ == offsetMs_) {
+                autoSyncNote_ = tr("That is the offset in use.");
+            } else {
+                autoSyncNote_ = QString::fromStdString(sug.note);
+            }
+            toolNote_ = autoSyncNote_;
+            emit toolNoteChanged();
+            emit autoSyncChanged();
+            if (sug.confidence == samn::AudioSyncConfidence::None) setError(autoSyncNote_);
+            else setError({});
+        });
+        connect(autoSyncAudio_, &AudioLevelDecoder::failed, this, [this](const QString& error) {
+            autoSyncBusy_ = false;
+            autoSyncConfidence_ = QStringLiteral("none");
+            autoSyncOffsetMs_ = 0;
+            autoSyncNote_ = tr("Auto sync: %1").arg(error);
+            toolNote_ = autoSyncNote_;
+            emit toolNoteChanged();
+            emit autoSyncChanged();
+            setFailure(autoSyncNote_);
+        });
+    }
+    if (autoSyncAudio_->busy() || autoSyncBusy_) {
+        setError(tr("Still listening…"));
+        return false;
+    }
+    autoSyncBusy_ = true;
+    autoSyncNote_ = tr("Listening…");
+    emit autoSyncChanged();
+    toolNote_ = autoSyncNote_;
+    emit toolNoteChanged();
+    setError({});
+    autoSyncAudio_->start(videoPath_);
+    return true;
+}
+
+bool PlayerController::applyAudioSyncSuggestion() {
+    if (!autoSyncCanApply()) {
+        if (autoSyncConfidence_ != QLatin1String("none") && autoSyncOffsetMs_ == offsetMs_) {
+            autoSyncNote_ = tr("That is the offset in use.");
+            emit autoSyncChanged();
+        } else {
+            setError(tr("Nothing to apply — run Auto sync first."));
+        }
+        return false;
+    }
+    setOffsetMs(autoSyncOffsetMs_);
+    autoSyncNote_ = tr("Applied %1 ms — Bake offset keeps it for other players.").arg(autoSyncOffsetMs_);
+    toolNote_ = autoSyncNote_;
+    emit toolNoteChanged();
+    emit autoSyncChanged();
+    setError({});
+    return true;
+}
+
 bool PlayerController::attachVideo(const QString& pathOrUrl) {
     const QString path = toLocalPath(pathOrUrl);
     if (!QFileInfo(path).isFile()) {
@@ -1286,6 +1994,7 @@ void PlayerController::clearScript() {
     partnerPath_.clear();
     extraPaths_.clear();
     contactControls_ = contactKnobsLive_ = false;
+    playbackSource_ = QStringLiteral("recipe");
     emit mappedChanged();
     stroke_.clear();
     vibration_.clear();
@@ -1317,10 +2026,47 @@ void PlayerController::setVideo(const QString& path) {
     videoDurationMs_ = 0;  // the player reports the new one
     mediaHead_.clear();
     mediaHead_.setDurationMs(0);
+    clearPlayEnvelope();
+    refreshVideoLinkWarning(path);
     emit videoChanged();
     if (!path.isEmpty()) emit videoLinked(path);
     emit scriptChanged();  // noScriptForVideo depends on the video too
+    if (audioVibration() && !path.isEmpty()) warmPlayAudio();
 }
+
+void PlayerController::refreshVideoLinkWarning(const QString& path) {
+    // Lightweight 0.7 ProbePlaybackVideo stand-in: container + name tags.
+    // Qt Multimedia plays more codecs than Chromium did; we still warn on
+    // mkv/avi and obvious HEVC/AV1 name tags before play fails.
+    QString warn;
+    bool suggest = false;
+    if (!path.isEmpty()) {
+        const QFileInfo fi(path);
+        const QString suf = fi.suffix().toLower();
+        const QString name = fi.fileName().toLower();
+        if (suf == QLatin1String("mkv") || suf == QLatin1String("avi")) {
+            warn = tr("Container often problematic in the player — H.264 MP4 copy recommended.");
+            suggest = true;
+        } else if (name.contains(QLatin1String("hevc")) || name.contains(QLatin1String("x265")) ||
+                   name.contains(QLatin1String("h265")) || name.contains(QLatin1String("av1"))) {
+            warn = tr("Codec hint in the file name — playback may fail.");
+            suggest = true;
+        }
+    }
+    if (warn == videoLinkWarning_ && suggest == videoLinkSuggestPlayable_) return;
+    videoLinkWarning_ = warn;
+    videoLinkSuggestPlayable_ = suggest;
+    emit videoLinkWarningChanged();
+}
+
+void PlayerController::clearVideoLinkWarning() {
+    if (videoLinkWarning_.isEmpty() && !videoLinkSuggestPlayable_) return;
+    videoLinkWarning_.clear();
+    videoLinkSuggestPlayable_ = false;
+    emit videoLinkWarningChanged();
+}
+
+void PlayerController::dismissVideoLinkWarning() { clearVideoLinkWarning(); }
 
 void PlayerController::setError(const QString& e) {
     mediaError_ = false;
@@ -1361,7 +2107,15 @@ void PlayerController::setOffsetMs(int ms) {
     movePlayhead(videoMs_, video ? mediaHead_.estimate() : videoMs_, !video);
 }
 
-void PlayerController::setVideoPositionMs(qint64 videoMs) { movePlayhead(videoMs, videoMs, true); }
+void PlayerController::setVideoPositionMs(qint64 videoMs) {
+    // 0.7 FPS-Snap: explicit seeks land on frame boundaries of script time.
+    if (fpsSnap_ > 0 && !stroke_.empty()) {
+        const int64_t script = samn::SnapMs(samn::script_time(videoMs, offsetMs_), fpsSnap_);
+        videoMs = script + offsetMs_;
+        if (videoMs < 0) videoMs = 0;
+    }
+    movePlayhead(videoMs, videoMs, true);
+}
 
 void PlayerController::movePlayhead(qint64 videoMs, qint64 outputVideoMs, bool fromReport) {
     videoMs_ = videoMs;
@@ -1505,6 +2259,16 @@ void PlayerController::setAudioLane(bool on) {
     emit viewOptionsChanged();
 }
 
+bool PlayerController::showScenes() const {
+    return const_cast<PlayerController*>(this)->uiValue(QStringLiteral("player.scenes"), false).toBool();
+}
+
+void PlayerController::setShowScenes(bool on) {
+    if (on == showScenes()) return;
+    setUiValue(QStringLiteral("player.scenes"), on);
+    emit viewOptionsChanged();
+}
+
 bool PlayerController::showContactMarks() const {
     return const_cast<PlayerController*>(this)->uiValue(QStringLiteral("player.showContactMarks"), true).toBool();
 }
@@ -1610,11 +2374,13 @@ void PlayerController::reportMediaError(int error, const QString& detail) {
     QString msg = tr("Video cannot be played (%1)").arg(kind);
     if (!videoName().isEmpty()) msg += QStringLiteral(": ") + videoName();
     if (!detail.isEmpty()) msg += QStringLiteral(" ") + QChar(0x2014) + QStringLiteral(" ") + detail;
+    msg += tr(". “Make playable” creates an H.264 copy.");
     setFailure(msg);
     mediaError_ = true;
 }
 
 void PlayerController::reportFirstPicture(const QString& codec) {
+    clearVideoLinkWarning();  // it played — drop the soft probe hint
     qInfo().noquote() << QStringLiteral("Video: first picture%1%2")
                              .arg(codec.isEmpty() ? QString() : QStringLiteral(" (%1)").arg(codec))
                              .arg(videoName().isEmpty() ? QString() : QStringLiteral(": ") + videoName());
@@ -1624,19 +2390,160 @@ void PlayerController::reportNoPicture(const QString& codec) {
     QString msg = codec.isEmpty() ? tr("No picture: this PC cannot decode the video")
                                   : tr("No picture: this PC cannot decode %1 video").arg(codec);
     if (!videoName().isEmpty()) msg += QStringLiteral(": ") + videoName();
-    msg += tr(". Convert to H.264 makes a copy that plays everywhere.");
+    msg += tr(". “Make playable” creates an H.264 copy that plays everywhere.");
     setFailure(msg);
+    mediaError_ = true;
+}
+
+bool PlayerController::videoPlayAutostart() const {
+    const auto v = const_cast<PlayerController*>(this)->settings().get("playback.video_play_autostart", true);
+    return !v.is_boolean() || v.get<bool>();
+}
+
+void PlayerController::setVideoPlayAutostart(bool on) {
+    if (on == videoPlayAutostart()) return;
+    settings().set("playback.video_play_autostart", on);
+    emit viewOptionsChanged();
+}
+
+bool PlayerController::audioVibration() const {
+    const auto v = const_cast<PlayerController*>(this)->settings().get("playback.audio_vibration", false);
+    return v.is_boolean() && v.get<bool>();
+}
+
+void PlayerController::setAudioVibration(bool on) {
+    if (on == audioVibration()) return;
+    settings().set("playback.audio_vibration", on);
+    emit viewOptionsChanged();
+    if (on) {
+        warmPlayAudio();
+    } else {
+        restoreScriptVibrationIfNeeded();
+    }
+}
+
+void PlayerController::setPlayAudioEnvelopeForTest(std::vector<double> envelope) {
+    const bool had = !playEnvelope_.empty();
+    playEnvelope_ = std::move(envelope);
+    if (had != !playEnvelope_.empty()) emit audioVibrationReadyChanged();
+}
+
+void PlayerController::ensurePlayAudioDecoder() {
+    if (playAudio_) return;
+    playAudio_ = new AudioLevelDecoder(this);
+    connect(playAudio_, &AudioLevelDecoder::finished, this, [this](const std::vector<double>& env) {
+        playEnvelope_ = env;
+        emit audioVibrationReadyChanged();
+        if (output_.playing()) applyLiveAudioVibrationIfReady();
+        if (playEnvelope_.empty())
+            qInfo().noquote() << QStringLiteral("Audio vibration: empty envelope — keeping script vibration");
+        else
+            qInfo().noquote() << QStringLiteral("Audio vibration: envelope ready (%1 steps)").arg(int(playEnvelope_.size()));
+    });
+    connect(playAudio_, &AudioLevelDecoder::failed, this, [this](const QString& error) {
+        clearPlayEnvelope();
+        qInfo().noquote() << QStringLiteral("Audio vibration: %1 — keeping script vibration").arg(error);
+    });
+}
+
+void PlayerController::warmPlayAudio() {
+    if (videoPath_.isEmpty()) return;
+    ensurePlayAudioDecoder();
+    if (playAudio_->busy()) return;
+    playAudio_->start(videoPath_);
+}
+
+void PlayerController::clearPlayEnvelope() {
+    const bool had = !playEnvelope_.empty();
+    playEnvelope_.clear();
+    if (had) emit audioVibrationReadyChanged();
+}
+
+double PlayerController::activeVibrationScale() const {
+    for (const auto& p : strength_) {
+        if (!activeStrength_.empty() && p.name == activeStrength_)
+            return p.vibration_scale > 0 ? p.vibration_scale : 1.0;
+    }
+    return 1.0;
+}
+
+void PlayerController::applyLiveAudioVibrationIfReady() {
+    if (!audioVibration()) return;
+    if (stroke_.empty()) return;
+    if (videoPath_.isEmpty()) {
+        qInfo().noquote() << QStringLiteral("Audio vibration: no video — keeping script vibration");
+        return;
+    }
+    if (playEnvelope_.empty()) {
+        warmPlayAudio();
+        qInfo().noquote() << QStringLiteral("Audio vibration: envelope not ready — keeping script vibration");
+        return;
+    }
+    try {
+        const samn::StrengthPreset* preset = nullptr;
+        for (const auto& p : strength_)
+            if (!activeStrength_.empty() && p.name == activeStrength_) preset = &p;
+        const auto plan = samn::PlanPlayback(scriptMap_, profile_, mapping_.choices(recipeHasContact_), preset);
+        auto frames = samn::PlaybackFrames(stroke_, plan);
+        frames = samn::ApplyAudioVibration(frames, playEnvelope_, samn::kAudioLevelStepMs, offsetMs_,
+                                           activeVibrationScale());
+        vibration_ = laneFrom(frames, false);
+        suction_ = laneFrom(frames, true);
+        output_.setLevels(vibration_, suction_);
+        audioVibApplied_ = true;
+        for (const auto& c : curves_)
+            if (c && c->lane() != QLatin1String("stroke"))
+                c->setActions(c->lane() == QLatin1String("vibration") ? vibration_ : suction_);
+        emit playheadMsChanged();
+        qInfo().noquote() << QStringLiteral("Audio vibration: live from video sound");
+    } catch (const std::exception& e) {
+        qInfo().noquote() << QStringLiteral("Audio vibration: %1 — keeping script vibration").arg(FromU8(e.what()));
+    }
+}
+
+void PlayerController::restoreScriptVibrationIfNeeded() {
+    if (!audioVibApplied_) return;
+    remap(false);
+}
+
+bool PlayerController::playbackMock() const {
+    const auto v = const_cast<PlayerController*>(this)->settings().get("playback.mock", true);
+    return !v.is_boolean() || v.get<bool>();
+}
+
+void PlayerController::setPlaybackMock(bool on) {
+    if (on == playbackMock()) return;
+    settings().set("playback.mock", on);
+    emit viewOptionsChanged();
 }
 
 void PlayerController::setMediaPlaying(bool playing) {
     // A pause stops the ticks before the output stops the device.
-    if (!playing) mediaHead_.setPlaying(false);
-    setPlaying(playing);
-    if (playing) mediaHead_.setPlaying(true);
+    if (!playing) {
+        mediaHead_.setPlaying(false);
+        setPlaying(false);
+        return;
+    }
+    // Video is playing: the media playhead ticks either way. The device only
+    // starts when "Video play starts device" is on (0.7 default).
+    mediaHead_.setPlaying(true);
+    if (videoPlayAutostart()) setPlaying(true);
 }
 
 void PlayerController::setPlaying(bool playing) {
+    // 0.7 playback.mock: with nothing connected, Play starts the Mock so the
+    // session has a device without opening Devices first. Output waits until
+    // the worker reports connected (same soft-start path as a late link).
+    if (playing && playbackMock() && device_ && !device_->connected() && !device_->connecting()) {
+        device_->connectMock();
+        qInfo().noquote() << QStringLiteral("Playback: connecting Mock device");
+    }
+    // Apply live audio vibration before the device session starts; restore
+    // script lanes only after output_.playing is false so remap does not
+    // re-apply mid-stop.
+    if (playing) applyLiveAudioVibrationIfReady();
     output_.setPlaying(playing);
+    if (!playing) restoreScriptVibrationIfNeeded();
     if (playing) autoEoFired_ = false;
     if (playing && mediaError_) setError({});
     if (playing) {

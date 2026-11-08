@@ -23,4 +23,18 @@ std::optional<std::string> find_matching_video(const std::string& script_path);
 // so on, in the order surge, sway, twist, roll, pitch; only those that exist.
 std::vector<std::pair<std::string, std::string>> companion_axis_files(const std::string& script_path);
 
+// Multi-axis companion names in 0.7 order (CreateScriptAxis / "+ Axis…").
+inline constexpr const char* kCompanionAxes[] = {"surge", "sway", "twist", "roll", "pitch"};
+
+[[nodiscard]] bool is_companion_axis(const std::string& axis);
+
+// Path of <stem>.<axis>.funscript beside script_path (whether or not it exists).
+[[nodiscard]] std::string companion_axis_path(const std::string& script_path, const std::string& axis);
+
+// CreateScriptAxis: write a new companion funscript centred at pos 50 over
+// [0, duration_ms] (at least 1 ms). Never overwrites an existing file (D-086).
+// Returns the created path, or nullopt with a short reason in `error`.
+std::optional<std::string> create_companion_axis(const std::string& script_path, const std::string& axis,
+                                                 int64_t duration_ms, std::string* error = nullptr);
+
 }  // namespace samn

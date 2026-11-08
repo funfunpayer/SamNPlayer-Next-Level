@@ -12,6 +12,7 @@ const texts = {
     "dev-pulse": "Two seconds of medium vibration, then off.",
     // src/device.js:37
     "dev-transport": "BLE = direct Bluetooth. Intiface = via Buttplug server (other devices too). Mock = UI without hardware.",
+    "pb-mock": "On (default): when you press Play and nothing is connected, SamN2 opens the Mock device so you can try scripts without hardware. Off: Play only drives a device you already connected in Devices (or the top-bar Connect). Same idea as Training → Mock.",
     // src/device.js:100 (Device diagnostics)
     "device.device-diagnostics": "Automated test sequence (raw acceptance, update rate, channel interaction). Measures write latency and accepted values — not felt intensity. The device moves briefly several times.",
     // src/device.js:83 (Raw value test)
@@ -245,6 +246,7 @@ const texts = {
     "pb-omarker-hint": "O-markers are saved in the script (not local only). Primary = peak; secondary = softer spots. Mark a range first, then apply.",
     // src/playback.js:241 (Optimize for)
     "pb-optimize-target": "Any device: fill and heal gaps, the stroke stays usable everywhere. Sam Neo 2: also contact vibration and baked vibration + suction, saved as Emotion Script.",
+    "pb-bake-share": "Bake feel channels writes Neo vibration and suction into the .samn Emotion Script. Share for other apps writes a community .funscript (stroke only) other players can open.",
     // src/playback.js:217
     "pb-pos-overlay-row": "0–100 stroke gauge over the video. Follows playhead. Turn off anytime.",
     // src/playback.js:336 (Soft edges)

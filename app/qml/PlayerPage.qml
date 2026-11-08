@@ -156,12 +156,24 @@ Item {
         onConverted: (path) => ctrl.openPath(path)
         onToolChanged: if (page.convertWhenReady && ffmpegReady) {
             page.convertWhenReady = false
-            convertCtl.convertForPlayback(ctrl.localPath(media.source.toString()), media.duration / 1000)
+            page.convertVideo()
         }
+    }
+    // Duration for convert: Qt may report 0 on FormatError; fall back to the
+    // controller's last known length (script / prior metadata).
+    function convertDurationS() {
+        const ms = Math.max(media.duration, ctrl.videoDurationMs)
+        return ms > 0 ? ms / 1000 : 0
     }
     function convertVideo() {
         media.pause()
-        if (convertCtl.ffmpegReady) convertCtl.convertForPlayback(ctrl.localPath(media.source.toString()), media.duration / 1000)
+        const secs = page.convertDurationS()
+        if (secs <= 0) {
+            ctrl.reportMediaError(MediaPlayer.FormatError,
+                                  qsTr("unknown length — open a playable copy first, or use Clip prep"))
+            return
+        }
+        if (convertCtl.ffmpegReady) convertCtl.convertForPlayback(ctrl.localPath(media.source.toString()), secs)
         else { page.convertWhenReady = true; convertCtl.fetchFfmpeg() }
     }
 
@@ -432,11 +444,63 @@ Item {
             }
         }
 
-        // Errors stay visible until the next successful open.
+        // Soft probe-on-link warning (before play fails). Distinct from the
+        // hard error bar; dismissed on first picture or by the user.
+        Rectangle {
+            id: linkWarnBar
+            objectName: "videoLinkWarning"
+            readonly property bool show: ctrl.videoLinkWarning !== "" && ctrl.lastError === ""
+            anchors.top: header.bottom; anchors.topMargin: show ? 8 : 0
+            width: parent.width
+            height: show ? Math.max(linkWarnText.implicitHeight, 36) + 16 : 0
+            visible: height > 0; clip: true
+            radius: Theme.radiusSmall
+            color: Qt.rgba(1, 0.72, 0.25, 0.12); border.color: Qt.rgba(1, 0.75, 0.3, 0.45)
+            Behavior on height { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
+            Text {
+                id: linkWarnText
+                textFormat: Text.PlainText
+                anchors.verticalCenter: parent.verticalCenter
+                x: 14
+                width: parent.width - 28 - (ctrl.videoLinkSuggestPlayable ? linkMakePlayable.width + 12 : 0)
+                                           - (linkDismiss.width + 12)
+                text: ctrl.videoLinkWarning; wrapMode: Text.Wrap
+                color: "#ffe8c0"; font.family: Theme.fontSoft; font.pixelSize: 13
+            }
+            FlowButton {
+                id: linkMakePlayable
+                objectName: "linkMakePlayable"
+                anchors.right: linkDismiss.left; anchors.rightMargin: 8
+                anchors.verticalCenter: parent.verticalCenter
+                visible: ctrl.videoLinkSuggestPlayable
+                primary: true
+                enabled: !convertCtl.cutting && !convertCtl.fetching
+                text: convertCtl.cutting ? (qsTr("%1 %").arg(convertCtl.progress))
+                      : convertCtl.fetching ? qsTr("Getting ffmpeg…")
+                      : qsTr("Make playable")
+                onClicked: page.convertVideo()
+            }
+            FlowButton {
+                id: linkDismiss
+                objectName: "dismissLinkWarning"
+                anchors.right: parent.right; anchors.rightMargin: 10
+                anchors.verticalCenter: parent.verticalCenter
+                text: qsTr("Dismiss")
+                onClicked: ctrl.dismissVideoLinkWarning()
+            }
+        }
+
+        // Errors stay visible until the next successful open. Make playable
+        // appears for media failures and for no-picture (same H.264 convert).
         Rectangle {
             id: errorBar
-            anchors.top: header.bottom; anchors.topMargin: ctrl.lastError !== "" ? 8 : 0
-            width: parent.width; height: ctrl.lastError !== "" ? errText.implicitHeight + 16 : 0
+            readonly property bool offerPlayable: ctrl.videoName !== "" && ctrl.lastError !== ""
+                                                 && (ctrl.mediaError || page.noPicture
+                                                     || ctrl.lastError.indexOf("Make playable") >= 0)
+            anchors.top: linkWarnBar.visible ? linkWarnBar.bottom : header.bottom
+            anchors.topMargin: ctrl.lastError !== "" ? 8 : 0
+            width: parent.width
+            height: ctrl.lastError !== "" ? Math.max(errText.implicitHeight, offerPlayable ? 36 : 0) + 16 : 0
             visible: height > 0; clip: true
             radius: Theme.radiusSmall
             color: Qt.rgba(1, 0.35, 0.3, 0.12); border.color: Qt.rgba(1, 0.4, 0.35, 0.5)
@@ -444,9 +508,24 @@ Item {
             Text {
                 textFormat: Text.PlainText
                 id: errText
-                anchors.verticalCenter: parent.verticalCenter; x: 14; width: parent.width - 28
+                anchors.verticalCenter: parent.verticalCenter
+                x: 14
+                width: parent.width - 28 - (errorBar.offerPlayable ? makePlayableBtn.width + 16 : 0)
                 text: ctrl.lastError; wrapMode: Text.Wrap
                 color: "#ffd0c8"; font.family: Theme.fontSoft; font.pixelSize: 13
+            }
+            FlowButton {
+                id: makePlayableBtn
+                objectName: "makePlayable"
+                anchors.right: parent.right; anchors.rightMargin: 10
+                anchors.verticalCenter: parent.verticalCenter
+                visible: errorBar.offerPlayable
+                primary: true
+                enabled: !convertCtl.cutting && !convertCtl.fetching
+                text: convertCtl.cutting ? (qsTr("%1 %").arg(convertCtl.progress))
+                      : convertCtl.fetching ? qsTr("Getting ffmpeg…")
+                      : qsTr("Make playable")
+                onClicked: page.convertVideo()
             }
         }
 
@@ -595,7 +674,7 @@ Item {
                                 objectName: "convertVideo"
                                 primary: true
                                 enabled: !convertCtl.cutting && !convertCtl.fetching
-                                text: qsTr("Convert to H.264")
+                                text: qsTr("Make playable")
                                 onClicked: page.convertVideo()
                             }
                             FlowButton {
@@ -913,6 +992,19 @@ Item {
                     color: "white"; font.family: Theme.fontSoft; font.pixelSize: 13
                     visible: ctrl.videoName !== "" || page.scriptOnly
                 }
+                // 0.7 keys hint on the stage (playback.js chrome).
+                Text {
+                    id: keysHint
+                    objectName: "keysHint"
+                    textFormat: Text.PlainText
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: 14
+                    visible: !page.empty && !page.fullStage
+                    opacity: 0.55
+                    text: qsTr("Space play/pause · ←/→ seek · ,/. fine · +/- offset · E Extended-O · T theatre · Esc leave fullscreen")
+                    color: "white"; font.family: Theme.fontSoft; font.pixelSize: 11
+                }
             }
             VideoTransport {
                 id: transport
@@ -1039,7 +1131,7 @@ Item {
                     }
                 }
                 LaneName { name: qsTr("Audio Level"); dot: "#93aec4"; height: audioLane.height; visible: audioLane.visible }
-                LaneName { name: qsTr("Chapters"); dot: "#2f80ed"; height: chapterStrip.height; visible: chapterStrip.visible }
+                LaneName { name: qsTr("Chapters"); dot: "#2f80ed"; height: chapterStrip.height; visible: chapterStrip.visible && ctrl.showScenes }
                 Item { width: 1; height: 4; visible: heatBar.visible }
                 LaneName { name: qsTr("Heatmap"); dot: "#e8603c"; height: heatBar.height; visible: heatBar.visible }
             }
@@ -1179,7 +1271,8 @@ Item {
                 Item {
                     id: chapterStrip
                     width: parent.width; height: 30
-                    visible: ctrl.hasScript
+                    // 0.7 pb.scenes: off by default in the Player.
+                    visible: ctrl.hasScript && ctrl.showScenes
                     clip: true
                     readonly property var colors: [Qt.rgba(47 / 255, 128 / 255, 237 / 255, 0.45), Qt.rgba(242 / 255, 140 / 255, 40 / 255, 0.45),
                                                    Qt.rgba(155 / 255, 81 / 255, 224 / 255, 0.45), Qt.rgba(39 / 255, 174 / 255, 160 / 255, 0.45),
@@ -1425,11 +1518,44 @@ Item {
                         enabled: ctrl.hasScript
                         onClicked: ctrl.guessBpmFromStroke()
                     }
+                    FlowButton {
+                        objectName: "bpmFromAudioTab"
+                        text: qsTr("From audio")
+                        enabled: ctrl.videoName !== ""
+                        onClicked: ctrl.guessBpmFromAudio()
+                    }
+                    FlowButton {
+                        objectName: "soundCurveWrite"
+                        text: qsTr("Sound curve")
+                        enabled: ctrl.hasScript && ctrl.videoName !== ""
+                        onClicked: ctrl.proposeSoundCurve()
+                    }
+                    FlowButton {
+                        objectName: "soundCurveUndo"
+                        text: qsTr("Undo sound curve")
+                        visible: ctrl.canUndoSoundCurve
+                        onClicked: ctrl.undoSoundCurve()
+                    }
                     Text {
                         textFormat: Text.PlainText
                         anchors.verticalCenter: parent.verticalCenter
                         text: qsTr("Blank BPM uses the stroke tempo when the grid is on.")
                         color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
+                    }
+                }
+                MessageDialog {
+                    id: soundCurveDialog
+                    title: qsTr("Sound Curve")
+                    text: qsTr("Write the sound as the Vibration curve (%1 points)? Undo brings the old curve back.")
+                           .arg(ctrl.pendingSoundCurvePoints)
+                    buttons: MessageDialog.Ok | MessageDialog.Cancel
+                    onAccepted: ctrl.confirmSoundCurve()
+                    onRejected: ctrl.cancelSoundCurve()
+                }
+                Connections {
+                    target: ctrl
+                    function onSoundCurveReady(points) {
+                        if (points >= 2) soundCurveDialog.open()
                     }
                 }
                 AudioLevelItem {

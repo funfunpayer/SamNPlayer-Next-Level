@@ -39,3 +39,21 @@ TEST_CASE("audio envelope: an all-silent track stays 0") {
     for (double v : samn::NormalizeLoudness({0, 1e-6, 0})) CHECK(v == 0);
     CHECK(samn::NormalizeLoudness({}).empty());
 }
+
+TEST_CASE("FoldBpmIntoRange folds by octaves into 20-240") {
+    CHECK(samn::FoldBpmIntoRange(0) == 0);
+    CHECK(samn::FoldBpmIntoRange(-1) == 0);
+    CHECK(samn::FoldBpmIntoRange(120) == 120);
+    CHECK(samn::FoldBpmIntoRange(10) == 20);    // *2 → 20
+    CHECK(samn::FoldBpmIntoRange(480) == 240);  // /2 → 240
+    CHECK(samn::FoldBpmIntoRange(5) == 20);     // *2 *2
+    CHECK(samn::FoldBpmIntoRange(960) == 240);  // /2 until ≤240
+}
+
+TEST_CASE("EstimateBpmFromLoudness finds a clear beat") {
+    // 120 BPM → peak every 500 ms; step 50 ms → every 10 samples.
+    std::vector<double> env(400, 0.05);
+    for (size_t i = 10; i + 1 < env.size(); i += 10) env[i] = 0.9;
+    CHECK(samn::EstimateBpmFromLoudness(env, 50) == 120);
+    CHECK(samn::EstimateBpmFromLoudness(std::vector<double>(20, 0.1), 50) == 0);
+}

@@ -2,17 +2,186 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 8 Nov 2026, Claude, branch `claude/samn2-json-fallback`: CI no longer depends on the github.com release download for nlohmann_json (handover below). No code behaviour changed. Earlier: 7 Nov 2026, Claude, branch `claude/samn2-vision-bench`: `samn_bench`, the detection benchmark, and its baseline (handover below). No engine behaviour changed. Before: the video playhead extrapolation (D-164, `claude/samn2-playhead`, #163) and the `DeviceWorker` move (#166) are merged.
+**Last update:** 8 Nov 2026, Claude, branch `claude/samn2-json-fallback`: nlohmann_json comes from the system package first, then the git-clone fallback main already had (handover below). No code behaviour changed. Cursor, same day: probe-on-link warning box (#191). Earlier: 7 Nov 2026, Claude, branch `claude/samn2-vision-bench`: `samn_bench`, the detection benchmark, and its baseline (handover below). No engine behaviour changed. Before: the video playhead extrapolation (D-164, `claude/samn2-playhead`, #163) and the `DeviceWorker` move (#166) are merged.
 
 ## Handover: `claude/samn2-json-fallback` (8 Nov, CI: nlohmann_json from the system first)
 
 On 8 Nov GitHub returned HTTP 504 for the release download of `json.tar.xz` for hours, so every job died in the CMake configure step before any code was built (#168 failed four re-runs for this reason alone).
 
-- **CMake:** `find_package(nlohmann_json 3.11 QUIET)` first; only if nothing is found, `FetchContent` of the pinned archive (same URL and SHA256 as before). No change for a developer machine without the package.
-- **CI:** the three Linux jobs install `nlohmann-json3-dev` (3.11.3 on Ubuntu 24.04) together with OpenCV. Verified: configure and build `core_tests` against the system package, 491/491 pass; without the package the fallback branch is taken.
-- **Not changed:** the Windows job still downloads the archive. Adding `nlohmann-json` to `ci/vcpkg/vcpkg.json` would change the hash that keys the vcpkg and the FFmpeg-dav1d caches and force an expensive rebuild; do it as its own PR if the outage returns.
+- **CMake:** `find_package(nlohmann_json 3.11 QUIET)` first; only if nothing is found, the shallow git clone of the pinned tag v3.11.3 that main already used instead of the Releases archive. No change for a developer machine without the package.
+- **CI:** the three Linux jobs install `nlohmann-json3-dev` (3.11.3 on Ubuntu 24.04) together with OpenCV. Verified: configure and build `core_tests` against the system package, 491/491 pass; without the package the fallback branch is taken. First CI run of this PR failed because `include(FetchContent)` had moved into the fallback branch (vision/ needs it for ONNX Runtime): fixed, it stays unconditional.
+- **Not changed:** the Windows job still fetches nlohmann_json (git clone) from github.com. Adding `nlohmann-json` to `ci/vcpkg/vcpkg.json` would change the hash that keys the vcpkg and the FFmpeg-dav1d caches and force an expensive rebuild; do it as its own PR if the outage returns.
 
-## Handover: `claude/samn2-vision-bench` (7 Nov, detection benchmark, measurement only)
+## Handover: `cursor/player-probe-link-635a` (8 Nov, Probe on link)
+
+Owner: finish Player/Editor GUI except Claude #168.
+
+- **Player:** soft `videoLinkWarning` on attach (mkv/avi / HEVC·AV1 name tags); amber bar + Make playable + Dismiss; cleared on first picture.
+- **Tests:** `videoLinkWarningOnProbeContainers`.
+- **Stay off:** Claude #168. Full ffprobe codec probe still optional later.
+
+## Handover: `cursor/player-audio-vib-635a` (8 Nov, Audio vibration) — merged #189
+
+Owner: finish Player/Editor GUI except Claude #168.
+
+- **Player:** `audioVibration` / `playback.audio_vibration` (default off); at Play start `ApplyAudioVibration` on mapped frames; warm decode on toggle; pause restores script lanes.
+- **UI:** Inspector Audio + View (`pb-audio-vibration`); Settings → Play (`st-audio-vibration`).
+- **Tests:** `audioVibrationDefaultsOffAndSwapsOnPlay`.
+- **Stay off:** Claude #168.
+
+## Handover: `cursor/player-mock-635a` (8 Nov, Mock checkbox) — merged #190
+
+Owner: finish Player/Editor GUI except Claude #168.
+
+- **Player:** `playbackMock` / `playback.mock` (default on); Play auto-connects Mock when disconnected.
+- **UI:** Inspector → View → "Mock (no device)" (`pb-mock`).
+- **Tests:** `playbackMockDefaultsOnAndConnectsOnPlay`.
+- **Stay off:** Claude #168.
+
+## Handover: `cursor/player-make-playable-635a` (8 Nov, Make playable) — merged #187
+
+Owner: finish Player/Editor GUI except Claude #168.
+
+- **Player:** error-bar + no-picture **Make playable** → `ClipPrepController::convertForPlayback` (`<stem>-h264.mp4`).
+- **Messages:** `reportMediaError` / `reportNoPicture`; `mediaError` + `videoDurationMs` for QML.
+- **Stay off:** Claude #168. Full ffprobe/proxy naming still open.
+
+## Handover: `cursor/player-video-autostart-635a` (8 Nov, Video play autostart) — merged #188
+
+Owner: finish Player/Editor GUI except Claude #168.
+
+- **Player:** `videoPlayAutostart` / `playback.video_play_autostart` (default on); gates `setMediaPlaying` → device.
+- **UI:** Inspector → View → "Video play starts device".
+- **Tests:** `videoPlayAutostartDefaultsOnAndGatesDevice`.
+- **Stay off:** Claude #168.
+
+## Handover: `cursor/player-auto-sync-635a` (8 Nov, Auto sync) — merged #186
+
+Owner: finish Player/Editor GUI except Claude #168.
+
+- **Core:** `EstimateAudioSyncOffset` (loudness vs stroke impulses, ±3 s, high/low/none).
+- **Player:** `suggestAudioSync` / `applyAudioSyncSuggestion`; Script Tools Auto sync + Apply.
+- **Tests:** `TestEstimateSyncLag*`, `autoSyncNeedsScriptAndVideo`.
+- **Stay off:** Claude #168.
+
+## Handover: `cursor/player-sound-curve-635a` (8 Nov, Sound Curve) — merged #185
+
+Owner: finish Player/Editor GUI except Claude #168.
+
+- **Core:** `VibrationCurveFromSound` (250 ms avg, Δ≥4 / 2 s, always last).
+- **Player:** `proposeSoundCurve` / `confirmSoundCurve` / `undoSoundCurve`; Audio Analysis + Inspector.
+- **Tests:** core decimate + `soundCurveWritesVibrationAndUndoes` (skips without decoder).
+- **Stay off:** Claude #168.
+
+## Shipped this stream (8 Nov, #178–#185)
+
+- Typed offset, Drive/Recipe, Save Emotion Script (#178)
+- CreateScriptAxis / + Axis… + Curve select (#179)
+- FPS-Snap seeks (#180)
+- Stage keys hint (#181)
+- Scene markers toggle (#182)
+- BPM From audio (#183)
+- Parity settings docs refresh (#184)
+- Sound Curve (#185)
+- CI: Linux `--parallel` capped to nproc/2 (OOM kills)
+
+## Still open (non-Claude, Player/Editor)
+
+- Speech-Hold / Feel segment strip + heatmap bands (needs `audio_check` segments)
+- Scene strip thumbnails in Player (markers done; thumbs Generator-side)
+
+## Handover: `cursor/player-bpm-audio-635a` (8 Nov, BPM From audio) — merged #183
+
+Owner: finish Player/Editor GUI except Claude #168.
+
+- **Core:** `EstimateBpmFromLoudness` / `FoldBpmIntoRange` (first 10 min, 20–240).
+- **Player:** `guessBpmFromAudio` via `AudioLevelDecoder`; Inspector Audio → From audio.
+- **Tests:** envelope BPM + `guessBpmFromAudioNeedsVideo`.
+- **Stay off:** Claude #168.
+
+## Handover: `cursor/player-scenes-toggle-635a` (8 Nov, Scene markers toggle) — merged #182
+
+Owner: finish Player/Editor GUI except Claude #168.
+
+- **View → Scene markers:** `showScenes` / `ui.player.scenes` (default off); hides chapter strip.
+- **Tests:** `showScenesDefaultsOffAndRemembers`.
+- **Stay off:** Claude #168.
+
+## Handover: `cursor/player-keys-635a` (8 Nov, Player keys hint) — merged #181
+
+Owner: finish Player/Editor GUI except Claude #168.
+
+- **Stage:** `keysHint` line (Space / seek / offset / E / T theatre / Esc).
+- **Inspector:** collapse tooltip points at theatre (T) for bigger video.
+- **Stay off:** Claude #168.
+
+## Handover: `cursor/player-fps-snap-635a` (8 Nov, Player FPS-Snap) — merged #180
+
+Owner: finish Player/Editor GUI except Claude #168.
+
+- **Player:** `fpsSnap` (playback.fps_snap); `setVideoPositionMs` snaps script time via `SnapMs`.
+- **Inspector → View → Curve edit:** FPS-Snap slider 0–60 (off at 0).
+- **Tests:** `fpsSnapSeeksToFrameBoundaries`.
+- **Stay off:** Claude #168.
+
+## Handover: `cursor/plus-axis-635a` (8 Nov, CreateScriptAxis / "+ Axis…")
+
+Owner: finish Player/Editor GUI except Claude #168. Companion axis create + Editor edit.
+
+- **Core:** `create_companion_axis` / `is_companion_axis` / `companion_axis_path` (centred at 50, never overwrite, D-086).
+- **Player:** `createCompanionAxis`, `missingAxisChoices`; Inspector Script Tools Curve select + "+ Axis…".
+- **Editor:** load/save companion files; Tools menu "+ Surge/…" via `createCompanionAxis`; lanes include companions.
+- **Tests:** core create; `createCompanionAxisAddsLane`; `createCompanionAxisIsEditableAndSaved`.
+- **Stay off:** Claude #168. Wait #178 CI before merge; rebase this on main after.
+
+## Handover: `cursor/typed-offset-635a` (8 Nov, Player Script Tools polish)
+
+Owner: finish Player/Editor GUI (Claude owns #168). Closes typed offset + feel-row Drive / Save Emotion Script.
+
+- **OffsetField:** typed ±10 000 ms, step 10; ±50 buttons kept.
+- **Drive:** Recipe | Axes (`setPlaybackSource`); contact block hidden in Axes mode.
+- **Save Emotion Script:** `saveAsEmotionScript` → companion `.samn`.
+- **Tests:** `driveSourceAndEmotionScript`; Adapt tab asserts driveSource / offsetInput.
+- **Stay off:** Claude #168.
+
+## Handover: `cursor/player-contact-save-635a` (8 Nov, Player contact feel probe + Save) — merged #177
+
+Owner: Player/Editor GUI — Neo 2 contact feel after Adapt. Completes PARITY §3.1 feel probe / Save to script.
+
+- **Inspector → Playback → Contact:** Feel probe canvas (PreviewContactVibration) + Save to script (`saveContactToScript` → `ApplyContactRecipe` + reload).
+- **C++:** `contactFeelProbe` property; strength follows live intensity knob.
+- **Tests:** `contactControlsFollowTheScript` save+probe; `playbackTabMappingControls` UI.
+- **Stay off:** Claude #168.
+
+## Handover: `cursor/player-bake-share-635a` (8 Nov, Player Bake & share) — merged #176
+
+Owner: Player/Editor GUI — Adapt / convert finished scripts. Unbury 0.7 Bake & share.
+
+- **Inspector → Playback → Bake & share:** Bake feel channels (`axesFromStroke`) + Share for other apps (`exportFunscript` → community `.funscript`).
+- **Adapt** card slimmed to Optimize + Editor link (bake moved here).
+- **Tests:** `axesFromStrokeWritesNeoLanes` covers share; `playbackTabAdaptForDevice` asserts bakeShareCard.
+- **Stay off:** Claude #168 intensity arc.
+
+## Handover: `cursor/player-curve-invert-635a` (8 Nov, Player Invert on Curve edit) — merged #175
+
+Owner: Player/Editor curves · optimize · align. Completes Curve edit after #173.
+
+- **Inspector → View → Curve edit:** Invert range (with mark) / Invert all (asks first, no undo in Player).
+- **C++:** `invertSelection` / `invertAll` via `applySelectionEdit` (`needMarker` flag).
+- **Tests:** `invertOnHeatmapSelectionAndAll`; `viewTabCurveEdit` covers Invert button.
+- **Stay off:** Claude #168 intensity arc.
+
+## Handover: `cursor/player-curve-edit-635a` (8 Nov, Player curve edit on mark) — merged #173
+
+Owner: Player/Editor curves · optimize · align. Cap / Softer / Stronger / Delete in the Player (PARITY §3.1).
+
+- **Inspector → View → Curve edit:** Cap slider (150–800, `playback.cap_intensity`), Soft edges, Speed-cap / Softer / Stronger / Delete on the heatmap mark; active script lane (stroke, or baked vib/suction).
+- **C++:** `PlayerController::{cap,scale,delete}Selection` via `range_edit.h`; rewrite+reload; Delete clears the mark.
+- **CI:** FetchContent for nlohmann/json uses shallow `GIT_TAG v3.11.3` (Releases `.tar.xz` was 504ing configure).
+- **Tests:** `curveEditOnHeatmapSelection`; `viewTabCurveEdit`.
+- **Stay off:** Claude #168 intensity arc. Vision-bench (#172) is on main — leave it alone.
+
+## Handover: `claude/samn2-vision-bench` (7 Nov, detection benchmark, measurement only) — merged #172
 
 Owner: the Generator's video detection must become cinema-grade accurate and lean, and every change is accepted or rejected by numbers. The harness comes first. **No engine behaviour was changed.**
 
@@ -23,7 +192,6 @@ Owner: the Generator's video detection must become cinema-grade accurate and lea
 - **Baseline:** `docs/benchmarks/DETECTION_BASELINE_2026-11-06.md` + `.csv`; load averages and three timing repeats in it. Full run about 33 min. Findings: **pan X raw track r 0.797** (pan Y and clean 0.999): the 0.81 reproduces on the track, but the script r is 0.989 because the default detrend removes this slow pan; occlusion 2 s / 4 s r 0.77 / 0.72 with the lost flag exact; 30 % dropped frames give 4 false cuts; the lighting cut with a jump leaves the tracker lost for the whole second half (r 0.66); fast_small has half its frames flagged lost. ms/frame is about 22 to 37 here (unoptimised build) with up to 25 % spread between runs: time on a quiet machine, median of 3 or more.
 - **Next slices (each judged by this bench):** PR-2 full 2-D camera compensation (`camera_motion.cpp` returns only `t(1,2)`, `track_box.cpp` about line 456 shifts only ys; measured: pan clip Y stroke 0.888 -> 1.000 with compensation, X stroke 0.812 -> 0.812; the Owner's clip uses X; judge on `pan_x` track r); PR-3 forward-backward LK loss flag + confirmed scene cuts (drop30, light_cut_jump); PR-4 phase-locked periodic bridge (occlusion scenes); PR-5 sub-sample peaks (peak error vs the 40 ms frame); PR-6 FR-8 640 px downscale 90 -> 35 ms/frame. CPU / RAM: chunked label-tracking decode, `grab()` for skipped frames.
 - **Not done:** an automatic baseline-vs-candidate comparison of two CSVs (the rule is applied by hand); Windows (RSS 0 there, not built); real clips (Owner gate).
-
 
 
 ## Handover: `claude/samn2-playhead` (5 Nov, video playhead extrapolation) — merged #163
@@ -500,7 +668,7 @@ Data and file fixes from a read-only bug hunt. Each fix has a test that failed b
 - **Teacher on a model server** (D-155 step 4, first part, #91; Owner 20 Oct: servers first): `core/teacher.h`, `LabelController` teacher settings, *Ask the teacher* (`A`).
 - **ONNX Runtime in the build** (D-155 step 4, 20 Oct, `claude/samn2-onnx-nudenet`): ONNX Runtime 1.22 from its NuGet package (FetchContent, pinned hash, `SAMN_WITH_ONNXRUNTIME`), beside every executable on Windows (`samn_copy_runtime_dlls`) and in the package with its licence; `vision/onnx_detector.h` (YOLOv8 decoding, NudeNet classes and their labels), tested on `tests/vision/data/tiny_yolo.onnx`.
 - **Player/Editor P4** (26 Oct, `claude/samn2-player-editor-p4`): 0.7 lane / legend selection in the Player: a click on a lane or its name picks it for the main curve (its colour, its name on the curve), Up / Down on a focused name step through the shown lanes; the picked lane is highlighted; falls back to the stroke when the lane goes away or a new script opens (`PlayerController::activeLane` / `laneChoices`). Fixes a P1 regression: the Extended-O text button pushed Stop under the volume at 1400 px; it is a 36 px icon button now.
-- **Player/Editor P3** (26 Oct, `claude/samn2-player-editor-p3`): 0.7 companion axis files beside the script (`<stem>.surge/sway/twist/roll/pitch.funscript`, `samn::companion_axis_files`) load with it, show as read lanes in the Player (0.7 colours, at least 34 px, only the axes a connected device has) and drive those axes (TCode L1/L2/R0/R1/R2). Next: lane selection / legend chips (P4), Curve select and "+ Axis…" for these files.
+- **Player/Editor P3** (26 Oct, `claude/samn2-player-editor-p3`): 0.7 companion axis files beside the script (`<stem>.surge/sway/twist/roll/pitch.funscript`, `samn::companion_axis_files`) load with it, show as read lanes in the Player (0.7 colours, at least 34 px, only the axes a connected device has) and drive those axes (TCode L1/L2/R0/R1/R2). Lane selection / legend chips done; Curve select + "+ Axis…" on `cursor/plus-axis-635a`.
 - **Player/Editor P2** (26 Oct, `claude/samn2-player-editor-p2`, Owner: "Werkzeuge kompakt"): the range tools are one row of icon buttons with tooltips (Delete, Cap, Softer, Stronger, Simplify, Invert) and the marked range; Optimize for, the whole-lane tools, "+ … lane", Vibration from the sound, Stroke from the beat bar, Soft edges and Snap moved into a "Tools…" menu (a tool closes it; the Cancel button shows the running tool's progress). Feel lanes keep at least 34 px (0.7), the stroke 60 px: at 1400×820 they were ~10 px. `IconButton` now shows its tip as a tooltip and names itself for screen readers.
 - **CI: sanitizer apt cache** (26 Oct, `claude/ci-sanitizer-apt`): the ASan and TSan jobs ran out of their 30 min while apt was still downloading OpenCV from a slow mirror (#113, #119, #123). The `.deb` files are now cached (`actions/cache`, `~/apt-cache`), installed without recommends with 3 retries, and the jobs have 45 min.
 - **Player/Editor P1** (25 Oct, `claude/samn2-player-editor-p1`): *Invert all* asks first (0.7 confirm); "+ Vibration lane" / "+ Suction lane" seed a missing feel lane with the stroke's times at 0 (`EditorController::addLane`); feel lanes draw the stroke ghost (alpha 0.3, 1 px); the Player transport gets the Extended-O trigger; PARITY §3 rechecked for these items (Previous / Stop were already built). The lane-height problem found here is fixed in P2.
