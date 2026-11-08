@@ -306,6 +306,8 @@ public:
     // invertAll flips the whole lane (Player asks first in QML).
     Q_PROPERTY(double capIntensity READ capIntensity WRITE setCapIntensity NOTIFY curveEditChanged)
     Q_PROPERTY(bool scaleSoftEdges READ scaleSoftEdges WRITE setScaleSoftEdges NOTIFY curveEditChanged)
+    // 0.7 FPS-Snap: seeks land on frame boundaries when > 0 (0 = off).
+    Q_PROPERTY(double fpsSnap READ fpsSnap WRITE setFpsSnap NOTIFY curveEditChanged)
     Q_INVOKABLE bool capSelection();
     Q_INVOKABLE bool scaleSelection(double factor);
     Q_INVOKABLE bool deleteSelection();
@@ -392,6 +394,8 @@ public:
     void setCapIntensity(double v);
     bool scaleSoftEdges() const { return scaleSoftEdges_; }
     void setScaleSoftEdges(bool on);
+    double fpsSnap() const { return fpsSnap_; }
+    void setFpsSnap(double fps);
     QStringList scriptFolders() const;
     bool hasMarker() const { return marker_.Valid(); }
     double markerStartMs() const { return double(marker_.start_ms); }
@@ -576,6 +580,7 @@ private:
     double scriptTempoBpm_ = 0;  // from stroke peaks when the script opens
     double capIntensity_ = 400;
     bool scaleSoftEdges_ = false;
+    double fpsSnap_ = 0;
     bool speedHL_ = true;
     double speedHLThresh_ = 400;
     bool bpmGrid_ = false;

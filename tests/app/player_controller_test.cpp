@@ -22,6 +22,7 @@
 #include "player_controller.h"
 #include "samn/marks.h"
 #include "samn/playback_mapping.h"
+#include "samn/range_edit.h"
 #include "samn/contact_marks.h"
 #include "samn/samn_file.h"
 #include "samn/settings.h"
@@ -265,6 +266,28 @@ private slots:
         QVERIFY(doc.vibration.size() >= 2);
         QVERIFY(c.setPlaybackSource("recipe"));
         QCOMPARE(c.playbackSource(), QString("recipe"));
+    }
+
+    // 0.7 FPS-Snap: seeks land on frame boundaries; 0 = off; remembered.
+    void fpsSnapSeeksToFrameBoundaries() {
+        QTemporaryDir d;
+        const QString path = d.filePath("snap.funscript");
+        writeFile(path, zigzag(21, 100));
+        PlayerController c;
+        QVERIFY(c.openScript(path));
+        QCOMPARE(c.fpsSnap(), 0.0);
+        c.setVideoPositionMs(666);
+        QCOMPARE(c.playheadMs(), qint64(666));
+        c.setFpsSnap(25);
+        QCOMPARE(c.fpsSnap(), 25.0);
+        c.setVideoPositionMs(666);
+        // 25 fps → 40 ms frames; 666 → 680 (16.65 → 17 frames).
+        QCOMPARE(c.playheadMs(), qint64(samn::SnapMs(666, 25)));
+        c.setFpsSnap(0);
+        c.setVideoPositionMs(666);
+        QCOMPARE(c.playheadMs(), qint64(666));
+        c.setFpsSnap(30);
+        QCOMPARE(c.fpsSnap(), 30.0);
     }
 
     // 0.7 CreateScriptAxis / "+ Axis…": centred companion file, never overwrite.
