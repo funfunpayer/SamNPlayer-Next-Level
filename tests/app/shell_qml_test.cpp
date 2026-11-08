@@ -24,6 +24,7 @@
 #include "app_log.h"
 #include "icon_provider.h"
 #include "player_controller.h"
+#include "mode_registry.h"
 #include "plugins.h"
 #include "theme.h"
 #include "update_checker.h"
@@ -60,6 +61,13 @@ QList<QQuickItem*> itemsOfType(QQuickItem* root, const char* qmlType) {
     for (QQuickItem* i : descendants(root))
         if (isType(i, qmlType)) out << i;
     return out;
+}
+
+// True while a visual descendant has this objectName.
+bool hasNamedItem(QQuickItem* root, const char* name) {
+    for (QQuickItem* i : descendants(root))
+        if (i->objectName() == QLatin1String(name)) return true;
+    return false;
 }
 
 // Every bundled vector file: the resource path and its bytes.
@@ -816,6 +824,43 @@ private slots:
             auto* theme = s.engine.singletonInstance<samn::ui::Theme*>(qmlTypeId("SamN", 1, 0, "Theme"));
             QVERIFY(theme && theme->reducedMotion());
             theme->setReducedMotion(false);
+        }
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
+
+    // D-165: a mode registered at start gets a tab, a Ctrl+N key and a page; removing it hides all three.
+    void registeredModeGetsTabKeyAndPage() {
+        auto& registry = samn::ui::ModeRegistry::instance();
+        samn::ui::ModeDescriptor extra;
+        extra.id = "extratest";
+        extra.title = "Extra";
+        extra.icon = "layers";
+        extra.hue = QColor("#ff8a23");
+        extra.page = "AiTrainPage.qml";
+        {
+            QVERIFY(registry.registerMode(extra));  // before the window: "registered at startup"
+            Shell s;
+            loadShell(s);
+            QVERIFY(s.window);
+            QCOMPARE(s.window->property("modeNames").toStringList(), (QStringList{"Player", "Generator", "Training", "Extra"}));
+            QVERIFY(hasNamedItem(s.one("TopBar"), "modeTab_3"));
+            QTest::keyClick(s.window, Qt::Key_4, Qt::ControlModifier);
+            QTRY_COMPARE_WITH_TIMEOUT(s.mode(), 3, kWait);
+            QCOMPARE(s.pillName(), QStringLiteral("Extra"));
+            QTRY_VERIFY_WITH_TIMEOUT(s.one("AiTrainPage") && s.one("AiTrainPage")->isVisible(), kWait);
+            // Removed while shown: the tab, the page and the key go, the shell is back in the Player.
+            QVERIFY(registry.unregisterMode("extratest"));
+            QTRY_COMPARE_WITH_TIMEOUT(s.mode(), 0, kWait);
+            QCOMPARE(s.window->property("modeNames").toStringList(), (QStringList{"Player", "Generator", "Training"}));
+            QVERIFY(!s.one("AiTrainPage"));
+            QVERIFY(!hasNamedItem(s.one("TopBar"), "modeTab_3"));
+            QTest::keyClick(s.window, Qt::Key_4, Qt::ControlModifier);
+            QTest::qWait(150);
+            QCOMPARE(s.mode(), 0);
+            // Registered while running: it appears without a restart.
+            QVERIFY(registry.registerMode(extra));
+            QTRY_COMPARE_WITH_TIMEOUT(s.window->property("modeNames").toStringList().size(), 4, kWait);
+            QVERIFY(registry.unregisterMode("extratest"));
         }
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }

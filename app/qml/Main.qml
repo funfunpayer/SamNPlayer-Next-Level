@@ -152,17 +152,21 @@ ApplicationWindow {
             asynchronous: true
             sourceComponent: TrainingPage { overlayOpen: win.overlayOpen; device: deviceCtl; autostart: trainingStart }
         }
-        // Plugin modes (D-155): loaded only while switched on in Settings.
-        Loader {
-            id: aiTrain
-            objectName: "aiTrainLoader"
-            active: Plugins.aiTrainEnabled
-            sourceComponent: AiTrainPage { overlayOpen: win.overlayOpen }
+        // The other modes of the registry (D-165, plugin modes D-155): one page each,
+        // loaded while the mode is listed (visible), in the tab order after the built-in three.
+        Repeater {
+            model: ModeRegistry.modes.filter(m => !m.builtin)
+            delegate: Loader {
+                required property var modelData
+                objectName: "modePage_" + modelData.id
+                source: modelData.page
+                onLoaded: if ("overlayOpen" in item) item.overlayOpen = Qt.binding(() => win.overlayOpen)
+            }
         }
     }
-    // A plugin mode switched off while it is shown: back to the Player.
+    // A mode that is removed or switched off while it is shown: back to the Player.
     Connections {
-        target: Plugins
+        target: ModeRegistry
         function onChanged() { if (win.mode >= top.modes.length) win.mode = 0 }
     }
 
@@ -396,12 +400,17 @@ ApplicationWindow {
     Shortcut { sequence: "Esc"; enabled: handbookPage.open; onActivated: handbookPage.open = false }
     Shortcut { sequence: "Esc"; enabled: settingsPage.open && !handbookPage.open; onActivated: settingsPage.open = false }
 
-    // Ctrl+1…3: the modes, as the tabs (D-150; replaces the M deck).
+    // Ctrl+1…: the modes, as the tabs (D-150; replaces the M deck); the keys come from the registry.
     Repeater {
-        model: top.modes.length
+        model: ModeRegistry.modes
         delegate: Item {
+            required property var modelData
             required property int index
-            Shortcut { sequence: "Ctrl+" + (index + 1); onActivated: win.mode = index }
+            Shortcut {
+                sequence: modelData.shortcut
+                enabled: modelData.shortcut !== "" && modelData.enabled
+                onActivated: win.mode = index
+            }
         }
     }
 

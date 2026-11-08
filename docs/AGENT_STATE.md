@@ -2,7 +2,17 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 8 Nov 2026, Claude, branch `claude/samn2-json-fallback`: nlohmann_json comes from the system package first, then the git-clone fallback main already had (handover below). No code behaviour changed. Cursor, same day: probe-on-link warning box (#191). Earlier: 7 Nov 2026, Claude, branch `claude/samn2-vision-bench`: `samn_bench`, the detection benchmark, and its baseline (handover below). No engine behaviour changed. Before: the video playhead extrapolation (D-164, `claude/samn2-playhead`, #163) and the `DeviceWorker` move (#166) are merged.
+**Last update:** 8 Nov 2026, Claude, branch `claude/samn2-kernel-modes`: `ModeRegistry` (D-165); the tab row, the Ctrl+N keys and the page stack read it (handover below). No visible change. Earlier: 8 Nov 2026, Claude, branch `claude/samn2-json-fallback`: nlohmann_json comes from the system package first, then the git-clone fallback main already had (handover below). No code behaviour changed. Cursor, same day: probe-on-link warning box (#191). Earlier: 7 Nov 2026, Claude, branch `claude/samn2-vision-bench`: `samn_bench`, the detection benchmark, and its baseline (handover below). No engine behaviour changed. Before: the video playhead extrapolation (D-164, `claude/samn2-playhead`, #163) and the `DeviceWorker` move (#166) are merged.
+
+## Handover: `claude/samn2-kernel-modes` (8 Nov, kernel / modules, slice 1: ModeRegistry)
+
+Owner direction: the core is the kernel, the pages are modules, compiled in plus registries.
+
+- **Done:** `app/src/mode_registry.*` (`ModeRegistry`, D-165): descriptors {id, title, icon, hue, tooltip, shortcut, page, visible, enabled}. `TopBar.modes`, the Ctrl+N shortcuts and the extra page `Repeater`/`Loader` in `Main.qml` read it; Player, Generator, Training stay hand-wired and built in; AI Train is registered hidden and `Plugins.setAiTrainEnabled` calls `setVisible`. `Plugins.modes` is gone. Order, titles, icons, hues, keys unchanged.
+- **Tests:** `tests/app/mode_registry_test.cpp` (new, 7 cases); `shell_qml_test`: `registeredModeGetsTabKeyAndPage` (new). Existing tests unchanged. Local Release build, Qt 6.4.2 offscreen: mode_registry_test 9/9 incl. init/cleanup, shell_qml_test 25/25. Other app tests were not rebuilt here.
+- **There is no ModeDeck:** D-150 replaced the M deck with the tab row, so slice 1 covers TopBar, keys and pages only.
+- **Next slice (not started): `DeviceService`.** A pure-virtual interface (send level / position / axis, connection state, battery, generation, `setSessionActiveFor`, `stop`, `emergencyStop`) that `PlayerController`, `TrainingController` and `PlaybackOutput` use instead of `DeviceController*`. It touches `Q_PROPERTY(DeviceController* device)` in the Player and Training controllers (QML binds them), `QPointer<DeviceController>`, and `connect(..., &DeviceController::statusChanged)`; the interface needs the signals too (QObject base). Add a `FakeDeviceService` so the `playback_output_test` / `training_controller_test` need no real controller. Judged larger than the rest of this PR, so left out.
+- **Stay off:** `app/qml` Player/Editor/Generator pages beyond what this PR touched (Main.qml, TopBar.qml).
 
 ## Handover: `claude/samn2-json-fallback` (8 Nov, CI: nlohmann_json from the system first)
 

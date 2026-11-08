@@ -15,6 +15,7 @@ qt_add_qml_module(samn_app
   SOURCES
     src/theme.h
     src/plugins.h src/plugins.cpp
+    src/mode_registry.h src/mode_registry.cpp
     src/label_controller.h src/label_controller.cpp
     src/model_download.h src/model_download.cpp
     src/train_controller.h src/train_controller.cpp
