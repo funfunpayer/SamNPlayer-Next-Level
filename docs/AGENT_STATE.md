@@ -2,18 +2,28 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-contact-save-635a`: Contact feel probe + Save to script (on top of bake-share). Stay off intensity-arc (#168).
+**Last update:** 8 Nov 2026, Cursor, branch `cursor/typed-offset-635a`: typed offset + Drive/Recipe + Save Emotion Script. #177 Contact probe merged. Stay off intensity-arc (#168).
 
-## Handover: `cursor/player-contact-save-635a` (8 Nov, Player contact feel probe + Save)
+## Handover: `cursor/typed-offset-635a` (8 Nov, Player Script Tools polish)
+
+Owner: finish Player/Editor GUI (Claude owns #168). Closes typed offset + feel-row Drive / Save Emotion Script.
+
+- **OffsetField:** typed ±10 000 ms, step 10; ±50 buttons kept.
+- **Drive:** Recipe | Axes (`setPlaybackSource`); contact block hidden in Axes mode.
+- **Save Emotion Script:** `saveAsEmotionScript` → companion `.samn`.
+- **Tests:** `driveSourceAndEmotionScript`; Adapt tab asserts driveSource / offsetInput.
+- **Stay off:** Claude #168.
+
+## Handover: `cursor/player-contact-save-635a` (8 Nov, Player contact feel probe + Save) — merged #177
 
 Owner: Player/Editor GUI — Neo 2 contact feel after Adapt. Completes PARITY §3.1 feel probe / Save to script.
 
 - **Inspector → Playback → Contact:** Feel probe canvas (PreviewContactVibration) + Save to script (`saveContactToScript` → `ApplyContactRecipe` + reload).
 - **C++:** `contactFeelProbe` property; strength follows live intensity knob.
 - **Tests:** `contactControlsFollowTheScript` save+probe; `playbackTabMappingControls` UI.
-- **Stay off:** Claude #168. Stacked on bake-share until #176 merges.
+- **Stay off:** Claude #168.
 
-## Handover: `cursor/player-bake-share-635a` (8 Nov, Player Bake & share)
+## Handover: `cursor/player-bake-share-635a` (8 Nov, Player Bake & share) — merged #176
 
 Owner: Player/Editor GUI — Adapt / convert finished scripts. Unbury 0.7 Bake & share.
 
