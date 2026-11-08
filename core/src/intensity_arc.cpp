@@ -15,10 +15,12 @@ constexpr double kMotionCap = 2.0;
 constexpr int64_t kProminenceReachMs = 30000;
 // Smaller swells of the arc are the action's own ebb and flow.
 constexpr double kMinProminence = 0.05;
-// Confidence is a ranking value, not a probability: 0.4 is the prominence of
-// the step from steady action to a clear climax (motion 2x, loud) in the
-// synthetic clips of the tests and the bench, not a calibrated level.
-constexpr double kFullConfidenceProminence = 0.4;
+// Confidence ranks climaxes and is no probability: a climax twice as busy and
+// loud as the rest of the action (strength 1) has the full 1.
+constexpr double kFullStrength = 1.0;
+// One input's level on a climax counts at most this many times its action
+// level (an input near 0 elsewhere must not outweigh the other one).
+constexpr double kMaxRatio = 4.0;
 // Sound and motion topping out farther apart than this disagree.
 constexpr int64_t kAgreementMs = 5000;
 constexpr double kDisagreement = 0.7;
@@ -33,17 +35,32 @@ constexpr double kOnsetShare = 0.25;
 constexpr double kBuildUpRise = 0.05;
 // The action's level for the intro search: the 65th percentile of the detail.
 constexpr double kActionLevel = 0.65;
+// An intro is calm: one input at most half its level in the action after it.
+constexpr double kIntroCalm = 0.5;
 // A step on the calm side at least 0.4 of the best one ends the intro earlier
 // (the step from the intro to the action before an early plateau); a black
 // start before a calm intro is a smaller step and stays inside the intro.
 constexpr double kEarlierStep = 0.4;
-// Slow drift is no climax: a climax lifts the intensity at least this much
-// over the action beside it (the median of the detail over 60 s past the
-// lower of its two sides). Calibrated on synthetic clips only: random-walk
-// drift rose at most 0.26 that way, the true climaxes of the tests and the
-// bench at least 0.31 (two climaxes of motion 2x and loudness 0.9 over 0.3).
-constexpr double kMinRise = 0.25;
+// Drift is no climax: a climax stands this many times over the action beside
+// it (per input, the lower of the medians over 60 s on either side within
+// the action), unless one of its edges is sudden: then climax_gain is
+// enough. A sudden edge goes from a quarter to three quarters of the rise
+// within kSuddenMs (a step, a burst, a drop); drift rises slowly. Both fitted
+// on the bench's train families only (sweep in
+// docs/benchmarks/INTENSITY_ARC_2026-11-06.md).
+constexpr double kFlankGain = 1.6;
+constexpr int64_t kSuddenMs = 3000;
+// A sudden edge must rise this many times the clip's own detail noise (see
+// `noise` in ComputeArc), or jitter would look sudden. Fitted on the train
+// families.
+constexpr double kSuddenNoise = 6.0;
+// A sudden rise held to the clip's end (the top step of a staircase) counts
+// from this gain over the step before. Fitted on the train families.
+constexpr double kLastStepGain = 1.15;
 constexpr int64_t kFlankMs = 60000;
+// A clip is calm outside its climaxes when the spread of that action is at
+// most this share of the primary climax's rise. Fitted on the train families.
+constexpr double kCalmSpread = 1.0;
 // The time scales hold for clips of two minutes and more; shorter clips scale
 // them down, or a climax of a 30 s clip would be smoothed away.
 constexpr int64_t kFullScaleMs = 120000;
@@ -79,6 +96,13 @@ double MedianWithout(const std::vector<double>& sorted, std::vector<double> part
     return sorted[lo];
 }
 
+// The mean of v[a, b).
+double MeanOf(const std::vector<double>& v, size_t a, size_t b) {
+    double sum = 0;
+    for (size_t i = a; i < b; ++i) sum += v[i];
+    return b > a ? sum / double(b - a) : 0;
+}
+
 // A centred moving average over `window` steps (shorter at the ends), from prefix sums.
 std::vector<double> Smooth(const std::vector<double>& v, size_t window) {
     std::vector<double> prefix(v.size() + 1, 0.0);
@@ -92,21 +116,41 @@ std::vector<double> Smooth(const std::vector<double>& v, size_t window) {
     return out;
 }
 
-// The top of curve[a, b): the connected run around its maximum that stays
-// within kTopBand of the range below it, and the run's middle. Two bursts
-// with a dip between are two tops; jitter on a plateau does not cut it, and
-// the middle of a long plateau is steadier than any weighted centre.
+// The run [first, last) around a sample, grown each way within [a, b) to the
+// next sample at or above `level` across a dip that is shorter than `gap` or
+// never below `level - 2 * noise` (jitter); its ends stay at the level.
+void GrowRun(const std::vector<double>& curve, size_t a, size_t b, double level, size_t gap, double noise,
+             size_t& first, size_t& last) {
+    const double shallow = level - 2 * noise;
+    for (;;) {
+        size_t j = first;
+        bool deep = false;
+        while (j > a && curve[j - 1] < level && !(deep && first - j > gap)) deep |= curve[--j] < shallow;
+        if (j == a || curve[j - 1] < level) break;
+        first = j - 1;
+    }
+    for (;;) {
+        size_t j = last;
+        bool deep = false;
+        while (j < b && curve[j] < level && !(deep && j - last > gap)) deep |= curve[j++] < shallow;
+        if (j == b || curve[j] < level) break;
+        last = j + 1;
+    }
+}
+
+// The top of curve[a, b): the run around its maximum that stays within
+// kTopBand of the range below it (GrowRun), and the run's middle. Two bursts
+// with a real dip between are two tops, and the middle of a long plateau is
+// steadier than any weighted centre.
 struct Top {
     size_t first, last;  // [first, last)
     double centre;
 };
-Top TopOf(const std::vector<double>& curve, size_t a, size_t b) {
+Top TopOf(const std::vector<double>& curve, size_t a, size_t b, size_t gap, double noise) {
     const auto begin = curve.begin();
     const auto [lo, hi] = std::minmax_element(begin + std::ptrdiff_t(a), begin + std::ptrdiff_t(b));
-    const double level = *hi - kTopBand * (*hi - *lo);
     Top top{size_t(hi - begin), size_t(hi - begin) + 1, 0};
-    while (top.first > a && curve[top.first - 1] >= level) --top.first;
-    while (top.last < b && curve[top.last] >= level) ++top.last;
+    GrowRun(curve, a, b, *hi - kTopBand * (*hi - *lo), gap, noise, top.first, top.last);
     top.centre = 0.5 * double(top.first + top.last - 1);
     return top;
 }
@@ -145,8 +189,8 @@ Step BestStep(const std::vector<double>& prefix, size_t end, size_t min_len) {
 // where the action first stays above the midpoint of the two levels for
 // `steady` steps. When the action starts with a build-up, the midpoint is
 // reached late: the intro then ends where the rise leaves the intro's level.
-size_t IntroEnd(const std::vector<double>& detail, const std::vector<double>& arc, double share, size_t steady,
-                size_t build_up) {
+size_t IntroEnd(const std::vector<double>& detail, const std::vector<double>& arc, const std::vector<double>& motion,
+                const std::vector<double>& loud, double share, size_t steady, size_t build_up) {
     const size_t n = detail.size(), m = std::min(n, size_t(share * double(n)));
     if (m < 2 * steady) return 0;
     // A climax inside the window must not look like the step the intro ends
@@ -163,6 +207,12 @@ size_t IntroEnd(const std::vector<double>& detail, const std::vector<double>& ar
     for (Step earlier; (earlier = BestStep(prefix, step.at, steady)).at > 0 &&
                        earlier.high - earlier.low >= kEarlierStep * (step.high - step.low);)
         step = earlier;
+    // An intro is calm: the picture's motion or the sound is at most half its
+    // level in the action after it (a staircase's first step is no intro).
+    const auto calm = [&](const std::vector<double>& x) {
+        return !x.empty() && MeanOf(x, 0, step.at) <= kIntroCalm * MeanOf(x, step.at, m);
+    };
+    if (!calm(motion) && !calm(loud)) return 0;
     const double midpoint = 0.5 * (step.low + step.high);
     size_t end = step.at;
     for (size_t i = 0, run = 0; i < n && i < m + run; ++i) {
@@ -193,33 +243,63 @@ std::vector<size_t> LocalMaxima(const std::vector<double>& arc, size_t from) {
     return out;
 }
 
-// Whether peak stands kMinRise over the action beside it: the lower of the
-// detail's medians in the `flank` steps before a and after b. A side shorter
-// than a quarter of that (the clip's edge) does not count; without either
-// side it stands out.
-bool StandsOut(const std::vector<double>& detail, size_t a, size_t b, double peak, size_t flank) {
+// Whether the detail climbs from a quarter to three quarters of the way from
+// `base` up to `peak` within `limit` steps on the side of the top run that
+// starts at `edge` and walks by `dir` (-1 left, +1 right), inside [from, to).
+bool SuddenEdge(const std::vector<double>& detail, size_t edge, int dir, size_t from, size_t to, double base,
+                double peak, size_t limit) {
+    const double high = base + 0.75 * (peak - base), low = base + 0.25 * (peak - base);
+    const auto next = [&](size_t i) { return dir < 0 ? (i > from ? i - 1 : to) : (i + 1 < to ? i + 1 : to); };
+    size_t i = edge;
+    while (i != to && detail[i] >= high) i = next(i);
+    size_t j = i;
+    for (size_t k = 0; j != to && detail[j] >= low && k <= limit; ++k) j = next(j);
+    return i != to && j != to && detail[j] < low && (dir < 0 ? i - j : j - i) <= limit;
+}
+
+// The median of detail[from, to), or -1 when that is shorter than min_len.
+double FlankMedian(const std::vector<double>& detail, size_t from, size_t to, size_t min_len) {
+    if (to <= from || to - from < min_len) return -1;
+    return Percentile(std::vector<double>(detail.begin() + std::ptrdiff_t(from), detail.begin() + std::ptrdiff_t(to)), 0.5);
+}
+
+// How far one input rises on a climax: the mean of its detail over the top
+// run against its own level over the rest of the action (the median of the
+// action after the intro without the climax's stretch [a, b)) and against
+// the action beside it (the lower median of `flank` steps on either side,
+// within the action; a side shorter than a quarter of that does not count).
+struct Rise {
+    double over_rest = 1, over_flank = 1;
+};
+Rise RiseOf(const std::vector<double>& detail, const std::vector<double>& sorted_action, size_t intro, size_t a, size_t b,
+            size_t top_first, size_t top_last, size_t flank) {
     const auto begin = detail.begin();
-    const auto median = [&](size_t from, size_t to) {
-        if (to - from < flank / 4) return -1.0;
-        return Percentile(std::vector<double>(begin + std::ptrdiff_t(from), begin + std::ptrdiff_t(to)), 0.5);
-    };
-    const double left = median(a - std::min(a, flank), a), right = median(b, std::min(detail.size(), b + flank));
+    const double top = MeanOf(detail, top_first, top_last);
+    const auto ratio = [&](double level) { return level > 0 ? std::min(kMaxRatio, top / level) : top > 0 ? kMaxRatio : 1.0; };
+    Rise rise;
+    const double rest = MedianWithout(sorted_action, std::vector<double>(begin + std::ptrdiff_t(a), begin + std::ptrdiff_t(b)));
+    if (rest >= 0) rise.over_rest = ratio(rest);
+    const double left = FlankMedian(detail, std::max(intro, a - std::min(a, flank)), a, flank / 4);
+    const double right = FlankMedian(detail, b, std::min(detail.size(), b + flank), flank / 4);
     const double low = left < 0 ? right : right < 0 ? left : std::min(left, right);
-    return low < 0 || peak - low >= kMinRise;
+    if (low >= 0) rise.over_flank = ratio(low);
+    return rise;
 }
 
 // Topographic prominence: the height over the higher of the lowest points on
-// either side before the curve rises above the peak. A side walks on while it
-// stays within `top` of the peak (a long plateau is one top), then at most
-// `reach` steps further. A side that runs into the clip's edge does not count
-// (the curve flattens there); when neither side stops inside the clip, the
-// lower one counts. `opening`: the left side ran into the clip's start
-// without falling off the top band, so there is no rise to the peak.
+// either side before the curve rises above the peak, within the action
+// [from, size). A side walks on while it stays within `top` of the peak (a
+// long plateau is one top), then at most `reach` steps further. A side that
+// runs into the clip's end or the action's start does not count (the curve
+// flattens at an edge, and the intro is no part of the action); when neither
+// side stops inside, the lower one counts. `opening`: the clip has no intro
+// and the left side ran into its start without falling off the top band, so
+// nothing shows a rise to the peak.
 struct Prominence {
     double value = 0;
     bool opening = false;
 };
-Prominence ProminenceOf(const std::vector<double>& arc, size_t p, size_t reach, double top) {
+Prominence ProminenceOf(const std::vector<double>& arc, size_t p, size_t from, size_t reach, double top) {
     struct Side {
         double low;
         bool inside;
@@ -228,7 +308,7 @@ Prominence ProminenceOf(const std::vector<double>& arc, size_t p, size_t reach, 
         Side side{arc[p], false};
         size_t off_top = 0;
         for (size_t i = p;;) {
-            if (left ? i == 0 : i + 1 == arc.size()) return side;
+            if (left ? i <= from : i + 1 == arc.size()) return side;
             i = left ? i - 1 : i + 1;
             if (arc[i] > arc[p]) break;
             side.low = std::min(side.low, arc[i]);
@@ -242,7 +322,7 @@ Prominence ProminenceOf(const std::vector<double>& arc, size_t p, size_t reach, 
                         : l.inside           ? l.low
                         : r.inside           ? r.low
                                              : std::min(l.low, r.low);
-    return {arc[p] - base, !l.inside && l.low >= arc[p] - top};
+    return {arc[p] - base, from == 0 && !l.inside && l.low >= arc[p] - top};
 }
 
 }  // namespace
@@ -287,65 +367,125 @@ IntensityArc ComputeArc(const PhaseSignals& s, const ArcOptions& o) {
     out.arc = Smooth(intensity, scaled(o.arc_ms));
     if (motion.empty() && loud.empty()) return out;
 
-    const size_t intro = IntroEnd(out.detail, out.arc, o.intro_share, steps(o.steady_ms), scaled(o.build_up_ms));
+    const auto motion_detail = Smooth(motion, scaled(o.detail_ms)), loud_detail = Smooth(loud, scaled(o.detail_ms));
+    const size_t intro = IntroEnd(out.detail, out.arc, motion_detail, loud_detail, o.intro_share, steps(o.steady_ms),
+                                  scaled(o.build_up_ms));
     out.intro_end_ms = int64_t(intro) * s.step_ms;
 
-    // Climax candidates over the whole clip after the intro.
-    const auto motion_detail = Smooth(motion, scaled(o.detail_ms)), loud_detail = Smooth(loud, scaled(o.detail_ms));
+    // Climax candidates over the whole action after the intro.
+    const auto sorted_action = [intro](const std::vector<double>& d) {
+        std::vector<double> v(d.begin() + std::ptrdiff_t(std::min(intro, d.size())), d.end());
+        std::sort(v.begin(), v.end());
+        return v;
+    };
+    const auto motion_action = sorted_action(motion_detail), loud_action = sorted_action(loud_detail);
     const int64_t gap_ms = std::llround(double(o.secondary_gap_ms) * scale);
-    const size_t half_arc = scaled(o.arc_ms) / 2;
-    std::vector<double> after_intro(out.arc.begin() + std::ptrdiff_t(intro), out.arc.end());
-    std::sort(after_intro.begin(), after_intro.end());
+    const size_t half_arc = scaled(o.arc_ms) / 2, flank = scaled(kFlankMs);
+    const size_t gap = scaled(o.detail_ms), sudden_steps = scaled(kSuddenMs);
+    // The detail's own noise: the median second difference over one detail
+    // window (a ramp's slope is no noise), scaled by 1 / sqrt(3) to the
+    // median first difference of white noise.
+    double noise = 0;
+    {
+        std::vector<double> bends;
+        for (size_t i = intro + gap; i + gap < n; ++i)
+            bends.push_back(std::abs(out.detail[i - gap] - 2 * out.detail[i] + out.detail[i + gap]));
+        noise = Percentile(std::move(bends), 0.5) / std::sqrt(3.0);
+    }
     struct Candidate {
         ArcPeak peak;
-        double score;
+        double strength, score, top_level;
+        size_t a, b;  // its stretch
     };
     std::vector<Candidate> candidates;
     for (size_t p : LocalMaxima(out.arc, intro)) {
-        const auto [prominence, opening] = ProminenceOf(out.arc, p, scaled(kProminenceReachMs), kMinProminence);
+        const auto [prominence, opening] = ProminenceOf(out.arc, p, intro, scaled(kProminenceReachMs), kMinProminence);
         // A clip that opens at its top has an opening (a cold open, a loud
-        // title) or was cut inside the climax: nothing shows it rising.
+        // title) or was cut inside the climax: nothing shows it rising. A
+        // conservative choice: no climax is suggested there.
         if (opening || prominence < kMinProminence) continue;
         // The climax's stretch: from the detail's top near the arc's peak (the
         // arc fuses close bursts and may peak in the dip between them), where
-        // the detail stays above half the prominence.
-        const auto from = out.detail.begin() + std::ptrdiff_t(p - std::min(p, half_arc));
+        // the detail stays above half the prominence, within the action.
+        const auto from = out.detail.begin() + std::ptrdiff_t(std::max(intro, p - std::min(p, half_arc)));
         const auto to = out.detail.begin() + std::ptrdiff_t(std::min(n, p + half_arc + 1));
         const size_t q = size_t(std::max_element(from, to) - out.detail.begin());
         const double level = out.arc[p] - 0.5 * prominence;
         size_t a = q, b = q + 1;
-        while (a > 0 && out.detail[a - 1] >= level) --a;
+        while (a > intro && out.detail[a - 1] >= level) --a;
         while (b < n && out.detail[b] >= level) ++b;
-        // It stands clearly over the action beside it and min_gain over the
-        // median of the rest of the clip after the intro (without its own
-        // stretch, so a long plateau counts).
-        if (!StandsOut(out.detail, a, b, out.arc[p], scaled(kFlankMs))) continue;
-        const auto own_from = out.arc.begin() + std::ptrdiff_t(std::max(intro, a));
-        const auto own_to = out.arc.begin() + std::ptrdiff_t(std::max(intro, b));
-        const double rest = MedianWithout(after_intro, std::vector<double>(own_from, own_to));
-        if (rest >= 0 && out.arc[p] < o.min_gain * rest) continue;
-        const Top top = TopOf(out.detail, a, b);
+        // A climax is the exception: the rest of the action is longer than it.
+        if (2 * (b - a) >= n - intro) continue;
+        // Its strength: per input, how many times its own action level it
+        // reaches (so a climax in the sound alone counts like one in the
+        // picture alone), weighted like the intensity.
+        const Top top = TopOf(out.detail, a, b, gap, noise);
+        double over_rest = 0, over_flank = 0;
+        if (!motion.empty()) {
+            const Rise r = RiseOf(motion_detail, motion_action, intro, a, b, top.first, top.last, flank);
+            over_rest += wm * r.over_rest;
+            over_flank += wm * r.over_flank;
+        }
+        if (!loud.empty()) {
+            const Rise r = RiseOf(loud_detail, loud_action, intro, a, b, top.first, top.last, flank);
+            over_rest += wl * r.over_rest;
+            over_flank += wl * r.over_flank;
+        }
+        over_rest /= wm + wl;
+        over_flank /= wm + wl;
+        // It stands min_gain over the rest of the action and kFlankGain over
+        // the action beside it, or min_gain there too behind a sudden edge.
+        const double top_level = MeanOf(out.detail, top.first, top.last);
+        const double left = FlankMedian(out.detail, std::max(intro, a - std::min(a, flank)), a, flank / 4);
+        const double right = FlankMedian(out.detail, b, std::min(n, b + flank), flank / 4);
+        const auto above_noise = [&](double base) { return top_level - base >= kSuddenNoise * noise; };
+        const bool sudden_left = left >= 0 && above_noise(left) &&
+                                 SuddenEdge(out.detail, top.first, -1, intro, n, left, top_level, sudden_steps);
+        const bool sudden = sudden_left || (right >= 0 && above_noise(right) &&
+                                            SuddenEdge(out.detail, top.last - 1, +1, intro, n, right, top_level, sudden_steps));
+        // The last step of a staircase: a sudden rise held to the clip's end.
+        const double flank_gain = sudden_left && b == n ? kLastStepGain : sudden ? o.min_gain : kFlankGain;
+        if (over_rest < o.min_gain || over_flank < flank_gain) continue;
+        const double strength = over_rest - 1;
         ArcPeak peak;
         peak.t_ms = std::llround(top.centre * double(s.step_ms));
         peak.start_ms = int64_t(top.first) * s.step_ms;
         peak.end_ms = int64_t(top.last) * s.step_ms;
         peak.prominence = prominence;
-        peak.confidence = std::clamp(prominence / kFullConfidenceProminence, 0.0, 1.0);
+        peak.confidence = std::clamp(strength / kFullStrength, 0.0, 1.0);
         if (!motion.empty() && !loud.empty()) {
-            const double apart = std::abs(TopOf(motion_detail, a, b).centre - TopOf(loud_detail, a, b).centre);
+            const double apart = std::abs(TopOf(motion_detail, a, b, gap, 0).centre - TopOf(loud_detail, a, b, gap, 0).centre);
             if (apart * double(s.step_ms) > double(kAgreementMs)) peak.confidence *= kDisagreement;
         }
         const double lateness = kEarlyWeight + (1 - kEarlyWeight) * double(peak.t_ms) / duration;
-        candidates.push_back({peak, prominence * lateness});
+        candidates.push_back({peak, strength, strength * lateness, top_level, a, b});
     }
     std::stable_sort(candidates.begin(), candidates.end(),
                      [](const Candidate& x, const Candidate& y) { return x.score > y.score; });
 
+    // More than one climax only in a clip that is calm outside its climaxes:
+    // the spread (p90 - p10) of the action outside every candidate's stretch
+    // is small against the primary's rise over that action's median. A busy
+    // clip (drift, a restless scene) gets one climax, as with the old rules.
+    bool calm = false;
+    if (!candidates.empty()) {
+        std::vector<bool> inside(n, false);
+        for (const auto& c : candidates) std::fill(inside.begin() + std::ptrdiff_t(c.a), inside.begin() + std::ptrdiff_t(c.b), true);
+        std::vector<double> outside;
+        for (size_t i = intro; i < n; ++i)
+            if (!inside[i]) outside.push_back(out.detail[i]);
+        if (!outside.empty()) {
+            const double spread = Percentile(outside, 0.9) - Percentile(outside, 0.1);
+            calm = spread <= kCalmSpread * (candidates.front().top_level - Percentile(outside, 0.5));
+        }
+    }
+
     // The primary, then the next ones that are high enough and far enough from every one taken.
     for (const auto& c : candidates) {
         if (!out.peaks.empty()) {
+            if (!calm) break;
             if (int(out.peaks.size()) > o.max_secondary) break;
-            if (c.peak.prominence < o.secondary_share * out.peaks.front().prominence) continue;
+            if (c.strength < o.secondary_share * candidates.front().strength) continue;
             const bool apart = std::all_of(out.peaks.begin(), out.peaks.end(), [&](const ArcPeak& q) {
                 return std::llabs(q.t_ms - c.peak.t_ms) >= gap_ms;
             });

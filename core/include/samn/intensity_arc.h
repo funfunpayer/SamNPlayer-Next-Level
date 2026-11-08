@@ -21,9 +21,9 @@ struct ArcOptions {
     int64_t build_up_ms = 15000;      // a rise at least this long is a build-up
     double intro_share = 0.4;         // the intro ends in the first 40 % of the clip
     int64_t steady_ms = 5000;         // the action has begun after this long above the intro
-    double min_gain = 1.25;           // a climax stands this far over the median of the rest
-    int max_secondary = 2;            // climaxes besides the primary
-    double secondary_share = 0.5;     // of the primary's prominence
+    double min_gain = 1.25;           // a climax reaches this many times the rest of the action (per input)
+    int max_secondary = 2;            // climaxes besides the primary, in a clip calm outside its climaxes
+    double secondary_share = 0.5;     // of the primary's strength
     int64_t secondary_gap_ms = 20000;  // between any two climaxes
 };
 
@@ -32,7 +32,7 @@ struct ArcPeak {
     int64_t start_ms = 0;   // the stretch around the top
     int64_t end_ms = 0;
     double prominence = 0;  // over the lows within 30 s past its top on either side, in intensity
-    double confidence = 0;  // 0..1, for ranking; not a calibrated probability
+    double confidence = 0;  // 0..1, from the strength: a ranking value, not a probability
 };
 
 struct IntensityArc {
@@ -40,13 +40,18 @@ struct IntensityArc {
     std::vector<double> detail;  // intensity smoothed over detail_ms, one value per step
     std::vector<double> arc;     // intensity smoothed over arc_ms
     int64_t intro_end_ms = 0;    // 0: no intro
-    std::vector<ArcPeak> peaks;  // the primary climax first, then the others by rank
+    std::vector<ArcPeak> peaks;  // the primary climax first, then the others by rank (only in a calm clip)
 };
 
 // Motion counts against the clip's busy level (its 90th percentile), the
 // loudness as given (0..1). Missing, negative and NaN values count as 0; an
 // input that is shorter than the clip or all 0 is missing. The clip's length
-// is the motion's, or the loudness's without motion.
+// is the motion's, or the loudness's without motion. A climax is a rise
+// within the action after the intro, measured per input against that
+// input's own level, so one in the sound alone counts like one in the
+// picture alone; drift, an even action after a calm intro and a clip that
+// opens at its top give none. The thresholds are fitted on synthetic clips
+// (docs/benchmarks/INTENSITY_ARC_2026-11-06.md).
 IntensityArc ComputeArc(const PhaseSignals& s, const ArcOptions& o = {});
 
 // The factor the time scales shrink by for a clip of duration_ms: 1 from two

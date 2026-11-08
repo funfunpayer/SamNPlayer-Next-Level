@@ -115,22 +115,35 @@ samn::PhaseSignals Black(samn::PhaseSignals s, double from_s, double to_s) {
     for (size_t i = size_t(from_s * 2); i < size_t(to_s * 2) && i < s.luma.size(); ++i) s.luma[i] = 0;
     return s;
 }
-// The motion as a slow random walk under even sound: no climax anywhere.
-samn::PhaseSignals Drift(uint32_t seed) {
+// Motion and sound as random walks of `step` per 500 ms (no climax
+// anywhere), +-15 % jitter, an optional calm intro, the loudness divided by
+// its loudest step as the label editor does.
+samn::PhaseSignals Walk(uint32_t seed, double step, bool intro) {
     samn::PhaseSignals s;
     s.step_ms = 500;
     uint32_t state = seed;
-    const auto jitter = [&] {
+    const auto u = [&] {
         state = state * 1103515245u + 12345u;
-        return double((state >> 16) % 1000) / 1000.0 - 0.5;
+        return double((state >> 16) % 1000) / 1000.0;
     };
-    double m = 0.2;
+    double m = 0.2, l = 0.3;
     for (int i = 0; i < 1200; ++i) {
-        m = std::clamp(m + 0.01 * jitter(), 0.05, 0.4);
+        m = std::clamp(m + step * (u() - 0.5), 0.05, 0.4);
+        l = std::clamp(l + step * (u() - 0.5), 0.1, 0.6);
+        const bool calm = intro && i < 30;
         s.luma.push_back(0.5);
-        s.motion.push_back(m * (1 + 0.3 * jitter()));
-        s.loudness.push_back(0.3);
+        s.motion.push_back((calm ? 0.02 : m) * (1 + 0.3 * (u() - 0.5)));
+        s.loudness.push_back((calm ? 0.15 : l) * (1 + 0.3 * (u() - 0.5)));
     }
+    const double top = *std::max_element(s.loudness.begin(), s.loudness.end());
+    for (auto& v : s.loudness) v /= top;
+    return s;
+}
+// The loudness divided by its loudest step, as the label editor does.
+samn::PhaseSignals Normalised(samn::PhaseSignals s) {
+    const double top = *std::max_element(s.loudness.begin(), s.loudness.end());
+    if (top > 0)
+        for (auto& v : s.loudness) v /= top;
     return s;
 }
 bool PeakNear(const samn::IntensityArc& arc, double truth_s, double tolerance_s) {
@@ -286,23 +299,23 @@ TEST_CASE("arc: NaN, infinite and negative values count as 0") {
     CHECK(samn::ComputeArc(broken).peaks.empty());
 }
 
-TEST_CASE("arc: confidence ranks by prominence and drops when sound and motion disagree") {
-    // A ranking value, not a probability: prominence / 0.4, capped at 1, x 0.7
-    // when sound and motion top out more than 5 s apart.
-    const auto early = samn::ComputeArc(EarlyClimax());
-    REQUIRE(early.peaks.size() == 1);
-    CHECK(early.peaks[0].confidence == doctest::Approx(1.0));
-    const auto talky = samn::ComputeArc(TalkyIntro());
-    REQUIRE_FALSE(talky.peaks.empty());
-    CHECK(talky.peaks[0].confidence == doctest::Approx(0.811).epsilon(0.01));
+TEST_CASE("arc: confidence is a bounded ranking value") {
+    // In 0..1, larger for a stronger climax, at most 0.7 when sound and
+    // motion top out more than 5 s apart.
+    for (const auto& clip : {EarlyClimax(), TalkyIntro(), BuildUp(), TwoClimaxes(), MotionPeak()})
+        for (const auto& p : samn::ComputeArc(clip).peaks) {
+            CHECK(p.confidence >= 0);
+            CHECK(p.confidence <= 1);
+        }
+    const auto weak = samn::ComputeArc(Clip({{10, .02, .2}, {60, .2, .3}, {12, .3, .45}, {40, .2, .3}}));
+    const auto strong = samn::ComputeArc(Clip({{10, .02, .2}, {60, .2, .3}, {12, .34, .55}, {40, .2, .3}}));
+    REQUIRE(weak.peaks.size() == 1);
+    REQUIRE(strong.peaks.size() == 1);
+    CHECK(strong.peaks[0].confidence > weak.peaks[0].confidence);
     // Motion tops out at 60-72 s, the sound at 70-82 s: one climax, 10 s apart inside it.
     const auto apart = samn::ComputeArc(Clip({{10, .02, .2}, {50, .2, .3}, {10, .4, .3}, {2, .4, .9}, {10, .2, .9}, {38, .2, .3}}));
     REQUIRE(apart.peaks.size() == 1);
-    CHECK(apart.peaks[0].confidence == doctest::Approx(0.7));
-    // Even music has no top of its own near the motion's: it disagrees too.
-    const auto even_music = samn::ComputeArc(MotionPeak());
-    REQUIRE_FALSE(even_music.peaks.empty());
-    CHECK(even_music.peaks[0].confidence == doctest::Approx(0.519).epsilon(0.01));
+    CHECK(apart.peaks[0].confidence <= 0.7 + 1e-9);
 }
 
 TEST_CASE("arc: secondary climaxes must be high enough, far enough and few") {
@@ -372,7 +385,8 @@ TEST_CASE("phases: two bursts close together: the climax sits on a burst, not in
 
 TEST_CASE("phases: a black cut inside a climax leaves one climax") {
     const auto clip = Clip({{10, .02, .2}, {82, .2, .3}, {18, .4, .9}, {90, .2, .3}});  // climax 92-110 s
-    for (const auto& [from, to] : {std::pair{104.0, 106.5}, std::pair{98.0, 101.0}}) {
+    for (const auto& cut : {std::pair{104.0, 106.5}, std::pair{98.0, 101.0}}) {
+        const double from = cut.first, to = cut.second;  // plain locals: CAPTURE cannot take a structured binding
         CAPTURE(from);
         const auto phases = samn::SuggestPhases(Black(clip, from, to));
         CHECK(Count(phases, "climax") == 1);
@@ -391,8 +405,104 @@ TEST_CASE("phases: climaxes never merge past climax_max_ms") {
         if (p.name == "climax") CHECK(p.end_ms - p.start_ms <= o.climax_max_ms);
 }
 
-TEST_CASE("phases: slow drift is no climax") {
-    int climaxes = 0;
-    for (uint32_t seed = 1; seed <= 50; ++seed) climaxes += Count(samn::SuggestPhases(Drift(seed)), "climax");
-    CHECK(climaxes <= 2);
+TEST_CASE("phases: random walks get few climaxes") {
+    // 40 clips of 600 s per step size, half of them with a calm intro. The
+    // bounds are absolute, per clip: 0.05, 0.15 and 0.7, with margin over
+    // what was measured when they were set (0, 0.05 and 0.475; the rules
+    // before D-165 gave 0, 0.05 and 0.525 on these clips). Step 0.02 is the
+    // regime where both rule sets are unreliable
+    // (docs/benchmarks/INTENSITY_ARC_2026-11-06.md).
+    const std::pair<double, double> bounds[] = {{0.005, 0.05}, {0.01, 0.15}, {0.02, 0.7}};
+    for (const auto& bound : bounds) {
+        const double step = bound.first, per_clip = bound.second;  // plain locals for CAPTURE
+        CAPTURE(step);
+        int climaxes = 0;
+        for (uint32_t seed = 1; seed <= 40; ++seed) climaxes += Count(samn::SuggestPhases(Walk(seed, step, seed % 2 == 0)), "climax");
+        CHECK(climaxes / 40.0 <= per_clip);
+    }
+}
+
+TEST_CASE("phases: a calm intro before even action is no climax") {
+    // The intro is no part of the action: the even action after it is no
+    // climax, whatever its length.
+    for (double intro : {5.0, 10.0, 20.0, 30.0})
+        for (double length : {60.0, 200.0, 600.0}) {
+            CAPTURE(intro);
+            CAPTURE(length);
+            const auto s = Shape(length, [intro](double t) -> Level { return t < intro ? Level{.02, .2} : Level{.2, .3}; });
+            CHECK(Count(samn::SuggestPhases(s), "climax") == 0);
+        }
+    const auto tail = Shape(300, [](double t) -> Level { return t < 15 ? Level{.02, .2} : t > 270 ? Level{.02, .1} : Level{.2, .3}; });
+    CHECK(Count(samn::SuggestPhases(tail), "climax") == 0);
+    const auto beats = Shape(300, [](double t) -> Level {
+        return t < 20 ? Level{.02, .1} : Level{.2, std::fmod(t, 1.0) < .5 ? .7 : .2};
+    });
+    CHECK(Count(samn::SuggestPhases(beats), "climax") == 0);
+    const auto all_top = Shape(200, [](double t) -> Level { return t < 20 ? Level{.02, .2} : Level{.4, .9}; });
+    CHECK(Count(samn::SuggestPhases(all_top), "climax") == 0);
+}
+
+TEST_CASE("phases: a climax in the sound alone is found") {
+    // A still camera, the music swells: motion even (or no picture motion at
+    // all), loudness from 0.3 to 0.9 over 12 s.
+    const auto even = Normalised(Shape(300, [](double t) -> Level {
+        return t < 15 ? Level{.02, .2} : std::abs(t - 220) < 6 ? Level{.2, .9} : Level{.2, .3};
+    }));
+    CHECK(Near(ClimaxMids(samn::SuggestPhases(even)), 220, 5));
+    auto still = Shape(300, [](double t) -> Level {
+        return t < 10 ? Level{0, .1} : std::abs(t - 220) < 6 ? Level{0, .6} : Level{0, .35};
+    });
+    const auto arc = samn::ComputeArc(still);
+    CHECK(PeakNear(arc, 220, 5));
+    // A small rise of the motion with a moderate one of the sound.
+    const auto mixed = Normalised(Shape(300, [](double t) -> Level {
+        return t < 15 ? Level{.02, .2} : std::abs(t - 220) < 6 ? Level{.26, .6} : Level{.2, .3};
+    }));
+    CHECK(Near(ClimaxMids(samn::SuggestPhases(mixed)), 220, 5));
+}
+
+TEST_CASE("phases: a climax that fades from its own level has a cool-down") {
+    // Where such a climax ends is ambiguous: the plateau at 144-156 s fades
+    // from its own level, so the true top runs on into the fade until its
+    // first calm step (the motion back at the action's 0.2, 236 s). The
+    // climax must lie inside that top, its midpoint within 8 s of the
+    // plateau's middle (150 s).
+    const auto s = Shape(300, [](double t) -> Level {
+        if (t < 10) return {.02, .2};
+        if (t < 144) return {.2, .3};
+        if (t < 156) return {.4, .9};
+        const double f = 1 - (t - 156) / 160;
+        return {.4 * f, .9 * f};
+    });
+    const auto phases = samn::SuggestPhases(s);
+    REQUIRE(Count(phases, "climax") == 1);
+    for (const auto& p : phases)
+        if (p.name == "climax") {
+            CHECK(p.start_ms >= 144000);
+            CHECK(p.end_ms <= 236000);
+        }
+    CHECK(Near(ClimaxMids(phases), 150, 8));
+    CHECK(Count(phases, "cool-down") == 1);
+}
+
+TEST_CASE("phases: a staircase whose top step runs to the end has its climax there") {
+    const auto s = Shape(300, [](double t) -> Level {
+        if (t < 10) return {.02, .2};
+        const int k = int((t - 10) / 58);
+        return {.1 + .06 * k, .2 + .15 * k};
+    });
+    const auto mids = ClimaxMids(samn::SuggestPhases(s));
+    REQUIRE(mids.size() == 1);
+    CHECK(mids[0] >= 242);
+}
+
+TEST_CASE("phases: a climax boxed in by black cuts takes its longest free piece") {
+    const auto clip = Clip({{10, .02, .2}, {82, .2, .3}, {18, .4, .9}, {90, .2, .3}});  // climax 92-110 s
+    const auto phases = samn::SuggestPhases(Black(Black(clip, 98, 101), 105, 107));
+    REQUIRE(Count(phases, "climax") == 1);
+    for (const auto& p : phases)
+        if (p.name == "climax") {
+            CHECK(p.end_ms <= 98000);  // the 6 s piece before the first cut, not the 4 s one between them
+            CHECK(p.end_ms - p.start_ms >= 6000);
+        }
 }

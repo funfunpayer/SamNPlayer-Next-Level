@@ -88,16 +88,25 @@ std::vector<LabelPhase> SuggestPhases(const PhaseSignals& s, const PhaseRuleOpti
     for (const auto& peak : arc.peaks) {
         const size_t from = std::max(action, index(peak.start_ms)), to = std::min(last, index(peak.end_ms) + 1);
         if (from >= to) continue;
-        // A top on an empty picture moves to the nearest free one of its stretch.
-        size_t top = std::clamp(index(peak.t_ms), from, to - 1);
-        for (size_t d = 0; !free(top) && d < to - from; ++d) {
-            if (top >= from + d && free(top - d)) top -= d;
-            else if (top + d < to && free(top + d)) top += d;
+        // The longest free piece of its stretch (an empty stretch may cut it);
+        // its top is the peak's own when that is free, else the piece's middle.
+        size_t a = from, b = from;
+        for (size_t i = from; i < to;) {
+            if (!free(i)) {
+                ++i;
+                continue;
+            }
+            size_t j = i;
+            while (j < to && free(j)) ++j;
+            if (j - i > b - a) {
+                a = i;
+                b = j;
+            }
+            i = j;
         }
-        if (!free(top)) continue;
-        size_t a = top, b = top + 1;
-        while (a > from && free(a - 1)) --a;
-        while (b < to && free(b)) ++b;
+        if (a == b) continue;
+        const size_t peak_top = index(peak.t_ms);
+        const size_t top = peak_top >= a && peak_top < b ? peak_top : a + (b - a) / 2;
         const size_t lo = steps(o.climax_min_ms), hi = steps(o.climax_max_ms);
         while (b - a < lo && (free(a - 1) || free(b))) {
             if (free(a - 1)) --a;
@@ -117,14 +126,16 @@ std::vector<LabelPhase> SuggestPhases(const PhaseSignals& s, const PhaseRuleOpti
     }
 
     // Cool-down: after the last climax until the next empty stretch, when it is
-    // calmer than the climax and than the action before it (after an early
-    // climax the action often just goes on).
+    // calmer than the climax and ends calmer than the action before it (after
+    // an early climax the action often just goes on; a fade from the
+    // climax's own level ends calm).
     if (latest_b > 0) {
         size_t c = latest_b;
         while (c < last && !in_empty[c]) ++c;
         const double after = Mean(arc.detail, latest_b, c), during = Mean(arc.detail, latest_a, latest_b);
-        const bool calmer_than_before = latest_a == action || after < kCalmer * Mean(arc.detail, action, latest_a);
-        if (at(c) - at(latest_b) >= o.min_cooldown_ms && after < kCalmer * during && calmer_than_before)
+        const double end = Mean(arc.detail, c - (c - latest_b) / 3, c);
+        const bool ends_calmer = latest_a == action || end < kCalmer * Mean(arc.detail, action, latest_a);
+        if (at(c) - at(latest_b) >= o.min_cooldown_ms && after < kCalmer * during && ends_calmer)
             p.SetPhase(at(latest_b), at(c), "cool-down", false, "rules");
     }
 

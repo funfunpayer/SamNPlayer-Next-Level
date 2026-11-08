@@ -2,18 +2,42 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 6 Nov 2026, Claude, branch `claude/samn2-intensity-arc`: intro and climaxes from an intensity arc (D-165, core only; handover below). Before it: Cursor's Training output caps (`cursor/training-channel-caps-635a`, merged #165). Claude #163 (`claude/samn2-playhead`) is still open — stay off playhead/playback_output. Rebased onto main after #200 (audio onsets / D-168). Rebased onto main after #201 (2-D camera). Rebased onto main after #215 (intensity-arc). Rebased onto main after #213 (intensity-arc). Rebased onto main after #198 (intensity-arc). Rebased onto main after #214.
+**Last update:** 8 Nov 2026, Claude, branch `claude/samn2-intensity-arc`: intro and climaxes from an intensity arc (D-165, core only; second review answered; handover below). Before it: Cursor's Player BPM from stroke (#170), Adapt for device (#169), AI tip re-acquire (#167). Claude #163 (`claude/samn2-playhead`) is still open — stay off playhead/playback_output. Rebased onto main after #201 (2-D camera). Rebased onto main after #215 (intensity-arc). Rebased onto main after #213 (intensity-arc). Rebased onto main after #198 (intensity-arc). Rebased onto main after #214.
 
-## Handover: `claude/samn2-intensity-arc` (6 Nov, D-165 first slice: intro and climaxes)
 
-Owner: find the intro and the climaxes ("Höhepunkte") of a video from its sound and samples of its picture; cinema-grade, clean, lean, measured before and after, little CPU and memory. This slice is core only: no decoder change, no FFT, no Generator change.
 
-- **Core:** new `intensity_arc.h` / `intensity_arc.cpp`, `ComputeArc(PhaseSignals, ArcOptions)` -> `IntensityArc` (`detail` 4 s and `arc` 20 s curves, `intro_end_ms`, `peaks` with `t_ms`, `start_ms`, `end_ms`, `prominence`, `confidence`; the primary first). Design and constants in D-165; each constant has its reason next to it.
-- **`SuggestPhases`** keeps its empty-stretch rule and takes the intro and the climaxes from the arc. `steady_ms` and `climax_gain` feed the arc; `min_intro_ms` scales down below two minutes. `PhaseSignals::tempo` and `PhaseRuleOptions::active_share` are removed (no caller set them). Still suggestions only; `ApplyPhaseSuggestions` untouched.
-- **Behaves differently:** climaxes anywhere after the intro (the old search began at half the clip), up to three (the Training's video stage pauses once per *confirmed* climax), each one stretch of non-empty pictures a step away from the others (never cut by a black cut, never merged past `climax_max_ms`); motion is capped at 2x its 90th percentile, not at 1x; a clip that opens at its top gets no climax there (decided, see D-165); the cool-down follows the last climax only when it is clearly calmer than the action before it too.
-- **Review of #168 (refuted, fixed in this branch):** an edge climax was dropped (an edge side counted in the prominence), a long plateau had no prominence within 30 s, short clips lost the climax (fixed 20 s arc), close bursts put the climax in the dip, black cuts split climaxes into pieces, touching climaxes merged past `climax_max_ms`, slow drift gave false climaxes, and the bench never produced these shapes. Each has a test that failed before the fix (`intensity_arc_test.cpp`, 7 new phase cases; the opening case pins the decision and passed before too), and the bench has 15 new scenarios with the old rules as the oracle.
-- **Measured** (`docs/benchmarks/INTENSITY_ARC_2026-11-06.md`, 550 synthetic clips in 22 scenarios): climax hits 351 -> 518 with no scenario worse than the old rules, intro hits 517 -> 550, false climaxes 51 -> 6; the review's drift clips 23 (old) / 64 (first arc) -> 2 of 200; CPU about 1.5x the old rules (44-56 us against 30-37 us per call at -O2, 2-3 ms on a 2 h clip). The review's fuzzer runs clean under ASan / UBSan. Still weak: slow build-ups of 100-500 s (20 of 25), two 10 s bursts only 15 s apart (one climax), a climax boxed in by two black cuts (kept shorter than `climax_min_ms`). Calibrated on synthetic clips only: `kMinRise` 0.25, `kFullConfidenceProminence` 0.4, `kActionLevel` 0.65, `kEarlierStep` 0.4.
-- **Tests:** `tests/core/intensity_arc_test.cpp` (21 cases). `phase_rules_test.cpp` unchanged and green. Bench: `tests/bench/phase_bench.cpp`, target `phase_bench`, built with the tests, not in ctest; exit 1 when the arc finds fewer climaxes than the old rules on any scenario.
+## Handover: `claude/samn2-intensity-arc` (6-8 Nov, D-165 first slice: intro and climaxes)
+
+Owner: find the intro and the climaxes ("Höhepunkte") of a video from its sound and samples of its picture; cinema-grade, clean, lean, measured before and after, little CPU and memory. This slice is core only: no decoder change, no FFT, no Generator change. PR #168, reviewed and refuted twice; this state answers both reviews.
+
+- **Core:** `intensity_arc.h` / `intensity_arc.cpp`, `ComputeArc(PhaseSignals, ArcOptions)` -> `IntensityArc` (`detail` 4 s and `arc` 20 s curves, `intro_end_ms`, `peaks` with `t_ms`, `start_ms`, `end_ms`, `prominence`, `confidence`; the primary first). Design in D-165. Each constant has its reason next to it, and the fitted ones say so.
+- **The design in one line each:**
+  - A climax is a rise **within the action** after the intro, never against the intro.
+  - It is measured **per input against that input's own level**, so a climax in the sound alone counts.
+  - It stands over the rest of the action (`climax_gain`) and over the action beside it: 1.6x, `climax_gain` behind a sudden edge, 1.15x for a sudden last step held to the clip's end.
+  - It takes less than half the action.
+  - Second and third climaxes only in a clip that is calm outside its climaxes.
+  - An intro must be calm (motion or sound at most half its level in the action).
+  - A clip that opens at its top gets no climax suggestion there (conservative).
+- **`SuggestPhases`:** keeps its empty-stretch rule and takes intro and climaxes from the arc. Every climax is the longest free stretch of its peak (never cut by black, never merged past `climax_max_ms`). The cool-down follows the last climax when it ends calmer than the action before it. `min_intro_ms` scales below two minutes. `PhaseSignals::tempo` and `PhaseRuleOptions::active_share` are removed (no caller set them).
+- **Measured** (`docs/benchmarks/INTENSITY_ARC_2026-11-06.md`):
+  - 24 scenarios: climax hits 369 -> 562 of 600, false climaxes 54 -> 8, intro hits 567 -> 600.
+  - 12 random-arc families, train and held-out seeds (held-out evaluated once, after the code was frozen): no family worse than the old rules under the acceptance written in the bench. That acceptance is: climax hits at least theirs; intro hits at most 2 % fewer; false climaxes per clip at most theirs + 0.02, or + 0.10 where theirs exceed 0.25 (fast random walks, where neither is reliable).
+  - With strict 5 s grading three family rows fail (shown in the doc).
+  - The thresholds are fitted on the train seeds; the doc has a sensitivity grid.
+  - CPU about 3.5-4x the old rules (84-99 us vs 22-27 us per call at -O2; 3.5 ms vs 0.75-1.1 ms on a 2 h clip).
+- **Tests:** `tests/core/intensity_arc_test.cpp`. The cases that failed before each fix are listed in the PR history:
+  - edge climax, plateau, short clips, close bursts, black cuts, merges;
+  - calm intro + even action, sound-only climaxes, fade cool-down, staircase top step, boxed-in climax;
+  - random walks against absolute bounds; confidence as properties.
+
+  `phase_rules_test.cpp` unchanged. Bench: `tests/bench/phase_bench.cpp`, target `phase_bench`, not in ctest, exit 1 when the acceptance fails.
+- **Limits:**
+  - Synthetic only.
+  - Fast random walks: 0.13-0.22 false climaxes per clip (old rules 0.30-0.39).
+  - Slow build-ups of 100-500 s: 17 of 25.
+  - Bursts 20 s apart fuse into one climax.
+  - A last staircase step under 1.15x is no climax.
 - **Left alone on purpose:** `LabelController::finishSuggest` divides the 500 ms loudness by the loudest step after `NormalizeLoudness` already scaled it. Not behaviour-neutral for the arc (rescaling the loudness changes the 0.6 / 0.4 blend; on cases A-E the peak times moved by up to 69 ms and the confidence by up to 0.07), so it stays until a slice measures it.
 - **D-number:** D-165, because the open playhead PR #163 takes D-164. If #163 lands with another number, or another PR takes D-165 first, renumber this one.
 - **Not verified:** real clips (synthetic only), Windows / MSVC, the Training stage with several confirmed climaxes on a real film.
