@@ -2,7 +2,15 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 7 Nov 2026, Claude, branch `claude/samn2-vision-bench`: `samn_bench`, the detection benchmark, and its baseline (handover below). No engine behaviour changed. Before: the video playhead extrapolation (D-164, `claude/samn2-playhead`, #163) and the `DeviceWorker` move (#166) are merged.
+**Last update:** 8 Nov 2026, Claude, branch `claude/samn2-json-fallback`: CI no longer depends on the github.com release download for nlohmann_json (handover below). No code behaviour changed. Earlier: 7 Nov 2026, Claude, branch `claude/samn2-vision-bench`: `samn_bench`, the detection benchmark, and its baseline (handover below). No engine behaviour changed. Before: the video playhead extrapolation (D-164, `claude/samn2-playhead`, #163) and the `DeviceWorker` move (#166) are merged.
+
+## Handover: `claude/samn2-json-fallback` (8 Nov, CI: nlohmann_json from the system first)
+
+On 8 Nov GitHub returned HTTP 504 for the release download of `json.tar.xz` for hours, so every job died in the CMake configure step before any code was built (#168 failed four re-runs for this reason alone).
+
+- **CMake:** `find_package(nlohmann_json 3.11 QUIET)` first; only if nothing is found, `FetchContent` of the pinned archive (same URL and SHA256 as before). No change for a developer machine without the package.
+- **CI:** the three Linux jobs install `nlohmann-json3-dev` (3.11.3 on Ubuntu 24.04) together with OpenCV. Verified: configure and build `core_tests` against the system package, 491/491 pass; without the package the fallback branch is taken.
+- **Not changed:** the Windows job still downloads the archive. Adding `nlohmann-json` to `ci/vcpkg/vcpkg.json` would change the hash that keys the vcpkg and the FFmpeg-dav1d caches and force an expensive rebuild; do it as its own PR if the outage returns.
 
 ## Handover: `claude/samn2-vision-bench` (7 Nov, detection benchmark, measurement only)
 
