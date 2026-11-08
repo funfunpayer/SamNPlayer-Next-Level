@@ -2,7 +2,16 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 7 Nov 2026, Cursor, branch `cursor/editor-tools-surface-635a`: Editor Align bar on curves. Playhead extrapolation landed on main from Claude (#163). Stay off intensity-arc (#168) if still open.
+**Last update:** 8 Nov 2026, Cursor, branch `cursor/player-curve-edit-635a`: Player Cap/Scale/Delete on heatmap selection. #171 Align bar merged. Stay off intensity-arc (#168) / vision-bench (#172).
+
+## Handover: `cursor/player-curve-edit-635a` (8 Nov, Player curve edit on mark)
+
+Owner: Player/Editor curves · optimize · align. Cap / Softer / Stronger / Delete in the Player (PARITY §3.1).
+
+- **Inspector → View → Curve edit:** Cap slider (150–800, `playback.cap_intensity`), Soft edges, Speed-cap / Softer / Stronger / Delete on the heatmap mark; active script lane (stroke, or baked vib/suction).
+- **C++:** `PlayerController::{cap,scale,delete}Selection` via `range_edit.h`; rewrite+reload; Delete clears the mark.
+- **Tests:** `curveEditOnHeatmapSelection`; `viewTabCurveEdit`.
+- **Stay off:** Claude #168 intensity arc / #172 vision bench.
 
 ## Handover: `claude/samn2-playhead` (5 Nov, video playhead extrapolation) — merged #163
 

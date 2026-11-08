@@ -306,6 +306,62 @@ private slots:
         qInstallMessageHandler(g_previous);
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }
+
+    // View tab: Curve edit card on the heatmap selection.
+    void viewTabCurveEdit() {
+        QTemporaryDir files;
+        const QString src = files.filePath("curve.funscript");
+        {
+            QFile f(src);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(R"({"actions":[{"at":0,"pos":10},{"at":1000,"pos":90},{"at":2000,"pos":10},{"at":3000,"pos":90},{"at":4000,"pos":10}]})");
+        }
+        g_messages.clear();
+        g_previous = qInstallMessageHandler(capture);
+        {
+            QQmlEngine engine;
+            engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
+            engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+            QQmlComponent comp(&engine);
+            comp.setData(R"(
+                import QtQuick
+                import SamN
+                Item {
+                    width: 360; height: 1700
+                    property alias player: pc
+                    DeviceController { id: dev }
+                    PlayerController { id: pc; device: dev }
+                    InspectorPanel { anchors.fill: parent; ctrl: pc; device: dev; tab: 3 }
+                })",
+                         QUrl("qrc:/test/WrapperCurveEdit.qml"));
+            QVERIFY2(comp.status() == QQmlComponent::Ready, qPrintable(comp.errorString()));
+            QQuickWindow window;
+            window.resize(360, 1700);
+            std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
+            QVERIFY(root);
+            root->setParentItem(window.contentItem());
+            window.show();
+            QVERIFY(QTest::qWaitForWindowExposed(&window));
+            auto* player = root->property("player").value<PlayerController*>();
+            QVERIFY(player);
+            QVERIFY(player->openPath(src));
+            for (const char* n : {"curveEditCard", "curveCap", "curveSoftEdges", "curveSofter",
+                                  "curveStronger", "curveDelete"}) {
+                auto* it = root->findChild<QQuickItem*>(n);
+                QVERIFY2(it && it->isVisible(), n);
+            }
+            QVERIFY(!root->findChild<QQuickItem*>("curveCap")->isEnabled());
+            QVERIFY(!root->findChild<QQuickItem*>("curveSofter")->isEnabled());
+            QVERIFY(root->findChild<QQuickItem*>("curveSoftEdges")->isEnabled());  // preference only
+            player->setMarker(0, 4000);
+            QTRY_VERIFY(root->findChild<QQuickItem*>("curveCap")->isEnabled());
+            player->setCapIntensity(20);
+            QVERIFY(player->capSelection());
+            QTRY_VERIFY(root->findChild<QQuickItem*>("curveEditNote")->isVisible());
+        }
+        qInstallMessageHandler(g_previous);
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
 };
 
 QTEST_MAIN(InspectorQmlTest)

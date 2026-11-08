@@ -7,6 +7,7 @@
 #include <QUrl>
 #include <QVariantList>
 #include <QtQml/qqmlregistration.h>
+#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
@@ -277,6 +278,14 @@ public:
     Q_INVOKABLE QString optimizeFor(const QString& target);
     // Write Neo vibration & suction lanes from the stroke into the .samn.
     Q_INVOKABLE bool axesFromStroke();
+    // Curve edit on the heatmap selection (0.7 Cap / Scale / Delete): rewrites
+    // the active script lane (stroke, or baked vibration/suction), saves and
+    // reloads. Needs a marked range.
+    Q_PROPERTY(double capIntensity READ capIntensity WRITE setCapIntensity NOTIFY curveEditChanged)
+    Q_PROPERTY(bool scaleSoftEdges READ scaleSoftEdges WRITE setScaleSoftEdges NOTIFY curveEditChanged)
+    Q_INVOKABLE bool capSelection();
+    Q_INVOKABLE bool scaleSelection(double factor);
+    Q_INVOKABLE bool deleteSelection();
     // 0.7 ExportScriptHeatmapPNG: "<script>.heatmap.png" beside the script,
     // 960 x 56 with chapter ticks. The path, or "" with lastError.
     Q_INVOKABLE QString exportHeatmapPng();
@@ -354,6 +363,10 @@ public:
     // Fill BPM from the open stroke's peak spacing and turn the grid on.
     // Returns the BPM set, or 0 with lastError / toolNote when unclear.
     Q_INVOKABLE double guessBpmFromStroke();
+    double capIntensity() const { return capIntensity_; }
+    void setCapIntensity(double v);
+    bool scaleSoftEdges() const { return scaleSoftEdges_; }
+    void setScaleSoftEdges(bool on);
     QStringList scriptFolders() const;
     bool hasMarker() const { return marker_.Valid(); }
     double markerStartMs() const { return double(marker_.start_ms); }
@@ -441,6 +454,7 @@ signals:
     void videoChanged();
     void offsetMsChanged();
     void toolNoteChanged();
+    void curveEditChanged();
     void playheadMsChanged();
     void lastErrorChanged();
     void variantsChanged();
@@ -477,6 +491,9 @@ private:
     void setView(samn::ViewWindow v);
     void clearScript();
     void pushToViews();
+    // Cap / Scale / Delete on the heatmap selection for the active script lane.
+    bool applySelectionEdit(const QString& label,
+                            const std::function<std::vector<samn::Action>(const std::vector<samn::Action>&)>& op);
     // Maps the script with the settings (0.7 StartPlayback): the vibration
     // and suction lanes and what the device gets. `fresh`: a new script.
     void remap(bool fresh);
@@ -526,6 +543,8 @@ private:
     samn::RangeMarker marker_;
     double oMarkerIntensity_ = 0.5, bpm_ = 0;
     double scriptTempoBpm_ = 0;  // from stroke peaks when the script opens
+    double capIntensity_ = 400;
+    bool scaleSoftEdges_ = false;
     bool speedHL_ = true;
     double speedHLThresh_ = 400;
     bool bpmGrid_ = false;
