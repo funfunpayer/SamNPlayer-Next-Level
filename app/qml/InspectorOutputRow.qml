@@ -21,4 +21,3 @@ Row {
     }
     Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; text: parent.level + "%"; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
 }
-// A labelled slider with its value (0.7 range + readout).
