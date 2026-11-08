@@ -298,10 +298,14 @@ private slots:
             QVERIFY(player);
             QVERIFY(player->openPath(src));
             for (const char* n : {"adaptCard", "adaptTarget", "adaptOptimize", "adaptEditTools",
-                                  "bakeShareCard", "bakeFeelChannels", "shareForApps"}) {
+                                  "bakeShareCard", "bakeFeelChannels", "shareForApps",
+                                  "driveSource", "saveEmotionScript", "offsetField", "offsetInput"}) {
                 auto* it = root->findChild<QQuickItem*>(n);
                 QVERIFY2(it && it->isVisible(), n);
             }
+            QCOMPARE(player->playbackSource(), QStringLiteral("recipe"));
+            QVERIFY(player->setPlaybackSource(QStringLiteral("axes")));
+            QTRY_COMPARE(root->findChild<QQuickItem*>("driveSource")->property("currentIndex").toInt(), 1);
             const QString msg = player->optimizeFor(QStringLiteral("neo2"));
             QVERIFY2(msg.startsWith("Neo 2 ready"), qPrintable(msg));
             QVERIFY(player->scriptPath().endsWith(QStringLiteral(".samn")));

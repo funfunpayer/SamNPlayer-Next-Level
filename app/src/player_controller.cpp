@@ -850,6 +850,96 @@ bool PlayerController::saveContactToScript() {
     return true;
 }
 
+bool PlayerController::setPlaybackSource(const QString& sourceIn) {
+    if (scriptPath_.isEmpty() || stroke_.size() < 2) {
+        setError(tr("Open a script first."));
+        return false;
+    }
+    const std::string source = samn::NormalizePlaybackSource(U8(sourceIn));
+    if (QString::fromStdString(source) == playbackSource_ && samn::IsSamnPath(U8(scriptPath_))) {
+        toolNote_ = tr("Drive already set to %1.").arg(playbackSource_ == QLatin1String("axes") ? tr("Axes")
+                                                                                                 : tr("Recipe"));
+        emit toolNoteChanged();
+        return true;
+    }
+    namespace fs = std::filesystem;
+    const std::string openedU8 = U8(scriptPath_);
+    const fs::path opened = fs::u8path(openedU8);
+    const bool wasSamn = samn::IsSamnPath(openedU8);
+    const std::string funscriptU8 = wasSamn ? samn::CompanionFunscriptPath(openedU8) : openedU8;
+    const fs::path funscript = fs::u8path(funscriptU8);
+    const fs::path samnPath = fs::u8path(samn::CompanionSamnPath(funscriptU8));
+
+    try {
+        samn::Document doc;
+        if (wasSamn || fs::exists(samnPath)) {
+            doc = samn::LoadDocument(wasSamn ? opened : samnPath);
+        } else {
+            doc = samn::LoadFunscriptFile(funscript);
+        }
+        if (doc.general.size() < 2) doc.general = stroke_;
+        if (source == samn::PlaybackAxes && doc.vibration.size() < 2 && doc.suction.size() < 2) {
+            doc.BakeNeoAxes();
+        }
+        doc.playback_source = source;
+        doc.recipe.playback_source = source;
+        if (doc.version == 0) doc.version = samn::SamnCurrentVersion;
+        if (doc.kind.empty()) doc.kind = samn::SamnKind;
+        if (doc.creator.empty()) doc.creator = "SamNPlayer";
+        samn::SaveDocument(wasSamn ? opened : samnPath, doc);
+        if (fs::exists(funscript) || !wasSamn) doc.ExportFunscript(funscript);
+    } catch (const std::exception& e) {
+        setFailure(tr("Drive: %1").arg(FromU8(e.what())));
+        return false;
+    }
+
+    const QString reload = wasSamn ? scriptPath_ : FromU8(samnPath.u8string());
+    if (!openScript(reload, videoPath_)) return false;
+    toolNote_ = tr("Drive · %1").arg(playbackSource_ == QLatin1String("axes") ? tr("Axes") : tr("Recipe"));
+    emit toolNoteChanged();
+    emit scriptEdited(scriptPath_);
+    return true;
+}
+
+QString PlayerController::saveAsEmotionScript() {
+    if (scriptPath_.isEmpty() || stroke_.size() < 2) {
+        setError(tr("Open a script first."));
+        return {};
+    }
+    namespace fs = std::filesystem;
+    const std::string openedU8 = U8(scriptPath_);
+    const fs::path opened = fs::u8path(openedU8);
+    const bool wasSamn = samn::IsSamnPath(openedU8);
+    const std::string funscriptU8 = wasSamn ? samn::CompanionFunscriptPath(openedU8) : openedU8;
+    const fs::path funscript = fs::u8path(funscriptU8);
+    const fs::path samnPath = fs::u8path(samn::CompanionSamnPath(funscriptU8));
+    const QString outPath = FromU8(samnPath.u8string());
+
+    try {
+        samn::Document doc;
+        if (wasSamn || fs::exists(samnPath)) {
+            doc = samn::LoadDocument(wasSamn ? opened : samnPath);
+        } else {
+            doc = samn::LoadFunscriptFile(funscript);
+        }
+        if (doc.general.size() < 2) doc.general = stroke_;
+        if (doc.version == 0) doc.version = samn::SamnCurrentVersion;
+        if (doc.kind.empty()) doc.kind = samn::SamnKind;
+        if (doc.creator.empty()) doc.creator = "SamNPlayer";
+        samn::SaveDocument(samnPath, doc);
+        if (fs::exists(funscript) || !wasSamn) doc.ExportFunscript(funscript);
+    } catch (const std::exception& e) {
+        setFailure(tr("Emotion Script: %1").arg(FromU8(e.what())));
+        return {};
+    }
+
+    if (!openScript(outPath, videoPath_)) return {};
+    toolNote_ = tr("Emotion Script saved · %1").arg(QFileInfo(outPath).fileName());
+    emit toolNoteChanged();
+    emit scriptEdited(scriptPath_);
+    return outPath;
+}
+
 void PlayerController::setCapIntensity(double v) {
     v = (std::isfinite(v) && v > 0) ? std::clamp(v, 150.0, 800.0) : 400.0;
     v = std::round(v / 25.0) * 25.0;
@@ -1044,6 +1134,7 @@ bool PlayerController::openScript(const QString& pathIn, const QString& videoIn)
     } catch (const std::exception&) {
     }
     profile_ = doc.profile;
+    playbackSource_ = QString::fromStdString(samn::NormalizePlaybackSource(doc.playback_source));
     recipeHasContact_ = doc.recipe.contact_vibration;
     contactMarks_ = doc.contact_marks && (samn::HasAnyArea(*doc.contact_marks) || !doc.contact_marks->tip_class.empty())
                         ? MarksInfo(*doc.contact_marks, doc.trajectory)
@@ -1542,6 +1633,7 @@ void PlayerController::clearScript() {
     partnerPath_.clear();
     extraPaths_.clear();
     contactControls_ = contactKnobsLive_ = false;
+    playbackSource_ = QStringLiteral("recipe");
     emit mappedChanged();
     stroke_.clear();
     vibration_.clear();

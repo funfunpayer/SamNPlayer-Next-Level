@@ -289,6 +289,12 @@ public:
     // 0.7 SaveContactSettings: write live contact on/off, Sensitivity and
     // Curve into the Emotion Script recipe and reload.
     Q_INVOKABLE bool saveContactToScript();
+    // 0.7 Drive select: "recipe" (contact path) or "axes" (baked vib/suction).
+    // Writes playbackSource into the Emotion Script and reloads.
+    Q_PROPERTY(QString playbackSource READ playbackSource NOTIFY mappedChanged)
+    Q_INVOKABLE bool setPlaybackSource(const QString& source);
+    // 0.7 Save Emotion Script: ensure a companion .samn and reload it.
+    Q_INVOKABLE QString saveAsEmotionScript();
     // Curve edit on the heatmap selection (0.7 Cap / Scale / Delete / Invert):
     // rewrites the active script lane (stroke, or baked vibration/suction),
     // saves and reloads. Cap/Scale/Delete and invertSelection need a mark;
@@ -423,6 +429,7 @@ public:
     bool contactControls() const { return contactControls_; }
     bool contactKnobsLive() const { return contactKnobsLive_; }
     QVariantMap contactFeelProbe() const;
+    QString playbackSource() const { return playbackSource_; }
     QStringList strengthPresets() const;
     QString activeStrength() const { return QString::fromStdString(activeStrength_); }
     void setActiveStrength(const QString& name);
@@ -552,6 +559,7 @@ private:
     int offsetMs_ = 0;
     QString toolNote_;
     bool vibrationFromScript_ = false, suctionFromScript_ = false;
+    QString playbackSource_ = QStringLiteral("recipe");
     std::map<std::string, std::vector<samn::Action>> axisActions_;
     QString activeLane_ = QStringLiteral("stroke");
     qint64 videoDurationMs_ = 0;

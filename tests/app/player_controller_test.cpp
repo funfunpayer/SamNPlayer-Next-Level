@@ -229,6 +229,8 @@ private slots:
             QVERIFY(c.openScript(d.filePath("A.funscript")));
             c.setOffsetMs(25000);  // clamped to ±10 s
             QCOMPARE(c.offsetMs(), 10000);
+            c.setOffsetMs(-10001);
+            QCOMPARE(c.offsetMs(), -10000);
             c.setOffsetMs(300);
             c.setVideoPositionMs(5000);
             QCOMPARE(c.playheadMs(), qint64(4700));
@@ -241,6 +243,28 @@ private slots:
         QCOMPARE(c2.offsetMs(), 300);
         QVERIFY(c2.openScript(d.filePath("B.funscript")));
         QCOMPARE(c2.offsetMs(), 0);
+    }
+
+    void driveSourceAndEmotionScript() {
+        QTemporaryDir d;
+        const QString path = d.filePath("drive.funscript");
+        writeFile(path, zigzag(21, 100));
+        PlayerController c;
+        QVERIFY(c.openScript(path));
+        QCOMPARE(c.playbackSource(), QString("recipe"));
+        const QString samn = c.saveAsEmotionScript();
+        QVERIFY2(!samn.isEmpty(), qPrintable(c.lastError()));
+        QVERIFY(samn.endsWith(QStringLiteral(".samn")));
+        QVERIFY(c.toolNote().contains("Emotion Script saved"));
+        QVERIFY(c.setPlaybackSource("axes"));
+        QCOMPARE(c.playbackSource(), QString("axes"));
+        QVERIFY(c.toolNote().contains("Axes"));
+        QVERIFY(!c.contactKnobsLive());  // axes mode: contact path off
+        const samn::Document doc = samn::LoadDocument(std::filesystem::u8path(c.scriptPath().toStdString()));
+        QCOMPARE(doc.playback_source, std::string(samn::PlaybackAxes));
+        QVERIFY(doc.vibration.size() >= 2);
+        QVERIFY(c.setPlaybackSource("recipe"));
+        QCOMPARE(c.playbackSource(), QString("recipe"));
     }
 
     void bakeOffsetWritesItIntoTheScript() {

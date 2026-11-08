@@ -655,6 +655,7 @@ GlassCard {
                     }
                 }
                 Card {
+                    id: scriptTools
                     title: qsTr("Script Tools")
                     help: "playback.script-offset"
                     Row {
@@ -680,7 +681,36 @@ GlassCard {
                             onAccepted: root.ctrl.bakeOffset()
                         }
                     }
-                    Note { text: qsTr("Positive: the script comes later. Saved per script. Bake writes it into the script's times (all channels, bookmarks and chapters), so other players get it too; the offset goes back to 0.") }
+                    Note { text: qsTr("Positive: the script comes later. Type a value (step 10 ms, ±10 000) or use ±50. Bake writes it into the script's times; the offset goes back to 0.") }
+                    Row {
+                        spacing: 8
+                        Text {
+                            textFormat: Text.PlainText
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 78
+                            text: qsTr("Drive")
+                            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                        }
+                        FlowCombo {
+                            objectName: "driveSource"
+                            width: scriptTools.width - 24 - 86
+                            enabled: root.ctrl.hasScript
+                            model: [qsTr("Recipe"), qsTr("Axes")]
+                            currentIndex: root.ctrl.playbackSource === "axes" ? 1 : 0
+                            onActivated: (i) => root.ctrl.setPlaybackSource(i === 1 ? "axes" : "recipe")
+                        }
+                    }
+                    FlowButton {
+                        objectName: "saveEmotionScript"
+                        text: qsTr("Save Emotion Script")
+                        icon: "save"
+                        enabled: root.ctrl.hasScript
+                        onClicked: {
+                            const path = root.ctrl.saveAsEmotionScript()
+                            if (path === "") root.projectStatus = root.ctrl.lastError
+                        }
+                    }
+                    Note { text: qsTr("Recipe = contact vibration from the stroke. Axes = baked vibration / suction lanes (Bake & share above). Save Emotion Script writes the companion .samn.") }
                     Note { objectName: "bakeNote"; visible: root.ctrl.toolNote !== ""; text: root.ctrl.toolNote }
                 }
                 // Effects (0.7 Player Inspector → Effects and "Playback &
@@ -789,19 +819,20 @@ GlassCard {
                 Card {
                     id: contact
                     title: qsTr("Contact vibration & strength")
-                    visible: root.ctrl.contactControls || root.ctrl.strengthPresets.length > 0
+                    visible: (root.ctrl.contactControls && root.ctrl.playbackSource !== "axes") || root.ctrl.strengthPresets.length > 0
                     readonly property var mapping: root.ctrl.mapping
                     readonly property var probe: root.ctrl.contactFeelProbe
+                    readonly property bool contactLive: root.ctrl.contactControls && root.ctrl.playbackSource !== "axes"
                     FlowButton {
                         objectName: "contactOff"
-                        visible: root.ctrl.contactControls
+                        visible: contact.contactLive
                         text: qsTr("Contact vibration off"); checked: contact.mapping.contactOff
                         onClicked: contact.mapping.contactOff = !contact.mapping.contactOff
                         HoverHandler { id: offHover }
                         ToolTipText { shown: offHover.hovered; text: qsTr("Turns off the contact vibration the script carries, without changing the file.") }
                     }
                     SliderRow {
-                        visible: root.ctrl.contactControls
+                        visible: contact.contactLive
                         label: qsTr("Strength")
                         help: "playback.contact-strength"
                         tip: qsTr("Live scaling of the contact vibration without rewriting the file. 1 = as created, 0 = off, up to 2 = stronger.")
@@ -810,7 +841,7 @@ GlassCard {
                         onPicked: (v) => contact.mapping.contactIntensity = Math.round(v * 20) / 20
                     }
                     SliderRow {
-                        visible: root.ctrl.contactControls
+                        visible: contact.contactLive
                         active: root.ctrl.contactKnobsLive
                         label: qsTr("Sensitivity")
                         help: "playback.sensitivity"
@@ -820,7 +851,7 @@ GlassCard {
                         onPicked: (v) => contact.mapping.contactSpan = Math.round(v * 20) / 20
                     }
                     Row {
-                        visible: root.ctrl.contactControls
+                        visible: contact.contactLive
                         spacing: 8
                         Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; width: 78; text: qsTr("Curve"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13 }
                         FlowCombo {
@@ -835,7 +866,7 @@ GlassCard {
                     // 0.7 Contact feel probe: synthetic bounce through Sensitivity / Curve / Strength.
                     Column {
                         objectName: "contactFeelProbe"
-                        visible: root.ctrl.contactControls
+                        visible: contact.contactLive
                         width: parent.width
                         spacing: 4
                         Row {
@@ -918,7 +949,7 @@ GlassCard {
                     }
                     FlowButton {
                         objectName: "saveContactToScript"
-                        visible: root.ctrl.contactControls
+                        visible: contact.contactLive
                         text: qsTr("Save to script")
                         icon: "save"
                         enabled: root.ctrl.hasScript && root.ctrl.contactKnobsLive
@@ -932,7 +963,7 @@ GlassCard {
                         text: root.ctrl.toolNote
                     }
                     Note {
-                        visible: root.ctrl.contactControls && !root.ctrl.contactKnobsLive
+                        visible: contact.contactLive && !root.ctrl.contactKnobsLive
                         text: qsTr("Sensitivity and curve act when the script plays from its recipe with contact vibration on.")
                     }
                     Row {
