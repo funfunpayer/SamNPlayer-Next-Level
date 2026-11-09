@@ -30,7 +30,7 @@ Item {
     // Side panels away: fullscreen or theatre.
     readonly property bool bare: fullStage || theatre
     property bool muted: false
-    readonly property string videoGlobs: "*.mp4 *.mkv *.avi *.mov *.wmv *.m4v *.webm *.ts *.m2ts *.flv *.mpg *.mpeg *.3gp *.ogv"
+    readonly property string videoGlobs: Theme.videoGlobs
     // An overlay (Settings) is open: its keys win.
     property bool overlayOpen: false
 

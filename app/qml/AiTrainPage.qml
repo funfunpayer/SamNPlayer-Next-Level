@@ -26,7 +26,7 @@ Item {
     FileDialog {
         id: clipSourceDialog
         title: qsTr("Open a video to cut")
-        nameFilters: [qsTr("Video (*.mp4 *.mkv *.webm *.mov *.avi *.m4v *.wmv)"), qsTr("All files (*)")]
+        nameFilters: [qsTr("Video (%1)").arg(Theme.videoGlobs), qsTr("All files (*)")]
         onAccepted: page.clipSource = clipCtl.localPath(selectedFile.toString())
     }
     FileDialog {
@@ -50,7 +50,7 @@ Item {
     FileDialog {
         id: clipDialog
         title: qsTr("Open a clip or an image to label")
-        nameFilters: [qsTr("Video or image (*.mp4 *.mkv *.webm *.mov *.avi *.m4v *.png *.jpg *.jpeg)"), qsTr("All files (*)")]
+        nameFilters: [qsTr("Video or image (%1 *.png *.jpg *.jpeg)").arg(Theme.videoGlobs), qsTr("All files (*)")]
         onAccepted: { page.showSetup = false; labelCtl.openVideo(selectedFile.toString()) }
     }
     FileDialog {
