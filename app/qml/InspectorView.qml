@@ -118,7 +118,18 @@ Column {
             }
             Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; text: Math.round(ctrl.speedHighlightThresh); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
         }
-        InspectorNote { text: qsTr("Heatmap: click = seek, drag = mark. Wheel on the heatmap zooms. Curve edit below uses the marked range.") }
+        Row {
+            spacing: 8
+            width: parent.width
+            Text {
+                textFormat: Text.PlainText
+                width: parent.width - 26
+                wrapMode: Text.WordWrap
+                text: qsTr("Heatmap: click = seek, drag = mark. Wheel on the heatmap zooms. Curve edit below uses the marked range.")
+                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+            }
+            HelpChip { objectName: "heatmapHintHelp"; key: "pb-marker-hint"; anchors.top: parent.top }
+        }
     }
     // Curve edit on the heatmap selection (0.7 Cap · Scale · Delete · Invert).
     MessageDialog {

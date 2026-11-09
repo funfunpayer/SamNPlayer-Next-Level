@@ -146,6 +146,16 @@ private slots:
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }
 
+    // PARITY quick win: header "Player" + empty-script wording, stage keys
+    // hint + help chip, and the Player shortcuts actually fire.
+    void headerKeysAndShortcuts() {
+        g_messages.clear();
+        g_previous = qInstallMessageHandler(capture);
+        runHeaderKeysAndShortcuts();
+        qInstallMessageHandler(g_previous);
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
+
 private:
     // Repeater delegates and Flow children: walk childItems() too.
     static QQuickItem* named(QQuickItem* root, const char* name) {
@@ -683,6 +693,87 @@ private:
         *ms = rest.left(s1).toLongLong();
         *path = QUrl::fromPercentEncoding(rest.mid(s2 + 1).toUtf8());
         return true;
+    }
+
+    void runHeaderKeysAndShortcuts() {
+        QQmlEngine engine;
+        engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
+        engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+        engine.addImageProvider(QStringLiteral("frames"), new samn::ui::FrameProvider);
+        QQmlComponent comp(&engine);
+        comp.setData(R"(
+            import QtQuick
+            import SamN
+            Item {
+                width: 1000; height: 700
+                property alias page: pp
+                DeviceController { id: dev }
+                PlayerPage { id: pp; anchors.fill: parent; device: dev }
+            })",
+                     QUrl("qrc:/test/Wrapper.qml"));
+        QVERIFY2(comp.status() == QQmlComponent::Ready, qPrintable(comp.errorString()));
+        QQuickWindow window;
+        window.resize(1000, 700);
+        std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
+        QVERIFY(root);
+        root->setParentItem(window.contentItem());
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto* page = root->property("page").value<QQuickItem*>();
+        auto* ctrl = page->property("controller").value<PlayerController*>();
+        QVERIFY(page && ctrl);
+
+        QCOMPARE(named(page, "playerHeaderTitle")->property("text").toString(), QStringLiteral("Player"));
+        QCOMPARE(named(page, "playerHeaderScriptLabel")->property("text").toString(),
+                 QStringLiteral("No Emotion Script selected"));
+
+        QTemporaryDir dir;
+        const QString script = dir.filePath(QStringLiteral("keys.funscript"));
+        QFile f(script);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(R"({"actions":[{"at":0,"pos":0},{"at":2000,"pos":100},{"at":5000,"pos":0},{"at":8000,"pos":50}]})");
+        f.close();
+        QVERIFY(ctrl->openPath(script));
+        QTRY_VERIFY(ctrl->hasScript());
+        QCOMPARE(named(page, "playerHeaderScriptLabel")->property("text").toString(), QStringLiteral("keys.funscript"));
+
+        auto* hint = named(page, "keysHint");
+        QVERIFY(hint && hint->isVisible());
+        QVERIFY(hint->property("text").toString().contains(QStringLiteral("Space")));
+        QVERIFY(named(page, "keysHintHelp")->isVisible());
+
+        // Shortcuts (Player page visible, no overlay).
+        const qint64 before = ctrl->playheadMs();
+        QTest::keyClick(&window, Qt::Key_Right);
+        QTRY_VERIFY(ctrl->playheadMs() >= before + 4000);  // +5 s, clamped by duration
+        QTest::keyClick(&window, Qt::Key_Left);
+        QTRY_VERIFY(ctrl->playheadMs() < before + 4000);
+
+        const int off0 = ctrl->offsetMs();
+        QTest::keyClick(&window, Qt::Key_Plus);
+        QTRY_COMPARE(ctrl->offsetMs(), off0 + 10);
+        QTest::keyClick(&window, Qt::Key_Minus);
+        QTRY_COMPARE(ctrl->offsetMs(), off0);
+
+        QVERIFY(!ctrl->loopEnabled());
+        QTest::keyClick(&window, Qt::Key_L);
+        QTRY_VERIFY(ctrl->loopEnabled());
+        QTest::keyClick(&window, Qt::Key_L);
+        QTRY_VERIFY(!ctrl->loopEnabled());
+
+        QTest::keyClick(&window, Qt::Key_T);
+        QTRY_VERIFY(page->property("theatre").toBool());
+        QTest::keyClick(&window, Qt::Key_T);
+        QTRY_VERIFY(!page->property("theatre").toBool());
+
+        const int marks0 = ctrl->oMarkers().size();
+        QTest::keyClick(&window, Qt::Key_O);
+        QTRY_COMPARE(ctrl->oMarkers().size(), marks0 + 1);
+
+        QTest::keyClick(&window, Qt::Key_Space);
+        QTRY_VERIFY(page->property("playing").toBool());
+        QTest::keyClick(&window, Qt::Key_Space);
+        QTRY_VERIFY(!page->property("playing").toBool());
     }
 
     void runSceneThumbs() {

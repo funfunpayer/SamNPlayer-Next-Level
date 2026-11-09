@@ -756,17 +756,28 @@ Item {
                     visible: ctrl.videoName !== "" || page.scriptOnly
                 }
                 // 0.7 keys hint on the stage (playback.js chrome).
-                Text {
-                    id: keysHint
-                    objectName: "keysHint"
-                    textFormat: Text.PlainText
+                Row {
+                    id: keysHintRow
+                    objectName: "keysHintRow"
                     anchors.horizontalCenter: parent.horizontalCenter
                     anchors.bottom: parent.bottom
                     anchors.bottomMargin: 14
+                    spacing: 8
                     visible: !page.empty && !page.fullStage
-                    opacity: 0.55
-                    text: qsTr("Space play/pause · ←/→ seek · ,/. fine · +/- offset · E Extended-O · T theatre · Esc leave fullscreen")
-                    color: "white"; font.family: Theme.fontSoft; font.pixelSize: 11
+                    Text {
+                        id: keysHint
+                        objectName: "keysHint"
+                        textFormat: Text.PlainText
+                        anchors.verticalCenter: parent.verticalCenter
+                        opacity: 0.55
+                        text: qsTr("Space play/pause · ←/→ seek · ,/. fine · +/- offset · L loop · E Extended-O · O O-marker · T theatre · Esc leave fullscreen")
+                        color: "white"; font.family: Theme.fontSoft; font.pixelSize: 11
+                    }
+                    HelpChip {
+                        objectName: "keysHintHelp"
+                        key: "pb-offset-hint"
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
                 }
             }
             VideoTransport {

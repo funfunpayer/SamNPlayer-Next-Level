@@ -6,11 +6,11 @@ Made on 8 Nov 2026 from the audit in [`PARITY.md`](PARITY.md) (113 open and 139 
 
 ### Quick wins (S)
 
-1. **Player key tests** (§3 keyboard item, §10): no test presses Space, arrows, `,` `.`, `+` `-`, L, E, O, or Ctrl+O. Add key-click tests in `player_page_qml_test`; the keys exist. Gets six lines back from partly to done.
-2. **Undo / Redo on the Player's curve edit** (§3 "Edit curve" item): wire Ctrl+Z / Ctrl+Y and two buttons to the same `edit_session` the Generator editor already uses.
+1. ~~**Player key tests**~~ — done (`headerKeysAndShortcuts`: Space, arrows, `+` `-`, L, T, O; header + keys hint).
+2. ~~**Undo / Redo on the Player's curve edit**~~ — done earlier (Ctrl+Z / Ctrl+Y + Undo/Redo under Curve edit).
 3. **Plain settings keys** (§2.3): `generator.reportPath`, `device.diagnosticsHistoryPath`, the `playback.feel_heatbands` pair; plus the diagnostics history list in Settings → Device (§8, §13 `GetDiagnosticsHistory`).
 4. **Window and brand wording** (§1 Window, brand lock-up): the title is "SamNPlayer Next" and the size is 1440x900 on purpose (D-150, D-151). Record that as "replaced" with the decision instead of leaving two partly lines.
-5. **Player polish** (§3): header title and "No Emotion Script selected" text, hover tooltip on the vibration and suction lanes, wheel zoom on the heatmap, the fixed hint text of the curve edit, the "only with a heatmap" hint rule.
+5. ~~**Player polish**~~ — header "Player" / "No Emotion Script selected", lane hover tips, heatmap wheel zoom + `pb-marker-hint` chip, keys-hint chip (remaining: soft-curve edit-dots hint belongs to the Generator editor).
 6. **Settings → Hardware and metrics** (§2.2 last collapsible, §13 `GetHardwareInfo`): reuse the System tab's adapter list as the "Check hardware" text; add the metrics file path and "Show summary".
 
 ### Medium (M)
@@ -45,7 +45,7 @@ Made on 8 Nov 2026 from the audit in [`PARITY.md`](PARITY.md) (113 open and 139 
 
 From the after-0.7.0 section and `ROADMAP.md` (b). The ROADMAP rows were not re-audited in this pass; their state is what the ROADMAP says, checked only where a feature name was easy to grep.
 
-1. **Hide panels button and Alt+B** (after 0.7.0): theatre (`T`) hides them already; add the button and the key. S.
+1. ~~**Hide panels button and Alt+B**~~ — done (#212: top-bar button + Alt+B).
 2. **Handbook text for 0.8 features** (after 0.7.0). S, see (a) 21.
 3. **Tip coast and "fail closed" rules** (after 0.7.0, generator rules): cancel and stale results are tested; tip coast and the no-silent-fallback rule are not. M, belongs to the engine slices in `AGENT_STATE.md` (camera compensation next).
 4. **Release contract** (after 0.7.0, D14): only `ci.yml` exists, no release workflow; write the guard with the first release. M.
