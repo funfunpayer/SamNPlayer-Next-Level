@@ -894,4 +894,16 @@ Item {
     }
     Shortcut { sequence: "Esc"; enabled: page.visible && page.fullStage && !page.overlayOpen; onActivated: page.fullStage = false }
     Shortcut { sequence: "T"; enabled: page.visible && !page.overlayOpen && !page.empty; onActivated: page.theatre = !page.theatre }
+    // Curve-edit undo. Same keys as the Generator editor; this page is hidden
+    // in other modes, and overlay (Settings) wins, like the keys above.
+    Shortcut {
+        sequences: [StandardKey.Undo]
+        enabled: page.visible && !page.overlayOpen && ctrl.canUndo
+        onActivated: ctrl.undo()
+    }
+    Shortcut {
+        sequences: [StandardKey.Redo, "Ctrl+Y"]
+        enabled: page.visible && !page.overlayOpen && ctrl.canRedo
+        onActivated: ctrl.redo()
+    }
 }

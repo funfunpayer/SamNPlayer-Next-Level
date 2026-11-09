@@ -595,6 +595,9 @@ bool PlayerController::openScript(const QString& pathIn, const QString& videoIn)
         setFailure(tr("Could not open %1: the script has no points.").arg(QFileInfo(path).fileName()));
         return false;
     }
+    // Curve-edit undo is per script, like the Generator's EditSession on open.
+    // The reload after a range edit keeps the step pushed before the write.
+    if (!preservingEditHistory_) resetCurveHistory(doc);
     // The script's own recipe (profile, sync, contact vibration, feel,
     // balance) and the Player's settings over it shape what the device
     // gets, as 0.7's StartPlayback did with MapOptionsFromScript; a plain
@@ -876,6 +879,7 @@ void PlayerController::setUiValue(const QString& key, const QVariant& value) {
 }
 
 void PlayerController::clearScript() {
+    resetCurveHistory({});
     strength_.clear();
     activeStrength_.clear();
     contactMarks_.clear();

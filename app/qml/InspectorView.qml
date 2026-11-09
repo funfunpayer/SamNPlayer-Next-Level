@@ -125,7 +125,7 @@ Column {
         id: invertAllDialog
         objectName: "curveInvertAllDialog"
         title: qsTr("Invert the curve?")
-        text: qsTr("Invert the whole lane? There is no undo here — open the Editor if you need one.")
+        text: qsTr("Invert the whole lane? (Undo can bring it back.)")
         buttons: MessageDialog.Ok | MessageDialog.Cancel
         onAccepted: ctrl.invertAll()
     }
@@ -202,6 +202,31 @@ Column {
                 onClicked: {
                     if (ctrl.hasMarker) ctrl.invertSelection()
                     else invertAllDialog.open()
+                }
+            }
+        }
+        Row {
+            spacing: 8
+            FlowButton {
+                objectName: "curveUndo"
+                text: qsTr("Undo")
+                enabled: ctrl.canUndo
+                onClicked: ctrl.undo()
+                HoverHandler { id: curveUndoHover }
+                ToolTipText {
+                    shown: curveUndoHover.hovered
+                    text: ctrl.canUndo ? ctrl.undoText + qsTr(" (Ctrl+Z)") : ctrl.undoText
+                }
+            }
+            FlowButton {
+                objectName: "curveRedo"
+                text: qsTr("Redo")
+                enabled: ctrl.canRedo
+                onClicked: ctrl.redo()
+                HoverHandler { id: curveRedoHover }
+                ToolTipText {
+                    shown: curveRedoHover.hovered
+                    text: ctrl.canRedo ? ctrl.redoText + qsTr(" (Ctrl+Y)") : ctrl.redoText
                 }
             }
         }

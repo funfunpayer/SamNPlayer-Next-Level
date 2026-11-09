@@ -991,6 +991,77 @@ private slots:
         QCOMPARE(flipped[3].pos, 20);
     }
 
+    // Cap / Scale / Delete / Invert share the Generator's EditSession: one
+    // step before the write, undo and redo round-trip the file, and opening
+    // another script drops the history.
+    void curveEditUndoRedoRestoresFileAndClearsOnOpen() {
+        QTemporaryDir d;
+        const QString path = d.filePath("edit.funscript");
+        writeFile(path, R"({"actions":[{"at":0,"pos":10},{"at":1000,"pos":90},{"at":2000,"pos":20},{"at":3000,"pos":80}]})");
+        PlayerController c;
+        QVERIFY(c.openScript(path));
+        QCOMPARE(c.pointCount(), 4);
+        QVERIFY(!c.canUndo());
+        QVERIFY(!c.canRedo());
+        QVERIFY(!c.undo());
+        QVERIFY(!c.capSelection());
+        QVERIFY(!c.canUndo());
+
+        c.setMarker(500, 2500);
+        QSignalSpy history(&c, &PlayerController::historyChanged);
+        QVERIFY(c.deleteSelection());
+        QVERIFY(history.count() >= 1);
+        QCOMPARE(c.pointCount(), 2);
+        QVERIFY(c.canUndo());
+        QVERIFY(!c.canRedo());
+        QVERIFY(c.undoText().contains(QStringLiteral("Delete range")));
+
+        const auto edited = samn::LoadFunscript(std::filesystem::u8path(path.toStdString())).actions;
+        QCOMPARE(int(edited.size()), 2);
+        QCOMPARE(edited[0].at, int64_t(0));
+        QCOMPARE(edited[0].pos, 10);
+        QCOMPARE(edited[1].at, int64_t(3000));
+        QCOMPARE(edited[1].pos, 80);
+
+        QVERIFY(c.undo());
+        QCOMPARE(c.pointCount(), 4);
+        QVERIFY(!c.canUndo());
+        QVERIFY(c.canRedo());
+        QVERIFY(c.redoText().contains(QStringLiteral("Delete range")));
+        const auto restored = samn::LoadFunscript(std::filesystem::u8path(path.toStdString())).actions;
+        QCOMPARE(int(restored.size()), 4);
+        QCOMPARE(restored[0].pos, 10);
+        QCOMPARE(restored[1].at, int64_t(1000));
+        QCOMPARE(restored[1].pos, 90);
+        QCOMPARE(restored[2].at, int64_t(2000));
+        QCOMPARE(restored[2].pos, 20);
+        QCOMPARE(restored[3].at, int64_t(3000));
+        QCOMPARE(restored[3].pos, 80);
+
+        QVERIFY(c.redo());
+        QCOMPARE(c.pointCount(), 2);
+        QVERIFY(c.canUndo());
+        QVERIFY(!c.canRedo());
+        const auto again = samn::LoadFunscript(std::filesystem::u8path(path.toStdString())).actions;
+        QCOMPARE(int(again.size()), 2);
+        QCOMPARE(again[0].pos, 10);
+        QCOMPARE(again[1].at, int64_t(3000));
+        QCOMPARE(again[1].pos, 80);
+
+        const QString other = d.filePath("other.funscript");
+        writeFile(other, zigzag());
+        QVERIFY(c.openScript(other));
+        QVERIFY(!c.canUndo());
+        QVERIFY(!c.canRedo());
+        QCOMPARE(c.pointCount(), 41);
+        QVERIFY(!c.undo());
+        QCOMPARE(c.pointCount(), 41);
+        const auto kept = samn::LoadFunscript(std::filesystem::u8path(path.toStdString())).actions;
+        QCOMPARE(int(kept.size()), 2);
+        QCOMPARE(kept[1].at, int64_t(3000));
+        QCOMPARE(kept[1].pos, 80);
+    }
+
     void speedHighlights() {
         QTemporaryDir d;
         writeFile(d.filePath("S.funscript"), zigzag());

@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "samn/curve_geometry.h"
+#include "samn/edit_session.h"
 #include "samn/funscript.h"
 #include "samn/marks.h"
 #include "samn/samn_file.h"
@@ -328,17 +329,29 @@ public:
     Q_INVOKABLE QString createCompanionAxis(const QString& axis);
     // Curve edit on the heatmap selection (0.7 Cap / Scale / Delete / Invert):
     // rewrites the active script lane (stroke, or baked vibration/suction),
-    // saves and reloads. Cap/Scale/Delete and invertSelection need a mark;
-    // invertAll flips the whole lane (Player asks first in QML).
+    // saves and reloads. Each edit is one EditSession undo step, pushed
+    // before the write (the same history the Generator editor uses).
+    // Cap/Scale/Delete and invertSelection need a mark; invertAll flips the
+    // whole lane (Player asks first in QML).
     Q_PROPERTY(double capIntensity READ capIntensity WRITE setCapIntensity NOTIFY curveEditChanged)
     Q_PROPERTY(bool scaleSoftEdges READ scaleSoftEdges WRITE setScaleSoftEdges NOTIFY curveEditChanged)
     // 0.7 FPS-Snap: seeks land on frame boundaries when > 0 (0 = off).
     Q_PROPERTY(double fpsSnap READ fpsSnap WRITE setFpsSnap NOTIFY curveEditChanged)
+    Q_PROPERTY(bool canUndo READ canUndo NOTIFY historyChanged)
+    Q_PROPERTY(bool canRedo READ canRedo NOTIFY historyChanged)
+    Q_PROPERTY(QString undoText READ undoText NOTIFY historyChanged)
+    Q_PROPERTY(QString redoText READ redoText NOTIFY historyChanged)
     Q_INVOKABLE bool capSelection();
     Q_INVOKABLE bool scaleSelection(double factor);
     Q_INVOKABLE bool deleteSelection();
     Q_INVOKABLE bool invertSelection();
     Q_INVOKABLE bool invertAll();
+    Q_INVOKABLE bool undo();
+    Q_INVOKABLE bool redo();
+    bool canUndo() const { return editSession_.CanUndo(); }
+    bool canRedo() const { return editSession_.CanRedo(); }
+    QString undoText() const;
+    QString redoText() const;
     // 0.7 ExportScriptHeatmapPNG: "<script>.heatmap.png" beside the script,
     // 960 x 56 with chapter ticks. The path, or "" with lastError.
     Q_INVOKABLE QString exportHeatmapPng();
@@ -572,6 +585,7 @@ signals:
     void scriptOpened(const QString& path);
     void videoLinked(const QString& path);
     void scriptEdited(const QString& path);
+    void historyChanged();
     void sleepChanged();
     // The sleep timer ran out: the player stops.
     void sleepReached();
@@ -597,9 +611,18 @@ private:
     void pushToViews();
     // Cap / Scale / Delete / Invert for the active script lane.
     // needMarker: Cap/Scale/Delete/invertSelection require a heatmap mark.
+    // Pushes one EditSession step before the file write.
     bool applySelectionEdit(const QString& label,
                             const std::function<std::vector<samn::Action>(const std::vector<samn::Action>&)>& op,
                             bool needMarker = true);
+    // Fresh EditSession from the file's lanes (open / no script). Not used
+    // when a curve edit is reloading the script it just wrote.
+    void resetCurveHistory(const samn::Document& doc);
+    // Writes session lanes that differ from disk, with the same rules as a
+    // range edit (funscript actions, companion .samn when that is the file).
+    void persistCurveHistory();
+    bool reloadKeepingCurveHistory(const QString& path);
+    bool finishCurveHistory(const QString& path, const QString& note);
     // Maps the script with the settings (0.7 StartPlayback): the vibration
     // and suction lanes and what the device gets. `fresh`: a new script.
     void remap(bool fresh);
@@ -657,6 +680,11 @@ private:
     double capIntensity_ = 400;
     bool scaleSoftEdges_ = false;
     double fpsSnap_ = 0;
+    // Curve-edit undo. The same EditSession type as the Generator editor.
+    samn::EditSession editSession_;
+    // True only while reloading after a curve-edit write, so openScript does
+    // not drop the step that was pushed before that write.
+    bool preservingEditHistory_ = false;
     bool speedHL_ = true;
     double speedHLThresh_ = 400;
     bool bpmGrid_ = false;
