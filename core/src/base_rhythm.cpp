@@ -59,8 +59,12 @@ bool RhythmicFillFromSettings(const Settings& s) {
 }
 
 double BaseRhythmDrift(const BaseRhythm& r, double t_ms) {
-    if (!std::isfinite(t_ms)) return 0;
-    const double x = t_ms / kBaseRhythmDriftKnotMs;
+    if (std::isnan(t_ms)) return 0;
+    // Clamped so the knot index fits an int64_t (and stays exact).
+    constexpr double kMaxMs = 1e15;
+    const double t = std::clamp(t_ms, -kMaxMs, kMaxMs);
+    const double knot_ms = kBaseRhythmDriftKnotBeats * 60000.0 / ClampBaseRhythm(r).bpm;
+    const double x = t / knot_ms;
     const double k = std::floor(x);
     const double f = x - k;
     const double s = f * f * (3 - 2 * f);
@@ -75,11 +79,14 @@ double BaseBpmAt(const BaseRhythm& r, double t_ms) {
 
 std::vector<double> BaseBeatGrid(const BaseRhythm& r, double start_ms, double end_ms) {
     std::vector<double> out;
-    if (!std::isfinite(start_ms) || !std::isfinite(end_ms) || end_ms <= start_ms) return out;
+    const double span = end_ms - start_ms;
+    if (!std::isfinite(start_ms) || !std::isfinite(end_ms) || !std::isfinite(span) || !(span > 0)) return out;
     const BaseRhythm c = ClampBaseRhythm(r);
     const double fastest = c.bpm * (1 + c.variation_pct / 100.0);
-    out.reserve(std::size_t((end_ms - start_ms) * fastest / 60000.0) + 2);
-    for (double t = start_ms; t < end_ms; t += 60000.0 / BaseBpmAt(c, t)) out.push_back(t);
+    const double expected = span * fastest / 60000.0 + 2;
+    out.reserve(expected < double(kBaseBeatGridMaxBeats) ? std::size_t(expected) : kBaseBeatGridMaxBeats);
+    for (double t = start_ms; t < end_ms && out.size() < kBaseBeatGridMaxBeats; t += 60000.0 / BaseBpmAt(c, t))
+        out.push_back(t);
     return out;
 }
 

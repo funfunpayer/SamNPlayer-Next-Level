@@ -143,6 +143,31 @@ TEST_CASE("onsets: drum hits are found within 50 ms") {
     CHECK(samn::PickOnsets(a.curve, a.fps).size() <= 1);
 }
 
+TEST_CASE("onsets: the minimum gap holds at every frame rate") {
+    // 4 kHz and 96 kHz give 62.5 and 46.875 values per second: 70 ms is
+    // 4.4 and 3.3 values, which must round up, not to the nearest.
+    for (const int rate : {4000, 11025, 44100, 96000}) {
+        CAPTURE(rate);
+        const double fps = samn::OnsetCurve(rate).FramesPerSecond();
+        std::vector<float> curve(600, 0.0f);
+        for (std::size_t i = 0; i < curve.size(); i += 3) curve[i] = 10.0f + float(i % 7);
+        const auto on = samn::PickOnsets(curve, fps);
+        REQUIRE(on.size() >= 10);
+        for (std::size_t k = 1; k < on.size(); ++k) CHECK(on[k] - on[k - 1] >= 70.0 - 1e-9);
+    }
+}
+
+TEST_CASE("tempo: Estimate leaves the accumulator unchanged and repeats") {
+    const auto a = Analyse(synth::Make(Hits(90)).samples);
+    samn::TempoAccumulator acc(a.fps);
+    acc.Push(a.curve.data(), a.curve.size());
+    const samn::TempoAccumulator& view = acc;
+    const auto t1 = view.Estimate(), t2 = view.Estimate();
+    CHECK(t1.bpm == t2.bpm);
+    CHECK(t1.confidence == t2.confidence);
+    CHECK(t1.raw_bpm == t2.raw_bpm);
+}
+
 TEST_CASE("tempo: known click tempi, the heart prior and octave folding") {
     for (double bpm : {50.0, 60.0, 72.0, 85.0, 100.0, 120.0}) {
         CAPTURE(bpm);
@@ -166,6 +191,56 @@ TEST_CASE("tempo: known click tempi, the heart prior and octave folding") {
     samn::TempoOptions fast;
     fast.prior_bpm = 160;
     CHECK(synth::TempoWithin(samn::EstimateTempo(a.curve, a.fps, fast).bpm, 180));
+}
+
+TEST_CASE("tempo: off-beat hats, 16th hats and bass do not give 2/5, 4/5 or 1/3 of the tempo") {
+    // Regression (review of D-168): clicks with noise hats on the off-beat
+    // locked to 0.4 x the tempo from about 100 BPM; 16th hats gave 0.8 x
+    // and 1/3. Octave errors (x1/2, x2) are allowed: the prior folds.
+    const auto check = [](synth::Spec s) {
+        s.seed = std::uint64_t(s.bpm) * 7 + 1;
+        s.jitter_ms = 5;
+        const auto a = Analyse(synth::Make(s).samples);
+        return samn::EstimateTempo(a.curve, a.fps).bpm;
+    };
+    for (double bpm : {99.0, 106.0, 120.0, 148.0}) {
+        CAPTURE(bpm);
+        synth::Spec s;
+        s.bpm = bpm;
+        s.click_kick = true;
+        s.pad = 0;
+        s.offbeat_hats = true;
+        s.hat_level = 0.4;
+        s.hat_decay_ms = 30;
+        const double got = check(s);
+        CAPTURE(got);
+        CHECK(synth::TempoOctaveWithin(got, bpm));
+    }
+    for (double bpm : {78.0, 155.0, 176.0}) {
+        CAPTURE(bpm);
+        synth::Spec s;
+        s.bpm = bpm;
+        s.click_kick = true;
+        s.pad = 0;
+        s.hat_every = 4;
+        s.hat_level = 0.3;
+        s.hat_decay_ms = 30;
+        const double got = check(s);
+        CAPTURE(got);
+        CHECK(synth::TempoOctaveWithin(got, bpm));
+    }
+    for (double bpm : {141.0, 155.0, 176.0}) {
+        CAPTURE(bpm);
+        synth::Spec s;
+        s.bpm = bpm;
+        s.sub_bass = 0.9;
+        s.hit = 0.4;
+        s.hat_every = 2;
+        s.hat_level = 0.2;
+        const double got = check(s);
+        CAPTURE(got);
+        CHECK(synth::TempoOctaveWithin(got, bpm));
+    }
 }
 
 TEST_CASE("tempo: under 4 s of curve says nothing; the state is fixed") {

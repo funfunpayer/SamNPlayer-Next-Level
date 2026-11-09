@@ -5,11 +5,16 @@
 // EstimateTempo: autocorrelation of the onset curve (detrended, smoothed by
 // a binomial kernel of 1.4 frames so a period between two frames is not
 // split, accumulated value by value: it streams with a fixed state of a
-// few kilobytes), octave
-// folding (the evidence at twice the period counts for a tempo, a pulse at
-// half or a third of the period counts against it) and a log-Gaussian prior around the
-// base tempo (72 BPM, samn/base_rhythm.h). The confidence is how far the
-// autocorrelation at the chosen period stands above its mean, 0..1.
+// few kilobytes). The pulse is the shortest period whose multiples (a comb
+// over 1..6 times it) explain the autocorrelation nearly as well as the
+// best one; the tempo is a duple multiple of the pulse (a triple one only
+// with a handicap), so hats or 16ths can move it by octaves but never to
+// 2/5, 4/5 or 1/3 of the tempo. Among those, octave folding (twice the
+// period counts for a tempo, a pulse at half or a third of it against) and
+// a log-Gaussian prior around the base tempo (72 BPM, samn/base_rhythm.h)
+// choose: by design a fast song (above about 130 BPM) comes out at half its
+// tempo, the stroke tempo. The confidence is how far the autocorrelation at
+// the chosen period stands above its mean, 0..1.
 //
 // TrackBeats: dynamic-programming beat tracking (Ellis 2007) at a given
 // tempo, a fallback beat grid where nothing better exists. Offline over the
@@ -45,14 +50,14 @@ public:
     TempoAccumulator(double fps, const TempoOptions& opts = {});
     void Push(float value);
     void Push(const float* values, std::size_t count);
+    // Does not change the object (safe from several threads at once; it
+    // allocates about 2 KB of scratch per call).
     TempoEstimate Estimate() const;
     std::size_t Count() const { return std::size_t(n_); }
     // Bytes of state; fixed after construction (about 6 KB at 43 fps).
     std::size_t StateBytes() const;
 
 private:
-    double R(double lag) const;  // normalised autocorrelation, interpolated
-
     double fps_;
     TempoOptions opts_;
     std::size_t max_lag_;
@@ -63,8 +68,6 @@ private:
     std::size_t pos_ = 0;
     std::vector<float> ring_;    // the last max_lag_ + 1 detrended values
     std::vector<double> acc_;    // sum of d[t] * d[t - lag]
-    // Filled by Estimate (mutable cache of r(lag)).
-    mutable std::vector<double> r_;
 };
 
 TempoEstimate EstimateTempo(const float* curve, std::size_t count, double fps, const TempoOptions& opts = {});
@@ -88,7 +91,7 @@ constexpr double kTempoMinConfidenceStrict = 0.60;
 
 struct TempoReliability {
     bool reliable = false;
-    double active_share = 0;  // blocks that are not silence
+    double active_share = 0;  // blocks that are not silence (absolute, or 35 dB under the loud blocks)
     double noise_share = 0;   // of the active blocks
     double speech_share = 0;  // of the active blocks
     double music_share = 0;   // of the active blocks

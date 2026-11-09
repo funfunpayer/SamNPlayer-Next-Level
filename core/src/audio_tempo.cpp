@@ -15,6 +15,23 @@ constexpr double kMinTempoSeconds = 4.0;
 constexpr double kBpmStep = 0.5;
 // Multiples of the period used to refine it.
 constexpr int kRefineMultiples = 4;
+// The pulse (tatum) search: periods down to this tempo, combs of up to this
+// many multiples, and the share of the best comb a shorter pulse must reach.
+constexpr double kMaxPulseBpm = 320;
+constexpr int kCombTerms = 6;
+constexpr double kPulseShare = 0.75;
+constexpr double kPulseScanStep = 0.25;  // frames
+// A triple multiple of the pulse must beat the best duple one by this factor.
+constexpr double kTripleHandicap = 0.9;
+
+// Normalised autocorrelation at a fractional lag (linear interpolation).
+double At(const std::vector<double>& r, double lag) {
+    if (!(lag >= 0)) return 0;
+    const auto i = std::size_t(lag);
+    if (i + 1 >= r.size()) return i < r.size() ? r[i] : 0;
+    const double f = lag - double(i);
+    return r[i] + f * (r[i + 1] - r[i]);
+}
 
 bool Usable(const TempoOptions& o) {
     return o.min_bpm > 0 && o.max_bpm > o.min_bpm && std::isfinite(o.max_bpm) && o.prior_bpm > 0 &&
@@ -37,7 +54,6 @@ TempoAccumulator::TempoAccumulator(double fps, const TempoOptions& opts) : fps_(
     mean_alpha_ = fps_ > 0 ? 1.0 / std::max(1.0, kDetrendSeconds * fps_) : 1.0;
     ring_.assign(max_lag_ + 1, 0.0f);
     acc_.assign(max_lag_ + 1, 0.0);
-    r_.assign(max_lag_ + 1, 0.0);
 }
 
 void TempoAccumulator::Push(float value) {
@@ -72,17 +88,8 @@ void TempoAccumulator::Push(const float* values, std::size_t count) {
     for (std::size_t i = 0; i < count; ++i) Push(values[i]);
 }
 
-double TempoAccumulator::R(double lag) const {
-    if (!(lag >= 0)) return 0;
-    const auto i = std::size_t(lag);
-    if (i + 1 >= r_.size()) return i < r_.size() ? r_[i] : 0;
-    const double f = lag - double(i);
-    return r_[i] + f * (r_[i + 1] - r_[i]);
-}
-
 std::size_t TempoAccumulator::StateBytes() const {
-    return sizeof(*this) + ring_.capacity() * sizeof(float) + acc_.capacity() * sizeof(double) +
-           r_.capacity() * sizeof(double);
+    return sizeof(*this) + ring_.capacity() * sizeof(float) + acc_.capacity() * sizeof(double);
 }
 
 TempoEstimate TempoAccumulator::Estimate() const {
@@ -91,28 +98,30 @@ TempoEstimate TempoAccumulator::Estimate() const {
     const double mean = sum_ / n_;
     const double var = sum2_ / n_ - mean * mean;
     if (!(var > 1e-12 * std::max(1.0, mean * mean))) return out;
-    for (std::size_t lag = 0; lag < r_.size(); ++lag) {
+    // A local buffer, so Estimate never writes to the object (const and
+    // safe to call from several threads at once).
+    std::vector<double> r(acc_.size());
+    for (std::size_t lag = 0; lag < r.size(); ++lag) {
         const double pairs = n_ - double(lag);
-        r_[lag] = pairs > 0 ? (acc_[lag] / pairs - mean * mean) / var : 0.0;
+        r[lag] = pairs > 0 ? (acc_[lag] / pairs - mean * mean) / var : 0.0;
     }
+    const auto R = [&r](double lag) { return At(r, lag); };
     // Octave folding: twice the period supports a tempo; a pulse at half or
-    // a third of the period speaks for the faster one (a third a little more:
-    // a duple reading wins a tie against a triple one).
-    const auto salience = [this](double lag) {
+    // a third of the period speaks for the faster one.
+    const auto salience = [&R](double lag) {
         return R(lag) + 0.5 * R(2 * lag) - std::max({0.0, 0.5 * R(lag / 2), 0.6 * R(lag / 3)});
     };
-    double best = -1e300, best_lag = 0, raw = -1e300, raw_lag = 0, r_sum = 0;
+    const auto prior = [this](double lag) {
+        const double oct = std::log2(60.0 * fps_ / lag / opts_.prior_bpm) / opts_.prior_octaves;
+        return std::exp(-0.5 * oct * oct);
+    };
+    const double lag_fast = 60.0 * fps_ / opts_.max_bpm, lag_slow = 60.0 * fps_ / opts_.min_bpm;
+    double raw = -1e300, raw_lag = 0, r_sum = 0;
     int r_count = 0;
     for (double bpm = opts_.min_bpm; bpm <= opts_.max_bpm + 1e-9; bpm += kBpmStep) {
         const double lag = 60.0 * fps_ / bpm;
         if (lag < 1) break;
         const double s = salience(lag);
-        const double oct = std::log2(bpm / opts_.prior_bpm) / opts_.prior_octaves;
-        const double w = std::exp(-0.5 * oct * oct);
-        if (s * w > best) {
-            best = s * w;
-            best_lag = lag;
-        }
         if (s > raw) {
             raw = s;
             raw_lag = lag;
@@ -120,22 +129,59 @@ TempoEstimate TempoAccumulator::Estimate() const {
         r_sum += R(lag);
         ++r_count;
     }
+    // The pulse: the shortest period whose multiples explain the
+    // autocorrelation (comb = mean of R at 1..6 times the period) nearly as
+    // well as the best one. A tempo is then a duple (or, handicapped, a
+    // triple) multiple of it: 2/5 or 4/5 of the tempo is never one.
+    const double lag_pulse = std::max(2.0, 60.0 * fps_ / kMaxPulseBpm);
+    const auto comb = [&](double lag) {
+        const int terms = std::min(kCombTerms, int((double(r.size()) - 2) / lag));
+        if (terms < 1) return -1.0;
+        double s = 0;
+        for (int k = 1; k <= terms; ++k) s += R(k * lag);
+        return s / terms;
+    };
+    std::vector<double> combs;
+    for (double lag = lag_pulse; lag <= lag_slow + 1e-9; lag += kPulseScanStep) combs.push_back(comb(lag));
+    double comb_max = 0;
+    for (double c : combs) comb_max = std::max(comb_max, c);
+    if (!(comb_max > 0)) return out;
+    double pulse = 0;
+    for (std::size_t i = 1; i + 1 < combs.size(); ++i) {
+        if (combs[i] >= kPulseShare * comb_max && combs[i] >= combs[i - 1] && combs[i] >= combs[i + 1]) {
+            pulse = lag_pulse + double(i) * kPulseScanStep;
+            break;
+        }
+    }
+    if (pulse <= 0) pulse = lag_pulse + double(std::max_element(combs.begin(), combs.end()) - combs.begin()) * kPulseScanStep;
+    double best = -1e300, best_lag = 0;
+    for (double m = 1; pulse * m <= lag_slow + 1e-9; m *= 2) {
+        for (double triple : {1.0, 3.0}) {
+            const double lag = pulse * m * triple;
+            if (lag < lag_fast - 1e-9 || lag > lag_slow + 1e-9) continue;
+            const double s = salience(lag) * prior(lag) * (triple > 1 ? kTripleHandicap : 1.0);
+            if (s > best) {
+                best = s;
+                best_lag = lag;
+            }
+        }
+    }
     if (!(best > 0) || best_lag <= 0) return out;
     // Refine: the autocorrelation peak near the lag and near its multiples
     // (a least-squares period through them).
-    const auto peak_near = [this](double lag) {
+    const auto peak_near = [&r](double lag) {
         const auto lo = std::size_t(std::max(1.0, std::floor(lag - 1.5)));
-        const auto hi = std::min(r_.size() - 2, std::size_t(std::ceil(lag + 1.5)));
+        const auto hi = std::min(r.size() - 2, std::size_t(std::ceil(lag + 1.5)));
         std::size_t at = lo;
         for (std::size_t i = lo; i <= hi; ++i)
-            if (r_[i] > r_[at]) at = i;
-        if (at < 1 || at + 1 >= r_.size()) return double(at);
-        return double(at) + Parabolic(r_[at - 1], r_[at], r_[at + 1]);
+            if (r[i] > r[at]) at = i;
+        if (at < 1 || at + 1 >= r.size()) return double(at);
+        return double(at) + Parabolic(r[at - 1], r[at], r[at + 1]);
     };
     double num = 0, den = 0;
     double period = peak_near(best_lag);
     for (int k = 1; k <= kRefineMultiples; ++k) {
-        if (double(k) * period + 2.5 >= double(r_.size())) break;
+        if (double(k) * period + 2.5 >= double(r.size())) break;
         const double lk = peak_near(double(k) * period);
         num += double(k) * lk;
         den += double(k) * k;
@@ -288,9 +334,19 @@ TempoReliability AssessTempo(const std::vector<AudioBlock>& blocks, const TempoE
         r.reason = "no sound analysed";
         return r;
     }
+    // The clip's loud level: the 90th percentile of its sounding blocks.
+    std::vector<float> levels;
+    for (const auto& b : blocks)
+        if (b.cls != AudioClass::kSilence) levels.push_back(b.level_db);
+    float floor_db = float(kGateSilenceDb);
+    if (!levels.empty()) {
+        const auto k = std::size_t(std::lround(0.9 * double(levels.size() - 1)));
+        std::nth_element(levels.begin(), levels.begin() + std::ptrdiff_t(k), levels.end());
+        floor_db = std::max(floor_db, float(levels[k] - kGateRelativeSilenceDb));
+    }
     int active = 0, noise = 0, speech = 0, music = 0;
     for (const auto& b : blocks) {
-        if (b.cls == AudioClass::kSilence) continue;
+        if (b.cls == AudioClass::kSilence || b.level_db < floor_db) continue;
         ++active;
         if (b.cls == AudioClass::kNoise) ++noise;
         else if (b.cls == AudioClass::kSpeechLike) ++speech;

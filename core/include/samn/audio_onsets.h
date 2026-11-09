@@ -23,8 +23,12 @@ namespace samn {
 
 // The analysis rate the app should decode to (a quarter of 44.1 kHz).
 constexpr int kOnsetSampleRate = 11025;
-// Below this block level (dBFS) a block is silence.
-constexpr double kGateSilenceDb = -60.0;
+// Below this block level (dBFS) a block is silence whatever the clip
+// (near digital silence). AssessTempo also counts blocks more than
+// kGateRelativeSilenceDb under the clip's loud blocks as silence, so a quiet
+// master is judged by its own level.
+constexpr double kGateSilenceDb = -80.0;
+constexpr double kGateRelativeSilenceDb = 35.0;
 // Spectral flatness (geometric / arithmetic mean of the power spectrum, 0..1)
 // above which a steady block is noise; white noise is about 0.56.
 constexpr double kGateNoiseFlatness = 0.30;

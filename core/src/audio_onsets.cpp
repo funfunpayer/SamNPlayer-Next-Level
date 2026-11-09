@@ -252,7 +252,8 @@ std::vector<double> PickOnsets(const std::vector<float>& curve, double fps, cons
     if (n < 3 || !(fps > 0) || !std::isfinite(fps)) return out;
     const auto mean_half = std::size_t(std::max(1L, std::lround(0.1 * fps)));
     const auto range_half = std::size_t(std::max(1L, std::lround(2.0 * fps)));
-    const auto wait = std::max<std::int64_t>(1, std::llround(opts.wait_ms * fps / 1000.0));
+    // Rounded up: the gap between two onsets is never under wait_ms.
+    const auto wait = std::max<std::int64_t>(1, std::int64_t(std::ceil(opts.wait_ms * fps / 1000.0 - 1e-9)));
     // Prefix sums for the local mean (one double per value).
     std::vector<double> prefix(n + 1, 0.0);
     for (std::size_t i = 0; i < n; ++i) prefix[i + 1] = prefix[i] + double(curve[i]);

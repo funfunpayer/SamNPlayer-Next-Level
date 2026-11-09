@@ -45,6 +45,13 @@ struct Spec {
     double pad = 0.08;          // chord pad amplitude (0 = sparse hits only)
     double hit = 0.6;           // drum hit amplitude
     bool offbeat_hats = false;  // a quieter hat between the beats
+    double hat_level = 0.5;     // hat amplitude relative to the drum hit
+    int hat_every = 0;          // > 0: hats on every 1/n of the beat (2 = 8ths, 4 = 16ths), on the beat too
+    double swing = 0.5;         // position of the off-beat hat (and every second 8th) within the beat
+    double sub_bass = 0;        // amplitude of a long 45 Hz sub under every hit (bass-heavy mix)
+    double syncopation = 0;     // chance per beat of an extra hit at 3/4 of the beat (not a beat)
+    bool click_kick = false;    // the hit is a short broadband click instead of a falling sine
+    double hat_decay_ms = 12;   // decay of the noise hat
     double silence_from = -1;   // seconds; hits and pad muted in [from, to)
     double silence_to = -1;
     bool hits = true;
@@ -62,7 +69,8 @@ struct Clip {
 inline bool Muted(const Spec& s, double t) { return t >= s.silence_from && t < s.silence_to; }
 
 // Kick-like hit: a falling sine plus a short noise click.
-inline void AddHit(std::vector<float>& out, int sr, double t0, double amp, Rng& rng, bool hat) {
+inline void AddHit(std::vector<float>& out, int sr, double t0, double amp, Rng& rng, bool hat, bool click = false,
+                   double hat_decay_ms = 12) {
     const auto start = std::int64_t(std::llround(t0 * sr));
     const int len = int(0.25 * sr);
     double phase = 0;
@@ -72,13 +80,29 @@ inline void AddHit(std::vector<float>& out, int sr, double t0, double amp, Rng& 
         const double t = double(i) / sr;
         double v;
         if (hat) {
-            v = 0.5 * rng.Gauss() * std::exp(-t / 0.012);
+            v = 0.5 * rng.Gauss() * std::exp(-t * 1000 / hat_decay_ms);
+        } else if (click) {
+            if (t > 0.03) break;
+            v = rng.Gauss() * std::exp(-t / 0.003);
         } else {
             const double f = 50 + 70 * std::exp(-t / 0.03);
             phase += 2 * kPi * f / sr;
             v = std::sin(phase) * std::exp(-t / 0.08) + 0.4 * rng.Gauss() * std::exp(-t / 0.004);
         }
         out[std::size_t(k)] += float(amp * v);
+    }
+}
+
+// A long sub-bass note (45 Hz, slow decay) under a kick.
+inline void AddSub(std::vector<float>& out, int sr, double t0, double amp) {
+    const auto start = std::int64_t(std::llround(t0 * sr));
+    const int len = int(0.6 * sr);
+    for (int i = 0; i < len; ++i) {
+        const std::int64_t k = start + i;
+        if (k < 0 || k >= std::int64_t(out.size())) continue;
+        const double t = double(i) / sr;
+        const double attack = std::min(1.0, t / 0.01);
+        out[std::size_t(k)] += float(amp * attack * std::exp(-t / 0.35) * std::sin(2 * kPi * 45 * t));
     }
 }
 
@@ -120,14 +144,30 @@ inline Clip Make(const Spec& s) {
             const double period = 60.0 / bpm;
             const double at = t + s.jitter_ms / 1000.0 * rng.Gauss();
             if (!Muted(s, at)) {
-                AddHit(c.samples, sr, at, s.hit, rng, false);
+                AddHit(c.samples, sr, at, s.hit, rng, false, s.click_kick);
+                if (s.sub_bass > 0) AddSub(c.samples, sr, at, s.sub_bass);
                 c.onsets_ms.push_back(at * 1000);
                 c.beats_ms.push_back(at * 1000);
             }
-            const double off = at + period / 2;
+            const double off = at + period * s.swing;
             if (s.offbeat_hats && off < s.seconds - 0.3 && !Muted(s, off)) {
-                AddHit(c.samples, sr, off, s.hit * 0.5, rng, true);
+                AddHit(c.samples, sr, off, s.hit * s.hat_level, rng, true, false, s.hat_decay_ms);
                 c.onsets_ms.push_back(off * 1000);
+            }
+            for (int j = 0; j < s.hat_every; ++j) {
+                // Every second 8th swings; 16ths stay straight.
+                const double frac = (s.hat_every == 2 && j == 1) ? s.swing : double(j) / s.hat_every;
+                const double h = at + period * frac;
+                if (h >= s.seconds - 0.3 || Muted(s, h)) continue;
+                AddHit(c.samples, sr, h, s.hit * s.hat_level, rng, true, false, s.hat_decay_ms);
+                if (j > 0) c.onsets_ms.push_back(h * 1000);
+            }
+            if (s.syncopation > 0 && rng.Uniform() < s.syncopation) {
+                const double sy = at + period * 0.75;
+                if (sy < s.seconds - 0.3 && !Muted(s, sy)) {
+                    AddHit(c.samples, sr, sy, s.hit * 0.8, rng, false, s.click_kick);
+                    c.onsets_ms.push_back(sy * 1000);
+                }
             }
             t += period;
         }

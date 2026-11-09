@@ -127,11 +127,52 @@ TEST_CASE("base rhythm: a deterministic grid that drifts slowly and never jitter
     for (double t = -50000; t < 50000; t += 777) CHECK(std::fabs(samn::BaseRhythmDrift(r, t)) <= 1.0);
 }
 
+TEST_CASE("base rhythm: adjacent beats differ by under 1 % over the whole clamped range") {
+    // The drift's knots are spaced in beats, so the bound does not depend
+    // on the tempo or the variation.
+    struct Case {
+        double bpm, pct;
+    };
+    for (const Case c : {Case{40, 10}, Case{140, 10}, Case{72, 10}, Case{40, 3}, Case{72, 3}, Case{140, 0.5}}) {
+        double worst = 0, lo = 1e9, hi = 0;
+        for (std::uint64_t seed = 1; seed <= 60; ++seed) {
+            samn::BaseRhythm r;
+            r.bpm = c.bpm;
+            r.variation_pct = c.pct;
+            r.seed = seed * 7919;
+            const auto g = samn::BaseBeatGrid(r, -30000, 1200000);  // 20 minutes
+            for (std::size_t k = 2; k < g.size(); ++k) {
+                const double interval = g[k] - g[k - 1];
+                worst = std::max(worst, std::fabs(interval / (g[k - 1] - g[k - 2]) - 1));
+                lo = std::min(lo, 60000.0 / interval);
+                hi = std::max(hi, 60000.0 / interval);
+            }
+        }
+        CAPTURE(c.bpm);
+        CAPTURE(c.pct);
+        CHECK(worst < 0.01);
+        CHECK(lo >= c.bpm * (1 - c.pct / 100) - 1e-6);
+        CHECK(hi <= c.bpm * (1 + c.pct / 100) + 1e-6);
+    }
+}
+
+TEST_CASE("base rhythm: huge or overflowing times stay defined") {
+    const samn::BaseRhythm r;
+    for (double t : {1e23, -1e23, 1e300, -1e300}) {
+        CHECK(std::isfinite(samn::BaseRhythmDrift(r, t)));
+        CHECK(std::fabs(samn::BaseRhythmDrift(r, t)) <= 1.0);
+    }
+    // end - start overflows to infinity: nothing, instead of a giant reserve.
+    CHECK(samn::BaseBeatGrid(r, -1.7e308, 1.7e308).empty());
+    // A long but finite range stops at the cap.
+    CHECK(samn::BaseBeatGrid(r, 0, 1e15).size() <= samn::kBaseBeatGridMaxBeats);
+}
+
 TEST_CASE("rhythmic fill: continues the script's own strokes through a gap") {
     const auto ref = Strokes(0, 30000, 400, 60);  // 75 strokes per minute
     const auto gapped = WithGap(ref, 12000, 16000);
     int gaps = 0, pts = 0;
-    const auto out = samn::FillGapsRhythmic(gapped, 800, 0, samn::BaseRhythm{}, &gaps, &pts);
+    const auto out = samn::FillGapsRhythmic(gapped, 800, 0, 0, samn::BaseRhythm{}, &gaps, &pts);
     CHECK(gaps == 1);
     const auto in = Inside(out, 12000, 16000);
     REQUIRE(in.size() == static_cast<std::size_t>(pts));
@@ -148,14 +189,20 @@ TEST_CASE("rhythmic fill: holds where the script holds, heart rhythm without str
     // A script holding at 30 around the gap: a straight line as in FillGaps.
     std::vector<samn::Action> hold;
     for (int64_t t = 0; t <= 10000; t += 500) hold.push_back({t, 30 + int(t / 500 % 2)});
-    const auto held = samn::FillGapsRhythmic(WithGap(hold, 3000, 7000), 800, 0, samn::BaseRhythm{});
+    const auto held = samn::FillGapsRhythmic(WithGap(hold, 3000, 7000), 800, 0, 0, samn::BaseRhythm{});
     for (const auto& x : Inside(held, 3000, 7000)) CHECK((x.pos >= 30 && x.pos <= 31));
+    // The straight line takes the caller's spacing, as FillGaps does.
+    const auto spaced = Inside(samn::FillGapsRhythmic(WithGap(hold, 3000, 7000), 800, 250, 0, samn::BaseRhythm{}), 3000, 7000);
+    REQUIRE(spaced.size() >= 2);
+    for (std::size_t k = 1; k < spaced.size(); ++k) CHECK(spaced[k].at - spaced[k - 1].at == 250);
+    CHECK(Same(samn::FillGapsRhythmic(WithGap(hold, 3000, 7000), 800, 250, 0, samn::BaseRhythm{}),
+               samn::FillGaps(WithGap(hold, 3000, 7000), 800, 250, 0)));
 
     // One stroke on either side, too few for a tempo: the heart rhythm strokes it.
     std::vector<samn::Action> sparse{{0, 10}, {900, 90}, {20000, 50}, {20500, 10}};
     samn::BaseRhythm steady;
     steady.variation_pct = 0;
-    const auto out = samn::FillGapsRhythmic(sparse, 800, 0, steady);
+    const auto out = samn::FillGapsRhythmic(sparse, 800, 0, 0, steady);
     const auto in = Inside(out, 900, 20000);
     REQUIRE(in.size() >= 40);
     // Half a beat apart at 72 BPM (417 ms), alternating sides.
@@ -165,12 +212,12 @@ TEST_CASE("rhythmic fill: holds where the script holds, heart rhythm without str
     }
     for (const auto& x : out) CHECK((x.pos >= 0 && x.pos <= 100));
     // An audio tempo wins over the heart rhythm (1.5 Hz = 90 BPM).
-    const auto audio = Inside(samn::FillGapsRhythmic(sparse, 800, 1.5, steady), 900, 20000);
+    const auto audio = Inside(samn::FillGapsRhythmic(sparse, 800, 0, 1.5, steady), 900, 20000);
     REQUIRE(audio.size() >= 2);
     CHECK(std::fabs(double(audio[1].at - audio[0].at) - 1000.0 / 3) <= 1);  // whole ms
     // Deterministic.
-    CHECK(Same(samn::FillGapsRhythmic(sparse, 800, 0, samn::BaseRhythm{}),
-               samn::FillGapsRhythmic(sparse, 800, 0, samn::BaseRhythm{})));
+    CHECK(Same(samn::FillGapsRhythmic(sparse, 800, 0, 0, samn::BaseRhythm{}),
+               samn::FillGapsRhythmic(sparse, 800, 0, 0, samn::BaseRhythm{})));
 }
 
 TEST_CASE("rhythmic fill: off by default in ImproveScript, on by the option") {

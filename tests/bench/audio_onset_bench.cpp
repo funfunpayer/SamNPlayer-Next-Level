@@ -305,11 +305,124 @@ void Families(Row& total) {
     PrintRow(pad);
 }
 
+// Harder rhythms (added after review): 19 tempi 50-176 BPM per family. The
+// after estimate's misses are sorted by ratio to the truth.
+const char* RatioClass(double est, double truth) {
+    if (!(est > 0)) return "none";
+    static const struct {
+        double r;
+        const char* name;
+    } kRatios[] = {{1.0 / 3, "1/3"}, {2.0 / 5, "2/5"}, {2.0 / 3, "2/3"}, {3.0 / 4, "3/4"}, {4.0 / 5, "4/5"},
+                   {5.0 / 4, "5/4"}, {4.0 / 3, "4/3"}, {3.0 / 2, "3/2"}, {3.0, "3"}};
+    for (const auto& k : kRatios)
+        if (synth::TempoWithin(est, truth * k.r)) return k.name;
+    return "other";
+}
+
+void HardFamilies() {
+    std::printf("\n## Harder rhythms (30 s clips, 19 tempi 50-176 BPM, 5 ms jitter)\n\n");
+    std::printf("Octave-corrected tempo within 4 %% (strict for after in brackets); beat F at 70 ms before -> after; the after misses by ratio to the truth.\n\n");
+    std::printf("| family | existing | trivial ACF | after | beat F | after misses |\n|---|---:|---:|---:|---:|---|\n");
+    struct Fam {
+        const char* name;
+        void (*apply)(synth::Spec&);
+    };
+    static const Fam fams[] = {
+        {"click kick, off-beat hats 0.1", [](synth::Spec& s) { s.click_kick = true; s.pad = 0; s.offbeat_hats = true; s.hat_level = 0.1; s.hat_decay_ms = 30; }},
+        {"click kick, off-beat hats 0.2", [](synth::Spec& s) { s.click_kick = true; s.pad = 0; s.offbeat_hats = true; s.hat_level = 0.2; s.hat_decay_ms = 30; }},
+        {"click kick, off-beat hats 0.3", [](synth::Spec& s) { s.click_kick = true; s.pad = 0; s.offbeat_hats = true; s.hat_level = 0.3; s.hat_decay_ms = 30; }},
+        {"click kick, off-beat hats 0.4", [](synth::Spec& s) { s.click_kick = true; s.pad = 0; s.offbeat_hats = true; s.hat_level = 0.4; s.hat_decay_ms = 30; }},
+        {"click kick, off-beat hats 0.6", [](synth::Spec& s) { s.click_kick = true; s.pad = 0; s.offbeat_hats = true; s.hat_level = 0.6; s.hat_decay_ms = 30; }},
+        {"drum kick, off-beat hats 0.4 + noise", [](synth::Spec& s) { s.offbeat_hats = true; s.hat_level = 0.4; s.noise = 0.03; s.hat_decay_ms = 30; }},
+        {"bass-heavy (sub + kick + 8th hats)", [](synth::Spec& s) { s.sub_bass = 0.9; s.hit = 0.4; s.hat_every = 2; s.hat_level = 0.2; }},
+        {"bass-heavy, click kick, off-beat hats", [](synth::Spec& s) { s.sub_bass = 0.9; s.hit = 0.4; s.click_kick = true; s.offbeat_hats = true; s.hat_level = 0.3; }},
+        {"swing (off-beat at 0.64)", [](synth::Spec& s) { s.click_kick = true; s.pad = 0; s.offbeat_hats = true; s.swing = 0.64; s.hat_level = 0.4; s.hat_decay_ms = 30; }},
+        {"hats on every 8th", [](synth::Spec& s) { s.click_kick = true; s.pad = 0; s.hat_every = 2; s.hat_level = 0.4; s.hat_decay_ms = 30; }},
+        {"hats on every 16th", [](synth::Spec& s) { s.click_kick = true; s.pad = 0; s.hat_every = 4; s.hat_level = 0.3; s.hat_decay_ms = 30; }},
+        {"syncopation (extra hit at 3/4)", [](synth::Spec& s) { s.click_kick = true; s.syncopation = 0.5; }},
+    };
+    int all = 0, all_ex = 0, all_tr = 0, all_af = 0;
+    double all_bb = 0, all_ba = 0;
+    for (const auto& f : fams) {
+        int n = 0, ex = 0, tr = 0, af = 0, af_strict = 0;
+        double bb = 0, ba = 0;
+        std::string misses;
+        for (double bpm = 50; bpm <= 176 + 1e-9; bpm += 7) {
+            synth::Spec s;
+            s.bpm = bpm;
+            s.jitter_ms = 5;
+            s.seed = std::uint64_t(bpm) * 7 + 1;
+            f.apply(s);
+            const auto c = synth::Make(s);
+            const Before b = RunBefore(c.samples, s.sample_rate, s.seconds);
+            const After a = RunAfter(c.samples, s.sample_rate);
+            ++n;
+            ex += synth::TempoOctaveWithin(b.bpm_existing, bpm);
+            tr += synth::TempoOctaveWithin(b.bpm_trivial, bpm);
+            const bool ok = synth::TempoOctaveWithin(a.tempo.bpm, bpm);
+            af += ok;
+            af_strict += synth::TempoWithin(a.tempo.bpm, bpm);
+            bb += synth::FMeasure(c.beats_ms, b.beats_ms, 70);
+            ba += synth::FMeasure(c.beats_ms, a.beats.beats_ms, 70);
+            if (!ok) {
+                char buf[48];
+                std::snprintf(buf, sizeof buf, "%s%.0f: %s", misses.empty() ? "" : ", ", bpm, RatioClass(a.tempo.bpm, bpm));
+                misses += buf;
+            }
+        }
+        std::printf("| %s | %.1f | %.1f | %.1f (%.1f) | %.3f -> %.3f | %s |\n", f.name, 100.0 * ex / n, 100.0 * tr / n,
+                    100.0 * af / n, 100.0 * af_strict / n, bb / n, ba / n, misses.empty() ? "-" : misses.c_str());
+        all += n;
+        all_ex += ex;
+        all_tr += tr;
+        all_af += af;
+        all_bb += bb;
+        all_ba += ba;
+    }
+    std::printf("| **all %d clips** | %.1f | %.1f | %.1f | %.3f -> %.3f | |\n", all, 100.0 * all_ex / all,
+                100.0 * all_tr / all, 100.0 * all_af / all, all_bb / all, all_ba / all);
+}
+
+// The gate on quiet masters and on music with speech over it.
+void GateLimits() {
+    std::printf("\n## Gate limits (19 tempi 50-176 BPM, drum kick + pad, 30 s)\n\n");
+    std::printf("| case | tempo right (octave) | trusted by AssessTempo |\n|---|---:|---:|\n");
+    struct Case {
+        const char* name;
+        double gain_db;
+        bool speech;
+    };
+    static const Case cases[] = {{"normal level (peaks about -4 dBFS)", 0, false},
+                                 {"quiet master, -30 dB", -30, false},
+                                 {"quiet master, -40 dB", -40, false},
+                                 {"quiet master, -50 dB", -50, false},
+                                 {"music with speech over it", 0, true}};
+    for (const auto& k : cases) {
+        int n = 0, right = 0, trusted = 0;
+        for (double bpm = 50; bpm <= 176 + 1e-9; bpm += 7) {
+            synth::Spec s;
+            s.bpm = bpm;
+            s.seed = std::uint64_t(bpm) * 3 + 2;
+            s.speech = k.speech;
+            auto c = synth::Make(s);
+            const auto g = float(std::pow(10.0, k.gain_db / 20));
+            for (float& v : c.samples) v *= g;
+            const After a = RunAfter(c.samples, s.sample_rate);
+            ++n;
+            right += synth::TempoOctaveWithin(a.tempo.bpm, bpm);
+            trusted += a.reliability.reliable;
+        }
+        std::printf("| %s | %.1f %% | %.1f %% |\n", k.name, 100.0 * right / n, 100.0 * trusted / n);
+    }
+}
+
 // Tempo changes: 10 s windows (hop 5 s) that lie inside one tempo.
 void TempoChanges() {
     std::printf("\n## Tempo changes (60 s clips, x1.25 at 30 s; 10 s windows inside one tempo)\n\n");
-    int windows = 0, ex = 0, ex_o = 0, af = 0, af_o = 0, whole_af = 0;
-    for (double bpm : {56.0, 64.0, 72.0, 80.0, 96.0, 112.0}) {
+    int windows = 0, ex = 0, ex_o = 0, af = 0, af_o = 0, whole_af = 0, clips = 0;
+    std::string wholes;
+    for (double bpm : {56.0, 64.0, 72.0, 80.0, 96.0, 112.0, 128.0, 144.0}) {
+        ++clips;
         synth::Spec s;
         s.seconds = 60;
         s.bpm = bpm;
@@ -318,7 +431,12 @@ void TempoChanges() {
         s.seed = std::uint64_t(bpm);
         const auto c = synth::Make(s);
         const After a = RunAfter(c.samples, s.sample_rate);
-        whole_af += synth::TempoOctaveWithin(a.tempo.bpm, bpm) || synth::TempoOctaveWithin(a.tempo.bpm, bpm * 1.25);
+        const bool whole_ok = synth::TempoOctaveWithin(a.tempo.bpm, bpm) || synth::TempoOctaveWithin(a.tempo.bpm, bpm * 1.25);
+        whole_af += whole_ok;
+        char buf[64];
+        std::snprintf(buf, sizeof buf, "%s%.0f->%.0f: %.1f%s", wholes.empty() ? "" : ", ", bpm, bpm * 1.25, a.tempo.bpm,
+                      whole_ok ? "" : " (neither tempo nor its octave)");
+        wholes += buf;
         for (double w0 = 0; w0 + 10 <= 60; w0 += 5) {
             if (w0 < 30 && w0 + 10 > 30) continue;  // straddles the change
             const double truth = w0 >= 30 ? bpm * 1.25 : bpm;
@@ -335,8 +453,9 @@ void TempoChanges() {
         }
     }
     std::printf("| windows | existing strict / octave | after strict / octave | after, whole clip matches either tempo (octave) |\n|---:|---:|---:|---:|\n");
-    std::printf("| %d | %.1f / %.1f | %.1f / %.1f | %d of 6 |\n", windows, 100.0 * ex / windows, 100.0 * ex_o / windows,
-                100.0 * af / windows, 100.0 * af_o / windows, whole_af);
+    std::printf("| %d | %.1f / %.1f | %.1f / %.1f | %d of %d |\n", windows, 100.0 * ex / windows, 100.0 * ex_o / windows,
+                100.0 * af / windows, 100.0 * af_o / windows, whole_af, clips);
+    std::printf("\nWhole clips: %s.\n", wholes.c_str());
 }
 
 void Speed() {
@@ -570,6 +689,8 @@ int main(int argc, char** argv) {
     std::printf("# audio_onset_bench\n");
     Row total;
     Families(total);
+    HardFamilies();
+    GateLimits();
     TempoChanges();
     Speed();
     const bool mem = Memory10h(true);

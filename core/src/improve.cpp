@@ -182,12 +182,13 @@ int LastDirection(const std::vector<Action>& a, size_t i) {
 
 }  // namespace
 
-std::vector<Action> FillGapsRhythmic(std::vector<Action> a, int64_t max_gap_ms, double audio_hz,
+std::vector<Action> FillGapsRhythmic(std::vector<Action> a, int64_t max_gap_ms, int64_t step_ms, double audio_hz,
                                      const BaseRhythm& base, int* gaps_filled, int* points_added) {
     int gaps = 0, added = 0;
     if (a.size() >= 2) {
         SortByTime(a);
         if (max_gap_ms <= 0) max_gap_ms = AutoFillGapThreshold(a);
+        const int64_t line_step = std::max<int64_t>(20, StepOrDefault(step_ms, audio_hz));
         // The whole script's stroke amplitude, for gaps without strokes near them.
         StrokeStats all;
         AddTurns(a, 0, a.size() - 1, all);
@@ -228,7 +229,7 @@ std::vector<Action> FillGapsRhythmic(std::vector<Action> a, int64_t max_gap_ms, 
             if (!holding && !(near.halves.size() >= 3) && global_amp < kRhythmicFillMinAmplitude) holding = true;
             ++gaps;
             if (holding) {
-                for (int64_t t = prev.at + kDefaultFillStepMs; t < next.at; t += kDefaultFillStepMs) {
+                for (int64_t t = prev.at + line_step; t < next.at; t += line_step) {
                     const double f = double(t - prev.at) / double(dt);
                     out.push_back({t, ClampPos(std::lround(prev.pos + f * (next.pos - prev.pos)))});
                     ++added;
@@ -365,7 +366,7 @@ ImproveResult ImproveScript(const std::vector<Action>& actions, const ImproveOpt
         // The spacing before filling: after filling, the median collapses.
         const double med = MedianSpacingMs(cur);
         const auto fill = [&opts](std::vector<Action> in, int64_t gap, int* g, int* p) {
-            return opts.rhythmic_fill ? FillGapsRhythmic(std::move(in), gap, opts.audio_hz, opts.base_rhythm, g, p)
+            return opts.rhythmic_fill ? FillGapsRhythmic(std::move(in), gap, opts.step_ms, opts.audio_hz, opts.base_rhythm, g, p)
                                       : FillGaps(std::move(in), gap, opts.step_ms, opts.audio_hz, g, p);
         };
         int gaps = 0, pts = 0;
