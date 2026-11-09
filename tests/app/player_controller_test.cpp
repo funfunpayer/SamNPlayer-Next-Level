@@ -203,7 +203,56 @@ private slots:
         QStringList shown;
         for (const auto& v : c.variants()) shown << v.toMap().value("display").toString();
         QVERIFY2(shown.contains(QStringLiteral("Hard · script folder")), qPrintable(shown.join(", ")));
+        const QString script = c.scriptPath();
+        QCOMPARE(c.pointCount(), 41);
+        c.setVideoPositionMs(1500);
+        QCOMPARE(c.playheadMs(), qint64(1500));
         c.removeScriptFolder(d.filePath("scripts"));
+        QStringList after;
+        for (const auto& v : c.variants()) after << v.toMap().value("display").toString();
+        QCOMPARE(after, QStringList{QStringLiteral("Main script")});
+        QCOMPARE(c.scriptPath(), script);
+        QCOMPARE(c.scriptName(), QStringLiteral("Clip.funscript"));
+        QCOMPARE(c.pointCount(), 41);
+        QCOMPARE(c.playheadMs(), qint64(1500));
+        QVERIFY(c.hasScript());
+        QCOMPARE(c.videoName(), QStringLiteral("Clip.mp4"));
+        QCOMPARE(c.variantIndex(), 0);
+    }
+
+    void addingScriptFolderRefreshesVariantsWithoutReload() {
+        QTemporaryDir d;
+        QDir().mkpath(d.filePath("more"));
+        writeFile(d.filePath("Clip.mp4"), "");
+        writeFile(d.filePath("Clip.funscript"), zigzag());
+        writeFile(d.filePath("more/Clip (Soft).funscript"), zigzag(11));
+        PlayerController c;
+        QVERIFY(c.openPath(d.filePath("Clip.mp4")));
+        QCOMPARE(c.variants().size(), 1);
+        QCOMPARE(c.scriptName(), QStringLiteral("Clip.funscript"));
+        QCOMPARE(c.pointCount(), 41);
+        const QString script = c.scriptPath();
+        c.setVideoPositionMs(4000);
+        QCOMPARE(c.playheadMs(), qint64(4000));
+        QSignalSpy scriptSpy(&c, &PlayerController::scriptChanged);
+        c.addScriptFolder(d.filePath("more"));
+        QCOMPARE(scriptSpy.count(), 0);
+        QCOMPARE(c.variants().size(), 2);
+        QStringList shown;
+        for (const auto& v : c.variants()) shown << v.toMap().value("display").toString();
+        QVERIFY2(shown.contains(QStringLiteral("Main script")), qPrintable(shown.join(", ")));
+        QVERIFY2(shown.contains(QStringLiteral("Soft · script folder")), qPrintable(shown.join(", ")));
+        QCOMPARE(c.scriptPath(), script);
+        QCOMPARE(c.scriptName(), QStringLiteral("Clip.funscript"));
+        QCOMPARE(c.pointCount(), 41);
+        QCOMPARE(c.playheadMs(), qint64(4000));
+        QVERIFY(c.variantIndex() >= 0);
+        QCOMPARE(c.variants().at(c.variantIndex()).toMap().value("path").toString(), script);
+        c.removeScriptFolder(d.filePath("more"));
+        QCOMPARE(c.variants().size(), 1);
+        QCOMPARE(c.scriptPath(), script);
+        QCOMPARE(c.playheadMs(), qint64(4000));
+        QCOMPARE(c.variants().at(0).toMap().value("display").toString(), QStringLiteral("Main script"));
     }
 
     void autoCreateAndVideoFiles() {
