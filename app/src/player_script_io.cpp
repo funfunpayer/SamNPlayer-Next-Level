@@ -39,6 +39,32 @@ namespace samn::ui {
 using player_internal::EditLane;
 using player_internal::ParseEditLane;
 
+namespace {
+
+bool sameActions(const std::vector<samn::Action>& a, const std::vector<samn::Action>& b) {
+    if (a.size() != b.size()) return false;
+    for (size_t i = 0; i < a.size(); ++i)
+        if (a[i].at != b[i].at || a[i].pos != b[i].pos) return false;
+    return true;
+}
+
+samn::EditSession::Axes curveAxes(const samn::Document& doc) {
+    samn::EditSession::Axes axes;
+    axes.emplace("stroke", doc.general);
+    if (!doc.vibration.empty()) axes.emplace("vibration", doc.vibration);
+    if (!doc.suction.empty()) axes.emplace("suction", doc.suction);
+    return axes;
+}
+
+// openScript clears history except while this is set (the curve-edit reload).
+struct PreserveCurveHistory {
+    bool& flag;
+    explicit PreserveCurveHistory(bool& flag) : flag(flag) { flag = true; }
+    ~PreserveCurveHistory() { flag = false; }
+};
+
+}  // namespace
+
 bool PlayerController::bakeOffset() {
     if (scriptPath_.isEmpty()) {
         setError(tr("Open a script first."));
@@ -569,6 +595,108 @@ bool PlayerController::invertAll() {
         false);
 }
 
+QString PlayerController::undoText() const {
+    return canUndo() ? tr("Undo: %1").arg(QString::fromStdString(editSession_.UndoLabel())) : tr("Nothing to undo");
+}
+
+QString PlayerController::redoText() const {
+    return canRedo() ? tr("Redo: %1").arg(QString::fromStdString(editSession_.RedoLabel())) : tr("Nothing to redo");
+}
+
+void PlayerController::resetCurveHistory(const samn::Document& doc) {
+    editSession_ = samn::EditSession(curveAxes(doc));
+    emit historyChanged();
+}
+
+void PlayerController::persistCurveHistory() {
+    namespace fs = std::filesystem;
+    const std::string openedU8 = U8(scriptPath_);
+    const fs::path opened = fs::u8path(openedU8);
+    const bool wasSamn = samn::IsSamnPath(openedU8);
+    const std::string funscriptU8 = wasSamn ? samn::CompanionFunscriptPath(openedU8) : openedU8;
+    const fs::path funscript = fs::u8path(funscriptU8);
+    const fs::path samnPath = fs::u8path(samn::CompanionSamnPath(funscriptU8));
+
+    samn::Document doc;
+    if (wasSamn || fs::exists(samnPath))
+        doc = samn::LoadDocument(wasSamn ? opened : samnPath);
+    else
+        doc = samn::LoadFunscriptFile(funscript);
+
+    const auto& axes = editSession_.axes();
+    const bool stroke = axes.count("stroke") && !sameActions(editSession_.Axis("stroke"), doc.general);
+    const bool vib = axes.count("vibration") && !sameActions(editSession_.Axis("vibration"), doc.vibration);
+    const bool suc = axes.count("suction") && !sameActions(editSession_.Axis("suction"), doc.suction);
+    if (!stroke && !vib && !suc) return;
+
+    if (stroke) doc.general = editSession_.Axis("stroke");
+    if (vib) doc.vibration = editSession_.Axis("vibration");
+    if (suc) doc.suction = editSession_.Axis("suction");
+
+    // Stroke lives in the .funscript (and the .samn, when that is the open file).
+    // Vibration / suction are the companion .samn, played from the baked lanes.
+    if (stroke && fs::exists(funscript)) samn::PatchActions(funscript, doc.general);
+    const bool samnExists = wasSamn || fs::exists(samnPath);
+    if (vib || suc || (stroke && samnExists) || (stroke && !fs::exists(funscript))) {
+        if (doc.version == 0) doc.version = samn::SamnCurrentVersion;
+        if (doc.kind.empty()) doc.kind = samn::SamnKind;
+        if (vib || suc) {
+            const char* source = doc.vibration.empty() && doc.suction.empty() ? samn::PlaybackRecipe : samn::PlaybackAxes;
+            doc.playback_source = source;
+            doc.recipe.playback_source = source;
+        }
+        if (vib || suc)
+            samn::SaveDocument(samnPath, doc);
+        else if (stroke && samnExists)
+            samn::SaveDocument(wasSamn ? opened : samnPath, doc);
+        else
+            samn::SaveDocument(opened, doc);
+    }
+}
+
+bool PlayerController::reloadKeepingCurveHistory(const QString& path) {
+    PreserveCurveHistory keep(preservingEditHistory_);
+    const bool ok = openScript(path, videoPath_);
+    emit historyChanged();
+    return ok;
+}
+
+bool PlayerController::finishCurveHistory(const QString& path, const QString& note) {
+    if (!reloadKeepingCurveHistory(path)) return false;
+    toolNote_ = note;
+    emit toolNoteChanged();
+    emit scriptEdited(scriptPath_);
+    return true;
+}
+
+bool PlayerController::undo() {
+    if (!editSession_.Undo()) return false;
+    try {
+        persistCurveHistory();
+    } catch (const std::exception& e) {
+        editSession_.Redo();
+        emit historyChanged();
+        setFailure(tr("Undo: %1").arg(FromU8(e.what())));
+        return false;
+    }
+    const QString label = QString::fromStdString(editSession_.RedoLabel());
+    return finishCurveHistory(scriptPath_, tr("Undone · %1").arg(label));
+}
+
+bool PlayerController::redo() {
+    if (!editSession_.Redo()) return false;
+    try {
+        persistCurveHistory();
+    } catch (const std::exception& e) {
+        editSession_.Undo();
+        emit historyChanged();
+        setFailure(tr("Redo: %1").arg(FromU8(e.what())));
+        return false;
+    }
+    const QString label = QString::fromStdString(editSession_.UndoLabel());
+    return finishCurveHistory(scriptPath_, tr("Redone · %1").arg(label));
+}
+
 bool PlayerController::applySelectionEdit(const QString& label,
                                          const std::function<std::vector<samn::Action>(const std::vector<samn::Action>&)>& op,
                                          bool needMarker) {
@@ -593,7 +721,9 @@ bool PlayerController::applySelectionEdit(const QString& label,
     const std::string funscriptU8 = wasSamn ? samn::CompanionFunscriptPath(openedU8) : openedU8;
     const fs::path funscript = fs::u8path(funscriptU8);
     const fs::path samnPath = fs::u8path(samn::CompanionSamnPath(funscriptU8));
+    const char* axis = *lane == EditLane::Stroke ? "stroke" : *lane == EditLane::Vibration ? "vibration" : "suction";
 
+    bool committed = false;
     try {
         samn::Document doc;
         if (wasSamn || fs::exists(samnPath)) {
@@ -610,26 +740,30 @@ bool PlayerController::applySelectionEdit(const QString& label,
             setError(tr("%1: the lane has too few points.").arg(label));
             return false;
         }
-        *target = op(*target);
-
-        if (*lane == EditLane::Stroke) {
-            if (fs::exists(funscript)) samn::PatchActions(funscript, doc.general);
-            if (wasSamn || fs::exists(samnPath)) {
-                if (doc.version == 0) doc.version = samn::SamnCurrentVersion;
-                if (doc.kind.empty()) doc.kind = samn::SamnKind;
-                samn::SaveDocument(wasSamn ? opened : samnPath, doc);
-            } else if (!fs::exists(funscript)) {
-                samn::SaveDocument(opened, doc);
-            }
-        } else {
-            if (doc.version == 0) doc.version = samn::SamnCurrentVersion;
-            if (doc.kind.empty()) doc.kind = samn::SamnKind;
-            const char* source = samn::PlaybackAxes;
-            doc.playback_source = source;
-            doc.recipe.playback_source = source;
-            samn::SaveDocument(samnPath, doc);
+        // The session is the file as opened. If something else wrote the lane,
+        // start this step from the file so the patch restores that content.
+        if (!sameActions(editSession_.Axis(axis), *target)) {
+            editSession_ = samn::EditSession(curveAxes(doc));
+            emit historyChanged();
         }
+
+        std::vector<samn::Action> next = op(*target);
+        // One undo step before the write (EditorController::applyRange).
+        editSession_.Begin(label.toStdString());
+        editSession_.Replace(axis, std::move(next), label.toStdString());
+        if (!editSession_.Commit()) {
+            setError(tr("%1: nothing to change here.").arg(label));
+            return false;
+        }
+        committed = true;
+        emit historyChanged();
+        persistCurveHistory();
     } catch (const std::exception& e) {
+        if (editSession_.InTransaction()) editSession_.Rollback();
+        if (committed) {
+            editSession_.Undo();
+            emit historyChanged();
+        }
         setFailure(tr("%1: %2").arg(label, FromU8(e.what())));
         return false;
     }
@@ -640,11 +774,7 @@ bool PlayerController::applySelectionEdit(const QString& label,
     const QString reload = (wasSamn || fs::exists(samnPath) || *lane != EditLane::Stroke)
                                ? FromU8(samnPath.u8string())
                                : scriptPath_;
-    if (!openScript(reload, videoPath_)) return false;
-    toolNote_ = tr("%1 · %2").arg(label, laneTitle);
-    emit toolNoteChanged();
-    emit scriptEdited(scriptPath_);
-    return true;
+    return finishCurveHistory(reload, tr("%1 · %2").arg(label, laneTitle));
 }
 
 QVariantMap PlayerController::scriptQuality() {

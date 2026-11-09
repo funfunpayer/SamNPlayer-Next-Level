@@ -559,11 +559,12 @@ Column {
         }
         Rectangle {
             visible: doctor.result !== null
-            width: parent.width; radius: 8
+            width: parent.width; radius: Theme.radiusSmall
             height: doctorText.implicitHeight + 16
             readonly property bool failed: doctor.result !== null && (doctor.result.error !== "" || !doctor.result.passed)
-            color: failed ? Qt.rgba(216 / 255, 77 / 255, 77 / 255, 0.12) : Qt.rgba(61 / 255, 216 / 255, 117 / 255, 0.12)
-            border.color: failed ? "#d84d4d" : "#3dd875"
+            color: failed ? Qt.rgba(Theme.danger.r, Theme.danger.g, Theme.danger.b, 0.12)
+                          : Qt.rgba(Theme.good.r, Theme.good.g, Theme.good.b, 0.12)
+            border.color: failed ? Theme.danger : Theme.good
             Text {
                 id: doctorText
                 x: 8; y: 8; width: parent.width - 16

@@ -30,7 +30,7 @@ Item {
     // Side panels away: fullscreen or theatre.
     readonly property bool bare: fullStage || theatre
     property bool muted: false
-    readonly property string videoGlobs: "*.mp4 *.mkv *.avi *.mov *.wmv *.m4v *.webm *.ts *.m2ts *.flv *.mpg *.mpeg *.3gp *.ogv"
+    readonly property string videoGlobs: Theme.videoGlobs
     // An overlay (Settings) is open: its keys win.
     property bool overlayOpen: false
 
@@ -342,271 +342,49 @@ Item {
         anchors.top: parent.top; anchors.bottom: parent.bottom
 
         // Header: what is open, the script variant, Open.
-        Item {
+        PlayerHeader {
             id: header
             visible: !page.fullStage
             width: parent.width; height: 40
-            Text {
-                textFormat: Text.PlainText
-                anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
-                anchors.right: variantBox.visible ? variantBox.left : videoBar.visible ? videoBar.left : openBtn.left
-                anchors.rightMargin: 12
-                text: ctrl.hasScript ? ctrl.scriptName + (ctrl.videoName !== "" ? "  ·  " + ctrl.videoName : "")
-                                     : ctrl.videoName !== "" ? ctrl.videoName : qsTr("Open a video or a script")
-                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 14
-                elide: Text.ElideMiddle
+            ctrl: ctrl
+            empty: page.empty
+            theatre: page.theatre; theatreLanes: page.theatreLanes; fullStage: page.fullStage
+            onOpenRequested: page.openFile()
+            onVideoPickRequested: videoDialog.open()
+            onBookmarkRequested: ctrl.addBookmark("", page.player.position)
+            onSnapshotRequested: {
+                snapshotDialog.currentFile = ctrl.snapshotFolder() + "/" + ctrl.snapshotName(media.position)
+                snapshotDialog.open()
             }
-            FlowCombo {
-                id: variantBox
-                anchors.right: videoBar.visible ? videoBar.left : openBtn.left; anchors.rightMargin: 10
-                anchors.verticalCenter: parent.verticalCenter
-                width: 240
-                visible: ctrl.variants.length > 1
-                objectName: "variantBox"
-                // 0.7: a script that is not one of the variants shows first as itself.
-                readonly property bool other: ctrl.variants.findIndex((v) => v.path === ctrl.scriptPath) < 0
-                model: (other ? [{ display: ctrl.scriptName !== "" ? ctrl.scriptName : qsTr("Other script"), path: "" }] : []).concat(ctrl.variants)
-                textRole: "display"
-                currentIndex: other ? 0 : ctrl.variants.findIndex((v) => v.path === ctrl.scriptPath)
-                onActivated: (i) => { if (!other || i > 0) ctrl.chooseVariant(other ? i - 1 : i) }
-            }
-            // Video bar (0.7 v1): link a video, bookmark, snapshot.
-            Row {
-                id: videoBar
-                anchors.right: fsBtn.visible ? fsBtn.left : openBtn.left; anchors.rightMargin: 10; anchors.verticalCenter: parent.verticalCenter
-                spacing: 8
-                visible: ctrl.hasScript
-                FlowButton {
-                    icon: "video"
-                    text: ctrl.videoName !== "" ? ctrl.videoName : qsTr("Select a video file…")
-                    onClicked: videoDialog.open()
-                }
-                IconButton {
-                    width: 36; height: 36; icon: "bookmark"; tip: qsTr("Add a bookmark at the current time")
-                    onClicked: ctrl.addBookmark("", page.player.position)
-                }
-                IconButton {
-                    width: 36; height: 36; icon: "snapshot"; tip: qsTr("Save the current video frame as PNG")
-                    visible: ctrl.videoName !== ""
-                    onClicked: {
-                        snapshotDialog.currentFile = ctrl.snapshotFolder() + "/" + ctrl.snapshotName(media.position)
-                        snapshotDialog.open()
-                    }
-                }
-            }
-            IconButton {
-                id: theatreLanesBtn
-                objectName: "theatreLanesButton"
-                anchors.right: theatreBtn.left; anchors.rightMargin: 8; anchors.verticalCenter: parent.verticalCenter
-                width: 36; height: 36; icon: "waveform"
-                visible: page.theatre && !page.empty
-                opacity: page.theatreLanes ? 1 : 0.45
-                tip: page.theatreLanes ? qsTr("Hide the curve and waveform") : qsTr("Show the curve and waveform")
-                onClicked: page.theatreLanes = !page.theatreLanes
-            }
-            IconButton {
-                id: theatreBtn
-                objectName: "theatreButton"
-                anchors.right: fsBtn.left; anchors.rightMargin: 8; anchors.verticalCenter: parent.verticalCenter
-                width: 36; height: 36; icon: page.theatre ? "minimize" : "video"
-                visible: !page.empty
-                tip: page.theatre ? qsTr("Leave theatre mode (T)") : qsTr("Theatre mode: the video large, panels away (T)")
-                onClicked: page.theatre = !page.theatre
-            }
-            IconButton {
-                id: fsBtn
-                anchors.right: openBtn.left; anchors.rightMargin: 8; anchors.verticalCenter: parent.verticalCenter
-                width: 36; height: 36; icon: page.fullStage ? "minimize" : "fullscreen"
-                tip: qsTr("Fullscreen (double-click the video)")
-                visible: ctrl.videoName !== ""
-                onClicked: page.fullStage = !page.fullStage
-            }
-            FlowButton {
-                id: openBtn
-                anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
-                primary: !page.empty; icon: "folder"; text: qsTr("Open…")
-                onClicked: page.openFile()
-            }
+            onTheatreToggled: page.theatre = !page.theatre
+            onTheatreLanesToggled: page.theatreLanes = !page.theatreLanes
+            onFullStageToggled: page.fullStage = !page.fullStage
         }
 
-        // Soft probe-on-link warning (before play fails). Distinct from the
-        // hard error bar; dismissed on first picture or by the user.
-        Rectangle {
-            id: linkWarnBar
-            objectName: "videoLinkWarning"
-            readonly property bool show: ctrl.videoLinkWarning !== "" && ctrl.lastError === ""
-            anchors.top: header.bottom; anchors.topMargin: show ? 8 : 0
+        // Link warning and the error bar. The component owns their height.
+        PlayerStatusBars {
+            id: statusBars
+            anchors.top: header.bottom
             width: parent.width
-            height: show ? Math.max(linkWarnText.implicitHeight, 36) + 16 : 0
-            visible: height > 0; clip: true
-            radius: Theme.radiusSmall
-            color: Qt.rgba(1, 0.72, 0.25, 0.12); border.color: Qt.rgba(1, 0.75, 0.3, 0.45)
-            Behavior on height { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
-            Text {
-                id: linkWarnText
-                textFormat: Text.PlainText
-                anchors.verticalCenter: parent.verticalCenter
-                x: 14
-                width: parent.width - 28 - (ctrl.videoLinkSuggestPlayable ? linkMakePlayable.width + 12 : 0)
-                                           - (linkDismiss.width + 12)
-                text: ctrl.videoLinkWarning; wrapMode: Text.Wrap
-                color: "#ffe8c0"; font.family: Theme.fontSoft; font.pixelSize: 13
-            }
-            FlowButton {
-                id: linkMakePlayable
-                objectName: "linkMakePlayable"
-                anchors.right: linkDismiss.left; anchors.rightMargin: 8
-                anchors.verticalCenter: parent.verticalCenter
-                visible: ctrl.videoLinkSuggestPlayable
-                primary: true
-                enabled: !convertCtl.cutting && !convertCtl.fetching
-                text: convertCtl.cutting ? (qsTr("%1 %").arg(convertCtl.progress))
-                      : convertCtl.fetching ? qsTr("Getting ffmpeg…")
-                      : qsTr("Make playable")
-                onClicked: page.convertVideo()
-            }
-            FlowButton {
-                id: linkDismiss
-                objectName: "dismissLinkWarning"
-                anchors.right: parent.right; anchors.rightMargin: 10
-                anchors.verticalCenter: parent.verticalCenter
-                text: qsTr("Dismiss")
-                onClicked: ctrl.dismissVideoLinkWarning()
-            }
+            ctrl: ctrl
+            noPicture: page.noPicture
+            convertCtl: convertCtl
+            onConvertRequested: page.convertVideo()
+            onDismissLinkWarningRequested: ctrl.dismissVideoLinkWarning()
         }
 
-        // Errors stay visible until the next successful open. Make playable
-        // appears for media failures and for no-picture (same H.264 convert).
-        Rectangle {
-            id: errorBar
-            readonly property bool offerPlayable: ctrl.videoName !== "" && ctrl.lastError !== ""
-                                                 && (ctrl.mediaError || page.noPicture
-                                                     || ctrl.lastError.indexOf("Make playable") >= 0)
-            anchors.top: linkWarnBar.visible ? linkWarnBar.bottom : header.bottom
-            anchors.topMargin: ctrl.lastError !== "" ? 8 : 0
-            width: parent.width
-            height: ctrl.lastError !== "" ? Math.max(errText.implicitHeight, offerPlayable ? 36 : 0) + 16 : 0
-            visible: height > 0; clip: true
-            radius: Theme.radiusSmall
-            color: Qt.rgba(1, 0.35, 0.3, 0.12); border.color: Qt.rgba(1, 0.4, 0.35, 0.5)
-            Behavior on height { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
-            Text {
-                textFormat: Text.PlainText
-                id: errText
-                anchors.verticalCenter: parent.verticalCenter
-                x: 14
-                width: parent.width - 28 - (errorBar.offerPlayable ? makePlayableBtn.width + 16 : 0)
-                text: ctrl.lastError; wrapMode: Text.Wrap
-                color: "#ffd0c8"; font.family: Theme.fontSoft; font.pixelSize: 13
-            }
-            FlowButton {
-                id: makePlayableBtn
-                objectName: "makePlayable"
-                anchors.right: parent.right; anchors.rightMargin: 10
-                anchors.verticalCenter: parent.verticalCenter
-                visible: errorBar.offerPlayable
-                primary: true
-                enabled: !convertCtl.cutting && !convertCtl.fetching
-                text: convertCtl.cutting ? (qsTr("%1 %").arg(convertCtl.progress))
-                      : convertCtl.fetching ? qsTr("Getting ffmpeg…")
-                      : qsTr("Make playable")
-                onClicked: page.convertVideo()
-            }
-        }
-
-        // Empty state (Owner 15 Oct, 0.8 #550): one real round Play button,
-        // "Open…" under it, centred. No wordmark or stage art. Soft bloom and
-        // a calm settle-in so the home feels alive without clutter.
-        Item {
-            id: emptyHome
-            visible: page.empty
+        // Empty state: round Play + Open…, centred.
+        PlayerEmptyHome {
             anchors.fill: parent
-            opacity: page.empty ? 1 : 0
-            Behavior on opacity { NumberAnimation { duration: Theme.animSlow; easing.type: Easing.OutCubic } }
-
-            Column {
-                id: emptyState
-                anchors.centerIn: parent
-                spacing: 18
-                scale: page.empty ? 1 : 0.96
-                Behavior on scale { NumberAnimation { duration: Theme.animSlow; easing.type: Easing.OutCubic } }
-
-                // Soft round bloom behind the Play only (Owner 26 Oct: the old
-                // wide oval looked like a dark smear behind the button). Layout
-                // size stays the Play; the bloom is larger and does not push Open….
-                Item {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    width: emptyPlay.width; height: emptyPlay.height
-                    Rectangle {
-                        id: emptyBloom
-                        property real breathe: 0.85
-                        anchors.centerIn: parent
-                        width: emptyPlay.width * 2.2; height: width; radius: width / 2
-                        opacity: breathe
-                        z: -1
-                        gradient: Gradient {
-                            GradientStop { position: 0; color: Qt.rgba(63 / 255, 208 / 255, 1, 0.14) }
-                            GradientStop { position: 0.5; color: Qt.rgba(1, 138 / 255, 35 / 255, 0.07) }
-                            GradientStop { position: 1; color: "transparent" }
-                        }
-                        SequentialAnimation on breathe {
-                            running: page.empty && Qt.application.state === Qt.ApplicationActive && !Theme.reducedMotion
-                            loops: Animation.Infinite
-                            NumberAnimation { from: 0.65; to: 1.0; duration: 3800; easing.type: Easing.InOutSine }
-                            NumberAnimation { from: 1.0; to: 0.65; duration: 3800; easing.type: Easing.InOutSine }
-                        }
-                    }
-                    PlayButton {
-                        id: emptyPlay
-                        objectName: "emptyPlay"
-                        anchors.centerIn: parent
-                        // Grows with the stage, 96..140 px (Owner 26 Oct: 168 px was
-                        // too big on small windows and at 150 % scaling).
-                        width: Math.round(Math.max(96, Math.min(140, Math.min(emptyHome.width, emptyHome.height) * 0.2)))
-                        height: width
-                        onClicked: page.openFile()
-                    }
-                }
-                // Match 0.8 `.pb-empty-open` (letter-spacing + soft cyan glow).
-                Item {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    width: emptyOpenLabel.implicitWidth
-                    height: emptyOpenLabel.implicitHeight
-                    Text {
-                        anchors.centerIn: parent
-                        textFormat: Text.PlainText
-                        text: emptyOpenLabel.text
-                        color: Qt.rgba(63 / 255, 208 / 255, 1, 0.45)
-                        font: emptyOpenLabel.font
-                        opacity: emptyOpen.containsMouse ? 0.85 : 0.55
-                        scale: 1.10
-                        z: -1
-                        Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
-                    }
-                    Text {
-                        id: emptyOpenLabel
-                        textFormat: Text.PlainText
-                        text: qsTr("Open…")
-                        color: emptyOpen.containsMouse ? "white" : Theme.text
-                        font.family: Theme.font; font.pixelSize: 20; font.weight: Font.DemiBold
-                        font.letterSpacing: 0.8
-                        Behavior on color { ColorAnimation { duration: Theme.animFast } }
-                    }
-                    MouseArea {
-                        id: emptyOpen
-                        anchors.fill: parent; anchors.margins: -8
-                        hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                        onClicked: page.openFile()
-                    }
-                }
-            }
+            empty: page.empty
+            onOpenRequested: page.openFile()
         }
         // Video card: stage + transport.
         GlassCard {
             id: videoCard
             objectName: "videoCard"
             visible: !page.empty
-            anchors.top: page.fullStage ? parent.top : errorBar.bottom; anchors.topMargin: page.fullStage ? 0 : 10
+            anchors.top: page.fullStage ? parent.top : statusBars.bottom; anchors.topMargin: page.fullStage ? 0 : 10
             width: parent.width
             height: page.fullStage ? parent.height
                     : page.theatre ? (page.theatreLanes ? Math.max(300, (parent.height - header.height) * 0.76) : parent.height - header.height - 10)
@@ -1071,7 +849,6 @@ Item {
             playheadPosition: page.player.position
             onSeekRequested: (ms) => page.seekTo(ms)
             onTipRequested: (item, x, y, text) => page.showTip(item, x, y, text)
-            onEditScenesRequested: page.editRequested(ctrl.scriptPath, ctrl.videoUrl, true)
         }
 
     }
@@ -1081,7 +858,7 @@ Item {
         id: chartTip
         visible: false; z: 100
         width: tipText.implicitWidth + 16; height: tipText.implicitHeight + 10
-        radius: 8; color: "#e60a1a2e"; border.color: Theme.cardBorder
+        radius: Theme.radiusSmall; color: "#e60a1a2e"; border.color: Theme.cardBorder
         Text { textFormat: Text.PlainText; id: tipText; anchors.centerIn: parent; color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 12 }
     }
 
@@ -1117,4 +894,16 @@ Item {
     }
     Shortcut { sequence: "Esc"; enabled: page.visible && page.fullStage && !page.overlayOpen; onActivated: page.fullStage = false }
     Shortcut { sequence: "T"; enabled: page.visible && !page.overlayOpen && !page.empty; onActivated: page.theatre = !page.theatre }
+    // Curve-edit undo. Same keys as the Generator editor; this page is hidden
+    // in other modes, and overlay (Settings) wins, like the keys above.
+    Shortcut {
+        sequences: [StandardKey.Undo]
+        enabled: page.visible && !page.overlayOpen && ctrl.canUndo
+        onActivated: ctrl.undo()
+    }
+    Shortcut {
+        sequences: [StandardKey.Redo, "Ctrl+Y"]
+        enabled: page.visible && !page.overlayOpen && ctrl.canRedo
+        onActivated: ctrl.redo()
+    }
 }

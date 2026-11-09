@@ -74,6 +74,12 @@ Functions use PascalCase and struct fields use snake_case.
 4. A new `TransportKind` only if no existing one fits: then one case in `DeviceWorker::MakeTransport` (`app/src/device_worker.cpp`) and a `QtTransport` in `app/src/device_io/`.
 5. Tests in `tests/core/device_driver_test.cpp` over `MockTransport` (or a fake server like `device_fake_buttplug.h`).
 
+**Adding a mode** (compiled in, no plugin loading; D-166):
+1. A QML page next to `Main.qml` (listed in `app/CMakeLists.txt`); give it `property bool overlayOpen` if it should know about Settings / handbook.
+2. A `ModeDescriptor` (id, title, icon from `qml/icons`, hue, optional tooltip and shortcut, `page` = the file name) passed to `ModeRegistry::instance().registerMode(...)`, at start or later. An empty shortcut means Ctrl+<position>.
+3. A mode hidden by a switch: `setVisible(id, bool)`; it loses its tab, key and page. `Main.qml` follows the current mode by id: other modes coming and going keep it shown; if it is hidden, removed or disabled the shell returns to the Player.
+4. Tests: `tests/app/mode_registry_test.cpp` (registry) and `registeredModeGetsTabKeyAndPage` in `shell_qml_test.cpp` (tab, key, page).
+
 **Open cleanups:**
 - `script_finder`/`settings`/`playback` use snake_case function names; rename them to PascalCase.
 
@@ -122,6 +128,7 @@ Controllers are `QObject`s registered for QML; their tests are `tests/app/<name>
 |---|---|
 | `src/qt_paths.h`, `src/ai_paths.h` | Qt string to path / UTF-8 conversions and the file: URL helper shared by the controllers; `AiDir()` (the AI Train folder, shared by the trainer and the health check). |
 | `src/theme.h` | All colours and sizes of the Flow look (QML singleton `Theme`). |
+| `src/mode_registry.*` | `ModeRegistry` (D-166, QML singleton): the modes as descriptors (id, title, icon, hue, tooltip, shortcut, page, visible, enabled; the tooltip is only the tab's accessible description today, no visible tooltip). Player, Generator and Training are built in (first, always visible and enabled, registered by the registry only, wired in `Main.qml`); every other mode is a page loaded from its descriptor. The tab row (`TopBar`), the Ctrl+N keys and the page stack of `Main.qml` read it; no kernel logic inside. `Plugins` (D-155) only holds the Settings switch and calls `setVisible`. |
 | `src/player_controller.*` | Player logic for QML: video first (folders, variants), `.samn`, lanes, heatmap, chapters, bookmarks, offset, loop, zoom window, errors. |
 | `src/curve_item.*` | One curve lane in the 0.7 look (soft line, glow, fill, dots, live dot, tempo wave). The static layer is cached; playing only moves the playhead. |
 | `src/heatmap_item.*` | The heatmap bar (0.7 colours, 300 buckets) on the zoom window, with the marked range and the playhead. |

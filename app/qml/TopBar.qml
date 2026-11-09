@@ -6,13 +6,10 @@ Item {
     id: root
     // The app's one device connection (Main.qml); null hides the chip.
     property DeviceController device: null
-    // Player, Generator, Training (D-144, D-145), then the plugin modes that
-    // are switched on (D-155); the tab row picks one.
-    readonly property var modes: [
-        { name: qsTr("Player"), color: Theme.cyan, icon: "player" },
-        { name: qsTr("Generator"), color: Theme.orange, icon: "create" },
-        { name: qsTr("Training"), color: Theme.blue, icon: "training" }
-    ].concat(Plugins.modes.map((m) => ({ name: m.name, color: Theme.orange, icon: m.icon })))
+    // The visible modes of the ModeRegistry (D-166): Player, Generator,
+    // Training (D-144, D-145), then the plugin modes that are switched on (D-155).
+    readonly property var modes: ModeRegistry.modes.map((m) => ({
+        id: m.id, name: m.title, color: m.hue, icon: m.icon, tooltip: m.tooltip, enabled: m.enabled }))
     property int currentMode: 0
     readonly property string modeName: modes[Math.min(currentMode, modes.length - 1)].name
     signal modeChosen(int index)
@@ -73,6 +70,8 @@ Item {
                 width: 124; height: 62
                 Accessible.role: Accessible.PageTab
                 Accessible.name: modelData.name
+                Accessible.description: modelData.tooltip
+                opacity: modelData.enabled ? 1 : 0.4
                 // Breathing glow around the current tab (0.8 #550 mode-pill pulse).
                 Rectangle {
                     anchors.centerIn: face
@@ -89,7 +88,7 @@ Item {
                 Rectangle {
                     id: face
                     anchors.fill: parent
-                    radius: 22
+                    radius: Theme.radius
                     border.width: tab.current ? 1.5 : 1
                     border.color: tab.current ? Theme.cyan : tabArea.containsMouse ? Qt.rgba(0, 217 / 255, 244 / 255, 0.35) : "transparent"
                     gradient: Gradient {
@@ -121,7 +120,7 @@ Item {
                     id: tabArea
                     anchors.fill: parent; hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: root.modeChosen(tab.index)
+                    onClicked: if (tab.modelData.enabled) root.modeChosen(tab.index)
                 }
             }
         }

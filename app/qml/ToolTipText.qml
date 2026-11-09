@@ -9,5 +9,5 @@ ToolTip {
     visible: shown && text !== ""
     delay: 500
     contentItem: Text { textFormat: Text.PlainText; text: tip.text; color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 12 }
-    background: Rectangle { color: "#0a1a2e"; border.color: Theme.cardBorder; radius: 8 }
+    background: Rectangle { color: "#0a1a2e"; border.color: Theme.cardBorder; radius: Theme.radiusSmall }
 }

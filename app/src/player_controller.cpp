@@ -62,6 +62,26 @@ bool isScript(const QString& path) {
     return std::find(samn::SCRIPT_EXTS.begin(), samn::SCRIPT_EXTS.end(), suffix) != samn::SCRIPT_EXTS.end();
 }
 
+// 0.7 #pb-variant: "Soft", "By someone" or "Main script", and where it lies.
+// index is the row whose path equals preferredPath, or -1.
+struct VariantRows {
+    QVariantList list;
+    int index = -1;
+};
+
+VariantRows variantRowsFor(const samn::VideoScriptMatch& match, const std::string& preferredPath) {
+    VariantRows rows;
+    for (size_t i = 0; i < match.variants.size(); ++i) {
+        const auto& v = match.variants[i];
+        QString name = FromU8(v.label);
+        name = name.isEmpty() ? PlayerController::tr("Main script") : name.left(1).toUpper() + name.mid(1);
+        if (!v.beside) name += PlayerController::tr(" · script folder");
+        rows.list.append(QVariantMap{{"path", FromU8(v.path)}, {"label", FromU8(v.label)}, {"display", name}, {"beside", v.beside}});
+        if (v.path == preferredPath) rows.index = static_cast<int>(i);
+    }
+    return rows;
+}
+
 }  // namespace
 
 PlayerController::PlayerController(QObject* parent)
@@ -219,17 +239,9 @@ bool PlayerController::openPath(const QString& pathOrUrl) {
     std::vector<std::string> folders;
     for (const auto& f : scriptFolders()) folders.push_back(U8(f));
     const auto match = samn::find_script_for_video(U8(path), folders);
-    variants_.clear();
-    variantIndex_ = -1;
-    for (size_t i = 0; i < match.variants.size(); ++i) {
-        const auto& v = match.variants[i];
-        // 0.7 #pb-variant: "Soft", "By someone" or "Main script", and where it lies.
-        QString name = FromU8(v.label);
-        name = name.isEmpty() ? tr("Main script") : name.left(1).toUpper() + name.mid(1);
-        if (!v.beside) name += tr(" · script folder");
-        variants_.append(QVariantMap{{"path", FromU8(v.path)}, {"label", FromU8(v.label)}, {"display", name}, {"beside", v.beside}});
-        if (v.path == match.script_path) variantIndex_ = static_cast<int>(i);
-    }
+    const auto rows = variantRowsFor(match, match.script_path);
+    variants_ = rows.list;
+    variantIndex_ = rows.index;
     emit variantsChanged();
     if (match.found && !match.script_path.empty()) {
         if (!openScript(FromU8(match.script_path), path)) return false;
@@ -392,6 +404,23 @@ void PlayerController::removeScriptFolder(const QString& path) {
         return;
     }
     emit scriptFoldersChanged();
+    if (!videoPath_.isEmpty()) refreshVariantsForOpenVideo();
+}
+
+void PlayerController::refreshVariantsForOpenVideo() {
+    if (videoPath_.isEmpty()) {
+        variants_.clear();
+        variantIndex_ = -1;
+        emit variantsChanged();
+        return;
+    }
+    std::vector<std::string> folders;
+    for (const auto& f : scriptFolders()) folders.push_back(U8(f));
+    const auto match = samn::find_script_for_video(U8(videoPath_), folders);
+    const auto rows = variantRowsFor(match, U8(scriptPath_));
+    variants_ = rows.list;
+    variantIndex_ = rows.index;
+    emit variantsChanged();
 }
 
 bool PlayerController::isVideoFile(const QString& pathOrUrl) const { return isVideo(toLocalPath(pathOrUrl)); }
@@ -429,11 +458,14 @@ void PlayerController::addScriptFolder(const QString& pathOrUrl) {
         }
         emit scriptFoldersChanged();
     }
-    // Look again for the open video's script.
+    // No script yet: search again (that may load one). A script already open
+    // only refreshes the variant list, so playback stays put.
     if (!hasScript() && !videoPath_.isEmpty()) {
         const QString video = videoPath_;
         openPath(video);
         if (!hasScript()) setError(tr("No script for %1 in that folder either.").arg(QFileInfo(video).fileName()));
+    } else if (!videoPath_.isEmpty()) {
+        refreshVariantsForOpenVideo();
     }
 }
 
@@ -563,6 +595,9 @@ bool PlayerController::openScript(const QString& pathIn, const QString& videoIn)
         setFailure(tr("Could not open %1: the script has no points.").arg(QFileInfo(path).fileName()));
         return false;
     }
+    // Curve-edit undo is per script, like the Generator's EditSession on open.
+    // The reload after a range edit keeps the step pushed before the write.
+    if (!preservingEditHistory_) resetCurveHistory(doc);
     // The script's own recipe (profile, sync, contact vibration, feel,
     // balance) and the Player's settings over it shape what the device
     // gets, as 0.7's StartPlayback did with MapOptionsFromScript; a plain
@@ -844,6 +879,7 @@ void PlayerController::setUiValue(const QString& key, const QVariant& value) {
 }
 
 void PlayerController::clearScript() {
+    resetCurveHistory({});
     strength_.clear();
     activeStrength_.clear();
     contactMarks_.clear();
