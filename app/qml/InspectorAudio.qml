@@ -71,6 +71,21 @@ Column {
             visible: ctrl.toolNote !== "" && ctrl.toolNote.indexOf("Sound") >= 0
             text: ctrl.toolNote
         }
+        MessageDialog {
+            id: soundCurveDialog
+            title: qsTr("Sound Curve")
+            text: qsTr("Write the sound as the Vibration curve (%1 points)? Undo brings the old curve back.")
+                   .arg(ctrl.pendingSoundCurvePoints)
+            buttons: MessageDialog.Ok | MessageDialog.Cancel
+            onAccepted: ctrl.confirmSoundCurve()
+            onRejected: ctrl.cancelSoundCurve()
+        }
+        Connections {
+            target: ctrl
+            function onSoundCurveReady(points) {
+                if (points >= 2) soundCurveDialog.open()
+            }
+        }
     }
     InspectorCard {
         title: qsTr("Audio Vibration")
