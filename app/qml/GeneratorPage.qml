@@ -2373,8 +2373,9 @@ Item {
                         visible: r.quality !== undefined && !gen.running
                         Layout.fillWidth: true
                         implicitHeight: qualityCol.implicitHeight + 16
-                        radius: 8
-                        color: ok ? Qt.rgba(61 / 255, 216 / 255, 117 / 255, 0.12) : Qt.rgba(216 / 255, 77 / 255, 77 / 255, 0.12)
+                        radius: Theme.radiusSmall
+                        color: ok ? Qt.rgba(Theme.good.r, Theme.good.g, Theme.good.b, 0.12)
+                                  : Qt.rgba(Theme.danger.r, Theme.danger.g, Theme.danger.b, 0.12)
                         border.color: ok ? Theme.good : Theme.danger
                         ColumnLayout {
                             id: qualityCol
