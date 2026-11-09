@@ -45,7 +45,7 @@ class QtTransport;
 // "tcode-serial" (port), "intiface" (URL or bare IP), "mock". A driver says
 // what a kind needs; the transports, their cancel, the connect and Stop
 // deadlines and the session holds are this controller's.
-class DeviceController : public DeviceService {
+class DeviceController : public samn::ui::DeviceService {
     Q_OBJECT
     QML_ELEMENT
     // "disconnected" | "connecting" | "connected"
