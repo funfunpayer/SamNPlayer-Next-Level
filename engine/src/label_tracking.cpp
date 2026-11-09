@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
+#include <future>
 #include <opencv2/imgproc.hpp>
 
 #include "samn/vision/canceled.h"
@@ -40,77 +42,156 @@ std::optional<BetweenKeysResult> TrackBetweenKeys(const std::filesystem::path& v
         if (error && error->empty()) *error = "cannot seek in the video";
         return std::nullopt;
     }
-    // The frames of the stretch, small; the sample times are the frames
-    // that cross a step.
-    std::vector<cv::Mat> frames;
-    std::vector<int64_t> times;
-    double scale = 1.0;
+    const int window = std::max(1, o.window_frames);
+    BetweenKeysStats local;
+    BetweenKeysStats& st = o.stats ? *o.stats : local;
+    st = {};
+
+    // One window of small frames, reused for every chunk of both runs, and
+    // one read buffer: nothing else holds pixels. Times and the sample
+    // indices are all that is kept for the whole stretch.
+    std::vector<cv::Mat> win(static_cast<size_t>(window));
     vision::VideoFrame f;
+    double scale = 1.0;
+    const auto shrink = [&scale](const vision::VideoFrame& src, cv::Mat& dst) {
+        if (scale < 1.0) cv::resize(src.bgr, dst, cv::Size(), scale, scale, cv::INTER_AREA);
+        else src.bgr.copyTo(dst);
+    };
+
+    std::vector<int64_t> times;
+    std::vector<size_t> samples;  // the first frame at or after each step
+    std::vector<std::optional<LabelBox>> fwd_at;
+    int64_t next_step = from_ms + o.step_ms;
     const int64_t span = to_ms - from_ms;
-    while (reader->Read(f)) {
+
+    BetweenKeysResult out;
+    const auto cancelled = [&] {
         if (o.cancel && o.cancel()) {
             if (error) *error = kCanceled;
-            return std::nullopt;
+            return true;
         }
-        const int64_t ms = f.pts_us / 1000;
-        if (ms > to_ms) break;
-        if (frames.empty()) scale = std::min(1.0, double(o.max_side) / std::max(f.bgr.cols, f.bgr.rows));
-        cv::Mat small;
-        if (scale < 1.0) cv::resize(f.bgr, small, cv::Size(), scale, scale, cv::INTER_AREA);
-        else small = f.bgr.clone();
-        if (int(frames.size()) >= o.max_frames) {
-            if (error) *error = "the stretch is too long; add a key in between";
-            return std::nullopt;
+        return false;
+    };
+
+    // Forward run, streaming: each frame is read, tracked and dropped.
+    {
+        auto tracker = vision::CreateTracker(vision::TrackerKind::kCsrt, error);
+        if (!tracker) return std::nullopt;
+        bool lost = false;
+        while (reader->Read(f)) {
+            ++st.frames_decoded;
+            if (cancelled()) return std::nullopt;
+            const int64_t ms = f.pts_us / 1000;
+            if (ms > to_ms) break;
+            const size_t i = times.size();
+            if (i == 0) scale = std::min(1.0, double(o.max_side) / std::max(f.bgr.cols, f.bgr.rows));
+            if (int(i) >= o.max_frames) {
+                if (error) *error = "the stretch is too long; add a key in between";
+                return std::nullopt;
+            }
+            times.push_back(ms);
+            fwd_at.emplace_back();
+            if (next_step < to_ms && ms >= next_step) {
+                samples.push_back(i);
+                while (next_step <= ms) next_step += o.step_ms;
+            }
+            if (i == 0) {
+                shrink(f, win[0]);
+                const cv::Rect init = ToRect(from_box, scale, win[0].size());
+                if (init.width < 2 || init.height < 2) {
+                    if (error) *error = "the key's box is outside the frame";
+                    return std::nullopt;
+                }
+                tracker->Init(win[0], init);
+                fwd_at[0] = from_box;
+            } else if (!lost) {
+                shrink(f, win[0]);
+                if (auto r = tracker->Update(win[0])) fwd_at[i] = FromRect(*r, scale);
+                else lost = true;  // gone stays gone for this run
+            }
+            if (o.progress) o.progress(int(std::clamp<int64_t>((ms - from_ms) * 50 / span, 0, 50)));
         }
-        frames.push_back(std::move(small));
-        times.push_back(ms);
-        if (o.progress) o.progress(int(std::clamp<int64_t>((ms - from_ms) * 50 / span, 0, 50)));
     }
-    if (frames.size() < 2) {
+    const size_t n = times.size();
+    if (n < 2) {
         if (error) *error = "no frames between the keys";
         return std::nullopt;
     }
-    // The sample frames: the first frame at or after each step.
-    std::vector<size_t> samples;
-    for (int64_t next = from_ms + o.step_ms; next < to_ms; next += o.step_ms) {
-        const auto it = std::lower_bound(times.begin(), times.end(), next);
-        if (it == times.end()) break;
-        const size_t i = size_t(it - times.begin());
-        if (samples.empty() || samples.back() != i) samples.push_back(i);
-    }
+    for (const size_t i : samples) out.forward.push_back({times[i], fwd_at[i]});
+    fwd_at = {};
 
-    BetweenKeysResult out;
-    const auto run = [&](bool forward) -> bool {
+    // Backward run: the frames come back in chunks, each decoded forward from
+    // a frame-exact seek and tracked from its last frame to its first. The
+    // next chunk is decoded on another thread while this one is tracked (two
+    // buffers), so the second read of the stretch costs wall time only where
+    // there is no spare core.
+    {
         auto tracker = vision::CreateTracker(vision::TrackerKind::kCsrt, error);
-        if (!tracker) return false;
-        const size_t n = frames.size();
-        const size_t start = forward ? 0 : n - 1;
-        const cv::Rect init = ToRect(forward ? from_box : to_box, scale, frames[start].size());
-        if (init.width < 2 || init.height < 2) {
-            if (error) *error = "the key's box is outside the frame";
-            return false;
+        if (!tracker) return std::nullopt;
+        struct Chunk { size_t lo, hi; };
+        std::vector<Chunk> chunks;
+        for (size_t hi = n; hi > 0;) {
+            const size_t lo = hi > size_t(window) ? hi - size_t(window) : 0;
+            chunks.push_back({lo, hi});
+            hi = lo;
         }
-        tracker->Init(frames[start], init);
+        std::vector<cv::Mat> spare(static_cast<size_t>(window));
+        std::vector<cv::Mat>* bufs[2] = {&win, &spare};
+        struct Decoded { std::string error; int frames = 0; };
+        const auto decode = [&](const Chunk& c, std::vector<cv::Mat>& dst) {
+            Decoded d;
+            if (!reader->SeekMs(times[c.lo])) {
+                d.error = "cannot seek in the video";
+                return d;
+            }
+            vision::VideoFrame g;
+            for (size_t i = c.lo; i < c.hi; ++i) {
+                if (!reader->Read(g) || g.pts_us / 1000 != times[i]) {
+                    d.error = "the video changed between two reads";
+                    return d;
+                }
+                ++d.frames;
+                shrink(g, dst[i - c.lo]);
+            }
+            return d;
+        };
         std::vector<std::optional<LabelBox>> at(n);
-        at[start] = forward ? from_box : to_box;
         bool lost = false;
-        for (size_t k = 1; k < n; ++k) {
-            if (o.cancel && o.cancel()) {
-                if (error) *error = kCanceled;
-                return false;
+        auto pending = std::async(std::launch::async, decode, chunks[0], std::ref(*bufs[0]));
+        for (size_t c = 0; c < chunks.size() && !lost; ++c) {
+            const Decoded d = pending.get();
+            st.frames_decoded += d.frames;
+            if (!d.error.empty()) {
+                if (error) *error = d.error;
+                return std::nullopt;
             }
-            const size_t i = forward ? k : n - 1 - k;
-            if (!lost) {
-                if (auto r = tracker->Update(frames[i])) at[i] = FromRect(*r, scale);
-                else lost = true;  // gone stays gone for this run
+            if (c + 1 < chunks.size()) pending = std::async(std::launch::async, decode, chunks[c + 1], std::ref(*bufs[(c + 1) & 1]));
+            const std::vector<cv::Mat>& cur = *bufs[c & 1];
+            for (size_t i = chunks[c].hi; i-- > chunks[c].lo;) {
+                const cv::Mat& frame = cur[i - chunks[c].lo];
+                if (i == n - 1) {
+                    const cv::Rect init = ToRect(to_box, scale, frame.size());
+                    if (init.width < 2 || init.height < 2) {
+                        if (error) *error = "the key's box is outside the frame";
+                        return std::nullopt;
+                    }
+                    tracker->Init(frame, init);
+                    at[i] = to_box;
+                    continue;
+                }
+                if (cancelled()) return std::nullopt;
+                if (auto r = tracker->Update(frame)) at[i] = FromRect(*r, scale);
+                else {
+                    lost = true;  // gone stays gone: the frames before are not tracked
+                    break;
+                }
+                if (o.progress) o.progress(50 + int((n - 1 - i) * 50 / n));
             }
-            if (o.progress) o.progress(50 + int(k * 25 / n) + (forward ? 0 : 25));
         }
-        auto& dst = forward ? out.forward : out.backward;
-        for (const size_t i : samples) dst.push_back({times[i], at[i]});
-        return true;
-    };
-    if (!run(true) || !run(false)) return std::nullopt;
+        st.peak_frames_held = int(std::count_if(win.begin(), win.end(), [](const cv::Mat& m) { return !m.empty(); }) +
+                                  std::count_if(spare.begin(), spare.end(), [](const cv::Mat& m) { return !m.empty(); }));
+        for (const size_t i : samples) out.backward.push_back({times[i], at[i]});
+    }
     if (o.progress) o.progress(100);
     return out;
 }
