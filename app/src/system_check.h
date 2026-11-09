@@ -17,6 +17,7 @@ namespace samn::ui {
 struct GpuInfo {
     QString name;
     QString vendor;  // "NVIDIA", "AMD", "Intel", "Microsoft" or "Other"
+    QString driver;  // driver name or version; empty when unknown
     quint64 dedicated_mb = 0;
     bool integrated = false;
     bool software = false;  // Microsoft's Basic Render Driver and the like
@@ -28,7 +29,11 @@ QString GpuVendorName(quint32 pci_vendor_id);
 
 // Every graphics adapter of this PC (DXGI on Windows, /sys/class/drm on
 // Linux, empty elsewhere), classified. May take a moment: not for the GUI thread.
-QList<GpuInfo> ListGpus();
+// `with_names` false skips lspci (and the PowerShell fallback): vendor and memory
+// are enough to pick the training card, so the AI Train path starts no program.
+QList<GpuInfo> ListGpus(bool with_names = true);
+// How many external programs (lspci, PowerShell) this process started; for tests.
+int ExternalProgramRuns();
 
 // Sets integrated and software: Intel is integrated unless it has 2 GB or more
 // of its own (Arc), AMD below 1 GB, NVIDIA never; Microsoft adapters are software.
@@ -40,7 +45,7 @@ std::optional<GpuInfo> PickTrainingGpu(const QList<GpuInfo>& gpus);
 
 struct CheckItem {
     QString id, title;
-    QString state;  // "ok" | "warn" | "fail"
+    QString state;  // "ok" | "warn" | "fail" | "off" (optional and not there)
     QString detail, fix;
     bool important = false;  // a failure of it raises the start notice
 };
@@ -57,14 +62,27 @@ struct CheckInputs {
     bool onnx_available = true;
     TrainEnvState train_env = TrainEnvState::kReady;
     bool nudenet_present = true;
+    // The missing-parts inputs (D-167); the defaults are "all there".
+    QString ffmpeg_path = QStringLiteral("ffmpeg"), ffprobe_path = QStringLiteral("ffprobe"), python_path = QStringLiteral("python");
+    qint64 ram_mb = 16384;  // -1 unknown
 };
 
-// The inputs of this PC, with the adapters given (ListGpus is slow, so the
-// caller decides on which thread it runs).
-CheckInputs GatherInputs(const QList<GpuInfo>& gpus);
+// What needs the disk, the PATH or the process list: found by GatherHostFacts,
+// which the refresh runs off the GUI thread.
+struct HostFacts {
+    QString ffmpeg_path, ffprobe_path, python_path;  // empty: not found
+    qint64 ram_mb = -1;
+};
+HostFacts GatherHostFacts();
+
+// The inputs of this PC, with the adapters and the host facts given (both are
+// slow, so the caller decides on which thread they are found). The rest here
+// is quick and uses Qt Multimedia and the settings: GUI thread.
+CheckInputs GatherInputs(const QList<GpuInfo>& gpus, const HostFacts& facts);
 
 // The checks in the order the tab shows them: settings, disk, gpu, ai-gpu,
-// video, onnx, ai-env, nudenet.
+// ai-provider, video, video-path, onnx, ai-env, nudenet, ffmpeg, python, ram.
+// The rules of ai-provider, video-path, ffmpeg, python and ram live in samn::health (core, D-167).
 QList<CheckItem> RunChecks(const CheckInputs& in);
 
 // Plain text for "Copy report": version, system, one line per check.

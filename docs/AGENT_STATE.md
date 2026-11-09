@@ -36,6 +36,19 @@ Owner asked for an honest picture of how far SamNPlayer 2 is against 0.7.0 and 0
 - **New file:** `docs/PARITY_REMAINING.md`: quick wins, medium and large blocks for 0.7, the 0.8 gaps, and what was dropped on purpose. Start with its (a) 1 to 6.
 - **Stay off:** Cursor edits `PARITY.md` in its PRs; merge `main` and keep its newer ticks where they are correct, then run the script and paste the table.
 
+**Last update (health check):** 8 Nov 2026, Claude, branch `claude/samn2-health-check`: the System tab (D-162) is extended, not rebuilt (D-167): Qt-free `samn::health` in core and five new rows. Earlier lines below still hold.
+
+## Handover: `claude/samn2-health-check` (8 Nov, D-167)
+
+Owner task: hardware and runtime health, iGPU and dedicated GPU for AI and video, plus a missing-parts report. Most of it already existed as Settings → System (D-162), so this extends it.
+
+- **Core:** `core/include/samn/health.h`, `core/src/health.cpp`, `tests/core/health_test.cpp` (9 cases, synthetic fixtures only). Check model (ok / warn / bad / off), GPU kind, `RecommendAi` (provider names as strings), `RecommendVideoDecode`, parsers (lspci -mm -nn -D, PowerShell Win32_VideoController list, /proc/meminfo), `FindOnPath`, five checks.
+- **App:** `system_check.*` keeps the controller; platform layer gained driver names, lspci names (Linux), a PowerShell fallback when DXGI lists nothing (Windows), RAM, ffmpeg / Python lookup. 13 rows now; a new state `off` (grey dot) for optional parts that are missing. `SettingsPage.qml`: one line (dot colour for `off`).
+- **Tests:** `system_check_test` (row list and counts updated 8 to 13, plus `theMissingPartsRows`), `shell_qml_test` has a fake PC pushed through `setInputs` (rows, summary, dot colours). Core 508/508, system_check 22/22, shell_qml 24/24 on Linux (Qt 6.4.2, offscreen).
+- **Timing:** a refresh takes about 50 ms wall on the test box (no GPU, no lspci), off the GUI thread; the work itself was under 2 ms. Every external program has one deadline (lspci 1.5 s, PowerShell 3 s, killed after it); the lookups run in the worker thread, not on the GUI thread.
+- **Not verified:** real GPUs, Windows (DXGI driver version, the PowerShell path), lspci on a real box.
+- **Next slice:** let AI Train / the detector read `RecommendAi` and pick the ONNX Runtime provider (needs a build that ships it); real-hardware check on the Owner's Windows box.
+
 ## Handover: `claude/samn2-json-fallback` (8 Nov, CI: nlohmann_json from the system first)
 
 On 8 Nov GitHub returned HTTP 504 for the release download of `json.tar.xz` for hours, so every job died in the CMake configure step before any code was built (#168 failed four re-runs for this reason alone).
