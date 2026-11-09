@@ -14,10 +14,6 @@ Item {
     property bool theatre
     property bool theatreLanes
     property bool fullStage
-    // Bookmark and snapshot read the live playhead on the page (the page owns
-    // the dialogs). Bound here so this header's inputs stay explicit.
-    property real playheadPosition
-    property real mediaPosition
 
     signal openRequested()
     signal videoPickRequested()

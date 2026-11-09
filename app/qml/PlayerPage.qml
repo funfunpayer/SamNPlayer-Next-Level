@@ -349,8 +349,6 @@ Item {
             ctrl: ctrl
             empty: page.empty
             theatre: page.theatre; theatreLanes: page.theatreLanes; fullStage: page.fullStage
-            playheadPosition: page.player.position
-            mediaPosition: media.position
             onOpenRequested: page.openFile()
             onVideoPickRequested: videoDialog.open()
             onBookmarkRequested: ctrl.addBookmark("", page.player.position)
