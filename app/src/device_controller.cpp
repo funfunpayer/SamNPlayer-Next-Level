@@ -41,7 +41,7 @@ bool DeviceController::Snapshot::operator==(const Snapshot& o) const {
 }
 
 DeviceController::DeviceController(QObject* parent)
-    : QObject(parent), drivers_(std::make_unique<dev::DriverRegistry>()) {
+    : DeviceService(parent), drivers_(std::make_unique<dev::DriverRegistry>()) {
     dev::RegisterBuiltinDrivers(*drivers_);
     worker_ = new DeviceWorker(this);
     worker_->moveToThread(&thread_);

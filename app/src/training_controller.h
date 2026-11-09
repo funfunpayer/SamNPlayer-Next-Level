@@ -131,8 +131,11 @@ public:
     explicit TrainingController(QObject* parent = nullptr);
     ~TrainingController() override;
 
-    samn::ui::DeviceController* device() const { return device_; }
-    void setDevice(samn::ui::DeviceController* d);
+    // QML binds the concrete controller; C++ (tests) may hand over any DeviceService.
+    samn::ui::DeviceController* device() const { return qobject_cast<samn::ui::DeviceController*>(device_.data()); }
+    void setDevice(samn::ui::DeviceController* d) { setDeviceService(d); }
+    void setDeviceService(samn::ui::DeviceService* d);
+    samn::ui::DeviceService* deviceService() const { return device_; }
 
     // ---- actions ----
     // Connects when needed (Mock, or the saved device kind), then runs. False when blocked.
@@ -321,7 +324,7 @@ private:
     std::vector<samn::LabelPhase> video_phases_;
     int last_climax_ = -1;
     void loadVideoPhases();
-    QPointer<DeviceController> device_;
+    QPointer<DeviceService> device_;
     // form
     bool mock_ = true, auto_adjust_ = true;
     QString script_name_, category_;

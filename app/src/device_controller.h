@@ -13,6 +13,7 @@
 #include <memory>
 #include <set>
 
+#include "device_service.h"
 #include "samn/device/capabilities.h"
 #include "samn/device/diagnostics.h"
 
@@ -44,7 +45,7 @@ class QtTransport;
 // "tcode-serial" (port), "intiface" (URL or bare IP), "mock". A driver says
 // what a kind needs; the transports, their cancel, the connect and Stop
 // deadlines and the session holds are this controller's.
-class DeviceController : public QObject {
+class DeviceController : public DeviceService {
     Q_OBJECT
     QML_ELEMENT
     // "disconnected" | "connecting" | "connected"
@@ -88,23 +89,23 @@ public:
 
     // --- connection ---
     // kind: see the class comment. target: address / port / URL (unused for ble, mock).
-    Q_INVOKABLE void connectDevice(const QString& kind, const QString& target = QString());
+    Q_INVOKABLE void connectDevice(const QString& kind, const QString& target = QString()) override;
     Q_INVOKABLE void connectSamNeo2() { connectDevice("ble"); }
     Q_INVOKABLE void connectTCode(const QString& address) { connectDevice("tcode", address); }
     Q_INVOKABLE void connectTCodeSerial(const QString& port) { connectDevice("tcode-serial", port); }
     Q_INVOKABLE void connectIntiface(const QString& url) { connectDevice("intiface", url); }
-    Q_INVOKABLE void connectMock() { connectDevice("mock"); }
+    Q_INVOKABLE void connectMock() { DeviceService::connectMock(); }
     // Stop, then close. Also aborts a connect in progress.
-    Q_INVOKABLE void disconnectDevice();
+    Q_INVOKABLE void disconnectDevice() override;
     // The settings remembered from the last successful connect (0.7 prefs).
-    Q_INVOKABLE QString savedKind() const;
-    Q_INVOKABLE QString savedTarget(const QString& kind) const;
+    Q_INVOKABLE QString savedKind() const override;
+    Q_INVOKABLE QString savedTarget(const QString& kind) const override;
 
     // --- levels (0-1; positions 0 = bottom, 1 = top, duration in ms) ---
-    Q_INVOKABLE void setVibration(double level);
-    Q_INVOKABLE void setSuction(double level);
-    Q_INVOKABLE void setPosition(double pos, int durationMs);
-    Q_INVOKABLE void setAxis(const QString& axis, double pos, int durationMs);
+    Q_INVOKABLE void setVibration(double level) override;
+    Q_INVOKABLE void setSuction(double level) override;
+    Q_INVOKABLE void setPosition(double pos, int durationMs) override;
+    Q_INVOKABLE void setAxis(const QString& axis, double pos, int durationMs) override;
     // axis name -> position (0-1), all with the same duration.
     Q_INVOKABLE void setAxes(const QVariantMap& positions, int durationMs);
     // Scales single motors on top of the channel level ({"vibration": 1, "vibration2": 0.5});
@@ -113,10 +114,10 @@ public:
     // Raw step value 0-255 without quantisation ("vibration" | "suction").
     Q_INVOKABLE void testRawValue(const QString& channel, int value);
     // Both channels off now (rejected when no device is connected).
-    Q_INVOKABLE void stop();
+    Q_INVOKABLE void stop() override;
     // Pause / abort: also cancels a running diagnostics and drops queued
     // levels, then stops the device. Silent when nothing is connected.
-    Q_INVOKABLE void emergencyStop();
+    Q_INVOKABLE void emergencyStop() override;
 
     // --- info ---
     Q_INVOKABLE void refreshSerialPorts();
@@ -147,25 +148,25 @@ public:
     void setVibrationForGeneration(double level, quint64 generation);
     void setSuctionForGeneration(double level, quint64 generation);
     // Counts the changes of deviceIdentity() the GUI has seen.
-    quint64 generation() const { return snap_.generation; }
+    quint64 generation() const override { return snap_.generation; }
 
     // --- state (GUI thread) ---
     QString state() const;
-    bool connected() const;
-    bool connecting() const;
+    bool connected() const override;
+    bool connecting() const override;
     QString kind() const;
     bool isMock() const;
-    QString name() const;
+    QString name() const override;
     QString address() const;
     int rssi() const;
-    int batteryPercent() const;
-    bool batteryOk() const;
-    QVariantList capabilities() const;
+    int batteryPercent() const override;
+    bool batteryOk() const override;
+    QVariantList capabilities() const override;
     QStringList channels() const;
-    QStringList axes() const;
-    bool capVibration() const;
-    bool capSuction() const;
-    bool capLinear() const;
+    QStringList axes() const override;
+    bool capVibration() const override;
+    bool capSuction() const override;
+    bool capLinear() const override;
     bool capBattery() const;
     bool capRaw() const;
     QVariantList drivers() const;
@@ -173,16 +174,16 @@ public:
     // adopted device: Intiface's device index); empty without one. Another
     // value = another device. Shown at once after a command whose reconnect
     // found another device; levels given before that are not sent to it.
-    QString deviceIdentity() const { return snap_.identity; }
-    QString lastError() const { return last_error_; }
+    QString deviceIdentity() const override { return snap_.identity; }
+    QString lastError() const override { return last_error_; }
     QString hint() const { return hint_; }
     QStringList serialPorts() const { return serial_ports_; }
     bool diagnosticsRunning() const { return diagnostics_running_; }
-    bool sessionActive() const { return !session_holders_.empty(); }
+    bool sessionActive() const override { return !session_holders_.empty(); }
     // The property's writer: a hold of its own, apart from every owner's.
     void setSessionActive(bool active) { setSessionActiveFor(this, active); }
     // `owner` (the playback output, the training) starts or ends its use.
-    void setSessionActiveFor(const QObject* owner, bool active);
+    void setSessionActiveFor(const QObject* owner, bool active) override;
 
     // What the GUI thread knows of the connection; filled by the worker.
     struct Snapshot {
@@ -203,8 +204,6 @@ public:
     };
 
 signals:
-    // Anything of the connection snapshot changed (connect, loss, battery ...).
-    void statusChanged();
     // A failure to show: a connect that failed, a command the device refused,
     // a lost link. `hint` is the likely cause (Intiface / TCode), may be empty.
     void errorChanged();

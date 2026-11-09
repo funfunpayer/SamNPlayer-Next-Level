@@ -19,7 +19,7 @@
 
 namespace samn::ui {
 
-class DeviceController;
+class DeviceService;
 
 // What reaches the device while a script plays (0.7 player/sync.go, stroke.go,
 // axes.go and app_stroke_filter.go), in C++ and without QML timers.
@@ -123,8 +123,8 @@ public:
     explicit PlaybackOutput(samn::Settings* settings = nullptr, QObject* parent = nullptr);
     ~PlaybackOutput() override;
 
-    void setDevice(DeviceController* device);
-    DeviceController* device() const { return device_; }
+    void setDevice(DeviceService* device);
+    DeviceService* device() const { return device_; }
     // stroke / vibration / suction 0-100; axes: TCode axis name -> actions.
     void setScript(std::vector<samn::Action> stroke, std::vector<samn::Action> vibration,
                    std::vector<samn::Action> suction,
@@ -223,7 +223,7 @@ private:
     bool sending() const { return playing_ && !halted_ && !quiet_ && deviceReady(); }
 
     samn::Settings* settings_ = nullptr;
-    QPointer<DeviceController> device_;
+    QPointer<DeviceService> device_;
     std::vector<samn::Action> stroke_, filtered_, vibration_, suction_;
     struct Axis {
         std::vector<samn::Action> actions;
