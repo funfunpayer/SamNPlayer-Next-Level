@@ -246,6 +246,11 @@ private slots:
         QCOMPARE(c.playheadMs(), qint64(4000));
         QVERIFY(c.variantIndex() >= 0);
         QCOMPARE(c.variants().at(c.variantIndex()).toMap().value("path").toString(), script);
+        c.removeScriptFolder(d.filePath("more"));
+        QCOMPARE(c.variants().size(), 1);
+        QCOMPARE(c.scriptPath(), script);
+        QCOMPARE(c.playheadMs(), qint64(4000));
+        QCOMPARE(c.variants().at(0).toMap().value("display").toString(), QStringLiteral("Main script"));
     }
 
     void autoCreateAndVideoFiles() {
