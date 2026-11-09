@@ -136,12 +136,12 @@ PlayerController::PlayerController(QObject* parent)
 }
 PlayerController::~PlayerController() = default;
 
-void PlayerController::setDevice(DeviceController* device) {
+void PlayerController::setDeviceService(DeviceService* device) {
     if (device == device_) return;
     if (device_) disconnect(device_, nullptr, this, nullptr);
     device_ = device;
     output_.setDevice(device);
-    if (device_) connect(device_, &DeviceController::statusChanged, this, &PlayerController::lanesChanged);
+    if (device_) connect(device_, &DeviceService::statusChanged, this, &PlayerController::lanesChanged);
     emit deviceChanged();
     emit lanesChanged();
 }

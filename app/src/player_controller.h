@@ -505,8 +505,11 @@ public:
     int suctionNow() const;
     int sleepMinutes() const { return sleepMinutes_; }
     void setSleepMinutes(int minutes);
-    DeviceController* device() const { return device_; }
-    void setDevice(DeviceController* device);
+    // QML binds the concrete controller; C++ (tests, other services) may hand over any DeviceService.
+    DeviceController* device() const { return qobject_cast<DeviceController*>(device_.data()); }
+    void setDevice(DeviceController* device) { setDeviceService(device); }
+    void setDeviceService(DeviceService* device);
+    DeviceService* deviceService() const { return device_; }
     PlaybackOutput* output() { return &output_; }
     // Tests: the video playhead between the media player's reports.
     MediaPlayhead* mediaPlayhead() { return &mediaHead_; }
@@ -650,7 +653,7 @@ private:
     bool opening_ = false;  // openScript sets the contact knobs
     std::vector<samn::StrengthPreset> strength_;
     std::string activeStrength_;
-    QPointer<DeviceController> device_;
+    QPointer<DeviceService> device_;
     std::vector<samn::Action> stroke_, vibration_, suction_;
     samn::ScriptMarks marks_;
     std::vector<float> heat_;
