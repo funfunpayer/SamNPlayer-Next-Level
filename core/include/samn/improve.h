@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "samn/base_rhythm.h"
 #include "samn/funscript.h"
 #include "samn/mapper.h"
 
@@ -28,6 +29,10 @@ struct ImproveOptions {
     // Strip the interior of known tracker-loss windows and bridge them.
     bool heal_tracking_gaps = false;
     std::vector<TrackingGap> tracking_gaps;
+    // Fill with strokes instead of straight lines (FillGapsRhythmic;
+    // generator.rhythmic_fill, off by default, D-168).
+    bool rhythmic_fill = false;
+    BaseRhythm base_rhythm;
 };
 
 struct ImproveResult {
@@ -52,13 +57,30 @@ std::vector<Action> TrimActions(std::vector<Action> actions, int64_t start_ms, i
 std::vector<Action> FillGaps(std::vector<Action> actions, int64_t max_gap_ms, int64_t step_ms, double audio_hz,
                              int* gaps_filled = nullptr, int* points_added = nullptr);
 
+// Minimum stroke amplitude (position units) around a gap for the rhythmic
+// fill to stroke; below it the script is holding there and the gap gets a
+// straight line as in FillGaps.
+constexpr int kRhythmicFillMinAmplitude = 10;
+
+// Strokes across gaps longer than max_gap_ms (<= 0: auto threshold). The
+// rhythm: the script's own strokes within 8 s on either side of the gap
+// (median half period 214-750 ms, that is 40-140 strokes per minute, and
+// median amplitude); without them the audio tempo (audio_hz, folded into
+// 40-140 BPM); without that the heart rhythm (base). One full stroke per
+// beat, starting away from the direction the script last moved, along the
+// line between the two anchors; never closer than half a half period to the
+// next anchor. Where the script holds (amplitude under
+// kRhythmicFillMinAmplitude) the gap is filled linearly at 100 ms.
+std::vector<Action> FillGapsRhythmic(std::vector<Action> actions, int64_t max_gap_ms, double audio_hz,
+                                     const BaseRhythm& base, int* gaps_filled = nullptr, int* points_added = nullptr);
+
 // Removes points strictly inside the windows (the boundaries stay as anchors)
 // and bridges only those windows. Refuses (returns the input) when fewer than
 // two points would be left.
 std::vector<Action> HealTrackingGaps(std::vector<Action> actions, const std::vector<TrackingGap>& gaps, int64_t step_ms,
                                      double audio_hz, int* windows_healed = nullptr, int* points_added = nullptr);
 
-// Trim → heal → fill. Throws std::invalid_argument with fewer than 2 points.
+// Trim → heal → fill (linear, or rhythmic with opts.rhythmic_fill). Throws std::invalid_argument with fewer than 2 points.
 ImproveResult ImproveScript(const std::vector<Action>& actions, const ImproveOptions& opts);
 
 // min(max(median spacing × 8, 2000), 800) — the Script Doctor's gap rule,

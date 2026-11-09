@@ -28,6 +28,9 @@ Functions use PascalCase and struct fields use snake_case.
 | `fileio.h` | `WriteFileAtomic`: temp file, flush, rename. The one writer for marks, `.samn`, settings and the range marker. `ReadFileToString`: the whole file or nullopt. | Go `writeFileAtomic` | ✅ |
 | `library.h` | Library lists (recent 8, favorites 50, scripts 50), settings keys `library.*` | 0.7 `player_layout.js` | ✅ |
 | `audio_envelope.h` | Loudness envelope 0..1 per 50 ms (Audio Level lane, vibration from sound). No ffmpeg: the app decodes. | Go `generator/audio_vibration.go` | ✅ Go tests ported |
+| `audio_onsets.h` | `OnsetCurve`: streaming log band flux (512-sample frames, hop 256 at 11025 Hz, 24 log bands, fixed state under 16 KiB, digital silence skips the FFT) with a per-second silence / noise / speech-like / music gate (energy, spectral flatness, quiet-frame share); `PickOnsets` (adaptive threshold). D-168 | new (0.7 had loudness peaks only) | ✅ tests + `tests/bench/audio_onset_bench.cpp` |
+| `audio_tempo.h` | `TempoAccumulator` / `EstimateTempo`: streaming autocorrelation of the onset curve, octave folding, log-Gaussian prior on the base tempo (72 BPM), confidence; `TrackBeats`: Ellis DP beat grid with a confidence; `AssessTempo`: the gate's "tempo reliable?" verdict. D-168 | new | ✅ tests + bench |
+| `base_rhythm.h` | The heart rhythm: `generator.base_bpm` (72, 40-140), `generator.base_bpm_variation` (3 %, 0-10 %), `generator.rhythmic_fill` (off); a seeded beat grid with slow drift (knots every 10 s), never beat-to-beat jitter. D-168 | new | ✅ |
 | `device/device.h`, `device/transport.h` | `Device` + optional interfaces (linear, multi-axis, motor level, raw, battery), `Status`; `Transport` = the I/O seam (BLE GATT write / line writer / WebSocket text) the app implements | Go `device/device.go` | ✅ |
 | `device/protocol.h`, `device/samneo2.h`, `device/battery.h` | Sam Neo 2 + legacy Sam packets (byte-exact), change detection, Stop/raw state, keepalive, battery cache | Go `protocol.go`, `samneo2.go`, `battery.go` | ✅ Go tests ported |
 | `device/tcode.h` | TCode strings and address parsing (identical to Go), `TCodeDevice` over a Transport | Go `tcode.go`, `tcode_serial.go` | ✅ Go tests ported; strings diffed against Go |
@@ -46,7 +49,7 @@ Functions use PascalCase and struct fields use snake_case.
 | `clip_prep.h` | Clip prep: time parsing, the ffmpeg arguments, cut names, `marks.json` batches and the script cut to the same window | 0.7 Benchmark Clip-Prep, D-155 step 6 | ✅ |
 | `contact_marks.h` | Tip and contact areas marked in the Generator; contact vibration that follows the tip into them | 0.7 `contact_marks.go`, `feel_spatial.go` | ✅ |
 | `contact_preview.h` | Live Feel probe: a fixed synthetic stroke through the contact-vibration envelope | 0.7 `PreviewContactVibration` | ✅ |
-| `improve.h` | Script polish after Create: trim ends, heal tracking-loss windows, fill long gaps | 0.7 `funscript/improve.go` | ✅ |
+| `improve.h` | Script polish after Create: trim ends, heal tracking-loss windows, fill long gaps (straight lines; `FillGapsRhythmic` strokes on the script's own tempo, the audio tempo or the heart rhythm, behind `generator.rhythmic_fill`, off, D-168) | 0.7 `funscript/improve.go` | ✅ |
 | `motion_fidelity.h` | Motion Fidelity: how well a script follows a reference (rhythm, phase, amplitude, lag window) | 0.7 `funscript/phase.go` | ✅ |
 | `script_quality.h` | Script Doctor: jitter, jumps, gaps and device limits from the points alone | 0.7 `script_quality.go`, `device_compat.go` | ✅ |
 | `ozone.h` | O-zone suggestions for the primary O-marker | 0.7 `funscript/ozone.go` | ✅ |

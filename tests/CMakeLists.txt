@@ -14,6 +14,19 @@ add_test(NAME core_tests COMMAND core_tests)
 # No personal name, old project name or model identifier in the sources.
 add_test(NAME identifiers COMMAND ${CMAKE_COMMAND} -DROOT=${PROJECT_SOURCE_DIR} -P ${CMAKE_CURRENT_SOURCE_DIR}/check_identifiers.cmake)
 
+# Onsets, tempo, beats and the heart-rhythm fill on synthetic sound and
+# scripts (docs/benchmarks/AUDIO_ONSETS_2026-11-08.md): the tables by hand
+# (CPU times depend on the machine); ctest runs only the 10-hour memory
+# bound, which counts every heap allocation of the process.
+add_executable(audio_onset_bench bench/audio_onset_bench.cpp)
+target_link_libraries(audio_onset_bench PRIVATE samn_core)
+if(MSVC)
+  target_compile_options(audio_onset_bench PRIVATE /W4 /utf-8)
+else()
+  target_compile_options(audio_onset_bench PRIVATE -Wall -Wextra)
+endif()
+add_test(NAME audio_onset_memory COMMAND audio_onset_bench --memory-10h)
+
 if(SAMN_BUILD_VISION)
   file(GLOB VISION_TESTS CONFIGURE_DEPENDS vision/*_test.cpp)
   add_executable(vision_tests core/main.cpp ${VISION_TESTS})
