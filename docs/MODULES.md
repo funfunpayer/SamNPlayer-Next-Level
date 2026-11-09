@@ -104,7 +104,7 @@ The Generator's engine (P3, D-140, D-142): tracking, signal chain, runs, self-ch
 
 | Header | What |
 |---|---|
-| `track_box.h` | `TrackBox`: CSRT single-box tracking with scene cuts, camera compensation, appearance memory, jump guard and velocity coast; the raw box-centre track. |
+| `track_box.h` | `TrackBox`: CSRT single-box tracking with scene cuts, 2-D camera compensation (shift, zoom and rotation of the background estimate at the tip, both axes, inlier-gated; `camera_motion.cpp`), appearance memory, jump guard and velocity coast; the raw box-centre track (`xs` / `ys` compensated, `frame_xs` / `frame_ys` in frame pixels). |
 | `track_cache.h` | Cache of raw tracks keyed by video content, algorithm version and tracking options (FR-11), so a post-processing change skips decode and tracking. |
 | `post_track.h` | Raw track to funscript actions: Savitzky-Golay, detrend, bandpass, normalisation, peaks with prominence, keyframes, minimum interval, RDP; `kNoMotionError`. |
 | `signal_chain.h` | Profile recipes, the default detrend (GD-12), post-processing, speed limit and the distance-profile clamp. |
@@ -117,7 +117,7 @@ The Generator's engine (P3, D-140, D-142): tracking, signal chain, runs, self-ch
 | `label_tracking.h` | Tracking between two label keyframes: CSRT forward and backward, blended with disagreement marked (D-155 step 3). |
 | `beatbar_video.h` | Beat bar from a video file: find the strip, then time every beat (the Editor's beat-bar tool). |
 | `compare.h` | The comparison controller: runs the engine on clips and scores it against a reference script and 0.7's output (GD-04, GD-05, GD-06). |
-| `tools/samn_bench.cpp` | `samn_bench`: the detection benchmark. The real Generate pipeline (Recommended profile) on 17 fixed-seed synthetic scenes with ground truth; windowed r, peak timing, extrema, amplitude, cuts, loss, jumps, ms/frame, peak RSS; CSV + markdown; acceptance rule in `--help`. Not run by ctest except `samn_bench_smoke`. Scenes: `tests/engine/synthetic_scenes.h` (on `synthetic_clips.h`). Baseline: `docs/benchmarks/DETECTION_BASELINE_2026-11-06.md`. |
+| `tools/samn_bench.cpp` | `samn_bench`: the detection benchmark. The real Generate pipeline (Recommended profile) on 19 fixed-seed synthetic scenes with ground truth; windowed r, peak timing, extrema, amplitude, cuts, loss, jumps, ms/frame, peak RSS; CSV + markdown; acceptance rule in `--help`. Not run by ctest except `samn_bench_smoke`. Scenes: `tests/engine/synthetic_scenes.h` (on `synthetic_clips.h`). Baseline: `docs/benchmarks/DETECTION_BASELINE_2026-11-06.md`; 2-D camera compensation: `DETECTION_CAMERA2D_2026-11-08.md`. |
 
 Tests: `tests/engine/*_test.cpp` (`engine_tests`, doctest; generated clips).
 

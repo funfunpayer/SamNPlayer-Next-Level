@@ -104,6 +104,89 @@ inline SceneInfo WriteZoomRamp(const std::filesystem::path& p, int seconds, doub
     return s;
 }
 
+// A camera over a large textured world: pan_x / pan_y move the camera centre
+// (world px, 0 at the start), zoom scales about the frame centre (1 = the
+// start). The world point under the camera centre is shown at the frame
+// centre: frame = zoom * (world - centre(t)) + (w/2, h/2), sub-pixel.
+struct CameraPath {
+    std::function<double(double)> pan_x = [](double) { return 0.0; };
+    std::function<double(double)> pan_y = [](double) { return 0.0; };
+    std::function<double(double)> zoom = [](double) { return 1.0; };
+};
+
+inline std::function<double(double)> Sine(double amp, double hz) {
+    return [amp, hz](double t) { return amp * std::sin(2 * kPi * hz * t); };
+}
+
+struct CameraScene {
+    double amp = 80, hz = 1.0;  // the tip disc's stroke in the world
+    bool stroke_x = false;      // stroke along x (else y)
+    CameraPath camera;
+    // A hard cut to another, darker world at this frame (-1: none). The
+    // camera keeps its path; the disc starts under the camera centre again.
+    int cut_frame = -1;
+    // A large textured disc (radius 95) in front of the camera (frame
+    // coordinates, not the world) right of the tip, swinging along y at
+    // 0.35 Hz, the tip drawn over it: its features move against the
+    // background and compete in the camera estimate.
+    bool foreground = false;
+    // Background boxes per 1000 px^2 of world (the other scenes: about 1.65).
+    double texture_density = 1.65;
+    // A fresh noise picture behind the disc in every frame: no stable
+    // feature, so a camera estimate is a random walk (GD-22, REJ-09).
+    bool noise_background = false;
+};
+
+// The tip disc (radius 35) sits at the frame centre at t = 0 (and after a
+// cut). Truth: the stroke in the world; the camera is not part of it.
+inline SceneInfo WriteCameraScene(const std::filesystem::path& p, int seconds, const CameraScene& c) {
+    SceneInfo s;
+    auto w = Writer(p);
+    if (!w.isOpened()) return s;
+    constexpr int pad = 220;
+    const int ww = kW + 2 * pad, wh = kH + 2 * pad;
+    const int boxes = int(c.texture_density * ww * wh / 1000.0);
+    const cv::Mat world1 = Texture(ww, wh, 11, boxes);
+    cv::Mat world2 = Texture(ww, wh, 99, boxes);
+    world2.convertTo(world2, -1, 0.4, 12);
+    const cv::Mat fg_texture = Texture(kW, kH, 31, 400);
+    cv::RNG rng(77);
+    s.frames = int(kFps * seconds);
+    for (int i = 0; i < s.frames; ++i) {
+        const double t = i / kFps;
+        const bool after_cut = c.cut_frame >= 0 && i >= c.cut_frame;
+        const double t0 = after_cut ? c.cut_frame / kFps : 0.0;
+        const double ax = ww / 2.0 + c.camera.pan_x(t0), ay = wh / 2.0 + c.camera.pan_y(t0);
+        const double d = Stroke(t, c.amp, c.hz);
+        cv::Mat world = (after_cut ? world2 : world1).clone();
+        if (c.noise_background) rng.fill(world, cv::RNG::UNIFORM, 0, 160);
+        Disc(world, int(std::lround(ax + (c.stroke_x ? d : 0))), int(std::lround(ay + (c.stroke_x ? 0 : d))));
+        const double z = c.camera.zoom(t);
+        const double cx = ww / 2.0 + c.camera.pan_x(t), cy = wh / 2.0 + c.camera.pan_y(t);
+        const cv::Mat m = (cv::Mat_<double>(2, 3) << z, 0, kW / 2.0 - z * cx, 0, z, kH / 2.0 - z * cy);
+        cv::Mat f;
+        cv::warpAffine(world, f, m, {kW, kH}, cv::INTER_LINEAR, cv::BORDER_REPLICATE);
+        if (c.foreground) {
+            const int fy = int(std::lround(50 * std::sin(2 * kPi * 0.35 * t)));
+            cv::Mat mask = cv::Mat::zeros(kH, kW, CV_8U), moved;
+            cv::circle(mask, {275, 120 + fy}, 95, cv::Scalar(255), cv::FILLED);
+            const cv::Mat shift = (cv::Mat_<double>(2, 3) << 1, 0, 0, 0, 1, fy);
+            cv::warpAffine(fg_texture, moved, shift, {kW, kH}, cv::INTER_NEAREST, cv::BORDER_WRAP);
+            moved.copyTo(f, mask);
+            // The tip stays in front: this is about the camera estimate, not occlusion.
+            const double tx = ax + (c.stroke_x ? d : 0), ty = ay + (c.stroke_x ? 0 : d);
+            DiscR(f, int(std::lround(z * (tx - cx) + kW / 2.0)), int(std::lround(z * (ty - cy) + kH / 2.0)),
+                  int(std::lround(35 * z)));
+        }
+        w.write(f);
+    }
+    const double amp = c.amp, hz = c.hz;
+    s.signal = [amp, hz](double t) { return -Stroke(t, amp, hz); };
+    if (c.cut_frame >= 0) s.cut_frames = {c.cut_frame};
+    s.ok = true;
+    return s;
+}
+
 // A 1 Hz disc that is not there between from_s and to_s (as spec T6).
 inline SceneInfo WriteOcclusion(const std::filesystem::path& p, int seconds, double amp, double from_s, double to_s) {
     SceneInfo s;

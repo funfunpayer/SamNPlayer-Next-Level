@@ -33,17 +33,48 @@ private:
     std::vector<double> past_;  // the last `window` signature differences, newest last
 };
 
-// Vertical camera shift between two gray frames from background features
-// outside the excluded boxes (10 px padding). 0 means "no reliable
-// estimate", not "no motion". inlier_fraction (optional) receives the RANSAC
-// inlier share of the matched features, 0 without an estimate (GD-14).
+// The camera's motion between two gray frames: a similarity (shift, scale,
+// rotation) from background features outside the excluded boxes (10 px
+// padding); the same estimate as 0.7, of which 0.7 used only the y shift.
+struct CameraMotion {
+    // Below this RANSAC inlier share an estimate is not trusted: random
+    // matches on a featureless or noisy picture fit a model too (REJ-09:
+    // 0.24 on noise against 0.84-0.90 on real background, GD-14).
+    static constexpr double kMinInliers = 0.5;
+    // RANSAC inlier distance. 0.7 used OpenCV's 3 px; a foreground moving 1
+    // to 3 px per frame against the background then joins the background's
+    // model, the fit becomes a compromise and the inlier share stays high,
+    // so the gate cannot see it (camera test "a large moving foreground":
+    // r 0.91 at 3 px, 0.998 at 1 px). Features tracked by LK are sub-pixel.
+    static constexpr double kRansacPx = 1.0;
+    static constexpr double kRansacPx07 = 3.0;
+    bool ok = false;      // an estimate exists (enough features, RANSAC converged)
+    double inliers = 0;   // RANSAC inlier share of the matched features; 0 without an estimate
+    cv::Matx23d m{1, 0, 0, 0, 1, 0};  // a pixel (x, y) of the previous frame -> m * (x, y, 1) in this one
+
+    bool Usable() const { return ok && inliers >= kMinInliers; }
+    double Scale() const;
+    double Angle() const;  // radians
+    // Where the camera moves a scene point that sat at p in the previous
+    // frame, as a displacement: m * p - p (exactly 0 for the identity).
+    cv::Point2d Shift(const cv::Point2d& p) const;
+};
+CameraMotion EstimateCameraMotion(const cv::Mat& prev_gray, const cv::Mat& gray, const std::vector<cv::Rect>& excludes,
+                                  double ransac_px = CameraMotion::kRansacPx);
+
+// The y shift of EstimateCameraMotion with 0.7's 3 px RANSAC distance; 0
+// means "no estimate", not "no motion" (0.7 estimate_camera_motion; the tip
+// finder uses it, unchanged).
+// inlier_fraction (optional) receives the RANSAC inlier share, 0 without an
+// estimate (GD-14).
 double CameraMotionY(const cv::Mat& prev_gray, const cv::Mat& gray, const std::vector<cv::Rect>& excludes,
                      double* inlier_fraction = nullptr);
 
 // Savitzky-Golay smoothing like scipy savgol_filter(mode="interp").
 std::vector<double> Savgol(const std::vector<double>& y, int window, int polyorder);
 
-// Subtracts the camera shift, smoothed per scene (savgol 9/2), from ys.
+// Subtracts the camera shift, smoothed per scene (savgol 9/2), from one
+// coordinate (ys with the camera's y shift, xs with its x shift).
 void ApplyCameraCompensation(std::vector<double>& ys, std::vector<double> camera_dy, const std::vector<int>& cuts);
 
 // Flags a single-frame jump far outside the recent accepted motion.

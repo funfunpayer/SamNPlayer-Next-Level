@@ -105,6 +105,7 @@ std::optional<TrackResult> LoadTrackCache(const std::filesystem::path& dir, cons
         r.lost = j.at("lost").get<std::vector<uint8_t>>();
         r.xs = j.at("xs").get<std::vector<double>>();
         r.ys = j.at("ys").get<std::vector<double>>();
+        r.frame_xs = j.at("frame_xs").get<std::vector<double>>();
         r.frame_ys = j.at("frame_ys").get<std::vector<double>>();
         r.partner_xs = j.at("partner_xs").get<std::vector<double>>();
         r.partner_ys = j.at("partner_ys").get<std::vector<double>>();
@@ -152,6 +153,7 @@ void SaveTrackCache(const std::filesystem::path& dir, const std::string& key, co
                            {"lost", r.lost},
                            {"xs", r.xs},
                            {"ys", r.ys},
+                           {"frame_xs", r.frame_xs},
                            {"frame_ys", r.frame_ys},
                            {"partner_xs", r.partner_xs},
                            {"partner_ys", r.partner_ys},

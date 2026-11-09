@@ -273,7 +273,8 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
         last_good_distance = FuseTipPartners(box, true, partner_boxes(), {}).value_or(0.0);
         distances.push_back(last_good_distance);
     }
-    std::vector<double> camera_dy{0.0};
+    // The camera's accumulated motion at the tip since the scene began.
+    std::vector<double> camera_dx{0.0}, camera_dy{0.0};
     cv::Rect last = box;
     bool tip_ok = true;  // last frame had a real tip box (found or coast)
     Coast coast;
@@ -331,6 +332,9 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
         }
         if (needs_gray) cv::cvtColor(frame.bgr, gray, cv::COLOR_BGR2GRAY);
         const bool cut = opts.scene_cuts && (adaptive_cut ? adaptive_cut->Test(prev_gray, gray) : IsSceneCut(prev_gray, gray));
+        // The tip's centre in the previous frame: where the camera's motion
+        // is measured for this frame (frame pixels, not yet compensated).
+        const cv::Point2d prev_tip(res.xs.back(), res.ys.back());
 
         std::optional<cv::Rect> found;
         bool reanchored = false;
@@ -446,7 +450,7 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
 
         double inliers = kNaN;
         if (opts.camera_compensation) {
-            double dy = 0;
+            cv::Point2d shift(0, 0);
             if (!cut) {
                 // Tip box plus soft masks (0.7 punch exclude): keep wrong
                 // latch regions out of the camera estimate.
@@ -454,11 +458,24 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
                 excludes.push_back(last);
                 if (want_partner) excludes.push_back(partner_last);
                 for (const ExtraState& e : extras) excludes.push_back(e.last);
-                dy = CameraMotionY(prev_gray, gray, excludes, recorder ? &inliers : nullptr);
-                if (dy == 0.0) ++res.stats.camera_frames_lost;
+                const CameraMotion cam = EstimateCameraMotion(prev_gray, gray, excludes);
+                inliers = cam.inliers;
+                // The full estimate where the tip was: a pan moves it by the
+                // shift, a zoom or a rotation by how far it sits from their
+                // centre (which the estimate itself places), so a tip off
+                // the zoom centre is not pulled along with the picture's
+                // corner (0.7 used t(1,2), the motion of pixel (0, 0)). An
+                // untrusted estimate adds nothing.
+                if (cam.Usable())
+                    shift = cam.Shift(prev_tip);
+                else
+                    ++res.stats.camera_frames_lost;
             }
-            camera_dy.push_back(cut ? 0.0 : camera_dy.back() + dy);
+            // A cut starts a new scene: its camera starts from 0.
+            camera_dx.push_back(cut ? 0.0 : camera_dx.back() + shift.x);
+            camera_dy.push_back(cut ? 0.0 : camera_dy.back() + shift.y);
         } else {
+            camera_dx.push_back(0.0);
             camera_dy.push_back(0.0);
         }
 
@@ -477,8 +494,12 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
     }
     progress.Report(idx);
 
+    res.frame_xs = res.xs;
     res.frame_ys = res.ys;
-    if (opts.camera_compensation) ApplyCameraCompensation(res.ys, camera_dy, res.scene_cuts);
+    if (opts.camera_compensation) {
+        ApplyCameraCompensation(res.xs, camera_dx, res.scene_cuts);
+        ApplyCameraCompensation(res.ys, camera_dy, res.scene_cuts);
+    }
 
     res.stats.vertical_range = Ptp(res.ys);
     res.stats.horizontal_range = Ptp(res.xs);
@@ -490,7 +511,10 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
         // compensation throw the centre out of the picture decided the axis
         // (Owner's clip: y -42..222 in a 144 px frame picked Y where 0.7's
         // own run picked X). The 2nd..98th percentile spread decides instead;
-        // a clean track gives the same choice as before.
+        // a clean track gives the same choice as before. Both axes are
+        // compensated, so a pan across the stroke cannot win the choice (a
+        // raw x against a compensated y picked a horizontal pan over a
+        // vertical stroke).
         const double h = RobustRange(res.xs), v = RobustRange(res.ys);
         const bool auto_x = h > v * 1.5 && h > 5;
         res.horizontal = opts.axis == TrackAxis::kX || (opts.axis == TrackAxis::kAuto && auto_x);
