@@ -79,6 +79,8 @@ Metrics (CSV: one row per scene x metric):
   amp_ratio          median swing of the script at true key pairs / the true swing as 0-100
   cuts_found, false_cuts   the engine's own scene cuts; false = not within 2 frames of a true cut
   lost_share         share of frames the tracker flags lost
+  camera_gated_share share of frames whose 1 px camera fit was not trusted (inliers < 0.5 or implausible)
+  camera_unmeasured_share  share of frames without a measured camera step (the last step carried)
   loss_precision, loss_recall   lost flags against the true occlusion mask (occlusion scenes)
   jumps_over_60px    frame-to-frame box moves above 60 px (the lighting-cut scene has one true)
   ms_per_frame, ms_spread   Generate wall time per frame: median and max - min of the runs
@@ -543,6 +545,11 @@ Rows MeasureScene(const SceneDef& d, const Options& opt, std::string* error) {
             flagged += lost, masked += hidden, both += lost && hidden;
         }
         rows.push_back({"lost_share", n ? double(flagged) / n : kNaN});
+        // Camera: frames whose 1 px fit was not trusted, and frames left
+        // without a measured step (the last one carried).
+        const double frames = std::max(1, tr->stats.total_frames);
+        rows.push_back({"camera_gated_share", tr->stats.camera_frames_gated / frames});
+        rows.push_back({"camera_unmeasured_share", tr->stats.camera_frames_lost / frames});
         if (masked > 0) {
             rows.push_back({"loss_precision", flagged ? double(both) / flagged : kNaN});
             rows.push_back({"loss_recall", double(both) / masked});
@@ -612,7 +619,7 @@ std::string Markdown(const std::vector<std::string>& order, const std::map<std::
     const Col cols[] = {{"r_median", "r med", 3},      {"r_min", "r min", 3},         {"r_spread", "r spread", 3}, {"track_r_median", "track r", 3},
                         {"peak_err_ms_median", "peak med ms", 1}, {"peak_err_ms_p95", "peak p95 ms", 1},
                         {"extrema_err", "ext err", 0}, {"amp_ratio", "amp", 2},       {"false_cuts", "false cuts", 0},
-                        {"lost_share", "lost", 2},     {"loss_precision", "loss P", 2}, {"loss_recall", "loss R", 2},
+                        {"lost_share", "lost", 2},     {"camera_gated_share", "cam gated", 2},     {"loss_precision", "loss P", 2}, {"loss_recall", "loss R", 2},
                         {"jumps_over_60px", "jumps", 0}, {"ms_per_frame", "ms/frame", 2}, {"rss_mb", "RSS MB", 0}};
     std::ostringstream o;
     o << "| scene |";

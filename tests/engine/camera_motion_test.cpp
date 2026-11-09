@@ -463,3 +463,79 @@ TEST_CASE("camera: a held box stays where it was in the scene") {
     REQUIRE(held >= 10);
     CHECK_MESSAGE(moved == 0, moved << " of " << held << " held frames moved");
 }
+
+TEST_CASE("camera: a shift of more than a quarter of the picture is no camera step") {
+    CameraMotion c;
+    c.ok = true;
+    c.inliers = 1;
+    c.frame = cv::Size(320, 240);
+    c.m(0, 2) = 70;  // under 80 = a quarter of 320
+    CHECK(c.Usable());
+    c.m(0, 2) = 90;
+    CHECK_FALSE(c.Usable());
+    c.m(0, 2) = 0;
+    c.m(1, 2) = -61;  // over 60 = a quarter of 240
+    CHECK_FALSE(c.Usable());
+}
+
+TEST_CASE("camera: steps without a trusted fit carry the last one, then fade; the 3 px fit must agree") {
+    const auto shift = [](double dx, double share) {
+        CameraMotion c;
+        c.ok = true;
+        c.inliers = share;
+        c.m(0, 2) = dx;
+        return c;
+    };
+    const cv::Point2d tip(160, 120);
+    CameraSteps steps(3);
+    CameraSteps::Source src = CameraSteps::Source::kNone;
+    CameraFits pan;
+    pan.fine = shift(2.0, 0.9);
+    CHECK(steps.Step(pan, tip, &src).x == doctest::Approx(2.0));
+    CHECK(src == CameraSteps::Source::kFine);
+
+    // Gated (share 0.3) and no coarse fit: the last step, three times.
+    CameraFits gated;
+    gated.fine = shift(-5.0, 0.3);
+    for (int i = 0; i < 3; ++i) {
+        CHECK(steps.Step(gated, tip, &src).x == doctest::Approx(2.0));
+        CHECK(src == CameraSteps::Source::kCarried);
+    }
+    // Then halved every frame.
+    CHECK(steps.Step(gated, tip).x == doctest::Approx(1.0));
+    CHECK(steps.Step(gated, tip).x == doctest::Approx(0.5));
+
+    // A clear 3 px fit that agrees with the last measured step (2.0) is taken ...
+    CameraFits coarse_ok = gated;
+    coarse_ok.coarse = shift(2.6, 0.8);
+    CHECK(steps.Step(coarse_ok, tip, &src).x == doctest::Approx(2.6));
+    CHECK(src == CameraSteps::Source::kCoarse);
+    // ... one that jumps away from it (a foreground taking over) is not,
+    CameraFits coarse_far = gated;
+    coarse_far.coarse = shift(4.5, 0.95);
+    CHECK(steps.Step(coarse_far, tip, &src).x == doctest::Approx(2.6));
+    CHECK(src == CameraSteps::Source::kCarried);
+    // ... nor one with a share under 0.7.
+    CameraFits coarse_weak = gated;
+    coarse_weak.coarse = shift(2.6, 0.6);
+    steps.Step(coarse_weak, tip, &src);
+    CHECK(src == CameraSteps::Source::kCarried);
+
+    // A cut: the new scene starts from rest, nothing to carry.
+    steps.Reset();
+    CHECK(steps.Step(gated, tip, &src).x == 0.0);
+    CHECK(src == CameraSteps::Source::kNone);
+}
+
+TEST_CASE("camera: the track reports frames whose fine fit was gated") {
+    TempDir dir;
+    const fs::path clip = dir.path / "gated.mp4";
+    Scene(clip, NoisyPan(320));
+    const TrackResult noisy = Track(clip, BoxX(320), Cam(TrackAxis::kX));
+    CHECK(noisy.stats.camera_frames_gated > 10);
+    CHECK(noisy.stats.camera_frames_lost < noisy.stats.camera_frames_gated);  // the 3 px fit or the carry filled them
+
+    const fs::path clean = dir.path / "clean_gated.mp4";
+    Scene(clean, PanX(45, 0.25, true));
+    CHECK(Track(clean, kBoxX, Cam(TrackAxis::kX)).stats.camera_frames_gated == 0);
+}

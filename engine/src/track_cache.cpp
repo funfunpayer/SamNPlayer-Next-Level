@@ -118,6 +118,7 @@ std::optional<TrackResult> LoadTrackCache(const std::filesystem::path& dir, cons
         const nlohmann::json& s = j.at("stats");
         r.stats.lost_frames = s.at("lost_frames").get<int>();
         r.stats.camera_frames_lost = s.at("camera_frames_lost").get<int>();
+        r.stats.camera_frames_gated = s.at("camera_frames_gated").get<int>();
         r.stats.total_frames = s.at("total_frames").get<int>();
         r.stats.valid_frames = s.at("valid_frames").get<int>();
         r.stats.vertical_range = s.at("vertical_range").get<double>();
@@ -141,6 +142,7 @@ void SaveTrackCache(const std::filesystem::path& dir, const std::string& key, co
     if (ec) throw std::runtime_error("cannot create the cache folder " + dir.u8string() + ": " + ec.message());
     const nlohmann::json stats{{"lost_frames", r.stats.lost_frames},
                                {"camera_frames_lost", r.stats.camera_frames_lost},
+                               {"camera_frames_gated", r.stats.camera_frames_gated},
                                {"total_frames", r.stats.total_frames},
                                {"valid_frames", r.stats.valid_frames},
                                {"vertical_range", r.stats.vertical_range},

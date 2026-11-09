@@ -29,8 +29,9 @@ struct TrackOptions {
     // tracked frame is skipped and gives no sample. 0 = every frame (0.7).
     double max_analysis_fps = 0;
     // Removes the camera's motion at the tip from xs and ys: shift, zoom and
-    // rotation of the background estimate, per scene, frames with a low
-    // inlier share left out (camera_motion.cpp, docs/benchmarks/DETECTION_CAMERA2D_2026-11-08.md).
+    // rotation of the background estimate, per scene; a frame without a
+    // trusted estimate carries the last step (CameraSteps, camera_motion.cpp,
+    // docs/benchmarks/DETECTION_CAMERA2D_2026-11-08.md).
     bool camera_compensation = true;
     bool scene_cuts = true;
     // Self-check: a cut must also be an outlier against the last 2 s of
@@ -90,7 +91,8 @@ struct TrackOptions {
 
 struct TrackStats {
     int lost_frames = 0;         // frames the tracker had no box
-    int camera_frames_lost = 0;  // frames without a trusted camera estimate (none, or inliers under 0.5)
+    int camera_frames_lost = 0;  // frames whose camera step was not measured (carried from the last one, or none)
+    int camera_frames_gated = 0; // frames whose 1 px camera fit was not trusted (inliers under 0.5 or implausible)
     int total_frames = 0;
     int valid_frames = 0;        // frames with a real tracker box
     double vertical_range = 0;
@@ -108,8 +110,10 @@ struct TrackResult {
     // resembles the first crop (LESSONS GD-11, spec T6).
     std::vector<uint8_t> lost;
     // Box centre per frame; with camera_compensation both axes are
-    // compensated (the tip's motion in the scene, in the pixels of the
-    // scene's first frame), otherwise frame pixels.
+    // compensated: the tip's motion in the scene, summed from frame steps in
+    // each frame's own pixels (under a zoom the stroke keeps the frame's
+    // scale; nothing is rescaled to the scene's first frame); a held box
+    // (kLostTracker) holds its compensated position. Otherwise frame pixels.
     std::vector<double> xs, ys;
     // Box centre in frame pixels, before compensation (tip path).
     std::vector<double> frame_xs, frame_ys;
