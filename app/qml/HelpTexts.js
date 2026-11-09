@@ -221,7 +221,7 @@ const texts = {
     // src/playback.js:356 (From audio)
     "pb-bpm-auto": "Measure the beat of the video's sound and fill BPM (first 10 min). Display only — never rewrites the stroke. Works also when the script has no audio check.",
     // src/playback.js:347 (BPM grid)
-    "pb-bpm-grid": "Draw beat lines on the Play curve from BPM (or audio tempo when BPM is blank). Display only — never snaps or rewrites the stroke.",
+    "pb-bpm-grid": "Draw beat lines on the Play curve from BPM (or the stroke's own tempo when BPM is blank). Display only — never snaps or rewrites the stroke.",
     // src/playback.js:412 (Add from selection)
     "pb-chapter-add": "Saves a chapter from the current heatmap selection into the loaded script.",
     // src/playback.js:407 (Chapters: named ranges in the script — see “?”.)
@@ -276,7 +276,7 @@ const texts = {
     // src/playback.js:585 (Amplitude)
     "playback.amplitude": "Extended-O amplitude multiplier (curve keeps rhythm; only height is scaled). Default 0.1. Playback feel only.",
     // src/playback.js:351 (BPM)
-    "playback.bpm": "Beats per minute for the curve grid. Leave blank to use audio_check tempo (Hz×60) when available.",
+    "playback.bpm": "Beats per minute for the curve grid. Leave blank to use the stroke's own tempo when the grid is on.",
     // src/playback.js:312 (Cap)
     "playback.cap": "Max community intensity (500×|Δpos|/|Δt|) for Speed-cap on the heatmap selection. Lower = more stretch / calmer. Play edit only — does not change Create Expert max-speed.",
     // src/playback.js:490 (Contact curve)

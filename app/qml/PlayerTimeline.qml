@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Dialogs
 import SamN
 
 // Timeline card: the curve, the channel lanes and the audio level.
@@ -429,7 +428,7 @@ GlassCard {
             onRemove: (i) => ctrl.removeBookmark(i)
         }
     }
-    // Audio Analysis (0.7): the whole video's sound with the beat grid; click seeks.
+    // Audio Analysis: BPM readout and the whole-video waveform (click seeks).
     Item {
         visible: bottomTabs.current === 3
         x: 16; y: 46; width: parent.width - 32; height: parent.height - 58
@@ -443,61 +442,11 @@ GlassCard {
                 text: ctrl.effectiveBpm > 0 ? qsTr("%1 BPM").arg(ctrl.effectiveBpm) : qsTr("— BPM")
                 color: Theme.text; font.family: Theme.font; font.pixelSize: 14
             }
-            FlowTextField {
-                width: 90
-                placeholder: ctrl.bpm > 0 ? String(ctrl.bpm)
-                           : ctrl.effectiveBpm > 0 ? qsTr("auto %1").arg(ctrl.effectiveBpm)
-                                                  : qsTr("BPM")
-                onAccepted: ctrl.bpm = parseFloat(text) || 0
-            }
-            FlowButton {
-                text: qsTr("BPM grid"); checked: ctrl.bpmGrid
-                onClicked: ctrl.bpmGrid = !ctrl.bpmGrid
-            }
-            FlowButton {
-                objectName: "bpmFromStrokeTab"
-                text: qsTr("Guess from stroke")
-                enabled: ctrl.hasScript
-                onClicked: ctrl.guessBpmFromStroke()
-            }
-            FlowButton {
-                objectName: "bpmFromAudioTab"
-                text: qsTr("From audio")
-                enabled: ctrl.videoName !== ""
-                onClicked: ctrl.guessBpmFromAudio()
-            }
-            FlowButton {
-                objectName: "soundCurveWrite"
-                text: qsTr("Sound curve")
-                enabled: ctrl.hasScript && ctrl.videoName !== ""
-                onClicked: ctrl.proposeSoundCurve()
-            }
-            FlowButton {
-                objectName: "soundCurveUndo"
-                text: qsTr("Undo sound curve")
-                visible: ctrl.canUndoSoundCurve
-                onClicked: ctrl.undoSoundCurve()
-            }
             Text {
                 textFormat: Text.PlainText
                 anchors.verticalCenter: parent.verticalCenter
-                text: qsTr("Blank BPM uses the stroke tempo when the grid is on.")
+                text: qsTr("Set BPM and Sound Curve in the Inspector → Audio tab.")
                 color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
-            }
-        }
-        MessageDialog {
-            id: soundCurveDialog
-            title: qsTr("Sound Curve")
-            text: qsTr("Write the sound as the Vibration curve (%1 points)? Undo brings the old curve back.")
-                   .arg(ctrl.pendingSoundCurvePoints)
-            buttons: MessageDialog.Ok | MessageDialog.Cancel
-            onAccepted: ctrl.confirmSoundCurve()
-            onRejected: ctrl.cancelSoundCurve()
-        }
-        Connections {
-            target: ctrl
-            function onSoundCurveReady(points) {
-                if (points >= 2) soundCurveDialog.open()
             }
         }
         AudioLevelItem {
