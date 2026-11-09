@@ -2,7 +2,58 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 9 Nov 2026, Cursor, branch `cursor/polish-safe-635a`: Player header "Player" + "No Emotion Script selected", stage keys-hint `HelpChip` (`pb-offset-hint`), heatmap `pb-marker-hint` chip, `headerKeysAndShortcuts` test (Space / arrows / offset / L / T / O). Stay off Claude #168 / #198 / #201 / #213 feature logic. Before that: 9 Nov 2026, Claude, branch `claude/samn2-audio-onsets`: review fixes: the tempo estimate finds the pulse first (no more 2/5, 4/5, 1/3 errors with off-beat or 16th hats; 228 harder synthetic clips 73.7 % -> 100 %), the heart-rhythm drift is spaced in beats (adjacent beats within 1 % over the whole range), quiet masters pass the gate; earlier the same day: streaming audio onsets, tempo, beats and a speech/music/silence gate in the core, the heart-rhythm base tempo (`generator.base_bpm` 72, variation 3 %) and a rhythmic gap fill that stays off (D-168, handover below). Generator default behaviour unchanged. Before that: 8 Nov 2026, Claude, branch `claude/samn2-kernel-modes`: `ModeRegistry` (D-166); the tab row, the Ctrl+N keys and the page stack read it (handover below). No visible change. Earlier: 8 Nov 2026, Claude, branch `claude/samn2-json-fallback`: nlohmann_json comes from the system package first, then the git-clone fallback main already had (handover below). No code behaviour changed. Cursor, same day: probe-on-link warning box (#191). Earlier: 7 Nov 2026, Claude, branch `claude/samn2-vision-bench`: `samn_bench`, the detection benchmark, and its baseline (handover below). No engine behaviour changed. Before: the video playhead extrapolation (D-164, `claude/samn2-playhead`, #163) and the `DeviceWorker` move (#166) are merged. Also on main: 8 Nov 2026, Claude, branch `claude/samn2-parity-refresh`: `docs/PARITY.md` audited against `main` (#193) and recounted, new `docs/PARITY_REMAINING.md` (handover below). Documentation only, no code changed. Before that: 8 Nov 2026, Claude, branch `claude/samn2-json-fallback`: nlohmann_json comes from the system package first, then the git-clone fallback main already had (handover below). No code behaviour changed. Cursor, same day: probe-on-link warning box (#191). Earlier: 7 Nov 2026, Claude, branch `claude/samn2-vision-bench`: `samn_bench`, the detection benchmark, and its baseline (handover below). No engine behaviour changed. Before: the video playhead extrapolation (D-164, `claude/samn2-playhead`, #163) and the `DeviceWorker` move (#166) are merged. Rebased onto main after #201. Rebased onto main after #215. Rebased onto main after #213. Rebased onto main after #198 (polish).
+**Last update:** 8 Nov 2026, Claude, branch `claude/samn2-intensity-arc`: intro and climaxes from an intensity arc (D-165, core only; third review answered; handover below). Before it: the playhead extrapolation (#163, D-164), Cursor's Editor tools surface (#171), Player BPM from stroke (#170), Adapt for device (#169). Rebased onto main after #201 (2-D camera). Rebased onto main after #215 (intensity-arc). Rebased onto main after #213 (intensity-arc). Rebased onto main after #198 (intensity-arc). Rebased onto main after #214.
+
+
+
+## Handover: `claude/samn2-intensity-arc` (6-8 Nov, D-165 first slice: intro and climaxes)
+
+Owner: find the intro and the climaxes ("Höhepunkte") of a video from its sound and samples of its picture; cinema-grade, clean, lean, measured before and after, little CPU and memory. This slice is core only: no decoder change, no FFT, no Generator change. PR #168, reviewed and refuted three times; this state answers the third review (empty stretches, scene cuts without sound, the loud-opening guard, test bounds, the documented limits, `steps()` overflow).
+
+- **Core:** `intensity_arc.h` / `intensity_arc.cpp`, `ComputeArc(PhaseSignals, ArcOptions)` -> `IntensityArc` (`detail` 4 s and `arc` 20 s curves, `intro_end_ms`, `peaks` with `t_ms`, `start_ms`, `end_ms`, `prominence`, `confidence`; the primary first). Design in D-165. Each constant has its reason next to it, and the fitted ones say so.
+- **The design in one line each:**
+  - A climax is a rise **within the action** after the intro, never against the intro.
+  - It is measured **per input against that input's own level**, so a climax in the sound alone counts; but the arc blends 0.6 / 0.4, so it needs a much larger rise than one in the picture.
+  - Scene cuts and flashes are taken out of the motion by a running median over 5 steps (also at the clip's ends).
+  - Empty steps (black, or still and silent) count in none of the levels, flanks or noise; `SuggestPhases` gives the arc only the span from the first to the last picture.
+  - It stands over the rest of the action (`climax_gain`) and over the action beside it: 1.6x, `climax_gain` behind a sudden edge, 1.15x for a sudden last step held to the clip's end.
+  - It takes less than half the action.
+  - Second and third climaxes only in a clip that is calm outside its climaxes.
+  - An intro must be calm (motion or sound at most half its level in the action).
+  - A clip that opens at its top gets no climax suggestion there (conservative); without a clear rise from its left flank, the arc must fall halfway towards the action beside it, clear of the noise, before the clip's start.
+- **`SuggestPhases`:** keeps its empty-stretch rule and takes intro and climaxes from the arc. Every climax is the longest free stretch of its peak (never cut by black, never merged past `climax_max_ms`). The cool-down follows the last climax when it ends calmer than the action before it. `min_intro_ms` scales below two minutes. `PhaseSignals::tempo` and `PhaseRuleOptions::active_share` are removed (no caller set them).
+- **Measured** (`docs/benchmarks/INTENSITY_ARC_2026-11-06.md`):
+  - 24 scenarios: climax hits 369 -> 560 of 600, false climaxes 54 -> 10, intro hits 567 -> 600.
+  - 17 random-arc families (five new: peak beside a black end, loud opening, empty middle, empty start or end, scene cuts without sound), train and held-out seeds: no family worse than the old rules under the acceptance written in the bench. That acceptance is: climax hits at least theirs; intro hits at most 2 % fewer; false climaxes per clip at most theirs + 0.02, or + 0.10 where theirs exceed 0.25 (fast random walks, where neither is reliable).
+  - The held-out seeds were looked at more than once in the third review (the doc says when and why), so they are no longer untouched data.
+  - With strict 5 s grading three family rows fail (shown in the doc).
+  - The thresholds are fitted on synthetic data only; the doc has a sensitivity grid. `kFlankGain` and `kLastStepGain` are knife edges.
+  - CPU about 4x the old rules (110 us vs 28 us per call at -O2; 4.1-4.4 ms vs 0.9-1.3 ms on a 2 h clip, on a loaded machine).
+- **Tests:** `tests/core/intensity_arc_test.cpp`. The cases that failed before each fix are listed in the PR history:
+  - edge climax, plateau, short clips, close bursts, black cuts, merges;
+  - calm intro + even action, sound-only climaxes, fade cool-down, staircase top step, boxed-in climax;
+  - random walks against absolute bounds; confidence as properties (0.7x when sound and motion top out apart);
+  - long empty stretches (middle, tail, lead-in, black or still), a peak beside a black stretch, scene cuts without sound (also on the first and last steps), a loud opening under +-35 % jitter.
+
+  `phase_rules_test.cpp` unchanged. Bench: `tests/bench/phase_bench.cpp`, target `phase_bench`, not in ctest, exit 1 when the acceptance fails.
+- **Limits:**
+  - Synthetic only; real clips are the gate.
+  - Worse than the old rules on the review's probes: staircases with jitter sd above about 0.2; random walks faster than the bench's (1.1-1.7 false climaxes per clip vs 0.8-0.9); quantised random walks (0.44 vs 0.27, made worse by the running median; three fixes tried and reverted); calm tails (0.010 vs 0); a lit, still, quiet but not silent lead-in over 60 % (0.53 vs 0).
+  - The bench's own walks: 0.17 false climaxes per clip at step 0.02 (old rules 0.32-0.34).
+  - A sound-only climax needs about 2x the rest of the action.
+  - Slow build-ups of 100-500 s: 15 of 25.
+  - Bursts 20 s apart fuse into one climax.
+  - A last staircase step under 1.15x is no climax.
+- **Left alone on purpose:** `LabelController::finishSuggest` divides the 500 ms loudness by the loudest step after `NormalizeLoudness` already scaled it. Not behaviour-neutral for the arc (rescaling the loudness changes the 0.6 / 0.4 blend; on cases A-E the peak times moved by up to 69 ms and the confidence by up to 0.07), so it stays until a slice measures it.
+- **D-number:** D-165, because the open playhead PR #163 takes D-164. If #163 lands with another number, or another PR takes D-165 first, renumber this one.
+- **Not verified:** real clips (synthetic only), Windows / MSVC, the Training stage with several confirmed climaxes on a real film.
+- **Next slices (roadmap, one per PR):**
+  1. one shared 11 kHz mono streaming decode plus an `AudioAnalyzer` (spectral-flux onsets);
+  2. tempo from the onset curve (autocorrelation, a log-Gaussian prior at 72 BPM, octave folding, a confidence);
+  3. the heart-rhythm default tempo, `base_rhythm.h` (`generator.base_bpm` 72, `generator.base_bpm_variation` 3 %, range 60-90), blended with the measured tempo; rhythmic fill stays opt-in until it beats linear fill on synthetic gaps;
+  4. beat tracking (Ellis dynamic programming) as the AU-04 fallback for rounds without a visible beat bar;
+  5. a speech / music / silence gate.
+- **Cleanup list (found by the read-only analysis, not done here):** `AutoFillGapThreshold` always gives 800 (min of at least 2000 and `kDefaultFillGapMs` 800: a dead rule); `ImproveOptions::audio_hz` has no caller; three percentile helpers in core (`audio_envelope.cpp`, `script_quality.cpp`, and the one that moved from `phase_rules.cpp` to `intensity_arc.cpp`); three owners of an `AudioLevelDecoder` (label controller, editor controller, each `AudioLevelItem`), each decoding the same file again.
 
 ## Handover: `claude/samn2-label-memory` (9 Nov, label tracking memory)
 
@@ -797,7 +848,9 @@ Data and file fixes from a read-only bug hunt. Each fix has a test that failed b
 
 ## Next (in order; the work list is `LESSONS.md` § Gaps, `TEST_PARITY.md` and `P3_GENERATOR.md`)
 
-**Kernel (D-163), one theme per PR, after the driver registry:** a ModeRegistry with a `Repeater` in `Main.qml`; a narrow `DeviceService` interface instead of `DeviceController*` in Player, Training and `PlaybackOutput`; ~~`DeviceWorker` into its own file~~ (done, `claude/samn2-device-worker`); registries for detectors and teachers.
+**Audio and phases (D-165), one slice per PR:** shared 11 kHz mono decode + `AudioAnalyzer` (spectral-flux onsets) → tempo from the onsets (autocorrelation, prior at 72 BPM, octave folding, confidence) → heart-rhythm default `base_rhythm.h` (72 BPM, 3 %) → Ellis beat tracking as the AU-04 fallback → speech / music / silence gate; cleanup list in the `claude/samn2-intensity-arc` handover.
+
+**Kernel (D-163), one theme per PR, after the driver registry:** a ModeRegistry with a `Repeater` in `Main.qml`; a narrow `DeviceService` interface instead of `DeviceController*` in Player, Training and `PlaybackOutput`; `DeviceWorker` into its own file; registries for detectors and teachers.
 
 0. **Generator:** G2 stack ✅ (#114–#116); Tf/Tj distance stroke ✅ (#119); G3 feel ✅; Player partner overlay ✅ (#141); extras multi (`track_multi`) ✅ (#145); G3 feel probe ✅ (#146); G4a Advanced shell ✅ (#147); G4b Expert knobs ✅ (#151, live postprocess probe still open); MT-Debug trajectory overlay ✅ (this PR); next G8 `.sam` / live probe / Quality Doctor.
 1. **Look polish:** ✅ (#122, Claude takeover of Cursor #117; reduced-motion gates and a window-wide loop test added).

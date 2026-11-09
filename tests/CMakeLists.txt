@@ -11,6 +11,12 @@ if(MSVC)
 endif()
 add_test(NAME core_tests COMMAND core_tests)
 
+# By hand only, never in ctest (the CPU times depend on the machine): phase
+# suggestions before and after the intensity arc
+# (docs/benchmarks/INTENSITY_ARC_2026-11-06.md).
+add_executable(phase_bench bench/phase_bench.cpp)
+target_link_libraries(phase_bench PRIVATE samn_core)
+
 # No personal name, old project name or model identifier in the sources.
 add_test(NAME identifiers COMMAND ${CMAKE_COMMAND} -DROOT=${PROJECT_SOURCE_DIR} -P ${CMAKE_CURRENT_SOURCE_DIR}/check_identifiers.cmake)
 
