@@ -12,6 +12,11 @@ namespace {
 
 // A cool-down is clearly calmer than what came before it.
 constexpr double kCalmer = 0.8;
+// An empty stretch this long (black, or still and silent) has no action:
+// its motion (a codec's noise on black frames) and its sound count as 0 for
+// the arc. Shorter ones, such as a black cut inside a climax, keep theirs, so
+// the climax is not split.
+constexpr int64_t kEmptyRunMs = 10000;
 
 // The mean of v[a, b).
 double Mean(const std::vector<double>& v, size_t a, size_t b) {
@@ -24,7 +29,8 @@ double Mean(const std::vector<double>& v, size_t a, size_t b) {
 
 std::vector<LabelPhase> SuggestPhases(const PhaseSignals& s, const PhaseRuleOptions& o) {
     const size_t n = std::min(s.luma.size(), s.motion.size());
-    if (n == 0 || s.step_ms <= 0) return {};
+    // A step so long that the clip's times overflow 64 bits gives no phases.
+    if (n == 0 || s.step_ms <= 0 || s.step_ms > std::numeric_limits<int64_t>::max() / int64_t(n + 1)) return {};
     const auto steps = [&](int64_t ms) {
         const int64_t m = std::clamp<int64_t>(ms, 0, std::numeric_limits<int64_t>::max() - s.step_ms);
         return std::max<size_t>(1, size_t((m + s.step_ms - 1) / s.step_ms));
@@ -60,9 +66,9 @@ std::vector<LabelPhase> SuggestPhases(const PhaseSignals& s, const PhaseRuleOpti
     if (std::all_of(in_empty.begin(), in_empty.end(), [](bool e) { return e; })) return add_empty();
 
     // The arc sees the pictures from the first to the last one that is not
-    // empty; its times are from `first` on. Empty stretches between have no
-    // motion and no sound, and the arc leaves such samples out of its
-    // statistics.
+    // empty; its times are from `first` on. Long empty stretches between are
+    // given to it without motion or sound (kEmptyRunMs), and the arc leaves
+    // such samples out of its statistics.
     size_t first = 0, last = n;
     while (first < n && in_empty[first]) ++first;
     while (last > first && in_empty[last - 1]) --last;
@@ -70,6 +76,12 @@ std::vector<LabelPhase> SuggestPhases(const PhaseSignals& s, const PhaseRuleOpti
     clip.step_ms = s.step_ms;
     clip.motion.assign(s.motion.begin() + std::ptrdiff_t(first), s.motion.begin() + std::ptrdiff_t(last));
     if (has_sound) clip.loudness.assign(s.loudness.begin() + std::ptrdiff_t(first), s.loudness.begin() + std::ptrdiff_t(last));
+    for (const auto& [a, b] : empty_runs)
+        if (b - a >= steps(kEmptyRunMs))
+            for (size_t i = std::max(a, first); i < std::min(b, last); ++i) {
+                clip.motion[i - first] = 0;
+                if (has_sound) clip.loudness[i - first] = 0;
+            }
     ArcOptions ao;
     ao.steady_ms = o.steady_ms;
     ao.min_gain = o.climax_gain;

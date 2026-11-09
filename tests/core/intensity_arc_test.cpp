@@ -286,6 +286,14 @@ TEST_CASE("arc: short, empty and broken clips") {
     s.step_ms = 0;
     s.motion.assign(100, 0.2);
     CHECK(samn::ComputeArc(s).detail.empty());
+    // A step so long that the clip's times would not fit in 64 bits: no arc,
+    // no phases (the app uses 500 ms).
+    s.luma.assign(100, 0.5);
+    for (const int64_t huge : {std::numeric_limits<int64_t>::max() / 100, std::numeric_limits<int64_t>::max()}) {
+        s.step_ms = huge;
+        CHECK(samn::ComputeArc(s).detail.empty());
+        CHECK(samn::SuggestPhases(s).empty());
+    }
     for (const size_t n : std::vector<size_t>{1, 2, 3, 9}) {
         samn::PhaseSignals tiny;
         tiny.motion.assign(n, 0.3);
@@ -411,15 +419,29 @@ TEST_CASE("phases: two bursts close together: the climax sits on a burst, not in
 
 TEST_CASE("phases: a black cut inside a climax leaves one climax") {
     const auto clip = Clip({{10, .02, .2}, {82, .2, .3}, {18, .4, .9}, {90, .2, .3}});  // climax 92-110 s
-    for (const auto& cut : {std::pair{104.0, 106.5}, std::pair{98.0, 101.0}}) {
-        const double from = cut.first, to = cut.second;  // plain locals: CAPTURE cannot take a structured binding
-        CAPTURE(from);
-        const auto phases = samn::SuggestPhases(Black(clip, from, to));
-        CHECK(Count(phases, "climax") == 1);
-        CHECK(Near(ClimaxMids(phases), 101, 5));
-        for (const auto& p : phases)
-            if (p.name == "climax") CHECK(p.end_ms - p.start_ms >= samn::PhaseRuleOptions{}.climax_min_ms);
-    }
+    for (const auto& cut : {std::pair{104.0, 106.5}, std::pair{98.0, 101.0}})
+        for (bool noisy : {false, true}) {
+            const double from = cut.first, to = cut.second;  // plain locals: CAPTURE cannot take a structured binding
+            CAPTURE(from);
+            CAPTURE(noisy);
+            auto s = Black(clip, from, to);
+            if (noisy)  // the cut as a codec gives it: a little motion, the sound going on
+                for (size_t i = size_t(from * 2); i < size_t(to * 2); ++i) {
+                    s.luma[i] = 0.02;
+                    s.motion[i] = 0.002;
+                }
+            const auto phases = samn::SuggestPhases(s);
+            CHECK(Count(phases, "climax") == 1);
+            if (!noisy) {
+                CHECK(Near(ClimaxMids(phases), 101, 5));
+            } else {
+                // Without its motion the cut splits the climax in two bursts
+                // and the arc may pick either: the climax lies inside the true one.
+                for (double m : ClimaxMids(phases)) CHECK((m >= 92 && m <= 110));
+            }
+            for (const auto& p : phases)
+                if (p.name == "climax") CHECK(p.end_ms - p.start_ms >= samn::PhaseRuleOptions{}.climax_min_ms);
+        }
 }
 
 TEST_CASE("phases: climaxes never merge past climax_max_ms") {
@@ -547,6 +569,33 @@ TEST_CASE("phases: long empty stretches are no climax") {
         CHECK(Count(samn::SuggestPhases(WithBlanks(600, seed, true, [](double t) { return t >= 240; })), "climax") == 0);
         CHECK(Count(samn::SuggestPhases(WithBlanks(600, seed, true, [](double t) { return t < 360; })), "climax") == 0);
     }
+}
+
+TEST_CASE("phases: a long black stretch with codec noise is no climax") {
+    // Black frames are not exactly still: the codec's noise gives a little
+    // motion (0.002 +-50 %), and the sound may be silent or go on (music at
+    // 0.25 +-20 %). Steady action on either side, 50 % or 70 % black between.
+    for (uint32_t seed = 1; seed <= 4; ++seed)
+        for (double share : {0.5, 0.7})
+            for (bool music : {false, true}) {
+                CAPTURE(seed);
+                CAPTURE(share);
+                CAPTURE(music);
+                const auto middle = [share](double t) { return std::abs(t - 300) < share * 300; };
+                auto s = WithBlanks(600, seed, true, middle);
+                uint32_t state = seed * 7919u;
+                const auto u = [&] {
+                    state = state * 1103515245u + 12345u;
+                    return double((state >> 16) % 1000) / 1000.0;
+                };
+                for (size_t i = 0; i < s.luma.size(); ++i)
+                    if (s.luma[i] == 0) {
+                        s.luma[i] = 0.02;
+                        s.motion[i] = 0.002 * (1 + (u() - 0.5));
+                        s.loudness[i] = music ? 0.25 * (1 + 0.4 * (u() - 0.5)) : 0;
+                    }
+                CHECK(Count(samn::SuggestPhases(s), "climax") == 0);
+            }
 }
 
 TEST_CASE("phases: a peak beside a long black stretch is still found") {

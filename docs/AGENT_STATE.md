@@ -10,7 +10,6 @@ PARITY_REMAINING item 10 (the panel pieces only). Review card on Generator Creat
 
 - **App:** `EditorController::improveScript(startSec, endSec, fillGaps, healTrackingGaps)`; QML `improvePanel` on `GeneratorPage` after `qualityBox`. HelpChips: `generator.start-s` / `generator.end-s` / `gen-improve-fill` / `gen-improve-heal`.
 - **Tests:** `editor_controller_test` `improveScriptTrimsFillsAndHeals`; `generator_qml_test` `improvePanelShowsAndRuns`.
-
 ## Handover: device diagnostics history (10 Nov)
 
 PARITY_REMAINING item 3 (the history piece only). After each finished `RunDiagnostics` (including interrupted) the worker appends one JSONL line. Empty `device.diagnosticsHistoryPath` → `config_dir()/device_diagnostics_history.jsonl`. `DeviceController::getDiagnosticsHistory` returns newest-first; Settings → Device lists `date (Mock|device) — N commands, M errors[, interrupted]`. Name/kind are stamped from the session (the report JSON has none). No Choose… path field (override is the settings key, tested in C++). Left open: `generator.reportPath`, feel_heatbands.
@@ -31,7 +30,6 @@ PARITY_REMAINING item 3 (the history piece only). After each finished `RunDiagno
 - **Tests:** `tests/core/motion_classify_test.cpp`, `motion_chapters_test.cpp`, `script_analysis_test.cpp`, `tests/app/player_controller_test.cpp` `scriptAnalysisOnOpen`.
 
 
-
 ## Handover: `claude/samn2-label-vfr` (9 Nov, label tracking: VFR fix and long-GOP window)
 
 Follow-up to #198 (label tracking memory), which was merged before its review finished. **#198 broke variable-frame-rate clips** (phone footage): the backward decode seeked by the nominal rate and required the exact frame time, so it failed with "the video changed between two reads" where the old code worked. This PR fixes that and the rest of the review. Below: the whole current design.
@@ -47,7 +45,7 @@ Owner priority: CPU/RAM efficient AI. `TrackBetweenKeys` (`engine/src/label_trac
 
 ## Handover: `claude/samn2-intensity-arc` (6-8 Nov, D-165 first slice: intro and climaxes)
 
-Owner: find the intro and the climaxes ("Höhepunkte") of a video from its sound and samples of its picture; cinema-grade, clean, lean, measured before and after, little CPU and memory. This slice is core only: no decoder change, no FFT, no Generator change. PR #168, reviewed and refuted three times; this state answers the third review (empty stretches, scene cuts without sound, the loud-opening guard, test bounds, the documented limits, `steps()` overflow).
+Owner: find the intro and the climaxes ("Höhepunkte") of a video from its sound and samples of its picture; cinema-grade, clean, lean, measured before and after, little CPU and memory. This slice is core only: no decoder change, no FFT, no Generator change. PR #168, reviewed and refuted three times, then verified with caveats and merged at the third review's state; the fourth review's fix follows in `claude/samn2-intensity-arc-fixes`. This state answers the third review (empty stretches, scene cuts without sound, the loud-opening guard, test bounds, the documented limits, `steps()` overflow) and the fourth (black stretches with codec noise: empty runs of 10 s or more reach the arc without motion or sound, `kEmptyRunMs`; a step that would overflow the clip's times is rejected).
 
 - **Core:** `intensity_arc.h` / `intensity_arc.cpp`, `ComputeArc(PhaseSignals, ArcOptions)` -> `IntensityArc` (`detail` 4 s and `arc` 20 s curves, `intro_end_ms`, `peaks` with `t_ms`, `start_ms`, `end_ms`, `prominence`, `confidence`; the primary first). Design in D-165. Each constant has its reason next to it, and the fitted ones say so.
 - **The design in one line each:**
@@ -63,7 +61,7 @@ Owner: find the intro and the climaxes ("Höhepunkte") of a video from its sound
 - **`SuggestPhases`:** keeps its empty-stretch rule and takes intro and climaxes from the arc. Every climax is the longest free stretch of its peak (never cut by black, never merged past `climax_max_ms`). The cool-down follows the last climax when it ends calmer than the action before it. `min_intro_ms` scales below two minutes. `PhaseSignals::tempo` and `PhaseRuleOptions::active_share` are removed (no caller set them).
 - **Measured** (`docs/benchmarks/INTENSITY_ARC_2026-11-06.md`):
   - 24 scenarios: climax hits 369 -> 560 of 600, false climaxes 54 -> 10, intro hits 567 -> 600.
-  - 17 random-arc families (five new: peak beside a black end, loud opening, empty middle, empty start or end, scene cuts without sound), train and held-out seeds: no family worse than the old rules under the acceptance written in the bench. That acceptance is: climax hits at least theirs; intro hits at most 2 % fewer; false climaxes per clip at most theirs + 0.02, or + 0.10 where theirs exceed 0.25 (fast random walks, where neither is reliable).
+  - 18 random-arc families (six new: black with codec noise, peak beside a black end, loud opening, empty middle, empty start or end, scene cuts without sound), train and held-out seeds: no family worse than the old rules under the acceptance written in the bench. That acceptance is: climax hits at least theirs; intro hits at most 2 % fewer; false climaxes per clip at most theirs + 0.02, or + 0.10 where theirs exceed 0.25 (fast random walks, where neither is reliable).
   - The held-out seeds were looked at more than once in the third review (the doc says when and why), so they are no longer untouched data.
   - With strict 5 s grading three family rows fail (shown in the doc).
   - The thresholds are fitted on synthetic data only; the doc has a sensitivity grid. `kFlankGain` and `kLastStepGain` are knife edges.
@@ -72,12 +70,12 @@ Owner: find the intro and the climaxes ("Höhepunkte") of a video from its sound
   - edge climax, plateau, short clips, close bursts, black cuts, merges;
   - calm intro + even action, sound-only climaxes, fade cool-down, staircase top step, boxed-in climax;
   - random walks against absolute bounds; confidence as properties (0.7x when sound and motion top out apart);
-  - long empty stretches (middle, tail, lead-in, black or still), a peak beside a black stretch, scene cuts without sound (also on the first and last steps), a loud opening under +-35 % jitter.
+  - long empty stretches (middle, tail, lead-in, black or still; black with codec noise, silent or with music), a peak beside a black stretch, scene cuts without sound (also on the first and last steps), a loud opening under +-35 % jitter.
 
   `phase_rules_test.cpp` unchanged. Bench: `tests/bench/phase_bench.cpp`, target `phase_bench`, not in ctest, exit 1 when the acceptance fails.
 - **Limits:**
   - Synthetic only; real clips are the gate.
-  - Worse than the old rules on the review's probes: staircases with jitter sd above about 0.2; random walks faster than the bench's (1.1-1.7 false climaxes per clip vs 0.8-0.9); quantised random walks (0.44 vs 0.27, made worse by the running median; three fixes tried and reverted); calm tails (0.010 vs 0); a lit, still, quiet but not silent lead-in over 60 % (0.53 vs 0).
+  - Worse than the old rules on the review's probes: staircases with jitter sd above about 0.2; random walks faster than the bench's (1.1-1.7 false climaxes per clip vs 0.8-0.9); quantised random walks (0.44 vs 0.27, made worse by the running median; three fixes tried and reverted; cannot occur in the app, whose motion quantum is about 1.7e-6 and whose loudness is a float RMS in dB); app-like loudness (`NormalizeLoudness`) adds spurious intros on ramps and staircases (intro hits 994 -> 891 and 809 -> 624, as at 6e4d314); calm tails (0.010 vs 0); a lit, still, quiet but not silent lead-in over 60 % (0.53 vs 0).
   - The bench's own walks: 0.17 false climaxes per clip at step 0.02 (old rules 0.32-0.34).
   - A sound-only climax needs about 2x the rest of the action.
   - Slow build-ups of 100-500 s: 15 of 25.
