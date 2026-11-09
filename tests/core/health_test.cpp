@@ -144,17 +144,30 @@ TEST_CASE("health: MemTotal") {
 
 TEST_CASE("health: FindOnPath") {
     namespace fs = std::filesystem;
-    const fs::path dir = fs::temp_directory_path() / "samn_health_path_test";
-    fs::create_directories(dir);
-    { std::ofstream(dir / "samn-tool") << "x"; }
-    { std::ofstream(dir / "samn-win.exe") << "x"; }
-    const std::string env_posix = "/nonexistent-samn-dir:" + dir.u8string() + ":";
-    CHECK(FindOnPath("samn-tool", env_posix, Platform::kLinux) == (dir / "samn-tool").u8string());
+    // The fixture folder is reached through a relative PATH entry from inside the temp folder: an
+    // absolute Windows temp path ("C:\\...") has a drive colon that the ':' separator of the
+    // Linux case would split, so the test must not depend on the host's path style.
+    const fs::path cwd = fs::current_path();
+    const fs::path base = fs::temp_directory_path();
+    const std::string rel = "samn_health_path_test";
+    fs::create_directories(base / rel);
+    { std::ofstream(base / rel / "samn-tool") << "x"; }
+    { std::ofstream(base / rel / "samn-win.exe") << "x"; }
+    fs::current_path(base);
+
+    const std::string env_posix = "nonexistent-samn-dir:" + rel + ":";
+    CHECK(FindOnPath("samn-tool", env_posix, Platform::kLinux) == (fs::path(rel) / "samn-tool").u8string());
     CHECK(FindOnPath("samn-missing", env_posix, Platform::kLinux).empty());
     CHECK(FindOnPath("samn-win", env_posix, Platform::kLinux).empty());  // .exe only on Windows
-    CHECK(FindOnPath("samn-win", "C:\\nonexistent;" + std::string("\"") + dir.u8string() + "\"", Platform::kWindows) == (dir / "samn-win.exe").u8string());
+    // Windows separator ';', a quoted entry, and a drive-letter entry that is not there.
+    const std::string env_win = "C:\\samn-nonexistent\\tools;\"" + rel + "\"";
+    CHECK(FindOnPath("samn-win", env_win, Platform::kWindows) == (fs::path(rel) / "samn-win.exe").u8string());
+    CHECK(FindOnPath("samn-tool", env_win, Platform::kWindows) == (fs::path(rel) / "samn-tool").u8string());  // an exact name is tried first
+    CHECK(FindOnPath("samn-missing", "C:\\samn-nonexistent\\tools", Platform::kWindows).empty());
     CHECK(FindOnPath("samn-tool", "", Platform::kLinux).empty());
-    fs::remove_all(dir);
+
+    fs::current_path(cwd);
+    fs::remove_all(base / rel);
 }
 
 TEST_CASE("health: parts checks and the report summary") {
