@@ -18,6 +18,7 @@
 #include <QtTest>
 
 #include "device_controller.h"
+#include "samn/settings.h"
 #include <memory>
 
 #include "frame_provider.h"
@@ -911,8 +912,9 @@ private slots:
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }
 
-    // The Player's "Edit this script" / "Open the scenes in the Editor" links
-    // (they replaced notes that said the editing comes later).
+    // "Edit this script" opens the Editor. editRequested(scenes=true) still
+    // selects Generator → Scenes (D-145). The Player Scene Map tab that only
+    // redirected there is gone.
     void editFromThePlayerOpensTheEditor() {
         {
             Shell s;
@@ -946,6 +948,95 @@ private slots:
                                               Q_ARG(QUrl, QUrl::fromLocalFile(video)), Q_ARG(bool, false)));
             QTRY_COMPARE_WITH_TIMEOUT(s.mode(), 1, kWait);
             QCOMPARE(generator->property("sidePanel").toInt(), 0);
+        }
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
+
+    // Bottom tabs: Timeline, Chapters, Bookmarks, Audio Analysis. A saved 4
+    // (old Audio Analysis) opens index 3; a saved 3 (old Scene Map) opens Timeline.
+    void playerBottomTabsDropSceneMap() {
+        auto bottomTabsOf = [](QQuickItem* timeline) -> QQuickItem* {
+            for (QQuickItem* i : descendants(timeline))
+                if (isType(i, "FlowTabs")) return i;
+            return nullptr;
+        };
+        auto labelsOf = [](QQuickItem* tabs) {
+            QStringList labels;
+            for (const QVariant& v : tabs->property("model").toList()) labels << v.toString();
+            return labels;
+        };
+        // The BPM label sits in the Audio Analysis panel, a direct child of the
+        // timeline card. The card stays hidden until a script is open, and
+        // QQuickItem::visible reports that effective state.
+        auto audioPanelOf = [](QQuickItem* timeline, QQuickItem* bpm) -> QQuickItem* {
+            QQuickItem* panel = bpm;
+            while (panel && panel->parentItem() && panel->parentItem() != timeline) panel = panel->parentItem();
+            return panel && panel->parentItem() == timeline ? panel : nullptr;
+        };
+        const QStringList expect{QStringLiteral("Timeline"), QStringLiteral("Chapters"),
+                                 QStringLiteral("Bookmarks"), QStringLiteral("Audio Analysis")};
+
+        samn::Settings().set("ui.player.bottomTab", 4);
+        {
+            Shell s;
+            loadShell(s);
+            QVERIFY(s.window);
+            QQuickItem* timeline = s.one("PlayerTimeline");
+            QVERIFY(timeline);
+            QVERIFY(!timeline->findChild<QObject*>(QStringLiteral("openScenes")));
+            QVERIFY(timeline->findChild<QQuickItem*>(QStringLiteral("chapterStrip")));
+            QQuickItem* tabs = bottomTabsOf(timeline);
+            QVERIFY(tabs);
+            QCOMPARE(labelsOf(tabs), expect);
+            QCOMPARE(tabs->property("current").toInt(), 3);
+            QTemporaryDir dir;
+            const QString script = dir.filePath(QStringLiteral("clip.funscript"));
+            QFile clip(script);
+            QVERIFY(clip.open(QIODevice::WriteOnly));
+            clip.write(R"({"version":"1.0","actions":[{"at":0,"pos":20},{"at":1000,"pos":80}]})");
+            clip.close();
+            auto* ctrl = s.one("PlayerPage")->property("controller").value<samn::ui::PlayerController*>();
+            QVERIFY(ctrl);
+            QVERIFY(ctrl->openScript(script));
+            QTRY_VERIFY_WITH_TIMEOUT(timeline->isVisible(), kWait);
+            auto* bpm = timeline->findChild<QQuickItem*>(QStringLiteral("audioAnalysisBpm"));
+            QQuickItem* panel = audioPanelOf(timeline, bpm);
+            QVERIFY(panel);
+            QVERIFY(panel->isVisible());
+            QVERIFY(QMetaObject::invokeMethod(timeline, "showAudioAnalysis"));
+            QCOMPARE(tabs->property("current").toInt(), 3);
+            QCOMPARE(ctrl->uiValue(QStringLiteral("player.bottomTab"), -1).toInt(), 3);
+        }
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+        g_messages.clear();
+
+        samn::Settings().set("ui.player.bottomTab", 3);
+        {
+            Shell s;
+            loadShell(s);
+            QVERIFY(s.window);
+            QQuickItem* timeline = s.one("PlayerTimeline");
+            QQuickItem* tabs = bottomTabsOf(timeline);
+            QVERIFY(timeline && tabs);
+            QCOMPARE(labelsOf(tabs), expect);
+            QCOMPARE(tabs->property("current").toInt(), 0);
+            QTemporaryDir dir;
+            const QString script = dir.filePath(QStringLiteral("clip.funscript"));
+            QFile clip(script);
+            QVERIFY(clip.open(QIODevice::WriteOnly));
+            clip.write(R"({"version":"1.0","actions":[{"at":0,"pos":20},{"at":1000,"pos":80}]})");
+            clip.close();
+            auto* ctrl = s.one("PlayerPage")->property("controller").value<samn::ui::PlayerController*>();
+            QVERIFY(ctrl);
+            QVERIFY(ctrl->openScript(script));
+            QTRY_VERIFY_WITH_TIMEOUT(timeline->isVisible(), kWait);
+            auto* bpm = timeline->findChild<QQuickItem*>(QStringLiteral("audioAnalysisBpm"));
+            QQuickItem* panel = audioPanelOf(timeline, bpm);
+            QVERIFY(panel);
+            QVERIFY(!panel->isVisible());
+            auto* stroke = timeline->findChild<QQuickItem*>(QStringLiteral("laneName_stroke"));
+            QVERIFY(stroke);
+            QVERIFY(stroke->isVisible());
         }
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }

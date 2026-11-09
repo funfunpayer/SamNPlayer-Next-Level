@@ -849,7 +849,6 @@ Item {
             playheadPosition: page.player.position
             onSeekRequested: (ms) => page.seekTo(ms)
             onTipRequested: (item, x, y, text) => page.showTip(item, x, y, text)
-            onEditScenesRequested: page.editRequested(ctrl.scriptPath, ctrl.videoUrl, true)
         }
 
     }
