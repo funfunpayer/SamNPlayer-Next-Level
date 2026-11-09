@@ -1104,6 +1104,56 @@ private slots:
         }
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }
+
+    // PARITY item 12: several videos dropped on the Generator join the queue;
+    // one video still opens there; a script drop goes to the Player.
+    void generatorDropQueuesSeveralVideos() {
+        {
+            Shell s;
+            loadShell(s, 1);
+            QVERIFY(s.window);
+            QCOMPARE(s.mode(), 1);
+            QQuickItem* generator = s.one("GeneratorPage");
+            QVERIFY(generator);
+            auto* gen = generator->property("controller").value<QObject*>();
+            QVERIFY(gen);
+            QTemporaryDir dir;
+            const QString a = dir.filePath("a.mp4");
+            const QString b = dir.filePath("b.mp4");
+            QVERIFY(QFile::copy(QStringLiteral(SAMN_APP_QML_DIR "/../../tests/app/data/testpattern_4s.mp4"), a));
+            QVERIFY(QFile::copy(QStringLiteral(SAMN_APP_QML_DIR "/../../tests/app/data/testpattern_4s.mp4"), b));
+            const QString script = dir.filePath("clip.funscript");
+            {
+                QFile f(script);
+                QVERIFY(f.open(QIODevice::WriteOnly));
+                f.write(R"({"version":"1.0","actions":[{"at":0,"pos":0},{"at":500,"pos":100}]})");
+            }
+
+            QVariant ok;
+            QVERIFY(QMetaObject::invokeMethod(
+                s.window, "handleUrlsDropped", Q_RETURN_ARG(QVariant, ok),
+                Q_ARG(QVariant, QVariant::fromValue(QStringList{
+                    QUrl::fromLocalFile(a).toString(), QUrl::fromLocalFile(b).toString()}))));
+            QCOMPARE(s.mode(), 1);
+            QCOMPARE(gen->property("queue").toList().size(), 2);
+            QVERIFY(!gen->property("hasVideo").toBool());
+
+            QVERIFY(QMetaObject::invokeMethod(
+                s.window, "handleUrlsDropped", Q_RETURN_ARG(QVariant, ok),
+                Q_ARG(QVariant, QVariant::fromValue(QStringList{QUrl::fromLocalFile(a).toString()}))));
+            QCOMPARE(s.mode(), 1);
+            QTRY_VERIFY_WITH_TIMEOUT(gen->property("hasVideo").toBool(), kWait);
+
+            QVERIFY(QMetaObject::invokeMethod(
+                s.window, "handleUrlsDropped", Q_RETURN_ARG(QVariant, ok),
+                Q_ARG(QVariant, QVariant::fromValue(QStringList{QUrl::fromLocalFile(script).toString()}))));
+            QTRY_COMPARE_WITH_TIMEOUT(s.mode(), 0, kWait);
+            auto* player = s.one("PlayerPage")->property("controller").value<QObject*>();
+            QVERIFY(player);
+            QTRY_VERIFY_WITH_TIMEOUT(player->property("hasScript").toBool(), kWait);
+        }
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
 };
 
 QTEST_MAIN(ShellQmlTest)
