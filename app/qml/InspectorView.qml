@@ -18,11 +18,13 @@ Column {
                 text: qsTr("Audio level lane"); checked: ctrl.audioLane
                 onClicked: ctrl.audioLane = !ctrl.audioLane
             }
+            HelpChip { key: "pb-audio-lane-row"; anchors.verticalCenter: parent.verticalCenter }
             FlowButton {
                 objectName: "showScenes"
                 text: qsTr("Scene markers"); checked: ctrl.showScenes
                 onClicked: ctrl.showScenes = !ctrl.showScenes
             }
+            HelpChip { key: "pb-scenes-row"; anchors.verticalCenter: parent.verticalCenter }
         }
         Row {
             spacing: 8
@@ -30,6 +32,7 @@ Column {
                 text: qsTr("0–100 on video"); checked: ctrl.posOverlay
                 onClicked: ctrl.posOverlay = !ctrl.posOverlay
             }
+            HelpChip { key: "pb-pos-overlay-row"; anchors.verticalCenter: parent.verticalCenter }
         }
         // 0.7 "Show contact areas" with its hint, when the script stores marks.
         FlowButton {
@@ -46,11 +49,15 @@ Column {
             text: ctrl.contactMarks.hint !== undefined ? ctrl.contactMarks.hint : ""
             color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 11
         }
-        FlowButton {
-            objectName: "videoPlayAutostart"
-            text: qsTr("Video play starts device")
-            checked: ctrl.videoPlayAutostart
-            onClicked: ctrl.videoPlayAutostart = !ctrl.videoPlayAutostart
+        Row {
+            spacing: 8
+            FlowButton {
+                objectName: "videoPlayAutostart"
+                text: qsTr("Video play starts device")
+                checked: ctrl.videoPlayAutostart
+                onClicked: ctrl.videoPlayAutostart = !ctrl.videoPlayAutostart
+            }
+            HelpChip { key: "pb-video-play-autostart"; anchors.verticalCenter: parent.verticalCenter }
         }
         InspectorNote { text: qsTr("When off, the film can play without moving the toy. Script Play (no video) still starts the device.") }
         Row {
@@ -108,6 +115,7 @@ Column {
                 HoverHandler { id: hlHover }
                 ToolTipText { shown: hlHover.hovered; text: qsTr("Paint red “too fast” bands on the curve (OFS community intensity). Display only — separate from Speed-cap edit.") }
             }
+            HelpChip { key: "pb-speed-hl"; anchors.verticalCenter: parent.verticalCenter }
             FlowSlider {
                 anchors.verticalCenter: parent.verticalCenter; width: 76
                 enabled: ctrl.speedHighlights
@@ -121,6 +129,7 @@ Column {
         Row {
             spacing: 8
             width: parent.width
+            visible: ctrl.hasScript
             Text {
                 textFormat: Text.PlainText
                 width: parent.width - 26
@@ -181,10 +190,14 @@ Column {
             enabled: ctrl.hasScript && ctrl.hasMarker
             onClicked: ctrl.capSelection()
         }
-        FlowButton {
-            objectName: "curveSoftEdges"
-            text: qsTr("Soft edges"); checked: ctrl.scaleSoftEdges
-            onClicked: ctrl.scaleSoftEdges = !ctrl.scaleSoftEdges
+        Row {
+            spacing: 8
+            FlowButton {
+                objectName: "curveSoftEdges"
+                text: qsTr("Soft edges"); checked: ctrl.scaleSoftEdges
+                onClicked: ctrl.scaleSoftEdges = !ctrl.scaleSoftEdges
+            }
+            HelpChip { key: "pb-scale-soft-edges"; anchors.verticalCenter: parent.verticalCenter }
         }
         Row {
             spacing: 8

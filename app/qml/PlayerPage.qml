@@ -817,10 +817,20 @@ Item {
                         readonly property var minutes: [0, 15, 30, 45, 60, 90]
                         currentIndex: Math.max(0, minutes.indexOf(ctrl.sleepMinutes))
                         onActivated: (i) => ctrl.sleepMinutes = minutes[i]
+                        HoverHandler { id: sleepHover }
+                        ToolTipText {
+                            shown: sleepHover.hovered
+                            text: qsTr("Pause playback after this many minutes (Sleep off = never).")
+                        }
                     },
                     FlowButton {
                         text: qsTr("Loop"); checked: ctrl.loopEnabled
                         onClicked: ctrl.loopEnabled = !ctrl.loopEnabled
+                        HoverHandler { id: loopHover }
+                        ToolTipText {
+                            shown: loopHover.hovered
+                            text: qsTr("Repeat the marked heatmap range (L).")
+                        }
                     },
                     FlowCombo {
                         width: 78
@@ -828,6 +838,11 @@ Item {
                         readonly property var rates: [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
                         currentIndex: rates.indexOf(page.speed)
                         onActivated: (i) => page.speed = rates[i]
+                        HoverHandler { id: speedHover }
+                        ToolTipText {
+                            shown: speedHover.hovered
+                            text: qsTr("Playback speed for video and device together.")
+                        }
                     },
                     // 0.7 Extended-O trigger (key E): shown while Extended-O is on,
                     // usable while playing and not already running.

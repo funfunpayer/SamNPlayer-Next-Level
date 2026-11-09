@@ -162,7 +162,8 @@ Item {
         anchors.right: parent.right; anchors.rightMargin: 18
         y: root.compact ? 44 : 74; spacing: 10
         IconButton {
-            width: 36; height: 36; icon: root.muted ? "mute" : "volume"; tip: qsTr("Mute")
+            width: 36; height: 36; icon: root.muted ? "mute" : "volume"
+            tip: root.muted ? qsTr("Unmute") : qsTr("Mute")
             anchors.verticalCenter: parent.verticalCenter
             onClicked: root.muteToggled()
         }
