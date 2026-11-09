@@ -591,6 +591,9 @@ private:
     void sendToOutput(qint64 videoMs, bool fromReport);
     void setView(samn::ViewWindow v);
     void clearScript();
+    // Rebuild variants_ for the open video from the current script folders.
+    // Does not reload the script or move the playhead.
+    void refreshVariantsForOpenVideo();
     void pushToViews();
     // Cap / Scale / Delete / Invert for the active script lane.
     // needMarker: Cap/Scale/Delete/invertSelection require a heatmap mark.
