@@ -229,10 +229,15 @@ GlassCard {
         }
         // Chapter bands (0.7 pb-chapter-bands): one coloured band per
         // chapter on the curve's time scale; click = seek to its start.
+        // Thumbnails (PARITY scene strip): 24 low frames across the zoom
+        // window when a video is linked. Bands, diamonds and "+" stay above.
         Item {
             id: chapterStrip
             objectName: "chapterStrip"
-            width: parent.width; height: 30
+            width: parent.width
+            readonly property int bandH: 30
+            readonly property int thumbH: 36
+            height: sceneThumbStrip.visible ? bandH + thumbH : bandH
             // 0.7 pb.scenes: off by default in the Player.
             visible: ctrl.hasScript && ctrl.showScenes
             clip: true
@@ -241,10 +246,49 @@ GlassCard {
                                            Qt.rgba(86 / 255, 140 / 255, 220 / 255, 0.38)]
             readonly property var solid: ["#2f80ed", "#f28c28", "#9b51e0", "#27aea0", "#568cdc"]
             readonly property real span: Math.max(1, ctrl.viewEndMs - ctrl.viewStartMs)
+            // Centre of slot i in [viewStartMs, viewEndMs], clamped to the video.
+            function thumbMs(i) {
+                const raw = ctrl.viewStartMs + (i + 0.5) * (ctrl.viewEndMs - ctrl.viewStartMs) / 24
+                const hi = root.mediaDuration > 0 ? root.mediaDuration - 1 : raw
+                return Math.min(Math.max(0, raw), Math.max(0, hi))
+            }
+            Row {
+                id: sceneThumbStrip
+                objectName: "sceneThumbStrip"
+                z: 0
+                y: chapterStrip.bandH
+                width: parent.width; height: chapterStrip.thumbH
+                spacing: 0
+                visible: ctrl.hasScript && ctrl.showScenes && ctrl.videoPath !== ""
+                Repeater {
+                    model: sceneThumbStrip.visible ? 24 : 0
+                    delegate: Image {
+                        required property int index
+                        objectName: "sceneThumb_" + index
+                        readonly property real ms: chapterStrip.thumbMs(index)
+                        // Place each slot. A Row does not lay these Repeater
+                        // delegates out, so a click would always hit the last one.
+                        x: index * width
+                        y: 0
+                        width: sceneThumbStrip.width / 24
+                        height: sceneThumbStrip.height
+                        asynchronous: true
+                        fillMode: Image.PreserveAspectCrop
+                        sourceSize.height: 40
+                        source: "image://frames/" + Math.round(ms) + "/40/" + encodeURIComponent(ctrl.videoPath)
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.seekRequested(parent.ms + ctrl.offsetMs)
+                        }
+                    }
+                }
+            }
             Repeater {
                 model: ctrl.chapterBands
                 delegate: Rectangle {
                     required property var modelData
+                    z: 1
                     readonly property real from: Math.max(modelData.startMs, ctrl.viewStartMs)
                     readonly property real to: Math.min(modelData.endMs, ctrl.viewEndMs)
                     readonly property bool current: ctrl.playheadMs >= modelData.startMs && ctrl.playheadMs < modelData.endMs
@@ -280,7 +324,9 @@ GlassCard {
             }
             Text {
                 textFormat: Text.PlainText
-                anchors.left: parent.left; anchors.leftMargin: 8; anchors.verticalCenter: parent.verticalCenter
+                z: 1
+                anchors.left: parent.left; anchors.leftMargin: 8
+                y: (chapterStrip.bandH - implicitHeight) / 2
                 visible: ctrl.chapterBands.length === 0
                 text: qsTr("No chapters yet — + adds a scene marker at the playhead.")
                 color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
@@ -288,7 +334,9 @@ GlassCard {
             // "+" (0.7 pb-scene-add): a scene marker at the playhead.
             Rectangle {
                 id: sceneAdd
-                anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                z: 2
+                anchors.right: parent.right
+                y: (chapterStrip.bandH - height) / 2
                 width: 26; height: 26; radius: 13
                 color: addArea.containsMouse ? Qt.rgba(0, 217 / 255, 244 / 255, 0.3) : "#0a2340"
                 border.width: 1; border.color: Theme.cyan
