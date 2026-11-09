@@ -209,6 +209,9 @@ QString PlayerController::optimizeFor(const QString& target) {
     samn::ImproveOptions o;
     o.fill_gaps = true;
     o.heal_tracking_gaps = true;
+    // Off by default: straight-line fill (D-168).
+    o.rhythmic_fill = samn::RhythmicFillFromSettings(settings());
+    o.base_rhythm = samn::BaseRhythmFromSettings(settings());
     try {
         o.tracking_gaps = samn::LoadFunscript(funscript).metadata.tracking_gaps;
     } catch (const std::exception&) {
