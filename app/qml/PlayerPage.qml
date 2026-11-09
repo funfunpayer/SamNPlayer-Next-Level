@@ -853,13 +853,20 @@ Item {
 
     }
 
-    // Shared chart tooltip (curve, heatmap).
+    // Shared chart tooltip (curve, heatmap, channel lanes).
     Rectangle {
         id: chartTip
+        objectName: "chartTip"
         visible: false; z: 100
         width: tipText.implicitWidth + 16; height: tipText.implicitHeight + 10
         radius: Theme.radiusSmall; color: "#e60a1a2e"; border.color: Theme.cardBorder
-        Text { textFormat: Text.PlainText; id: tipText; anchors.centerIn: parent; color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 12 }
+        Text {
+            textFormat: Text.PlainText
+            id: tipText
+            objectName: "chartTipText"
+            anchors.centerIn: parent
+            color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 12
+        }
     }
 
     // Drop a video or a script anywhere on the page.

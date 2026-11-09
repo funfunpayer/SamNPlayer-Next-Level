@@ -15,6 +15,9 @@ Item {
     signal modeChosen(int index)
     // Open a video or script (0.7 top-bar folder button, Ctrl+O).
     signal openRequested()
+    // Side panels away (Player theatre). Main binds this to player.theatre.
+    property bool panelsHidden: false
+    signal panelsToggleRequested()
     // The chip was clicked: show the device controls.
     signal deviceRequested()
     // The gear: Settings, Log, About (D-146).
@@ -126,7 +129,7 @@ Item {
         }
     }
 
-    // Right: device chip, Open, version (0.7 top bar).
+    // Right: device chip, Open, hide panels, Settings, version (0.7 top bar).
     Row {
         anchors.right: parent.right; anchors.rightMargin: 24
         anchors.verticalCenter: parent.verticalCenter
@@ -210,6 +213,18 @@ Item {
             icon: "folder"; tip: qsTr("Open a video or script (Ctrl+O)")
             color: Qt.rgba(6 / 255, 22 / 255, 42 / 255, 0.92)
             onClicked: root.openRequested()
+        }
+        IconButton {
+            objectName: "topHidePanelsButton"
+            anchors.verticalCenter: parent.verticalCenter
+            width: 36; height: 36
+            // Same glyphs as the Player header theatre button.
+            icon: root.panelsHidden ? "minimize" : "video"
+            opacity: root.panelsHidden ? 1 : 0.45
+            tip: root.panelsHidden ? qsTr("Show side panels (Alt+B / T)")
+                                   : qsTr("Hide side panels (Alt+B / T)")
+            color: Qt.rgba(6 / 255, 22 / 255, 42 / 255, 0.92)
+            onClicked: root.panelsToggleRequested()
         }
         IconButton {
             objectName: "topSettingsButton"

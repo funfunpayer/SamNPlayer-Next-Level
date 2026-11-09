@@ -170,8 +170,15 @@ GlassCard {
             Rectangle { anchors.fill: parent; z: -1; color: Qt.rgba(1, 1, 1, 0.045); visible: ctrl.activeLane === "vibration" }
             viewStartMs: ctrl.viewStartMs; viewEndMs: ctrl.viewEndMs
             Component.onCompleted: ctrl.attachCurve(vibLane)
-            // 0.7: a click on a lane picks it for the main curve.
-            MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: ctrl.activeLane = "vibration" }
+            // 0.7: a click on a lane picks it for the main curve. Hover matches the main curve tip.
+            MouseArea {
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onPositionChanged: (m) => root.tipRequested(vibLane, m.x, m.y, vibLane.hoverText(m.x))
+                onExited: root.tipRequested(null, 0, 0, "")
+                onClicked: ctrl.activeLane = "vibration"
+            }
             WheelHandler {
                 acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
                 onWheel: (e) => ctrl.zoomAt(e.angleDelta.y > 0 ? 1.25 : 1 / 1.25, point.position.x / parent.width)
@@ -187,8 +194,15 @@ GlassCard {
             Rectangle { anchors.fill: parent; z: -1; color: Qt.rgba(1, 1, 1, 0.045); visible: ctrl.activeLane === "suction" }
             viewStartMs: ctrl.viewStartMs; viewEndMs: ctrl.viewEndMs
             Component.onCompleted: ctrl.attachCurve(sucLane)
-            // 0.7: a click on a lane picks it for the main curve.
-            MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: ctrl.activeLane = "suction" }
+            // 0.7: a click on a lane picks it for the main curve. Hover matches the main curve tip.
+            MouseArea {
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onPositionChanged: (m) => root.tipRequested(sucLane, m.x, m.y, sucLane.hoverText(m.x))
+                onExited: root.tipRequested(null, 0, 0, "")
+                onClicked: ctrl.activeLane = "suction"
+            }
             WheelHandler {
                 acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
                 onWheel: (e) => ctrl.zoomAt(e.angleDelta.y > 0 ? 1.25 : 1 / 1.25, point.position.x / parent.width)
@@ -208,7 +222,14 @@ GlassCard {
                 Rectangle { anchors.fill: parent; z: -1; color: Qt.rgba(1, 1, 1, 0.045); visible: ctrl.activeLane === axisLane.modelData }
                 viewStartMs: ctrl.viewStartMs; viewEndMs: ctrl.viewEndMs
                 Component.onCompleted: ctrl.attachCurve(axisLane)
-                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: ctrl.activeLane = axisLane.modelData }
+                MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onPositionChanged: (m) => root.tipRequested(axisLane, m.x, m.y, axisLane.hoverText(m.x))
+                    onExited: root.tipRequested(null, 0, 0, "")
+                    onClicked: ctrl.activeLane = axisLane.modelData
+                }
                 WheelHandler {
                     acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
                     onWheel: (e) => ctrl.zoomAt(e.angleDelta.y > 0 ? 1.25 : 1 / 1.25, point.position.x / axisLane.width)
