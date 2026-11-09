@@ -25,11 +25,8 @@
 #include "app_log.h"
 #include "icon_provider.h"
 #include "player_controller.h"
-<<<<<<< HEAD
 #include "system_check.h"
-=======
 #include "mode_registry.h"
->>>>>>> origin/main
 #include "plugins.h"
 #include "theme.h"
 #include "update_checker.h"
