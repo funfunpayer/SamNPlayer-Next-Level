@@ -3,14 +3,18 @@
 // synthetic 4 s test pattern (tests/app/data).
 #include <QFile>
 #include <QGuiApplication>
+#include <QHoverEvent>
 #include <QMediaPlayer>
 #include <QQmlComponent>
 #include <QQmlEngine>
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QTemporaryDir>
+#include <QUrl>
 #include <QtQml/QQmlExtensionPlugin>
 #include <QtTest>
+
+#include <algorithm>
 
 #include "device_controller.h"
 #include "frame_provider.h"
@@ -128,6 +132,16 @@ private slots:
         g_messages.clear();
         g_previous = qInstallMessageHandler(capture);
         runNoPicture();
+        qInstallMessageHandler(g_previous);
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
+
+    // Scene markers on: 24 low frames across the zoom window when a video is
+    // linked; the chapter strip stays, with no frame decode, for a script alone.
+    void sceneThumbStripFollowsTheZoomWindow() {
+        g_messages.clear();
+        g_previous = qInstallMessageHandler(capture);
+        runSceneThumbs();
         qInstallMessageHandler(g_previous);
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }
@@ -284,6 +298,35 @@ private:
         QTRY_VERIFY(named(page, "axisLane_twist"));
         QVERIFY(named(page, "axisLane_twist")->isVisible());
         QVERIFY(named(page, "axisLane_twist")->height() >= 34);
+        // Hover a channel lane: the same chart tip as the main curve (time · position).
+        // Delivered to the lane MouseArea: a window mouse move does not reach it here.
+        {
+            auto* lane = named(page, "axisLane_twist");
+            QQuickItem* area = nullptr;
+            for (QQuickItem* child : lane->childItems()) {
+                if (QString::fromLatin1(child->metaObject()->className()).startsWith(QLatin1String("QQuickMouseArea")))
+                    area = child;
+            }
+            QVERIFY(area);
+            const QPointF local(lane->width() * 0.55, lane->height() * 0.5);
+            const QPointF before(local.x() - 8, local.y());
+            // position() is the first point. Enter and move must differ or positionChanged is skipped.
+            QHoverEvent enter(QEvent::HoverEnter, before, before, before);
+            QCoreApplication::sendEvent(area, &enter);
+            QHoverEvent move(QEvent::HoverMove, local, local, before);
+            QCoreApplication::sendEvent(area, &move);
+            auto* tip = named(page, "chartTip");
+            QVERIFY(tip);
+            QTRY_VERIFY(tip->isVisible());
+            QString expect;
+            QVERIFY(QMetaObject::invokeMethod(lane, "hoverText", Q_RETURN_ARG(QString, expect),
+                                              Q_ARG(double, local.x())));
+            QCOMPARE(named(page, "chartTipText")->property("text").toString(), expect);
+            QVERIFY(expect.contains(QStringLiteral(" · ")));
+            QHoverEvent leave(QEvent::HoverLeave, local, local, local);
+            QCoreApplication::sendEvent(area, &leave);
+            QTRY_VERIFY(!tip->isVisible());
+        }
         // 0.7 legend chips: a click on a lane's name shows it in the main curve;
         // Up / Down move on (two lanes: stroke and twist, wrapping).
         auto* twistName = named(page, "laneName_twist");
@@ -596,6 +639,204 @@ private:
         QVERIFY(ctrl->openPath(broken));
         QTRY_VERIFY_WITH_TIMEOUT(ctrl->lastError().contains(QStringLiteral("cannot be played")), 10000);
         QVERIFY(ctrl->lastError().contains(QStringLiteral("broken.mp4")));
+    }
+
+    // Centre of slot i, matching PlayerTimeline.thumbMs (upper clamp only once
+    // the video's duration is known). The frame URL rounds it; the click seeks
+    // the centre itself.
+    static double thumbCentre(double t0, double t1, double durationMs, int i) {
+        const double raw = t0 + (i + 0.5) * (t1 - t0) / 24.0;
+        const double hi = durationMs > 0 ? durationMs - 1.0 : raw;
+        return std::min(std::max(0.0, raw), std::max(0.0, hi));
+    }
+    static qint64 thumbMs(double t0, double t1, double durationMs, int i) {
+        return qRound64(thumbCentre(t0, t1, durationMs, i));
+    }
+
+    static int countNamedPrefix(QQuickItem* root, const QString& prefix) {
+        int n = 0;
+        for (QQuickItem* child : root->childItems()) {
+            if (child->objectName().startsWith(prefix)) ++n;
+            n += countNamedPrefix(child, prefix);
+        }
+        return n;
+    }
+
+    // Image.source comes back as a URL; the path may still be percent-encoded.
+    static bool frameSource(const QString& src, qint64* ms, QString* path, QString* why) {
+        const QString head = QStringLiteral("image://frames/");
+        if (!src.startsWith(head)) {
+            *why = src;
+            return false;
+        }
+        const QString rest = src.mid(head.size());
+        const int s1 = rest.indexOf(QLatin1Char('/'));
+        const int s2 = s1 < 0 ? -1 : rest.indexOf(QLatin1Char('/'), s1 + 1);
+        if (s1 <= 0 || s2 <= s1) {
+            *why = src;
+            return false;
+        }
+        if (rest.mid(s1 + 1, s2 - s1 - 1) != QLatin1String("40")) {
+            *why = src;
+            return false;
+        }
+        *ms = rest.left(s1).toLongLong();
+        *path = QUrl::fromPercentEncoding(rest.mid(s2 + 1).toUtf8());
+        return true;
+    }
+
+    void runSceneThumbs() {
+        QQmlEngine engine;
+        engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
+        engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+        engine.addImageProvider(QStringLiteral("frames"), new samn::ui::FrameProvider);
+        QQmlComponent comp(&engine);
+        comp.setData(R"(
+            import QtQuick
+            import SamN
+            Item {
+                width: 1280; height: 900
+                property alias page: pp
+                DeviceController { id: dev }
+                PlayerPage { id: pp; anchors.fill: parent; device: dev }
+            })",
+                     QUrl("qrc:/test/Wrapper.qml"));
+        QVERIFY2(comp.status() == QQmlComponent::Ready, qPrintable(comp.errorString()));
+        QQuickWindow window;
+        window.resize(1280, 900);
+        std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
+        QVERIFY(root);
+        root->setParentItem(window.contentItem());
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto* page = root->property("page").value<QQuickItem*>();
+        auto* media = page->findChild<QMediaPlayer*>(QStringLiteral("media"));
+        auto* ctrl = page->property("controller").value<PlayerController*>();
+        QVERIFY(page && media && ctrl);
+        QVERIFY(!ctrl->showScenes());
+
+        QTemporaryDir dir;
+        const QString script = dir.filePath(QStringLiteral("scenes.funscript"));
+        QFile f(script);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(R"({"actions":[{"at":0,"pos":0},{"at":2000,"pos":100},{"at":4000,"pos":0}]})");
+        f.close();
+        const QString video = QStringLiteral(SAMN_TEST_DATA "/testpattern_4s.mp4");
+
+        QString why;
+        auto sourcesMatch = [&] {
+            why.clear();
+            QQuickItem* row = named(page, "sceneThumbStrip");
+            QQuickItem* chapter = named(page, "chapterStrip");
+            if (!row || !row->isVisible() || !chapter || !chapter->isVisible()) {
+                why = QStringLiteral("strip hidden");
+                return false;
+            }
+            if (std::abs(chapter->height() - 66.0) > 0.5) {
+                why = QStringLiteral("chapter height %1").arg(chapter->height());
+                return false;
+            }
+            if (countNamedPrefix(page, QStringLiteral("sceneThumb_")) != 24) {
+                why = QStringLiteral("thumb count %1").arg(countNamedPrefix(page, QStringLiteral("sceneThumb_")));
+                return false;
+            }
+            const double dur = double(media->duration());
+            for (int i = 0; i < 24; ++i) {
+                const QByteArray name = QStringLiteral("sceneThumb_%1").arg(i).toUtf8();
+                QQuickItem* img = named(page, name.constData());
+                if (!img) {
+                    why = QStringLiteral("missing %1").arg(i);
+                    return false;
+                }
+                qint64 ms = -1;
+                QString path;
+                if (!frameSource(img->property("source").toString(), &ms, &path, &why)) return false;
+                const qint64 want = thumbMs(ctrl->viewStartMs(), ctrl->viewEndMs(), dur, i);
+                if (ms != want || path != ctrl->videoPath()) {
+                    why = QStringLiteral("%1 got %2 (%3) want %4 (%5)")
+                              .arg(i)
+                              .arg(ms)
+                              .arg(path)
+                              .arg(want)
+                              .arg(ctrl->videoPath());
+                    return false;
+                }
+            }
+            return true;
+        };
+
+        // Scene markers off: a linked video does not decode a thumb strip.
+        QVERIFY(ctrl->openScript(script, video));
+        QQuickItem* chapter = named(page, "chapterStrip");
+        QVERIFY(chapter);
+        QVERIFY(!chapter->isVisible());
+        QQuickItem* row = named(page, "sceneThumbStrip");
+        QVERIFY(row);
+        QVERIFY(!row->isVisible());
+        QCOMPARE(countNamedPrefix(page, QStringLiteral("sceneThumb_")), 0);
+        QCOMPARE(chapter->height(), 30.0);
+
+        ctrl->setShowScenes(true);
+        // Frame URLs follow the view window even when this machine cannot play
+        // the clip. A working backend reports a duration and the clamp uses it.
+        QTRY_VERIFY_WITH_TIMEOUT(media->mediaStatus() != QMediaPlayer::LoadingMedia || media->duration() > 0, 10000);
+        QVERIFY2(QTest::qWaitFor(sourcesMatch, 5000), qPrintable(why));
+        QVERIFY(named(page, "sceneThumb_23")->x() > named(page, "sceneThumb_0")->x() + 20);
+        // The 24 centres are spread across the view, one slot apart.
+        {
+            const double step = (ctrl->viewEndMs() - ctrl->viewStartMs()) / 24.0;
+            QVERIFY(step > 1.0);
+            qint64 prev = thumbMs(ctrl->viewStartMs(), ctrl->viewEndMs(), double(media->duration()), 0);
+            for (int i = 1; i < 24; ++i) {
+                const qint64 ms = thumbMs(ctrl->viewStartMs(), ctrl->viewEndMs(), double(media->duration()), i);
+                QVERIFY(ms >= prev);
+                QVERIFY(ms - prev <= qRound64(step) + 1);
+                prev = ms;
+            }
+            QVERIFY(prev > thumbMs(ctrl->viewStartMs(), ctrl->viewEndMs(), double(media->duration()), 0));
+        }
+
+        QQuickItem* mid = named(page, "sceneThumb_8");
+        QVERIFY(mid && mid->isVisible() && mid->width() > 2);
+        const double seekTo =
+            thumbCentre(ctrl->viewStartMs(), ctrl->viewEndMs(), double(media->duration()), 8) + ctrl->offsetMs();
+        const QPoint where = mid->mapToScene(QPointF(mid->width() / 2.0, mid->height() / 2.0)).toPoint();
+        QTest::mouseClick(page->window(), Qt::LeftButton, {}, where);
+        const bool playable = media->duration() > 0 && media->mediaStatus() != QMediaPlayer::InvalidMedia &&
+                              media->mediaStatus() != QMediaPlayer::NoMedia;
+        if (playable) {
+            const bool landed = QTest::qWaitFor([&] { return std::abs(double(media->position()) - seekTo) <= 200; }, 5000);
+            QVERIFY2(landed, qPrintable(QStringLiteral("position %1 pending %2 seek %3 status %4")
+                                            .arg(media->position())
+                                            .arg(media->property("pendingSeekMs").toDouble())
+                                            .arg(seekTo)
+                                            .arg(int(media->mediaStatus()))));
+        } else {
+            // No decoder: seekTo queues the video position instead of moving it.
+            QTRY_VERIFY(std::abs(media->property("pendingSeekMs").toDouble() - seekTo) < 0.05);
+        }
+
+        const double fullEnd = ctrl->viewEndMs();
+        const QString before = named(page, "sceneThumb_0")->property("source").toString();
+        ctrl->zoomBy(1.6);
+        QTRY_VERIFY(ctrl->viewEndMs() < fullEnd - 1.0);
+        QVERIFY2(QTest::qWaitFor(sourcesMatch, 5000), qPrintable(why));
+        QVERIFY(named(page, "sceneThumb_0")->property("source").toString() != before);
+
+        ctrl->setShowScenes(false);
+        QTRY_VERIFY(!named(page, "chapterStrip")->isVisible());
+        QTRY_VERIFY(!named(page, "sceneThumbStrip")->isVisible());
+        QTRY_COMPARE(countNamedPrefix(page, QStringLiteral("sceneThumb_")), 0);
+
+        // Script only: the chapter strip stays, and nothing asks for a frame.
+        ctrl->setShowScenes(true);
+        QVERIFY(ctrl->openScript(script));
+        QCOMPARE(ctrl->videoPath(), QString());
+        QTRY_VERIFY(named(page, "chapterStrip")->isVisible());
+        QTRY_COMPARE(named(page, "chapterStrip")->height(), 30.0);
+        QTRY_VERIFY(!named(page, "sceneThumbStrip")->isVisible());
+        QCOMPARE(countNamedPrefix(page, QStringLiteral("sceneThumb_")), 0);
+        ctrl->setShowScenes(false);
     }
 };
 

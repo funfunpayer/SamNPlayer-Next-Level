@@ -162,6 +162,39 @@ void AudioLevelItem::paint(QPainter* p) {
         const double hg = std::max(0.6, peak * half);
         p->fillRect(QRectF(x, mid - hg, step - 0.6, hg * 2), c);
     }
+    // Beat grid (same lines as CurveItem): every 4th beat is a bar. A line
+    // that would sit under 4 px from the last one is skipped, so a long
+    // video stays a grid instead of a solid band. At most 240 lines.
+    if (beatPeriod_ > 0 && std::isfinite(beatPeriod_)) {
+        const double spacingPx = beatPeriod_ / span * w;
+        const double rawStep = spacingPx >= 4.0 ? 1.0 : std::ceil(4.0 / spacingPx);
+        const double first = std::floor(t0 / beatPeriod_);
+        if (spacingPx > 0 && std::isfinite(spacingPx) && rawStep >= 1.0 && rawStep <= 1.0e12 && first >= -1.0e12 &&
+            first <= 1.0e12) {
+            const auto step = static_cast<long long>(rawStep);
+            long long beat = static_cast<long long>(first);
+            int drawn = 0;
+            double lastX = -1.0e9;
+            double prevT = -1.0e300;
+            // prevT stops a beat so fine that the next index does not move t.
+            while (drawn < 240) {
+                const double t = double(beat) * beatPeriod_;
+                if (!(t > prevT) || t > t1) break;
+                prevT = t;
+                const double x = std::round((t - t0) / span * w) + 0.5;
+                if (t < t0 || x - lastX < 4.0) {
+                    ++beat;
+                    continue;
+                }
+                const bool bar = beat % 4 == 0;
+                p->setPen(QPen(QColor(184, 150, 232, bar ? 97 : 41), bar ? 1.25 : 1.0));
+                p->drawLine(QPointF(x, 0), QPointF(x, h));
+                lastX = x;
+                ++drawn;
+                beat += step;
+            }
+        }
+    }
     if (!label_.isEmpty()) {
         QFont f(QStringLiteral("Figtree"));
         f.setPixelSize(10);

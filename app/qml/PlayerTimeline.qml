@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Dialogs
 import SamN
 
 // Timeline card: the curve, the channel lanes and the audio level.
@@ -171,8 +170,15 @@ GlassCard {
             Rectangle { anchors.fill: parent; z: -1; color: Qt.rgba(1, 1, 1, 0.045); visible: ctrl.activeLane === "vibration" }
             viewStartMs: ctrl.viewStartMs; viewEndMs: ctrl.viewEndMs
             Component.onCompleted: ctrl.attachCurve(vibLane)
-            // 0.7: a click on a lane picks it for the main curve.
-            MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: ctrl.activeLane = "vibration" }
+            // 0.7: a click on a lane picks it for the main curve. Hover matches the main curve tip.
+            MouseArea {
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onPositionChanged: (m) => root.tipRequested(vibLane, m.x, m.y, vibLane.hoverText(m.x))
+                onExited: root.tipRequested(null, 0, 0, "")
+                onClicked: ctrl.activeLane = "vibration"
+            }
             WheelHandler {
                 acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
                 onWheel: (e) => ctrl.zoomAt(e.angleDelta.y > 0 ? 1.25 : 1 / 1.25, point.position.x / parent.width)
@@ -188,8 +194,15 @@ GlassCard {
             Rectangle { anchors.fill: parent; z: -1; color: Qt.rgba(1, 1, 1, 0.045); visible: ctrl.activeLane === "suction" }
             viewStartMs: ctrl.viewStartMs; viewEndMs: ctrl.viewEndMs
             Component.onCompleted: ctrl.attachCurve(sucLane)
-            // 0.7: a click on a lane picks it for the main curve.
-            MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: ctrl.activeLane = "suction" }
+            // 0.7: a click on a lane picks it for the main curve. Hover matches the main curve tip.
+            MouseArea {
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onPositionChanged: (m) => root.tipRequested(sucLane, m.x, m.y, sucLane.hoverText(m.x))
+                onExited: root.tipRequested(null, 0, 0, "")
+                onClicked: ctrl.activeLane = "suction"
+            }
             WheelHandler {
                 acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
                 onWheel: (e) => ctrl.zoomAt(e.angleDelta.y > 0 ? 1.25 : 1 / 1.25, point.position.x / parent.width)
@@ -209,7 +222,14 @@ GlassCard {
                 Rectangle { anchors.fill: parent; z: -1; color: Qt.rgba(1, 1, 1, 0.045); visible: ctrl.activeLane === axisLane.modelData }
                 viewStartMs: ctrl.viewStartMs; viewEndMs: ctrl.viewEndMs
                 Component.onCompleted: ctrl.attachCurve(axisLane)
-                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: ctrl.activeLane = axisLane.modelData }
+                MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onPositionChanged: (m) => root.tipRequested(axisLane, m.x, m.y, axisLane.hoverText(m.x))
+                    onExited: root.tipRequested(null, 0, 0, "")
+                    onClicked: ctrl.activeLane = axisLane.modelData
+                }
                 WheelHandler {
                     acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
                     onWheel: (e) => ctrl.zoomAt(e.angleDelta.y > 0 ? 1.25 : 1 / 1.25, point.position.x / axisLane.width)
@@ -230,10 +250,15 @@ GlassCard {
         }
         // Chapter bands (0.7 pb-chapter-bands): one coloured band per
         // chapter on the curve's time scale; click = seek to its start.
+        // Thumbnails (PARITY scene strip): 24 low frames across the zoom
+        // window when a video is linked. Bands, diamonds and "+" stay above.
         Item {
             id: chapterStrip
             objectName: "chapterStrip"
-            width: parent.width; height: 30
+            width: parent.width
+            readonly property int bandH: 30
+            readonly property int thumbH: 36
+            height: sceneThumbStrip.visible ? bandH + thumbH : bandH
             // 0.7 pb.scenes: off by default in the Player.
             visible: ctrl.hasScript && ctrl.showScenes
             clip: true
@@ -242,10 +267,49 @@ GlassCard {
                                            Qt.rgba(86 / 255, 140 / 255, 220 / 255, 0.38)]
             readonly property var solid: ["#2f80ed", "#f28c28", "#9b51e0", "#27aea0", "#568cdc"]
             readonly property real span: Math.max(1, ctrl.viewEndMs - ctrl.viewStartMs)
+            // Centre of slot i in [viewStartMs, viewEndMs], clamped to the video.
+            function thumbMs(i) {
+                const raw = ctrl.viewStartMs + (i + 0.5) * (ctrl.viewEndMs - ctrl.viewStartMs) / 24
+                const hi = root.mediaDuration > 0 ? root.mediaDuration - 1 : raw
+                return Math.min(Math.max(0, raw), Math.max(0, hi))
+            }
+            Row {
+                id: sceneThumbStrip
+                objectName: "sceneThumbStrip"
+                z: 0
+                y: chapterStrip.bandH
+                width: parent.width; height: chapterStrip.thumbH
+                spacing: 0
+                visible: ctrl.hasScript && ctrl.showScenes && ctrl.videoPath !== ""
+                Repeater {
+                    model: sceneThumbStrip.visible ? 24 : 0
+                    delegate: Image {
+                        required property int index
+                        objectName: "sceneThumb_" + index
+                        readonly property real ms: chapterStrip.thumbMs(index)
+                        // Place each slot. A Row does not lay these Repeater
+                        // delegates out, so a click would always hit the last one.
+                        x: index * width
+                        y: 0
+                        width: sceneThumbStrip.width / 24
+                        height: sceneThumbStrip.height
+                        asynchronous: true
+                        fillMode: Image.PreserveAspectCrop
+                        sourceSize.height: 40
+                        source: "image://frames/" + Math.round(ms) + "/40/" + encodeURIComponent(ctrl.videoPath)
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.seekRequested(parent.ms + ctrl.offsetMs)
+                        }
+                    }
+                }
+            }
             Repeater {
                 model: ctrl.chapterBands
                 delegate: Rectangle {
                     required property var modelData
+                    z: 1
                     readonly property real from: Math.max(modelData.startMs, ctrl.viewStartMs)
                     readonly property real to: Math.min(modelData.endMs, ctrl.viewEndMs)
                     readonly property bool current: ctrl.playheadMs >= modelData.startMs && ctrl.playheadMs < modelData.endMs
@@ -281,7 +345,9 @@ GlassCard {
             }
             Text {
                 textFormat: Text.PlainText
-                anchors.left: parent.left; anchors.leftMargin: 8; anchors.verticalCenter: parent.verticalCenter
+                z: 1
+                anchors.left: parent.left; anchors.leftMargin: 8
+                y: (chapterStrip.bandH - implicitHeight) / 2
                 visible: ctrl.chapterBands.length === 0
                 text: qsTr("No chapters yet — + adds a scene marker at the playhead.")
                 color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
@@ -289,7 +355,9 @@ GlassCard {
             // "+" (0.7 pb-scene-add): a scene marker at the playhead.
             Rectangle {
                 id: sceneAdd
-                anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                z: 2
+                anchors.right: parent.right
+                y: (chapterStrip.bandH - height) / 2
                 width: 26; height: 26; radius: 13
                 color: addArea.containsMouse ? Qt.rgba(0, 217 / 255, 244 / 255, 0.3) : "#0a2340"
                 border.width: 1; border.color: Theme.cyan
@@ -429,7 +497,7 @@ GlassCard {
             onRemove: (i) => ctrl.removeBookmark(i)
         }
     }
-    // Audio Analysis (0.7): the whole video's sound with the beat grid; click seeks.
+    // Audio Analysis: BPM readout and the whole-video waveform (click seeks).
     Item {
         visible: bottomTabs.current === 3
         x: 16; y: 46; width: parent.width - 32; height: parent.height - 58
@@ -443,61 +511,11 @@ GlassCard {
                 text: ctrl.effectiveBpm > 0 ? qsTr("%1 BPM").arg(ctrl.effectiveBpm) : qsTr("— BPM")
                 color: Theme.text; font.family: Theme.font; font.pixelSize: 14
             }
-            FlowTextField {
-                width: 90
-                placeholder: ctrl.bpm > 0 ? String(ctrl.bpm)
-                           : ctrl.effectiveBpm > 0 ? qsTr("auto %1").arg(ctrl.effectiveBpm)
-                                                  : qsTr("BPM")
-                onAccepted: ctrl.bpm = parseFloat(text) || 0
-            }
-            FlowButton {
-                text: qsTr("BPM grid"); checked: ctrl.bpmGrid
-                onClicked: ctrl.bpmGrid = !ctrl.bpmGrid
-            }
-            FlowButton {
-                objectName: "bpmFromStrokeTab"
-                text: qsTr("Guess from stroke")
-                enabled: ctrl.hasScript
-                onClicked: ctrl.guessBpmFromStroke()
-            }
-            FlowButton {
-                objectName: "bpmFromAudioTab"
-                text: qsTr("From audio")
-                enabled: ctrl.videoName !== ""
-                onClicked: ctrl.guessBpmFromAudio()
-            }
-            FlowButton {
-                objectName: "soundCurveWrite"
-                text: qsTr("Sound curve")
-                enabled: ctrl.hasScript && ctrl.videoName !== ""
-                onClicked: ctrl.proposeSoundCurve()
-            }
-            FlowButton {
-                objectName: "soundCurveUndo"
-                text: qsTr("Undo sound curve")
-                visible: ctrl.canUndoSoundCurve
-                onClicked: ctrl.undoSoundCurve()
-            }
             Text {
                 textFormat: Text.PlainText
                 anchors.verticalCenter: parent.verticalCenter
-                text: qsTr("Blank BPM uses the stroke tempo when the grid is on.")
+                text: qsTr("Set BPM and Sound Curve in the Inspector → Audio tab.")
                 color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
-            }
-        }
-        MessageDialog {
-            id: soundCurveDialog
-            title: qsTr("Sound Curve")
-            text: qsTr("Write the sound as the Vibration curve (%1 points)? Undo brings the old curve back.")
-                   .arg(ctrl.pendingSoundCurvePoints)
-            buttons: MessageDialog.Ok | MessageDialog.Cancel
-            onAccepted: ctrl.confirmSoundCurve()
-            onRejected: ctrl.cancelSoundCurve()
-        }
-        Connections {
-            target: ctrl
-            function onSoundCurveReady(points) {
-                if (points >= 2) soundCurveDialog.open()
             }
         }
         AudioLevelItem {
@@ -507,6 +525,7 @@ GlassCard {
             source: ctrl.videoUrl
             viewStartMs: 0; viewEndMs: root.mediaDuration > 0 ? root.mediaDuration : -1
             playheadMs: root.mediaPosition
+            beatPeriodMs: (ctrl.bpmGrid && ctrl.effectiveBpm > 0) ? (60000.0 / ctrl.effectiveBpm) : 0
             label: ""
             MouseArea {
                 anchors.fill: parent

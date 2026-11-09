@@ -56,7 +56,8 @@ private slots:
         QCOMPARE(GpuVendorName(0x1022), QString("AMD"));
         QCOMPARE(GpuVendorName(0x8086), QString("Intel"));
         QCOMPARE(GpuVendorName(0x1414), QString("Microsoft"));
-        QCOMPARE(GpuVendorName(0x1234), QString("Other"));
+        QCOMPARE(GpuVendorName(0x5555), QString("Other"));
+        QCOMPARE(GpuVendorName(0x1AF4), QString("Virtual"));  // virtio: software
     }
 
     void anIntelIgpuListedFirstNeverWinsTheTraining() {
@@ -99,11 +100,36 @@ private slots:
         qInfo() << "adapters found:" << gpus.size();
     }
 
+    void theTrainingPathStartsNoProgram() {
+        const int before = ExternalProgramRuns();
+        const auto gpus = ListGpus(false);  // what AI Train calls on the GUI thread
+        QCOMPARE(ExternalProgramRuns(), before);
+        for (const GpuInfo& g : gpus) QVERIFY(!g.vendor.isEmpty());
+        (void)PickTrainingGpu(gpus);
+    }
+
+    void namesDecideWhatMemoryCannot() {
+        auto k = Classified({Gpu("Virtio GPU", "Virtual", 0), Gpu("AMD Radeon 780M Graphics", "AMD", 2048), Gpu("Intel Arc A770", "Intel", 0)});
+        QVERIFY(k[0].software);
+        QVERIFY(k[1].integrated && !k[1].software);
+        QVERIFY(!k[2].integrated && !k[2].software);
+    }
+
+    void hostFactsAreGatheredApartFromTheRest() {
+        const HostFacts f = GatherHostFacts();  // runs the PATH scans; the controller calls it off the GUI thread
+        QVERIFY(f.ram_mb != 0);
+        HostFacts none;
+        const CheckInputs in = GatherInputs({}, none);
+        QVERIFY(in.ffmpeg_path.isEmpty() && in.python_path.isEmpty());
+        QCOMPARE(in.ram_mb, qint64(-1));
+    }
+
     void aGoodPcHasNoImportantProblem() {
         const auto items = RunChecks(GoodPc());
         QStringList ids;
         for (const CheckItem& i : items) ids << i.id;
-        QCOMPARE(ids, (QStringList{"settings", "disk", "gpu", "ai-gpu", "video", "onnx", "ai-env", "nudenet"}));
+        QCOMPARE(ids, (QStringList{"settings", "disk", "gpu", "ai-gpu", "ai-provider", "video", "video-path", "onnx", "ai-env", "nudenet", "ffmpeg",
+                                   "python", "ram"}));  // D-167 added five rows
         QVERIFY(!AnyImportantFailure(items));
         for (const CheckItem& i : items) {
             QCOMPARE(i.state, QString("ok"));
@@ -204,6 +230,43 @@ private slots:
         QVERIFY(!AnyImportantFailure(items));
     }
 
+    void theMissingPartsRows() {
+        CheckInputs in = GoodPc();
+        auto items = RunChecks(in);
+        QCOMPARE(items.size(), 13);
+        QStringList ids;
+        for (const CheckItem& i : items) ids << i.id;
+        QCOMPARE(ids, QStringList({"settings", "disk", "gpu", "ai-gpu", "ai-provider", "video", "video-path", "onnx", "ai-env", "nudenet",
+                                   "ffmpeg", "python", "ram"}));
+        QCOMPARE(Find(items, "ai-provider")->state, QString("ok"));
+        QVERIFY(Find(items, "ai-provider")->detail.contains("CUDA") || Find(items, "ai-provider")->detail.contains("DirectML") ||
+                Find(items, "ai-provider")->detail.contains("OpenVINO"));
+        QCOMPARE(Find(items, "video-path")->state, QString("ok"));
+
+        // Optional parts that are missing are "off": no warning, no problem, no start notice.
+        in.ffmpeg_path.clear();
+        in.ffprobe_path.clear();
+        in.python_path.clear();
+        items = RunChecks(in);
+        QCOMPARE(Find(items, "ffmpeg")->state, QString("off"));
+        QVERIFY(!Find(items, "ffmpeg")->fix.isEmpty());
+        QCOMPARE(Find(items, "python")->state, QString("off"));
+        QVERIFY(!AnyImportantFailure(items));
+        SystemCheckController c;
+        c.setInputs(in);
+        QCOMPARE(c.summary(), QString("All checks passed"));
+        QVERIFY(Report(items).contains("[OFF] ffmpeg"));
+
+        // Only a software adapter: AI on the CPU, video on the CPU, both warnings.
+        in.gpus = Classified({Gpu("Microsoft Basic Render Driver", "Microsoft", 0)});
+        in.ram_mb = 3000;
+        items = RunChecks(in);
+        QCOMPARE(Find(items, "ai-provider")->state, QString("warn"));
+        QCOMPARE(Find(items, "video-path")->state, QString("warn"));
+        QCOMPARE(Find(items, "ram")->state, QString("fail"));
+        QVERIFY(!AnyImportantFailure(items));
+    }
+
     void theReportHasEveryTitleAndState() {
         CheckInputs in = GoodPc();
         in.decodes_av1 = false;
@@ -223,7 +286,7 @@ private slots:
         QVERIFY(!c.running());
         CheckInputs in = GoodPc();
         c.setInputs(in);
-        QCOMPARE(c.items().size(), 8);
+        QCOMPARE(c.items().size(), 13);
         QCOMPARE(c.summary(), QString("All checks passed"));
         QVERIFY(!c.importantProblem());
         in.decodes_av1 = false;
@@ -245,7 +308,7 @@ private slots:
         c.refresh();
         QVERIFY(c.running());
         QTRY_VERIFY_WITH_TIMEOUT(!c.running(), 15000);
-        QCOMPARE(c.items().size(), 8);
+        QCOMPARE(c.items().size(), 13);
         QVERIFY(c.items().first().toMap().value("state").toString() == "ok");  // the isolated config folder is writable
     }
 

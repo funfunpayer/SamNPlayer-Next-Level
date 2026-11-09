@@ -715,7 +715,7 @@ Item {
                                 objectName: "systemItem_" + modelData.id
                                 Layout.fillWidth: true
                                 implicitHeight: rowCol.implicitHeight + 24
-                                readonly property color tone: modelData.state === "ok" ? Theme.good : modelData.state === "warn" ? Theme.orange : Theme.danger
+                                readonly property color tone: modelData.state === "ok" ? Theme.good : modelData.state === "warn" ? Theme.orange : modelData.state === "off" ? Theme.textDim : Theme.danger
                                 RowLayout {
                                     id: rowCol
                                     anchors.fill: parent; anchors.margins: 12; spacing: 12

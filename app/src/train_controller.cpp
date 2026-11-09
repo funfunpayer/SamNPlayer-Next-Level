@@ -257,7 +257,7 @@ void TrainController::runSteps(QList<Step> steps, std::function<void()> done) {
         }
         const QJsonObject o = QJsonDocument::fromJson(env_status_.toUtf8()).object();
         // The card is named from the adapter list: with an Intel iGPU beside it, it is the NVIDIA one that CUDA uses.
-        const auto gpu = o.value("cuda").toBool() ? PickTrainingGpu(ListGpus()) : std::nullopt;
+        const auto gpu = o.value("cuda").toBool() ? PickTrainingGpu(ListGpus(false)) : std::nullopt;
         finishSetup(true, !o.value("cuda").toBool() ? tr("Ready: PyTorch %1 on the processor.").arg(o.value("torch").toString())
                           : gpu                     ? tr("Ready: PyTorch %1 with %2 (CUDA).").arg(o.value("torch").toString(), gpu->name)
                                                     : tr("Ready: PyTorch %1 with the NVIDIA card (CUDA).").arg(o.value("torch").toString()));

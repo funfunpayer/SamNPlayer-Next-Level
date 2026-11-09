@@ -1043,6 +1043,7 @@ Item {
                             readonly property var targets: ["general", "neo2"]
                             model: [qsTr("Any device"), qsTr("Sam Neo 2")]
                             currentIndex: Math.max(0, targets.indexOf(gen.optimizeTarget !== "" ? gen.optimizeTarget : "general"))
+                            onActivated: (i) => gen.optimizeTarget = targets[i]
                         }
                         FlowButton {
                             objectName: "tool_optimize"
@@ -2461,7 +2462,8 @@ Item {
                                 Layout.preferredWidth: 140; Layout.preferredHeight: 36
                                 readonly property var targets: ["general", "neo2"]
                                 model: [qsTr("Any device"), qsTr("Sam Neo 2")]
-                                currentIndex: Math.max(0, targets.indexOf(gen.optimizeTarget !== "" ? gen.optimizeTarget : "neo2"))
+                                currentIndex: Math.max(0, targets.indexOf(gen.optimizeTarget !== "" ? gen.optimizeTarget : "general"))
+                                onActivated: (i) => gen.optimizeTarget = targets[i]
                             }
                             FlowButton {
                                 objectName: "postAdaptOptimize"

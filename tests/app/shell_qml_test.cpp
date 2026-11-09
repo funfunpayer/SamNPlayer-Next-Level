@@ -25,6 +25,7 @@
 #include "app_log.h"
 #include "icon_provider.h"
 #include "player_controller.h"
+#include "system_check.h"
 #include "mode_registry.h"
 #include "plugins.h"
 #include "theme.h"
@@ -567,6 +568,32 @@ private slots:
             QMetaObject::invokeMethod(page->property("system").value<QObject*>(), "refresh");
             QTRY_VERIFY_WITH_TIMEOUT(byName("systemItem_settings"), kWait);
             QVERIFY(byName("systemItem_gpu") && byName("systemItem_ai-gpu"));
+            QTRY_VERIFY_WITH_TIMEOUT(!qobject_cast<samn::ui::SystemCheckController*>(page->property("system").value<QObject*>())->running(), kWait);
+            {
+                // A fake PC (D-167): a card plus an iGPU, ffmpeg and Python missing (optional, "off").
+                samn::ui::CheckInputs fake;
+                samn::ui::GpuInfo igpu, card;
+                igpu.name = QStringLiteral("Intel UHD Graphics 770");
+                igpu.vendor = QStringLiteral("Intel");
+                igpu.dedicated_mb = 128;
+                card.name = QStringLiteral("NVIDIA GeForce RTX 3060");
+                card.vendor = QStringLiteral("NVIDIA");
+                card.dedicated_mb = 12288;
+                fake.gpus = {igpu, card};
+                samn::ui::ClassifyGpus(fake.gpus);
+                fake.config_dir = QStringLiteral("/fake");
+                fake.free_bytes = qint64(50) * 1024 * 1024 * 1024;
+                fake.ffmpeg_path.clear();
+                fake.python_path.clear();
+                fake.ram_mb = 6000;
+                qobject_cast<samn::ui::SystemCheckController*>(page->property("system").value<QObject*>())->setInputs(fake);
+            }
+            QTRY_VERIFY_WITH_TIMEOUT(byName("systemItem_ffmpeg") && byName("systemItem_ai-provider") && byName("systemItem_video-path"), kWait);
+            QVERIFY(byName("systemItem_python") && byName("systemItem_ram"));
+            QCOMPARE(byName("systemSummary")->property("text").toString(), QStringLiteral("1 warning"));  // RAM below 8 GB
+            QCOMPARE(byName("systemDot_ffmpeg")->property("color").value<QColor>(), byName("systemDot_python")->property("color").value<QColor>());
+            QVERIFY(byName("systemDot_ffmpeg")->property("color").value<QColor>() != byName("systemDot_ram")->property("color").value<QColor>());
+            QVERIFY(byName("systemDot_ai-provider")->property("color").value<QColor>() != byName("systemDot_ram")->property("color").value<QColor>());
             page->setProperty("tab", 3);
             QTRY_VERIFY_WITH_TIMEOUT(byName("logTab")->isVisible(), kWait);
             page->setProperty("tab", 4);
@@ -1322,6 +1349,66 @@ private slots:
             auto* player = s.one("PlayerPage")->property("controller").value<QObject*>();
             QVERIFY(player);
             QTRY_VERIFY_WITH_TIMEOUT(player->property("hasScript").toBool(), kWait);
+        }
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
+
+    // Top bar hide-panels and Alt+B are the Player theatre toggle.
+    void hidePanelsButtonAndAltBToggleTheatre() {
+        {
+            Shell s;
+            loadShell(s);
+            QVERIFY(s.window);
+            QQuickItem* player = s.one("PlayerPage");
+            QQuickItem* topBar = s.one("TopBar");
+            QVERIFY(player && topBar);
+            QVERIFY(!player->property("theatre").toBool());
+            QVERIFY(!topBar->property("panelsHidden").toBool());
+            QQuickItem* button = nullptr;
+            for (QQuickItem* i : descendants(topBar))
+                if (i->objectName() == QLatin1String("topHidePanelsButton")) button = i;
+            QVERIFY(button && button->isVisible());
+            QCOMPARE(button->property("icon").toString(), QStringLiteral("video"));
+            QCOMPARE(button->property("tip").toString(), QStringLiteral("Hide side panels (Alt+B / T)"));
+            QCOMPARE(button->opacity(), 0.45);
+            QQuickItem* library = s.one("LibraryPanel");
+            QQuickItem* inspector = s.one("InspectorPanel");
+            QVERIFY(library && inspector);
+            QVERIFY(library->isVisible() && inspector->isVisible());
+
+            QTest::mouseClick(s.window, Qt::LeftButton, {},
+                              button->mapToScene(QPointF(button->width() / 2, button->height() / 2)).toPoint());
+            QTRY_VERIFY_WITH_TIMEOUT(player->property("theatre").toBool(), kWait);
+            QVERIFY(topBar->property("panelsHidden").toBool());
+            QCOMPARE(button->property("icon").toString(), QStringLiteral("minimize"));
+            QCOMPARE(button->property("tip").toString(), QStringLiteral("Show side panels (Alt+B / T)"));
+            QCOMPARE(button->opacity(), 1.0);
+            QVERIFY(!library->isVisible() && !inspector->isVisible());
+
+            QTest::keyClick(s.window, Qt::Key_B, Qt::AltModifier);
+            QTRY_VERIFY_WITH_TIMEOUT(!player->property("theatre").toBool(), kWait);
+            QVERIFY(!topBar->property("panelsHidden").toBool());
+            QVERIFY(library->isVisible() && inspector->isVisible());
+            QCOMPARE(button->property("tip").toString(), QStringLiteral("Hide side panels (Alt+B / T)"));
+
+            // From another mode, Alt+B returns to the Player and hides the panels.
+            s.window->setProperty("mode", 2);
+            QTRY_COMPARE_WITH_TIMEOUT(s.mode(), 2, kWait);
+            QTest::keyClick(s.window, Qt::Key_B, Qt::AltModifier);
+            QTRY_COMPARE_WITH_TIMEOUT(s.mode(), 0, kWait);
+            QTRY_VERIFY_WITH_TIMEOUT(player->isVisible(), kWait);
+            QVERIFY(player->property("theatre").toBool());
+            QVERIFY(!library->isVisible() && !inspector->isVisible());
+
+            // Settings (or the handbook) blocks the shortcut.
+            QQuickItem* settings = s.one("SettingsPage");
+            QVERIFY(settings);
+            settings->setProperty("open", true);
+            QTRY_VERIFY_WITH_TIMEOUT(s.window->property("overlayOpen").toBool(), kWait);
+            QTest::keyClick(s.window, Qt::Key_B, Qt::AltModifier);
+            QTest::qWait(150);
+            QVERIFY(player->property("theatre").toBool());
+            QVERIFY(s.window->property("overlayOpen").toBool());
         }
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }

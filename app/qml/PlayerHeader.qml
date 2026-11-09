@@ -100,5 +100,7 @@ Item {
         anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
         primary: !root.empty; icon: "folder"; text: qsTr("Open…")
         onClicked: root.openRequested()
+        HoverHandler { id: openHover }
+        ToolTipText { shown: openHover.hovered; text: qsTr("Open a video or a script (Ctrl+O)") }
     }
 }

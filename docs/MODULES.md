@@ -66,6 +66,7 @@ Functions use PascalCase and struct fields use snake_case.
 | `sha256.h` | `Sha256`: dependency-free content hash for benchmark manifests | GD-05 | ✅ |
 | `update_check.h` | Update check: release URLs, tag parsing, newer-than compare, release-notes preview; check only | 0.7 `update/update.go`, D-147 | ✅ |
 | `video_info.h` | What a video's header says: codec name from a FourCC, never a guessed default | issue #4 (MEDIA-01) | ✅ |
+| `health.h` | Hardware and runtime health as data and pure functions (D-167): `Check` / `HealthReport` (ok, warn, bad, off), GPU kind (integrated / dedicated / software), `RecommendAi` (ONNX Runtime provider by name: dedicated GPU, then iGPU, then CPU), `RecommendVideoDecode` (GPU or CPU, AV1 on dav1d), parsers for `lspci -mm -nn -D`, the PowerShell `Win32_VideoController` list and `/proc/meminfo`, `FindOnPath`, and the ai-provider, video-path, ffmpeg, python and ram checks. No Qt, no GPU runtime, no machine access | D-162, D-167 | ✅ `health_test.cpp` (synthetic fixtures) |
 
 **Adding a device driver** (compiled in, no plugin loading; D-163):
 1. A `DeviceSession` subclass over your `Device` (`GetDevice`, `Info`, `Alive`; `Tick` / `Pump` / `AdoptedId` when the device needs them) in `core/src/device_driver.cpp` or a new `core/src/device_<name>.cpp`.
@@ -148,7 +149,7 @@ Controllers are `QObject`s registered for QML; their tests are `tests/app/<name>
 | `src/clip_prep_controller.*` | Clip prep: one cut or a batch through ffmpeg, which the app fetches or the user chooses. |
 | `src/training_controller.*`, `training_curve_item.*` | Training mode: presets, the live session on the shared `DeviceController`, log, history, recap; the training curves. |
 | `src/settings_controller.*` | The Settings page: app-wide choices, the log view, licence texts. |
-| `src/system_check.*` | The health check: graphics adapters, which one trains, what the app needs (D-162). |
+| `src/system_check.*` | The health check (Settings → System): the platform layer (DXGI + PowerShell fallback on Windows, /sys/class/drm + `lspci` on Linux, RAM, ffmpeg / Python lookup) and the 13 rows; the rules of the new rows are `samn::health` in core (D-162, D-167). |
 | `src/notices.*` | Error toasts fed by `AppLog::reportError`. |
 | `src/plugins.*` | The plugin modes: extra tabs behind switches in Settings. |
 | `src/update_checker.*` | "Check for updates": asks GitHub for the newest release and offers its page. |
