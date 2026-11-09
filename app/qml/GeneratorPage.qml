@@ -94,14 +94,14 @@ Item {
     FileDialog {
         id: videoDialog
         title: qsTr("Choose a video")
-        nameFilters: [qsTr("Video (*.mp4 *.mkv *.webm *.mov *.avi *.m4v)"), qsTr("All files (*)")]
+        nameFilters: [qsTr("Video (%1)").arg(Theme.videoGlobs), qsTr("All files (*)")]
         onAccepted: gen.openVideo(selectedFile.toString())
     }
     FileDialog {
         id: queueDialog
         title: qsTr("Add videos to the queue")
         fileMode: FileDialog.OpenFiles
-        nameFilters: [qsTr("Video (*.mp4 *.mkv *.webm *.mov *.avi *.m4v)"), qsTr("All files (*)")]
+        nameFilters: [qsTr("Video (%1)").arg(Theme.videoGlobs), qsTr("All files (*)")]
         onAccepted: gen.addToQueue(selectedFiles.map((u) => u.toString()))
     }
     FileDialog {
@@ -2373,8 +2373,9 @@ Item {
                         visible: r.quality !== undefined && !gen.running
                         Layout.fillWidth: true
                         implicitHeight: qualityCol.implicitHeight + 16
-                        radius: 8
-                        color: ok ? Qt.rgba(61 / 255, 216 / 255, 117 / 255, 0.12) : Qt.rgba(216 / 255, 77 / 255, 77 / 255, 0.12)
+                        radius: Theme.radiusSmall
+                        color: ok ? Qt.rgba(Theme.good.r, Theme.good.g, Theme.good.b, 0.12)
+                                  : Qt.rgba(Theme.danger.r, Theme.danger.g, Theme.danger.b, 0.12)
                         border.color: ok ? Theme.good : Theme.danger
                         ColumnLayout {
                             id: qualityCol

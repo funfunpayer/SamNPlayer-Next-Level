@@ -98,7 +98,8 @@ bool PlayerController::guessBpmFromAudio() {
     toolNote_ = tr("Measuring BPM from the sound…");
     emit toolNoteChanged();
     setError({});
-    bpmAudio_->start(videoPath_);
+    // First 10 minutes — EstimateBpmFromLoudness ignores the rest.
+    bpmAudio_->start(videoPath_, samn::kAudioLevelStepMs, 600000);
     return true;
 }
 
@@ -314,7 +315,8 @@ bool PlayerController::suggestAudioSync() {
     toolNote_ = autoSyncNote_;
     emit toolNoteChanged();
     setError({});
-    autoSyncAudio_->start(videoPath_);
+    // First 10 minutes — EstimateAudioSyncOffset ignores the rest.
+    autoSyncAudio_->start(videoPath_, samn::kAudioLevelStepMs, 600000);
     return true;
 }
 

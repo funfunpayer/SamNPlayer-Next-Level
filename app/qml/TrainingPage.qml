@@ -27,7 +27,7 @@ Item {
     FileDialog {
         id: stageVideoDialog
         title: qsTr("Choose a video to play along")
-        nameFilters: [qsTr("Video (*.mp4 *.mkv *.webm *.mov *.avi *.m4v)"), qsTr("All files (*)")]
+        nameFilters: [qsTr("Video (%1)").arg(Theme.videoGlobs), qsTr("All files (*)")]
         onAccepted: ctl.chooseVideo(selectedFile.toString())
     }
 

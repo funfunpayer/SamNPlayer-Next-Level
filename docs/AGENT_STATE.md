@@ -2,7 +2,17 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 8 Nov 2026, Claude, branch `claude/samn2-parity-refresh`: `docs/PARITY.md` audited against `main` (#193) and recounted, new `docs/PARITY_REMAINING.md` (handover below). Documentation only, no code changed. Before that: 8 Nov 2026, Claude, branch `claude/samn2-json-fallback`: nlohmann_json comes from the system package first, then the git-clone fallback main already had (handover below). No code behaviour changed. Cursor, same day: probe-on-link warning box (#191). Earlier: 7 Nov 2026, Claude, branch `claude/samn2-vision-bench`: `samn_bench`, the detection benchmark, and its baseline (handover below). No engine behaviour changed. Before: the video playhead extrapolation (D-164, `claude/samn2-playhead`, #163) and the `DeviceWorker` move (#166) are merged.
+**Last update:** 9 Nov 2026, Cursor, branch `cursor/player-drop-scenemap-635a`: Player bottom tabs drop the Scene Map stub (handover below). Before that: 8 Nov 2026, Claude, branch `claude/samn2-parity-refresh`: `docs/PARITY.md` audited against `main` (#193) and recounted, new `docs/PARITY_REMAINING.md` (handover below). Documentation only, no code changed. Before that: 8 Nov 2026, Claude, branch `claude/samn2-json-fallback`: nlohmann_json comes from the system package first, then the git-clone fallback main already had (handover below). No code behaviour changed. Cursor, same day: probe-on-link warning box (#191). Earlier: 7 Nov 2026, Claude, branch `claude/samn2-vision-bench`: `samn_bench`, the detection benchmark, and its baseline (handover below). No engine behaviour changed. Before: the video playhead extrapolation (D-164, `claude/samn2-playhead`, #163) and the `DeviceWorker` move (#166) are merged.
+
+## Handover: `cursor/player-drop-scenemap-635a` (9 Nov, drop Player Scene Map tab)
+
+Owner: shrink the unfinished Player surface. Scenes already live in the Generator Editor (D-145). The Player bottom tab was a redirect stub.
+
+- **Tabs:** Timeline · Chapters · Bookmarks · Audio Analysis. Audio Analysis is index 3. `showAudioAnalysis()` writes `player.bottomTab` 3.
+- **Old prefs:** stored 4 (old Audio Analysis) opens 3; stored 3 (old Scene Map) opens Timeline (0).
+- **Kept:** chapter bands on the Timeline lane (`chapterStrip`); Generator Scenes tab and `editRequested(scenes)`.
+- **Test:** `playerBottomTabsDropSceneMap` in `shell_qml_test`.
+- **Stay off:** Auto sync. Do not build a Scene Map view.
 
 ## Handover: `claude/samn2-parity-refresh` (8 Nov, PARITY audit and the list of what is left)
 
