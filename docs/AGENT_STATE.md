@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 8 Nov 2026, Claude, branch `claude/samn2-camera-2d`: detection plan PR-2, 2-D camera compensation, judged by `samn_bench` (handover below). Before: Cursor, `cursor/player-probe-link-635a`: Probe-on-link warning box (stay off #168 / Speech-Hold). Rebased onto main after #200 (audio onsets / D-168); skipped already-merged samn_bench commits.
+**Last update:** 9 Nov 2026, Cursor, branch `cursor/ci-stable-635a`: CI apt cache/retries on the main Linux job, `locales` on ASan/TSan, Sound Curve QSKIP→QFAIL in CI, fuller per-function failure re-run list. Stay off Claude feature PRs. Rebased onto main after #201.
 
 ## Handover: `claude/samn2-camera-2d` (8 Nov, detection plan PR-2: 2-D camera compensation)
 

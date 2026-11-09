@@ -396,7 +396,11 @@ private slots:
         QTRY_VERIFY_WITH_TIMEOUT(ready.count() > 0 || c.toolNote().contains(QStringLiteral("short"))
                                      || c.toolNote().startsWith(QStringLiteral("Sound Curve:")),
                                  20000);
-        if (ready.isEmpty()) QSKIP("No readable sound track in this environment");
+        if (ready.isEmpty()) {
+            // A skip with exit 0 would hide a broken decoder/backend in CI.
+            if (qEnvironmentVariableIsSet("CI")) QFAIL("No readable sound track in CI");
+            QSKIP("No readable sound track in this environment");
+        }
         QVERIFY(c.pendingSoundCurvePoints() >= 2);
         QVERIFY(c.confirmSoundCurve());
         QVERIFY(c.toolNote().contains(QStringLiteral("Sound Curve")));
