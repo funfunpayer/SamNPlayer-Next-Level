@@ -4,6 +4,7 @@
 // between them; samn::BlendTracks then blends the two runs and marks where
 // they disagree.
 
+#include <atomic>
 #include <cstdint>
 #include <filesystem>
 #include <functional>
@@ -17,8 +18,13 @@ namespace samn::engine {
 
 // What a run held and did, for tests and the memory benchmark.
 struct BetweenKeysStats {
-    int peak_frames_held = 0;   // small frames alive at once (two windows at most; never the whole stretch)
-    int frames_decoded = 0;     // frames read from the file, both runs
+    // The most frames alive at once over the run: the small frames of the two
+    // chunk buffers plus the full-size read buffers (counted when first filled).
+    // Atomic: the decode thread raises it too.
+    std::atomic<int> peak_frames_held{0};
+    int frames_decoded = 0;  // frames grabbed from the file, both runs, warm-up after a seek included
+                             // (frames the decoder runs through inside a seek are not: use CPU time)
+    int window_used = 0;     // the largest chunk size of the backward run
 };
 
 struct BetweenKeysOptions {
@@ -26,6 +32,7 @@ struct BetweenKeysOptions {
     int max_side = 640;       // frames are tracked at most this large
     int max_frames = 1500;    // a longer stretch is refused: add a key in between
     int window_frames = 24;   // the backward run decodes the stretch in chunks of this size, two chunks alive at once
+    int max_window_frames = 96;   // a long GOP (costly seeks) grows the chunk up to this; two windows of 96 small frames are about 130 MB
     BetweenKeysStats* stats = nullptr;  // filled when set
     std::function<bool()> cancel;
     std::function<void(int)> progress;  // 0..100

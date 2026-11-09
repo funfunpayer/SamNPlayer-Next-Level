@@ -37,6 +37,12 @@ public:
 
     // The next frame; false at the end or on a decode error.
     bool Read(VideoFrame& out);
+    // Read split in two: Grab advances to the next frame (it is decoded, but
+    // not converted to a picture) and gives its time; Retrieve converts the
+    // frame just grabbed. A frame that is only grabbed costs less than one
+    // that is read. Retrieve is valid only right after a Grab that returned true.
+    bool Grab(int64_t* pts_us);
+    bool Retrieve(VideoFrame& out);
     // Frame-exact: the next Read returns the first frame whose time is at
     // or after ms (clamped to the stream). False when the stream cannot seek.
     bool SeekMs(int64_t ms);

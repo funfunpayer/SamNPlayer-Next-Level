@@ -10,6 +10,8 @@ namespace samn::vision {
 struct FrameReader::Impl {
     cv::VideoCapture cap;
     int64_t next_index = 0;
+    int64_t grabbed_index = 0;  // the frame the last successful Grab advanced to
+    int64_t grabbed_pts_us = 0;
 };
 
 FrameReader::~FrameReader() = default;
@@ -37,15 +39,29 @@ std::unique_ptr<FrameReader> FrameReader::Open(const std::filesystem::path& path
     return r;
 }
 
-bool FrameReader::Read(VideoFrame& out) {
-    if (!impl_->cap.read(out.bgr) || out.bgr.empty()) return false;
-    out.index = impl_->next_index++;
-    // The decoder's time of the frame just read; streams without one get the
+bool FrameReader::Grab(int64_t* pts_us) {
+    if (!impl_->cap.grab()) return false;
+    const int64_t index = impl_->next_index++;
+    // The decoder's time of the frame just grabbed; streams without one get the
     // nominal time of the frame number (constant frame rate).
     const double ms = impl_->cap.get(cv::CAP_PROP_POS_MSEC);
-    out.pts_us = (ms > 0 || out.index == 0) ? static_cast<int64_t>(std::llround(ms * 1000.0))
-                                            : static_cast<int64_t>(std::llround(out.index * 1e6 / fps_));
+    impl_->grabbed_index = index;
+    impl_->grabbed_pts_us = (ms > 0 || index == 0) ? static_cast<int64_t>(std::llround(ms * 1000.0))
+                                                   : static_cast<int64_t>(std::llround(index * 1e6 / fps_));
+    if (pts_us) *pts_us = impl_->grabbed_pts_us;
     return true;
+}
+
+bool FrameReader::Retrieve(VideoFrame& out) {
+    if (!impl_->cap.retrieve(out.bgr) || out.bgr.empty()) return false;
+    out.index = impl_->grabbed_index;
+    out.pts_us = impl_->grabbed_pts_us;
+    return true;
+}
+
+bool FrameReader::Read(VideoFrame& out) {
+    // cap.read() is grab plus retrieve; a failed retrieve ends the stream as before.
+    return Grab(nullptr) && Retrieve(out);
 }
 
 bool FrameReader::SeekMs(int64_t ms) {
