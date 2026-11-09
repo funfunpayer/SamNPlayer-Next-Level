@@ -456,6 +456,7 @@ GlassCard {
             source: ctrl.videoUrl
             viewStartMs: 0; viewEndMs: root.mediaDuration > 0 ? root.mediaDuration : -1
             playheadMs: root.mediaPosition
+            beatPeriodMs: (ctrl.bpmGrid && ctrl.effectiveBpm > 0) ? (60000.0 / ctrl.effectiveBpm) : 0
             label: ""
             MouseArea {
                 anchors.fill: parent
