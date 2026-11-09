@@ -21,7 +21,9 @@
 #include "device_controller.h"
 #include "heatmap_item.h"
 #include "player_controller.h"
+#include "theme.h"
 #include "samn/marks.h"
+#include "samn/script_finder.h"
 #include "samn/playback_mapping.h"
 #include "samn/range_edit.h"
 #include "samn/contact_marks.h"
@@ -219,6 +221,12 @@ private slots:
         QVERIFY(again.isVideoFile(QStringLiteral("file:///x/Clip.M2TS")));
         QVERIFY(again.isVideoFile(QStringLiteral("/x/a.ogv")));
         QVERIFY(!again.isVideoFile(QStringLiteral("/x/a.funscript")));
+        // Dialog filters share Theme.videoGlobs with core VIDEO_EXTS.
+        const QString globs = samn::ui::Theme().videoGlobs();
+        for (const auto& ext : samn::VIDEO_EXTS)
+            QVERIFY2(globs.contains(QStringLiteral("*") + QString::fromStdString(ext)),
+                     qPrintable(QStringLiteral("missing %1 in %2").arg(QString::fromStdString(ext), globs)));
+        QVERIFY(again.isVideoFile(QStringLiteral("/x/clip.ts")));
     }
 
     void offsetSavedPerScriptAndPlayhead() {

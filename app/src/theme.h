@@ -3,9 +3,11 @@
 #include <QColor>
 #include <QObject>
 #include <QProcessEnvironment>
+#include <QStringList>
 #include <QtQml/qqmlregistration.h>
 
 #include "app_log.h"
+#include "samn/script_finder.h"
 #include "samn/settings.h"
 
 namespace samn::ui {
@@ -46,6 +48,8 @@ private:
 #undef SAMN_COLOR
     Q_PROPERTY(QString font READ font CONSTANT)
     Q_PROPERTY(QString fontSoft READ fontSoft CONSTANT)
+    // File-dialog video filter, one string from samn::VIDEO_EXTS (Player / Generator / Training).
+    Q_PROPERTY(QString videoGlobs READ videoGlobs CONSTANT)
     Q_PROPERTY(int radius READ radius CONSTANT)
     Q_PROPERTY(int radiusSmall READ radiusSmall CONSTANT)
     Q_PROPERTY(bool reducedMotion READ reducedMotion WRITE setReducedMotion NOTIFY reducedMotionChanged)
@@ -69,6 +73,12 @@ public:
     }
     QString font() const { return QStringLiteral("Sora"); }
     QString fontSoft() const { return QStringLiteral("Figtree"); }
+    QString videoGlobs() const {
+        QStringList parts;
+        parts.reserve(static_cast<int>(samn::VIDEO_EXTS.size()));
+        for (const auto& ext : samn::VIDEO_EXTS) parts << QStringLiteral("*") + QString::fromStdString(ext);
+        return parts.join(QLatin1Char(' '));
+    }
     int radius() const { return 18; }
     int radiusSmall() const { return 12; }
     bool reducedMotion() const { return reduced_motion_; }

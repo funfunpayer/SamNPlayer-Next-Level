@@ -94,14 +94,14 @@ Item {
     FileDialog {
         id: videoDialog
         title: qsTr("Choose a video")
-        nameFilters: [qsTr("Video (*.mp4 *.mkv *.webm *.mov *.avi *.m4v)"), qsTr("All files (*)")]
+        nameFilters: [qsTr("Video (%1)").arg(Theme.videoGlobs), qsTr("All files (*)")]
         onAccepted: gen.openVideo(selectedFile.toString())
     }
     FileDialog {
         id: queueDialog
         title: qsTr("Add videos to the queue")
         fileMode: FileDialog.OpenFiles
-        nameFilters: [qsTr("Video (*.mp4 *.mkv *.webm *.mov *.avi *.m4v)"), qsTr("All files (*)")]
+        nameFilters: [qsTr("Video (%1)").arg(Theme.videoGlobs), qsTr("All files (*)")]
         onAccepted: gen.addToQueue(selectedFiles.map((u) => u.toString()))
     }
     FileDialog {
