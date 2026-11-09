@@ -70,6 +70,8 @@ class AudioLevelItem : public QQuickPaintedItem {
     Q_PROPERTY(double viewEndMs MEMBER viewEnd_ NOTIFY viewChanged)
     Q_PROPERTY(int offsetMs MEMBER offset_ NOTIFY viewChanged)
     Q_PROPERTY(double playheadMs MEMBER playhead_ NOTIFY viewChanged)
+    // Beat grid period in ms. 0 draws no lines (grid off, or no BPM).
+    Q_PROPERTY(double beatPeriodMs MEMBER beatPeriod_ NOTIFY viewChanged)
     Q_PROPERTY(QColor color MEMBER color_ NOTIFY viewChanged)
     Q_PROPERTY(QString label MEMBER label_ NOTIFY viewChanged)
     Q_PROPERTY(bool empty READ empty NOTIFY levelChanged)
@@ -97,7 +99,7 @@ private:
     QUrl source_;
     std::vector<double> level_;
     QString error_, label_ = QStringLiteral("AUDIO LEVEL");
-    double viewStart_ = 0, viewEnd_ = -1, playhead_ = -1;
+    double viewStart_ = 0, viewEnd_ = -1, playhead_ = -1, beatPeriod_ = 0;
     int offset_ = 0;
     QColor color_{0x93, 0xae, 0xc4};
 };

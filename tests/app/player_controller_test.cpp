@@ -31,6 +31,7 @@
 #include "samn/settings.h"
 
 using samn::ui::AudioLevelDecoder;
+using samn::ui::AudioLevelItem;
 using samn::ui::CurveItem;
 using samn::ui::DeviceController;
 using samn::ui::HeatmapItem;
@@ -1919,6 +1920,93 @@ private slots:
         QCOMPARE(fail.count(), 0);
         QCOMPARE(done.at(4).first().value<std::vector<double>>().size(), size_t(otherMs / step));
         QVERIFY(!dec.busy());
+    }
+
+    // Whole-video waveform beat grid: off at period 0, every 4th beat stronger
+    // when the beats have room, and never closer than 4 px when they don't.
+    void audioLevelBeatGrid() {
+        struct Col {
+            int x;
+            int blue;
+        };
+        struct Line {
+            int x0, x1, blue;
+            double center() const { return (x0 + x1) / 2.0; }
+        };
+        const auto linesOf = [](AudioLevelItem& item) {
+            QImage img(int(item.width()), int(item.height()), QImage::Format_ARGB32_Premultiplied);
+            img.fill(Qt::black);
+            QPainter painter(&img);
+            item.paint(&painter);
+            painter.end();
+            QList<Col> cols;
+            for (int x = 0; x < img.width(); ++x) {
+                int blue = 0;
+                for (int y = 0; y < 12; ++y) {
+                    const QColor c = img.pixelColor(x, y);
+                    // Grid purple (184,150,232) keeps red above green. The
+                    // loudness bars (and the label) do not.
+                    if (c.red() > c.green() + 4 && c.blue() > c.red()) blue = std::max(blue, c.blue());
+                }
+                if (blue > 0) cols << Col{x, blue};
+            }
+            QList<Line> lines;
+            for (const Col& c : cols) {
+                if (lines.isEmpty() || c.x > lines.last().x1 + 1) lines << Line{c.x, c.x, c.blue};
+                else {
+                    lines.last().x1 = c.x;
+                    lines.last().blue = std::max(lines.last().blue, c.blue);
+                }
+            }
+            return lines;
+        };
+
+        AudioLevelItem item;
+        item.setWidth(400);
+        item.setHeight(72);
+        item.setProperty("label", QString());
+        item.setLevel(std::vector<double>(8, 0.0));
+        item.setProperty("viewStartMs", 0.0);
+        item.setProperty("viewEndMs", 8000.0);
+        QCOMPARE(item.property("beatPeriodMs").toDouble(), 0.0);
+        QCOMPARE(linesOf(item).size(), 0);
+
+        item.setProperty("beatPeriodMs", -10.0);
+        QCOMPARE(linesOf(item).size(), 0);
+
+        // 120 BPM → 500 ms. 25 px apart on this view: every beat, bars stronger.
+        item.setProperty("beatPeriodMs", 500.0);
+        QCOMPARE(item.property("beatPeriodMs").toDouble(), 500.0);
+        const auto open = linesOf(item);
+        QVERIFY(open.size() >= 15);
+        QVERIFY(open.size() <= 17);
+        for (int i = 1; i < open.size(); ++i) QVERIFY(open[i].center() - open[i - 1].center() >= 4.0);
+        // Beat 4 is a bar; beat 5 is not. Both sit inside the view.
+        QVERIFY(open.size() > 5);
+        QVERIFY(open[4].blue > open[5].blue + 15);
+
+        // 2 px per beat: skip until the lines are at least 4 px apart.
+        item.setProperty("beatPeriodMs", 40.0);
+        const auto dense = linesOf(item);
+        QVERIFY(dense.size() >= 90);
+        QVERIFY(dense.size() <= 110);
+        for (int i = 1; i < dense.size(); ++i) QVERIFY(dense[i].center() - dense[i - 1].center() >= 4.0);
+
+        // Exactly 4 px still draws every beat. More than 240 of them fit, so
+        // the cap stops before the right edge (beat 239 lands near x = 956).
+        AudioLevelItem wide;
+        wide.setWidth(2000);
+        wide.setHeight(40);
+        wide.setProperty("label", QString());
+        wide.setLevel(std::vector<double>(8, 0.0));
+        wide.setProperty("viewStartMs", 0.0);
+        wide.setProperty("viewEndMs", 20000.0);
+        wide.setProperty("beatPeriodMs", 40.0);
+        const auto capped = linesOf(wide);
+        QVERIFY(capped.size() >= 230);
+        QVERIFY(capped.size() <= 240);
+        QVERIFY(capped.last().center() > 900.0);
+        QVERIFY(capped.last().x1 < 1100);
     }
 
     void curveModes() {
