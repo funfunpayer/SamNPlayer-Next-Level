@@ -169,18 +169,29 @@ ApplicationWindow {
             asynchronous: true
             sourceComponent: TrainingPage { overlayOpen: win.overlayOpen; device: deviceCtl; autostart: trainingStart }
         }
-        // Plugin modes (D-155): loaded only while switched on in Settings.
-        Loader {
-            id: aiTrain
-            objectName: "aiTrainLoader"
-            active: Plugins.aiTrainEnabled
-            sourceComponent: AiTrainPage { overlayOpen: win.overlayOpen }
+        // The other modes of the registry (D-166, plugin modes D-155): one page each,
+        // loaded while the mode is listed (visible), in the tab order after the built-in three.
+        Repeater {
+            model: ModeRegistry.pages
+            delegate: Loader {
+                required property var modelData
+                objectName: "modePage_" + modelData.id
+                source: modelData.page
+                onLoaded: if ("overlayOpen" in item) item.overlayOpen = Qt.binding(() => win.overlayOpen)
+            }
         }
     }
-    // A plugin mode switched off while it is shown: back to the Player.
+    // The current mode is followed by its id: a mode that is removed, hidden or
+    // disabled moves the others' indices; the shell stays on the same mode, or
+    // goes back to the Player when that one is gone.
+    property string modeId: "player"
+    onModeChanged: { const m = ModeRegistry.modes[win.mode]; if (m) win.modeId = m.id }
     Connections {
-        target: Plugins
-        function onChanged() { if (win.mode >= top.modes.length) win.mode = 0 }
+        target: ModeRegistry
+        function onChanged() {
+            const i = ModeRegistry.modes.findIndex(m => m.id === win.modeId && m.enabled)
+            win.mode = i < 0 ? 0 : i
+        }
     }
 
     // Drops anywhere in the window open in the Player (0.7 files:dropped,
@@ -407,12 +418,17 @@ ApplicationWindow {
     Shortcut { sequence: "Esc"; enabled: handbookPage.open; onActivated: handbookPage.open = false }
     Shortcut { sequence: "Esc"; enabled: settingsPage.open && !handbookPage.open; onActivated: settingsPage.open = false }
 
-    // Ctrl+1…3: the modes, as the tabs (D-150; replaces the M deck).
+    // Ctrl+1…: the modes, as the tabs (D-150; replaces the M deck); the keys come from the registry.
     Repeater {
-        model: top.modes.length
+        model: ModeRegistry.modes
         delegate: Item {
+            required property var modelData
             required property int index
-            Shortcut { sequence: "Ctrl+" + (index + 1); onActivated: win.mode = index }
+            Shortcut {
+                sequence: modelData.shortcut
+                enabled: modelData.shortcut !== "" && modelData.enabled
+                onActivated: win.mode = index
+            }
         }
     }
 
@@ -420,7 +436,8 @@ ApplicationWindow {
     function smokePlay() { win.mode = 0; player.playWhenReady() }
 
     Component.onCompleted: {
-        if (win.mode >= top.modes.length) win.mode = 0  // a plugin mode that is off
+        if (win.mode >= ModeRegistry.modes.length) win.mode = 0  // a plugin mode that is off
+        win.modeId = ModeRegistry.modes[win.mode].id
         if (startupPaths.length > 0) player.controller.openPaths(startupPaths)
         updates.checkIfEnabled()
     }

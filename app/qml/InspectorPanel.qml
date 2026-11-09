@@ -111,4 +111,21 @@ GlassCard {
             }
         }
     }
+
+    // Lives on the panel (not the Audio tab) so confirm still opens if the tab is hidden.
+    MessageDialog {
+        id: soundCurveDialog
+        title: qsTr("Sound Curve")
+        text: qsTr("Write the sound as the Vibration curve (%1 points)? Undo brings the old curve back.")
+               .arg(root.ctrl.pendingSoundCurvePoints)
+        buttons: MessageDialog.Ok | MessageDialog.Cancel
+        onAccepted: root.ctrl.confirmSoundCurve()
+        onRejected: root.ctrl.cancelSoundCurve()
+    }
+    Connections {
+        target: root.ctrl
+        function onSoundCurveReady(points) {
+            if (points >= 2) soundCurveDialog.open()
+        }
+    }
 }
