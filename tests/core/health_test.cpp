@@ -1,5 +1,7 @@
 #include <doctest/doctest.h>
 
+#include <chrono>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 
@@ -24,11 +26,15 @@ TEST_CASE("health: vendor ids and texts") {
     CHECK(VendorFromPciId(0x1022) == "AMD");
     CHECK(VendorFromPciId(0x8086) == "Intel");
     CHECK(VendorFromPciId(0x1414) == "Microsoft");
-    CHECK(VendorFromPciId(0x1234) == "Other");
+    CHECK(VendorFromPciId(0x5555) == "Other");
+    for (std::uint32_t id : {0x1AF4u, 0x1B36u, 0x15ADu, 0x80EEu, 0x1234u, 0x1A03u}) CHECK(VendorFromPciId(id) == "Virtual");
     CHECK(VendorFromText("NVIDIA Corporation") == "NVIDIA");
     CHECK(VendorFromText("Advanced Micro Devices, Inc. [AMD/ATI]") == "AMD");
     CHECK(VendorFromText("Intel(R) Corporation") == "Intel");
     CHECK(VendorFromText("Contoso Graphics") == "Other");
+    CHECK(VendorFromText("VMware SVGA II Adapter") == "Virtual");
+    CHECK(VendorFromText("Red Hat, Inc.") == "Virtual");
+    CHECK(VendorFromText("ASPEED Technology, Inc.") == "Virtual");
 }
 
 TEST_CASE("health: integrated or dedicated") {
@@ -40,6 +46,35 @@ TEST_CASE("health: integrated or dedicated") {
     CHECK(ClassifyKind("NVIDIA", 0) == GpuKind::kDiscrete);
     CHECK(ClassifyKind("Microsoft", 0) == GpuKind::kSoftware);
     CHECK(ClassifyKind("Other", 0, true) == GpuKind::kSoftware);
+}
+
+TEST_CASE("health: virtual adapters are software, APUs and Arc by name") {
+    CHECK(ClassifyKind("Virtual", 16, false, "Virtio GPU") == GpuKind::kSoftware);
+    CHECK(ClassifyKind("Virtual", 0, false, "ASPEED Graphics Family") == GpuKind::kSoftware);
+    // AMD APUs with a carve-out of 1 GB or more stay integrated.
+    CHECK(ClassifyKind("AMD", 2048, false, "AMD Radeon 780M Graphics") == GpuKind::kIntegrated);
+    CHECK(ClassifyKind("AMD", 2048, false, "AMD Radeon(TM) Graphics") == GpuKind::kIntegrated);
+    CHECK(ClassifyKind("AMD", 2048, false, "AMD Radeon(TM) Vega 8 Graphics") == GpuKind::kIntegrated);
+    CHECK(ClassifyKind("AMD", 1024, false, "Radeon 680M") == GpuKind::kIntegrated);
+    // Cards stay dedicated, including the ones with an M or Vega in the name.
+    CHECK(ClassifyKind("AMD", 8192, false, "AMD Radeon RX 6800M") == GpuKind::kDiscrete);
+    CHECK(ClassifyKind("AMD", 8192, false, "AMD Radeon RX Vega 56") == GpuKind::kDiscrete);
+    CHECK(ClassifyKind("AMD", 16384, false, "AMD Radeon VII") == GpuKind::kDiscrete);
+    CHECK(ClassifyKind("AMD", 12288, false, "AMD Radeon RX 6700 XT") == GpuKind::kDiscrete);
+    // Intel Arc on Linux reports no memory: the name decides.
+    CHECK(ClassifyKind("Intel", 0, false, "Intel Arc A770") == GpuKind::kDiscrete);
+    CHECK(ClassifyKind("Intel", 0, false, "Intel(R) Arc(TM) B580 Graphics") == GpuKind::kDiscrete);
+    CHECK(ClassifyKind("Intel", 0, false, "Intel Arc Pro A40") == GpuKind::kDiscrete);
+    CHECK(ClassifyKind("Intel", 0, false, "Intel(R) Arc(TM) Graphics") == GpuKind::kIntegrated);  // Core Ultra iGPU
+    CHECK(ClassifyKind("Intel", 0, false, "Intel UHD Graphics 770") == GpuKind::kIntegrated);
+}
+
+TEST_CASE("health: equal adapters resolve the same in any list order") {
+    Gpu a = G("AMD", "Radeon RX 6600", 8192), b = G("AMD", "Radeon RX 6650 XT", 8192);
+    CHECK(RecommendAi({a, b}, Platform::kWindows).device == RecommendAi({b, a}, Platform::kWindows).device);
+    CHECK(RecommendVideoDecode({a, b}, true, true).device == RecommendVideoDecode({b, a}, true, true).device);
+    Gpu i1 = G("Intel", "Intel UHD 730", 128), i2 = G("Intel", "Intel HD 630", 128);
+    CHECK(RecommendAi({i1, i2}, Platform::kLinux).device == RecommendAi({i2, i1}, Platform::kLinux).device);
 }
 
 TEST_CASE("health: AI provider, dedicated first, then iGPU, then CPU") {
@@ -135,38 +170,80 @@ TEST_CASE("health: Win32_VideoController list parser on a synthetic listing") {
     CHECK(ParseWindowsVideoControllers("nothing useful here").empty());
 }
 
+TEST_CASE("health: Win32_VideoController CSV parser") {
+    const std::string text =
+        "\"Name\",\"AdapterRAM\",\"DriverVersion\",\"AdapterCompatibility\"\r\n"
+        "\"AMD Radeon(TM) 780M Graphics with a very long marketing name that Format-List would cut\",\"2147483648\",\"32.0.12011.1036\",\"Advanced Micro Devices, Inc.\"\r\n"
+        "\"NVIDIA \"\"Test\"\" Card\",\"4293918720\",\"31.0.15.3623\",\"NVIDIA\"\r\n"
+        "\"Microsoft Basic Render Driver\",\"\",\"10.0.19041.1\",\"Microsoft\"\r\n";
+    const auto g = ParseWindowsVideoControllersCsv(text);
+    REQUIRE(g.size() == 3);
+    CHECK(g[0].name.find("very long marketing name that Format-List would cut") != std::string::npos);
+    CHECK(g[0].vendor == "AMD");
+    CHECK(g[0].kind == GpuKind::kIntegrated);  // an APU with a 2 GB carve-out
+    CHECK(g[0].vram_mb == 2048);
+    CHECK(g[0].driver == "32.0.12011.1036");
+    CHECK(g[1].name == "NVIDIA \"Test\" Card");
+    CHECK(g[1].kind == GpuKind::kDiscrete);
+    CHECK(g[2].kind == GpuKind::kSoftware);
+    CHECK(ParseWindowsVideoControllersCsv("").empty());
+    CHECK(ParseWindowsVideoControllersCsv("\"Name\",\"AdapterRAM\"\r\n").empty());
+    // A negative or non-numeric AdapterRAM is no memory, not a wrapped number.
+    const auto neg = ParseWindowsVideoControllers("Name : Some Card\nAdapterRAM : -1\nAdapterCompatibility : NVIDIA\n");
+    REQUIRE(neg.size() == 1);
+    CHECK(neg[0].vram_mb == 0);
+}
+
 TEST_CASE("health: MemTotal") {
+    CHECK(!ParseMemTotalMb("MemTotal: -1 kB\n"));
     CHECK(ParseMemTotalMb("MemTotal:       16318412 kB\nMemFree:  1 kB\n") == 15935);
     CHECK(!ParseMemTotalMb("MemFree: 12 kB\n"));
     CHECK(!ParseMemTotalMb("MemTotal: lots\n"));
     CHECK(!ParseMemTotalMb(""));
 }
 
+namespace {
+// Switches the working directory and puts it back, whatever the test does.
+struct CwdGuard {
+    std::filesystem::path old = std::filesystem::current_path();
+    ~CwdGuard() {
+        std::error_code ec;
+        std::filesystem::current_path(old, ec);
+    }
+};
+}  // namespace
+
 TEST_CASE("health: FindOnPath") {
     namespace fs = std::filesystem;
     // The fixture folder is reached through a relative PATH entry from inside the temp folder: an
     // absolute Windows temp path ("C:\\...") has a drive colon that the ':' separator of the
     // Linux case would split, so the test must not depend on the host's path style.
-    const fs::path cwd = fs::current_path();
     const fs::path base = fs::temp_directory_path();
-    const std::string rel = "samn_health_path_test";
+    const std::string rel = "samn_health_path_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
     fs::create_directories(base / rel);
-    { std::ofstream(base / rel / "samn-tool") << "x"; }
-    { std::ofstream(base / rel / "samn-win.exe") << "x"; }
-    fs::current_path(base);
+    const fs::path tool = base / rel / "samn-tool", plain = base / rel / "samn-plain", win = base / rel / "samn-win.exe";
+    for (const fs::path& f : {tool, plain, win}) std::ofstream(f) << "x";
+    fs::permissions(tool, fs::perms::owner_all);
+    fs::permissions(plain, fs::perms::owner_read | fs::perms::owner_write);
+    fs::permissions(win, fs::perms::owner_all);
+    {
+        CwdGuard guard;
+        fs::current_path(base);
 
-    const std::string env_posix = "nonexistent-samn-dir:" + rel + ":";
-    CHECK(FindOnPath("samn-tool", env_posix, Platform::kLinux) == (fs::path(rel) / "samn-tool").u8string());
-    CHECK(FindOnPath("samn-missing", env_posix, Platform::kLinux).empty());
-    CHECK(FindOnPath("samn-win", env_posix, Platform::kLinux).empty());  // .exe only on Windows
-    // Windows separator ';', a quoted entry, and a drive-letter entry that is not there.
-    const std::string env_win = "C:\\samn-nonexistent\\tools;\"" + rel + "\"";
-    CHECK(FindOnPath("samn-win", env_win, Platform::kWindows) == (fs::path(rel) / "samn-win.exe").u8string());
-    CHECK(FindOnPath("samn-tool", env_win, Platform::kWindows) == (fs::path(rel) / "samn-tool").u8string());  // an exact name is tried first
-    CHECK(FindOnPath("samn-missing", "C:\\samn-nonexistent\\tools", Platform::kWindows).empty());
-    CHECK(FindOnPath("samn-tool", "", Platform::kLinux).empty());
-
-    fs::current_path(cwd);
+        const std::string env_posix = "nonexistent-samn-dir:" + rel + ":";
+        CHECK(FindOnPath("samn-tool", env_posix, Platform::kLinux) == (fs::path(rel) / "samn-tool").u8string());
+        CHECK(FindOnPath("samn-missing", env_posix, Platform::kLinux).empty());
+        CHECK(FindOnPath("samn-win", env_posix, Platform::kLinux).empty());  // .exe only on Windows
+#ifndef _WIN32
+        CHECK(FindOnPath("samn-plain", env_posix, Platform::kLinux).empty());  // no execute bit
+#endif
+        // Windows separator ';', a quoted entry, and a drive-letter entry that is not there.
+        const std::string env_win = "C:\\samn-nonexistent\\tools;\"" + rel + "\"";
+        CHECK(FindOnPath("samn-win", env_win, Platform::kWindows) == (fs::path(rel) / "samn-win.exe").u8string());
+        CHECK(FindOnPath("samn-tool", env_win, Platform::kWindows) == (fs::path(rel) / "samn-tool").u8string());  // an exact name is tried first
+        CHECK(FindOnPath("samn-missing", "C:\\samn-nonexistent\\tools", Platform::kWindows).empty());
+        CHECK(FindOnPath("samn-tool", "", Platform::kLinux).empty());
+    }
     fs::remove_all(base / rel);
 }
 
@@ -184,6 +261,8 @@ TEST_CASE("health: parts checks and the report summary") {
     CHECK(CheckRam(16384).detail == "16 GB installed");
     CHECK(CheckRam(12288 + 512).detail == "12.5 GB installed");
     CHECK(CheckRam(-1).status == Status::kWarn);
+    CHECK(CheckRam(INT64_MAX).detail.find("GB installed") != std::string::npos);
+    CHECK(CheckRam(INT64_MAX).detail.rfind("0 GB", 0) != 0);
     CHECK(CheckVideoPath({}, true, true).status == Status::kWarn);
     CHECK(CheckVideoPath({G("NVIDIA", "RTX", 8192)}, true, true).status == Status::kOk);
     CHECK(CheckVideoPath({G("NVIDIA", "RTX", 8192)}, false, true).status == Status::kOff);  // reported by the app's "Video decoding" row

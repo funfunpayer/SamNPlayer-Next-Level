@@ -29,7 +29,11 @@ QString GpuVendorName(quint32 pci_vendor_id);
 
 // Every graphics adapter of this PC (DXGI on Windows, /sys/class/drm on
 // Linux, empty elsewhere), classified. May take a moment: not for the GUI thread.
-QList<GpuInfo> ListGpus();
+// `with_names` false skips lspci (and the PowerShell fallback): vendor and memory
+// are enough to pick the training card, so the AI Train path starts no program.
+QList<GpuInfo> ListGpus(bool with_names = true);
+// How many external programs (lspci, PowerShell) this process started; for tests.
+int ExternalProgramRuns();
 
 // Sets integrated and software: Intel is integrated unless it has 2 GB or more
 // of its own (Arc), AMD below 1 GB, NVIDIA never; Microsoft adapters are software.
@@ -63,9 +67,18 @@ struct CheckInputs {
     qint64 ram_mb = 16384;  // -1 unknown
 };
 
-// The inputs of this PC, with the adapters given (ListGpus is slow, so the
-// caller decides on which thread it runs).
-CheckInputs GatherInputs(const QList<GpuInfo>& gpus);
+// What needs the disk, the PATH or the process list: found by GatherHostFacts,
+// which the refresh runs off the GUI thread.
+struct HostFacts {
+    QString ffmpeg_path, ffprobe_path, python_path;  // empty: not found
+    qint64 ram_mb = -1;
+};
+HostFacts GatherHostFacts();
+
+// The inputs of this PC, with the adapters and the host facts given (both are
+// slow, so the caller decides on which thread they are found). The rest here
+// is quick and uses Qt Multimedia and the settings: GUI thread.
+CheckInputs GatherInputs(const QList<GpuInfo>& gpus, const HostFacts& facts);
 
 // The checks in the order the tab shows them: settings, disk, gpu, ai-gpu,
 // ai-provider, video, video-path, onnx, ai-env, nudenet, ffmpeg, python, ram.

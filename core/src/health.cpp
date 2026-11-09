@@ -21,7 +21,8 @@ std::string Trim(const std::string& s) {
 
 std::string Mem(std::uint64_t mb) {
     if (mb >= 1024) {
-        const std::uint64_t tenth = (mb * 10 + 512) / 1024;  // GB with one decimal
+        // GB with one decimal, without the overflow of mb * 10 for huge values.
+        const std::uint64_t tenth = (mb / 1024) * 10 + ((mb % 1024) * 10 + 512) / 1024;
         return std::to_string(tenth / 10) + (tenth % 10 ? "." + std::to_string(tenth % 10) : std::string()) + " GB";
     }
     return std::to_string(mb) + " MB";
@@ -33,21 +34,28 @@ std::string Label(const Gpu& g) {
     return s;
 }
 
+// Order that does not depend on the list: more memory first, then the name.
+bool Better(const Gpu& g, const Gpu& best) {
+    if (g.vram_mb != best.vram_mb) return g.vram_mb > best.vram_mb;
+    return g.name < best.name;
+}
+
 // The adapter AI should prefer: not software; dedicated before integrated;
-// NVIDIA first among dedicated ones, then the most memory; first in the list on a tie.
+// NVIDIA first among dedicated ones, then the most memory, then the name.
 const Gpu* PickDedicated(const std::vector<Gpu>& gpus) {
     const Gpu* best = nullptr;
     for (const Gpu& g : gpus) {
         if (g.kind != GpuKind::kDiscrete) continue;
         const bool nv = g.vendor == "NVIDIA", best_nv = best && best->vendor == "NVIDIA";
-        if (!best || (nv && !best_nv) || (nv == best_nv && g.vram_mb > best->vram_mb)) best = &g;
+        if (!best || (nv && !best_nv) || (nv == best_nv && Better(g, *best))) best = &g;
     }
     return best;
 }
 const Gpu* PickIntegrated(const std::vector<Gpu>& gpus) {
+    const Gpu* best = nullptr;
     for (const Gpu& g : gpus)
-        if (g.kind == GpuKind::kIntegrated) return &g;
-    return nullptr;
+        if (g.kind == GpuKind::kIntegrated && (!best || Better(g, *best))) best = &g;
+    return best;
 }
 
 Check Make(const char* id, const char* title, Status st, std::string detail, std::string fix = {}) {
@@ -176,6 +184,12 @@ std::string VendorFromPciId(std::uint32_t id) {
         case 0x8086: return "Intel";
         case 0x1414: return "Microsoft";
         case 0x106B: return "Apple";
+        case 0x1AF4:  // virtio
+        case 0x1B36:  // QXL / QEMU
+        case 0x15AD:  // VMware
+        case 0x80EE:  // VirtualBox
+        case 0x1234:  // Bochs / QEMU standard VGA
+        case 0x1A03: return "Virtual";  // ASPEED: the server's management controller
         default: return "Other";
     }
 }
@@ -187,13 +201,50 @@ std::string VendorFromText(const std::string& text) {
     if (Contains(t, "intel")) return "Intel";
     if (Contains(t, "microsoft")) return "Microsoft";
     if (Contains(t, "apple")) return "Apple";
+    for (const char* v : {"vmware", "virtualbox", "innotek", "qemu", "red hat", "virtio", "aspeed", "bochs"})
+        if (Contains(t, v)) return "Virtual";
     return "Other";
 }
 
-GpuKind ClassifyKind(const std::string& vendor, std::uint64_t vram_mb, bool software) {
-    if (software || vendor == "Microsoft") return GpuKind::kSoftware;
-    if (vendor == "Intel") return vram_mb < 2048 ? GpuKind::kIntegrated : GpuKind::kDiscrete;
-    if (vendor == "AMD") return vram_mb < 1024 ? GpuKind::kIntegrated : GpuKind::kDiscrete;
+namespace {
+// "radeon 780m": three digits and an 'm' that ends the word, without "rx" (an RX 6800M is a card).
+bool IsRadeonMobileApuName(const std::string& t) {
+    if (!Contains(t, "radeon") || Contains(t, " rx ")) return false;
+    for (std::size_t i = 0; i + 3 < t.size(); ++i)
+        if (std::isdigit(static_cast<unsigned char>(t[i])) && std::isdigit(static_cast<unsigned char>(t[i + 1])) &&
+            std::isdigit(static_cast<unsigned char>(t[i + 2])) && t[i + 3] == 'm' &&
+            (i + 4 == t.size() || !std::isalnum(static_cast<unsigned char>(t[i + 4]))) &&
+            (i == 0 || !std::isalnum(static_cast<unsigned char>(t[i - 1]))))
+            return true;
+    return false;
+}
+
+bool IsAmdApuName(const std::string& name) {
+    const std::string t = AsciiLower(name);
+    if (Contains(t, "radeon(tm) graphics") || Contains(t, "radeon graphics")) return true;
+    if (Contains(t, "vega") && !Contains(t, "rx vega") && !Contains(t, "vega 56") && !Contains(t, "vega 64") && !Contains(t, "frontier") &&
+        !Contains(t, "vega ii") && !Contains(t, "radeon vii"))
+        return true;
+    return IsRadeonMobileApuName(t);
+}
+
+// "Arc A770", "Arc(TM) B580", "Arc Pro A40": a card. "Arc Graphics" (Core Ultra) has no model letter: an iGPU.
+bool IsIntelArcCardName(const std::string& name) {
+    const std::string t = AsciiLower(name);
+    const std::size_t arc = t.find("arc");
+    if (arc == std::string::npos) return false;
+    for (std::size_t i = arc + 3; i + 2 < t.size(); ++i)
+        if ((t[i] == 'a' || t[i] == 'b') && (i == 0 || !std::isalnum(static_cast<unsigned char>(t[i - 1]))) &&
+            std::isdigit(static_cast<unsigned char>(t[i + 1])) && std::isdigit(static_cast<unsigned char>(t[i + 2])))
+            return true;
+    return false;
+}
+}  // namespace
+
+GpuKind ClassifyKind(const std::string& vendor, std::uint64_t vram_mb, bool software, const std::string& name) {
+    if (software || vendor == "Microsoft" || vendor == "Virtual") return GpuKind::kSoftware;
+    if (vendor == "Intel") return IsIntelArcCardName(name) || vram_mb >= 2048 ? GpuKind::kDiscrete : GpuKind::kIntegrated;
+    if (vendor == "AMD") return IsAmdApuName(name) || vram_mb < 1024 ? GpuKind::kIntegrated : GpuKind::kDiscrete;
     if (vendor == "Apple") return GpuKind::kIntegrated;
     return GpuKind::kDiscrete;
 }
@@ -278,46 +329,59 @@ std::vector<PciDisplay> ParseLspciMm(const std::string& text) {
     return out;
 }
 
+namespace {
+std::uint64_t ParseBytes(const std::string& v) {
+    if (v.empty() || !std::all_of(v.begin(), v.end(), [](char c) { return std::isdigit(static_cast<unsigned char>(c)) != 0; })) return 0;
+    try {
+        return std::stoull(v);
+    } catch (const std::exception&) {
+        return 0;
+    }
+}
+
+Gpu MakeWindowsGpu(const std::string& name, const std::string& compat, std::uint64_t ram_bytes, const std::string& driver) {
+    Gpu g;
+    g.name = name;
+    g.driver = driver;
+    g.vendor = VendorFromText(compat.empty() ? name : compat);
+    if (g.vendor == "Other") g.vendor = VendorFromText(name);
+    g.vram_mb = ram_bytes / (1024 * 1024);
+    g.kind = ClassifyKind(g.vendor, g.vram_mb, Contains(AsciiLower(name), "basic render"), name);
+    return g;
+}
+}  // namespace
+
 std::vector<Gpu> ParseWindowsVideoControllers(const std::string& text) {
     std::vector<Gpu> out;
-    Gpu cur;
-    bool have = false;
-    std::string compat;
+    std::string name, compat, driver;
     std::uint64_t ram_bytes = 0;
+    bool have = false;
     auto flush = [&] {
-        if (have && !cur.name.empty()) {
-            cur.vendor = VendorFromText(compat.empty() ? cur.name : compat);
-            if (cur.vendor == "Other") cur.vendor = VendorFromText(cur.name);
-            cur.vram_mb = ram_bytes / (1024 * 1024);
-            cur.kind = ClassifyKind(cur.vendor, cur.vram_mb, Contains(AsciiLower(cur.name), "basic render"));
-            out.push_back(cur);
-        }
-        cur = Gpu{};
+        if (have && !name.empty()) out.push_back(MakeWindowsGpu(name, compat, ram_bytes, driver));
+        name.clear();
         compat.clear();
+        driver.clear();
         ram_bytes = 0;
         have = false;
     };
     for (const std::string& line : Lines(text)) {
         const std::size_t colon = line.find(':');
-        if (Trim(line).empty() || colon == std::string::npos) {
-            if (Trim(line).empty()) flush();
+        if (Trim(line).empty()) {
+            flush();
             continue;
         }
+        if (colon == std::string::npos) continue;
         const std::string key = AsciiLower(Trim(line.substr(0, colon)));
         const std::string val = Trim(line.substr(colon + 1));
         if (key == "name") {
             if (have) flush();  // two adapters without a blank line between them
-            cur.name = val;
+            name = val;
             have = true;
         } else if (key == "adapterram") {
-            try {
-                ram_bytes = val.empty() ? 0 : std::stoull(val);
-            } catch (const std::exception&) {
-                ram_bytes = 0;
-            }
+            ram_bytes = ParseBytes(val);
             have = true;
         } else if (key == "driverversion") {
-            cur.driver = val;
+            driver = val;
             have = true;
         } else if (key == "adaptercompatibility") {
             compat = val;
@@ -325,6 +389,53 @@ std::vector<Gpu> ParseWindowsVideoControllers(const std::string& text) {
         }
     }
     flush();
+    return out;
+}
+
+std::vector<Gpu> ParseWindowsVideoControllersCsv(const std::string& text) {
+    // One record per line; fields in double quotes, "" inside a field is a quote.
+    auto split = [](const std::string& line) {
+        std::vector<std::string> f;
+        std::string cur;
+        bool quoted = false, any = false;
+        for (std::size_t i = 0; i < line.size(); ++i) {
+            const char c = line[i];
+            if (quoted) {
+                if (c == '"' && i + 1 < line.size() && line[i + 1] == '"') cur += '"', ++i;
+                else if (c == '"') quoted = false;
+                else cur += c;
+            } else if (c == '"') {
+                quoted = true;
+                any = true;
+            } else if (c == ',') {
+                f.push_back(cur);
+                cur.clear();
+            } else {
+                cur += c;
+            }
+        }
+        if (any || !cur.empty() || !f.empty()) f.push_back(cur);
+        return f;
+    };
+    std::vector<Gpu> out;
+    std::vector<std::string> header;
+    for (const std::string& line : Lines(text)) {
+        if (Trim(line).empty()) continue;
+        std::vector<std::string> f = split(line);
+        if (header.empty()) {
+            for (std::string& h : f) header.push_back(AsciiLower(Trim(h)));
+            continue;
+        }
+        std::string name, compat, driver;
+        std::uint64_t ram = 0;
+        for (std::size_t i = 0; i < f.size() && i < header.size(); ++i) {
+            if (header[i] == "name") name = Trim(f[i]);
+            else if (header[i] == "adapterram") ram = ParseBytes(Trim(f[i]));
+            else if (header[i] == "driverversion") driver = Trim(f[i]);
+            else if (header[i] == "adaptercompatibility") compat = Trim(f[i]);
+        }
+        if (!name.empty()) out.push_back(MakeWindowsGpu(name, compat, ram, driver));
+    }
     return out;
 }
 
@@ -362,7 +473,12 @@ std::string FindOnPath(const std::string& name, const std::string& path_env, Pla
             if (*ext && platform != Platform::kWindows) break;
             std::error_code ec;
             const fs::path f = d / fs::u8path(name + ext);
-            if (fs::is_regular_file(f, ec) && !ec) return f.u8string();
+            if (!fs::is_regular_file(f, ec) || ec) continue;
+            if (platform != Platform::kWindows) {  // a POSIX program needs an execute bit
+                const auto perms = fs::status(f, ec).permissions();
+                if (ec || (perms & (fs::perms::owner_exec | fs::perms::group_exec | fs::perms::others_exec)) == fs::perms::none) continue;
+            }
+            return f.u8string();
         }
     }
     return {};

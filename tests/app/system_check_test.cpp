@@ -56,7 +56,8 @@ private slots:
         QCOMPARE(GpuVendorName(0x1022), QString("AMD"));
         QCOMPARE(GpuVendorName(0x8086), QString("Intel"));
         QCOMPARE(GpuVendorName(0x1414), QString("Microsoft"));
-        QCOMPARE(GpuVendorName(0x1234), QString("Other"));
+        QCOMPARE(GpuVendorName(0x5555), QString("Other"));
+        QCOMPARE(GpuVendorName(0x1AF4), QString("Virtual"));  // virtio: software
     }
 
     void anIntelIgpuListedFirstNeverWinsTheTraining() {
@@ -97,6 +98,30 @@ private slots:
         const auto gpus = ListGpus();
         for (const GpuInfo& g : gpus) QVERIFY(!g.name.isEmpty() && !g.vendor.isEmpty());
         qInfo() << "adapters found:" << gpus.size();
+    }
+
+    void theTrainingPathStartsNoProgram() {
+        const int before = ExternalProgramRuns();
+        const auto gpus = ListGpus(false);  // what AI Train calls on the GUI thread
+        QCOMPARE(ExternalProgramRuns(), before);
+        for (const GpuInfo& g : gpus) QVERIFY(!g.vendor.isEmpty());
+        (void)PickTrainingGpu(gpus);
+    }
+
+    void namesDecideWhatMemoryCannot() {
+        auto k = Classified({Gpu("Virtio GPU", "Virtual", 0), Gpu("AMD Radeon 780M Graphics", "AMD", 2048), Gpu("Intel Arc A770", "Intel", 0)});
+        QVERIFY(k[0].software);
+        QVERIFY(k[1].integrated && !k[1].software);
+        QVERIFY(!k[2].integrated && !k[2].software);
+    }
+
+    void hostFactsAreGatheredApartFromTheRest() {
+        const HostFacts f = GatherHostFacts();  // runs the PATH scans; the controller calls it off the GUI thread
+        QVERIFY(f.ram_mb != 0);
+        HostFacts none;
+        const CheckInputs in = GatherInputs({}, none);
+        QVERIFY(in.ffmpeg_path.isEmpty() && in.python_path.isEmpty());
+        QCOMPARE(in.ram_mb, qint64(-1));
     }
 
     void aGoodPcHasNoImportantProblem() {

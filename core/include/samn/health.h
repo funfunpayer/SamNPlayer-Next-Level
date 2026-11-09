@@ -47,16 +47,21 @@ struct Gpu {
 };
 
 // "NVIDIA" for 0x10DE, "AMD" for 0x1002 / 0x1022, "Intel" for 0x8086,
-// "Microsoft" for 0x1414, "Apple" for 0x106B, else "Other".
+// "Microsoft" for 0x1414, "Apple" for 0x106B, "Virtual" for virtual and
+// management adapters (virtio 1af4, QXL 1b36, VMware 15ad, VirtualBox 80ee,
+// Bochs 1234, ASPEED 1a03), else "Other".
 std::string VendorFromPciId(std::uint32_t pci_vendor_id);
 // The same from a vendor text ("NVIDIA Corporation", "Advanced Micro Devices,
 // Inc. [AMD/ATI]", "Intel(R) ..."); "Other" when none matches.
 std::string VendorFromText(const std::string& text);
 
-// Intel is integrated below 2 GB of its own memory (Arc is not), AMD below
-// 1 GB, NVIDIA and others never; Microsoft's adapters (Basic Render Driver)
-// and `software` are software.
-GpuKind ClassifyKind(const std::string& vendor, std::uint64_t vram_mb, bool software = false);
+// Intel is integrated below 2 GB of its own memory, AMD below 1 GB, NVIDIA and
+// others never; Microsoft's and "Virtual" adapters and `software` are software.
+// The name corrects what memory cannot tell: an Arc card (A310 ... A770, B570,
+// B580) is dedicated even when Linux reports no memory, and an AMD APU
+// ("Radeon(TM) Graphics", Vega 8, Radeon 780M) is integrated even with a
+// 2 GB carve-out.
+GpuKind ClassifyKind(const std::string& vendor, std::uint64_t vram_mb, bool software = false, const std::string& name = {});
 
 // The adapter an AI model should run on, and through which ONNX Runtime
 // provider: the dedicated GPU first (NVIDIA ahead of the rest, then the most
@@ -99,12 +104,16 @@ std::vector<PciDisplay> ParseLspciMm(const std::string& text);
 // 32-bit number: an adapter with 4 GB or more reports 4095 MB, which is still
 // enough to tell a card from an integrated one.
 std::vector<Gpu> ParseWindowsVideoControllers(const std::string& text);
+// The same adapters from `... | Select-Object Name,AdapterRAM,DriverVersion,AdapterCompatibility | ConvertTo-Csv -NoTypeInformation`
+// (a header line, quoted fields): long names are not cut as Format-List cuts them.
+std::vector<Gpu> ParseWindowsVideoControllersCsv(const std::string& text);
 
 // /proc/meminfo: MemTotal in MB.
 std::optional<std::uint64_t> ParseMemTotalMb(const std::string& meminfo);
 
 // First `name` found in the folders of `path_env` (separated by ';' on
-// Windows, ':' elsewhere); "name.exe" is tried on Windows. Empty if none.
+// Windows, ':' elsewhere); "name.exe" is tried on Windows, an execute bit is
+// required elsewhere. Empty if none.
 std::string FindOnPath(const std::string& name, const std::string& path_env, Platform platform);
 
 // ---- The missing-parts checks ---------------------------------------------

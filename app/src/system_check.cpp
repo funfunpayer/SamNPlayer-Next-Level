@@ -1,10 +1,12 @@
 #include "system_check.h"
 
 #include <algorithm>
+#include <atomic>
 
 #include <QClipboard>
 #include <QCoreApplication>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
 #include <QGuiApplication>
@@ -87,12 +89,22 @@ CheckItem FromCore(const samn::health::Check& k) {
             QString::fromStdString(k.fix), false};
 }
 
-// A program's output, or empty when it is missing, fails or takes longer than `ms`.
+std::atomic<int> g_program_runs{0};
+
+// A program's output, or empty when it is missing, fails or is not done within `ms` in all.
 QString RunProgram(const QString& program, const QStringList& args, int ms) {
+    ++g_program_runs;
+    QElapsedTimer clock;
+    clock.start();
     QProcess p;
     p.start(program, args);
-    if (!p.waitForStarted(ms)) return {};
-    if (!p.waitForFinished(ms)) {
+    if (!p.waitForStarted(ms)) {
+        p.kill();  // the destructor would otherwise wait for it
+        p.waitForFinished(500);
+        return {};
+    }
+    const int left = int(std::max<qint64>(0, ms - clock.elapsed()));
+    if (!p.waitForFinished(left)) {
         p.kill();
         p.waitForFinished(500);
         return {};
@@ -153,26 +165,19 @@ QString ReadLine(const QString& path) {
 #endif
 }  // namespace
 
-QString GpuVendorName(quint32 id) {
-    switch (id) {
-        case 0x10DE: return QStringLiteral("NVIDIA");
-        case 0x1002:
-        case 0x1022: return QStringLiteral("AMD");
-        case 0x8086: return QStringLiteral("Intel");
-        case 0x1414: return QStringLiteral("Microsoft");
-        default: return QStringLiteral("Other");
-    }
-}
+QString GpuVendorName(quint32 id) { return QString::fromStdString(samn::health::VendorFromPciId(id)); }
+
+int ExternalProgramRuns() { return g_program_runs.load(); }
 
 void ClassifyGpus(QList<GpuInfo>& gpus) {
     for (GpuInfo& g : gpus) {
-        const auto kind = samn::health::ClassifyKind(g.vendor.toStdString(), g.dedicated_mb, g.software);
+        const auto kind = samn::health::ClassifyKind(g.vendor.toStdString(), g.dedicated_mb, g.software, g.name.toStdString());
         g.software = kind == samn::health::GpuKind::kSoftware;
         g.integrated = kind == samn::health::GpuKind::kIntegrated;
     }
 }
 
-QList<GpuInfo> ListGpus() {
+QList<GpuInfo> ListGpus(bool with_names) {
     QList<GpuInfo> out;
 #ifdef Q_OS_WIN
     IDXGIFactory1* factory = nullptr;
@@ -195,12 +200,15 @@ QList<GpuInfo> ListGpus() {
         }
         factory->Release();
     }
-    if (out.isEmpty()) {  // DXGI gave nothing (remote session, broken driver): ask WMI, which is slower
-        const QString text = RunProgram(QStringLiteral("powershell"),
+    if (out.isEmpty() && with_names) {  // DXGI gave nothing (remote session, broken driver): ask WMI, which is slower
+        // By full path: a bare name is searched in the app's own folder first.
+        const QString root = qEnvironmentVariable("SystemRoot", QStringLiteral("C:\\Windows"));
+        const QString ps = root + QStringLiteral("\\System32\\WindowsPowerShell\\v1.0\\powershell.exe");
+        const QString text = RunProgram(ps,
                                         {QStringLiteral("-NoProfile"), QStringLiteral("-NonInteractive"), QStringLiteral("-Command"),
-                                         QStringLiteral("Get-CimInstance Win32_VideoController | Format-List Name,AdapterRAM,DriverVersion,AdapterCompatibility")},
-                                        4000);
-        for (const samn::health::Gpu& h : samn::health::ParseWindowsVideoControllers(text.toStdString())) {
+                                         QStringLiteral("Get-CimInstance Win32_VideoController | Select-Object Name,AdapterRAM,DriverVersion,AdapterCompatibility | ConvertTo-Csv -NoTypeInformation")},
+                                        3000);
+        for (const samn::health::Gpu& h : samn::health::ParseWindowsVideoControllersCsv(text.toStdString())) {
             GpuInfo g;
             g.name = QString::fromStdString(h.name);
             g.vendor = QString::fromStdString(h.vendor);
@@ -212,8 +220,10 @@ QList<GpuInfo> ListGpus() {
 #elif defined(Q_OS_LINUX)
     const QDir drm(QStringLiteral("/sys/class/drm"));
     static const QRegularExpression card(QStringLiteral("^card\\d+$"));  // not the card0-HDMI-A-1 connectors
-    const std::vector<samn::health::PciDisplay> names = samn::health::ParseLspciMm(
-        RunProgram(QStringLiteral("lspci"), {QStringLiteral("-mm"), QStringLiteral("-nn"), QStringLiteral("-D")}, 1500).toStdString());
+    // lspci knows the marketing names; the training path (with_names false) needs only vendor and memory and starts no program.
+    const std::vector<samn::health::PciDisplay> names =
+        with_names ? samn::health::ParseLspciMm(RunProgram(QStringLiteral("lspci"), {QStringLiteral("-mm"), QStringLiteral("-nn"), QStringLiteral("-D")}, 1500).toStdString())
+                   : std::vector<samn::health::PciDisplay>{};
     for (const QString& entry : drm.entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name)) {
         if (!card.match(entry).hasMatch()) continue;
         const QString dev = drm.filePath(entry) + QStringLiteral("/device/");
@@ -225,7 +235,7 @@ QList<GpuInfo> ListGpus() {
         g.vendor = GpuVendorName(vendor);
         const QString label = ReadLine(dev + QStringLiteral("label"));
         g.name = !label.isEmpty() ? label
-                                  : QStringLiteral("%1 (device 0x%2)").arg(g.vendor == QLatin1String("Other") ? QStringLiteral("Graphics adapter") : g.vendor)
+                                  : QStringLiteral("%1 (device 0x%2)").arg(g.vendor == QLatin1String("Other") || g.vendor == QLatin1String("Virtual") ? QStringLiteral("Graphics adapter") : g.vendor)
                                         .arg(device, 4, 16, QLatin1Char('0'));
         g.dedicated_mb = ReadLine(dev + QStringLiteral("mem_info_vram_total")).toULongLong() / quint64(kMiB);  // AMD only
         g.driver = QFileInfo(QFileInfo(dev + QStringLiteral("driver")).symLinkTarget()).fileName();  // "nvidia", "i915", "amdgpu"
@@ -250,7 +260,17 @@ std::optional<GpuInfo> PickTrainingGpu(const QList<GpuInfo>& gpus) {
     return best;
 }
 
-CheckInputs GatherInputs(const QList<GpuInfo>& gpus) {
+HostFacts GatherHostFacts() {
+    HostFacts f;
+    f.ffmpeg_path = FindFfmpeg();
+    f.ffprobe_path = OnPath("ffprobe");
+    f.python_path = samn::health::CurrentPlatform() == samn::health::Platform::kWindows ? FirstOnPath({"python", "py"})
+                                                                                        : FirstOnPath({"python3", "python"});
+    f.ram_mb = TotalRamMb();
+    return f;
+}
+
+CheckInputs GatherInputs(const QList<GpuInfo>& gpus, const HostFacts& facts) {
     CheckInputs in;
     in.gpus = gpus;
     const QString dir = FromFs(samn::config_dir());
@@ -278,11 +298,10 @@ CheckInputs GatherInputs(const QList<GpuInfo>& gpus) {
     } catch (const std::exception&) {
         in.nudenet_present = false;
     }
-    in.ffmpeg_path = FindFfmpeg();
-    in.ffprobe_path = OnPath("ffprobe");
-    in.python_path = samn::health::CurrentPlatform() == samn::health::Platform::kWindows ? FirstOnPath({"python", "py"})
-                                                                                         : FirstOnPath({"python3", "python"});
-    in.ram_mb = TotalRamMb();
+    in.ffmpeg_path = facts.ffmpeg_path;
+    in.ffprobe_path = facts.ffprobe_path;
+    in.python_path = facts.python_path;
+    in.ram_mb = facts.ram_mb;
     return in;
 }
 
@@ -404,9 +423,11 @@ void SystemCheckController::refresh() {
     if (worker_.joinable()) worker_.join();
     QPointer<SystemCheckController> self(this);
     worker_ = std::thread([self] {
+        // Everything that can wait on the disk, the PATH or a program runs here.
         const QList<GpuInfo> gpus = ListGpus();
+        const HostFacts facts = GatherHostFacts();
         // Back on the GUI thread: the rest touches Qt Multimedia and the settings.
-        if (self) QMetaObject::invokeMethod(self, [self, gpus] { if (self) self->finish(GatherInputs(gpus)); }, Qt::QueuedConnection);
+        if (self) QMetaObject::invokeMethod(self, [self, gpus, facts] { if (self) self->finish(GatherInputs(gpus, facts)); }, Qt::QueuedConnection);
     });
 }
 
