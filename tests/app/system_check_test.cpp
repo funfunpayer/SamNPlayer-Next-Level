@@ -104,7 +104,7 @@ private slots:
         QStringList ids;
         for (const CheckItem& i : items) ids << i.id;
         QCOMPARE(ids, (QStringList{"settings", "disk", "gpu", "ai-gpu", "ai-provider", "video", "video-path", "onnx", "ai-env", "nudenet", "ffmpeg",
-                                   "python", "ram"}));  // D-165 added five rows
+                                   "python", "ram"}));  // D-167 added five rows
         QVERIFY(!AnyImportantFailure(items));
         for (const CheckItem& i : items) {
             QCOMPARE(i.state, QString("ok"));

@@ -561,7 +561,7 @@ private slots:
             QVERIFY(byName("systemItem_gpu") && byName("systemItem_ai-gpu"));
             QTRY_VERIFY_WITH_TIMEOUT(!qobject_cast<samn::ui::SystemCheckController*>(page->property("system").value<QObject*>())->running(), kWait);
             {
-                // A fake PC (D-165): a card plus an iGPU, ffmpeg and Python missing (optional, "off").
+                // A fake PC (D-167): a card plus an iGPU, ffmpeg and Python missing (optional, "off").
                 samn::ui::CheckInputs fake;
                 samn::ui::GpuInfo igpu, card;
                 igpu.name = QStringLiteral("Intel UHD Graphics 770");

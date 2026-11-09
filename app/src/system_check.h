@@ -58,7 +58,7 @@ struct CheckInputs {
     bool onnx_available = true;
     TrainEnvState train_env = TrainEnvState::kReady;
     bool nudenet_present = true;
-    // The missing-parts inputs (D-165); the defaults are "all there".
+    // The missing-parts inputs (D-167); the defaults are "all there".
     QString ffmpeg_path = QStringLiteral("ffmpeg"), ffprobe_path = QStringLiteral("ffprobe"), python_path = QStringLiteral("python");
     qint64 ram_mb = 16384;  // -1 unknown
 };
@@ -69,7 +69,7 @@ CheckInputs GatherInputs(const QList<GpuInfo>& gpus);
 
 // The checks in the order the tab shows them: settings, disk, gpu, ai-gpu,
 // ai-provider, video, video-path, onnx, ai-env, nudenet, ffmpeg, python, ram.
-// The rules of ai-provider, video-path, ffmpeg, python and ram live in samn::health (core, D-165).
+// The rules of ai-provider, video-path, ffmpeg, python and ram live in samn::health (core, D-167).
 QList<CheckItem> RunChecks(const CheckInputs& in);
 
 // Plain text for "Copy report": version, system, one line per check.

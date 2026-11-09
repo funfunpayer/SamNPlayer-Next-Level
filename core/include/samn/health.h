@@ -1,5 +1,5 @@
 #pragma once
-// Hardware and runtime health, as plain data and pure functions (D-165): the
+// Hardware and runtime health, as plain data and pure functions (D-167): the
 // graphics adapters (integrated and dedicated) classified, which one an AI
 // model and video decoding should use, and the "missing parts" checks. Nothing
 // here reads the machine: the platform layer (the app) hands in strings and

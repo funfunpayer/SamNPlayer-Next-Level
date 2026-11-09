@@ -4,9 +4,9 @@
 
 **Last update:** 8 Nov 2026, Claude, branch `claude/samn2-json-fallback`: nlohmann_json comes from the system package first, then the git-clone fallback main already had (handover below). No code behaviour changed. Cursor, same day: probe-on-link warning box (#191). Earlier: 7 Nov 2026, Claude, branch `claude/samn2-vision-bench`: `samn_bench`, the detection benchmark, and its baseline (handover below). No engine behaviour changed. Before: the video playhead extrapolation (D-164, `claude/samn2-playhead`, #163) and the `DeviceWorker` move (#166) are merged.
 
-**Last update (health check):** 8 Nov 2026, Claude, branch `claude/samn2-health-check`: the System tab (D-162) is extended, not rebuilt (D-165): Qt-free `samn::health` in core and five new rows. Earlier lines below still hold.
+**Last update (health check):** 8 Nov 2026, Claude, branch `claude/samn2-health-check`: the System tab (D-162) is extended, not rebuilt (D-167): Qt-free `samn::health` in core and five new rows. Earlier lines below still hold.
 
-## Handover: `claude/samn2-health-check` (8 Nov, D-165)
+## Handover: `claude/samn2-health-check` (8 Nov, D-167)
 
 Owner task: hardware and runtime health, iGPU and dedicated GPU for AI and video, plus a missing-parts report. Most of it already existed as Settings → System (D-162), so this extends it.
 
