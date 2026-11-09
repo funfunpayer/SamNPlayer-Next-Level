@@ -18,6 +18,23 @@ ApplicationWindow {
     readonly property var training: trainingLoader.item
     // Called once by main.cpp after the window is shown: the system check, with a notice only for an important failure.
     function startSystemCheck() { settingsPage.system.startupCheck() }
+    // Drop routing (also used by tests): Generator keeps videos; scripts go to the Player.
+    function handleUrlsDropped(urls) {
+        if (!urls || urls.length === 0) return
+        if (win.mode === 1 && generator) {
+            const videos = urls.filter((u) => player.controller.isVideoFile(u))
+            if (videos.length === urls.length && videos.length === 1) {
+                generator.createFor(videos[0], false)
+                return
+            }
+            if (videos.length === urls.length && videos.length >= 2) {
+                generator.controller.addToQueue(videos)
+                return
+            }
+        }
+        win.mode = 0
+        player.controller.openPaths(urls)
+    }
     // Settings or the handbook overlays the current mode (Esc closes the top one first).
     readonly property bool overlayOpen: settingsPage.open || handbookPage.open
     function openHandbook() { handbookPage.open = true }
@@ -184,13 +201,7 @@ ApplicationWindow {
         anchors.fill: parent
         onDropped: (d) => {
             if (!d.hasUrls) return
-            // 0.7: one video dropped in the Generator stays there.
-            if (win.mode === 1 && d.urls.length === 1 && player.controller.isVideoFile(d.urls[0].toString())) {
-                generator.createFor(d.urls[0], false)
-                return
-            }
-            win.mode = 0
-            player.controller.openPaths(d.urls.map(u => u.toString()))
+            win.handleUrlsDropped(d.urls.map((u) => u.toString()))
         }
     }
     Rectangle {

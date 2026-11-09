@@ -16,6 +16,16 @@ Owner direction: the core is the kernel, the pages are modules, compiled in plus
 - **Next slice (not started): `DeviceService`.** A pure-virtual interface (send level / position / axis, connection state, battery, generation, `setSessionActiveFor`, `stop`, `emergencyStop`) that `PlayerController`, `TrainingController` and `PlaybackOutput` use instead of `DeviceController*`. It touches `Q_PROPERTY(DeviceController* device)` in the Player and Training controllers (QML binds them), `QPointer<DeviceController>`, and `connect(..., &DeviceController::statusChanged)`; the interface needs the signals too (QObject base). Add a `FakeDeviceService` so the `playback_output_test` / `training_controller_test` need no real controller. Judged larger than the rest of this PR, so left out.
 - **Stay off:** `app/qml` Player/Editor/Generator pages beyond what this PR touched (Main.qml, TopBar.qml).
 
+## Handover: `cursor/player-drop-scenemap-635a` (9 Nov, drop Player Scene Map tab)
+
+Owner: shrink the unfinished Player surface. Scenes already live in the Generator Editor (D-145). The Player bottom tab was a redirect stub.
+
+- **Tabs:** Timeline · Chapters · Bookmarks · Audio Analysis. Audio Analysis is index 3. `showAudioAnalysis()` writes `player.bottomTab` 3.
+- **Old prefs:** stored 4 (old Audio Analysis) opens 3; stored 3 (old Scene Map) opens Timeline (0).
+- **Kept:** chapter bands on the Timeline lane (`chapterStrip`); Generator Scenes tab and `editRequested(scenes)`.
+- **Test:** `playerBottomTabsDropSceneMap` in `shell_qml_test`.
+- **Stay off:** Auto sync. Do not build a Scene Map view.
+
 ## Handover: `claude/samn2-parity-refresh` (8 Nov, PARITY audit and the list of what is left)
 
 Owner asked for an honest picture of how far SamNPlayer 2 is against 0.7.0 and 0.8. **Documentation only; no code or test changed.**

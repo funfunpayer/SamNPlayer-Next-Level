@@ -88,7 +88,7 @@ Item {
                 Rectangle {
                     id: face
                     anchors.fill: parent
-                    radius: 22
+                    radius: Theme.radius
                     border.width: tab.current ? 1.5 : 1
                     border.color: tab.current ? Theme.cyan : tabArea.containsMouse ? Qt.rgba(0, 217 / 255, 244 / 255, 0.35) : "transparent"
                     gradient: Gradient {

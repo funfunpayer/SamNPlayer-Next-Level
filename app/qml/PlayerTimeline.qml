@@ -14,11 +14,17 @@ GlassCard {
 
     signal seekRequested(real ms)
     signal tipRequested(var item, real x, real y, string text)
-    signal editScenesRequested()
 
+    // Old prefs: 4 was Audio Analysis, 3 was the Scene Map stub (now gone).
+    function migratedBottomTab() {
+        let t = ctrl.uiValue("player.bottomTab", 0)
+        if (t === 4) t = 3
+        else if (t === 3) t = 0
+        return t
+    }
     function showAudioAnalysis() {
-        bottomTabs.current = 4
-        ctrl.setUiValue("player.bottomTab", 4)
+        bottomTabs.current = 3
+        ctrl.setUiValue("player.bottomTab", 3)
     }
     // 0.7 companion axis names and colours (theme_flow.css axis tokens).
     function axisTitle(axis) {
@@ -36,12 +42,13 @@ GlassCard {
         return { surge: "#e5c07b", sway: "#98c379", twist: "#e06c9f", roll: "#61afef", pitch: "#d19a66" }[axis] || Theme.textDim
     }
 
-    // Bottom tabs (0.7 v1): Timeline · Chapters · Bookmarks · Scene Map · Audio Analysis.
+    // Bottom tabs: Timeline · Chapters · Bookmarks · Audio Analysis.
+    // Scenes stay in the Generator Editor (D-145); the Player tab was only a redirect.
     FlowTabs {
         id: bottomTabs
         x: 16; y: 9
-        model: [qsTr("Timeline"), qsTr("Chapters"), qsTr("Bookmarks"), qsTr("Scene Map"), qsTr("Audio Analysis")]
-        current: ctrl.uiValue("player.bottomTab", 0)
+        model: [qsTr("Timeline"), qsTr("Chapters"), qsTr("Bookmarks"), qsTr("Audio Analysis")]
+        current: migratedBottomTab()
         onPicked: (i) => { current = i; ctrl.setUiValue("player.bottomTab", i) }
     }
     Row {
@@ -225,6 +232,7 @@ GlassCard {
         // chapter on the curve's time scale; click = seek to its start.
         Item {
             id: chapterStrip
+            objectName: "chapterStrip"
             width: parent.width; height: 30
             // 0.7 pb.scenes: off by default in the Player.
             visible: ctrl.hasScript && ctrl.showScenes
@@ -421,30 +429,9 @@ GlassCard {
             onRemove: (i) => ctrl.removeBookmark(i)
         }
     }
-    // The Scene Map lives in the Editor (D-145): the way there.
-    Item {
-        visible: bottomTabs.current === 3
-        x: 16; y: 46; width: parent.width - 32; height: parent.height - 58
-        Column {
-            anchors.centerIn: parent; spacing: 10
-            Text {
-                textFormat: Text.PlainText
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: qsTr("Scenes with their frame, feel and suggestions are in the Editor (Generator → Scenes).")
-                color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 13
-            }
-            FlowButton {
-                objectName: "openScenes"
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: qsTr("Open the scenes in the Editor")
-                enabled: ctrl.hasScript
-                onClicked: root.editScenesRequested()
-            }
-        }
-    }
     // Audio Analysis (0.7): the whole video's sound with the beat grid; click seeks.
     Item {
-        visible: bottomTabs.current === 4
+        visible: bottomTabs.current === 3
         x: 16; y: 46; width: parent.width - 32; height: parent.height - 58
         Row {
             id: bpmRow

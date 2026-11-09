@@ -21,7 +21,9 @@
 #include "device_controller.h"
 #include "heatmap_item.h"
 #include "player_controller.h"
+#include "theme.h"
 #include "samn/marks.h"
+#include "samn/script_finder.h"
 #include "samn/playback_mapping.h"
 #include "samn/range_edit.h"
 #include "samn/contact_marks.h"
@@ -201,7 +203,56 @@ private slots:
         QStringList shown;
         for (const auto& v : c.variants()) shown << v.toMap().value("display").toString();
         QVERIFY2(shown.contains(QStringLiteral("Hard · script folder")), qPrintable(shown.join(", ")));
+        const QString script = c.scriptPath();
+        QCOMPARE(c.pointCount(), 41);
+        c.setVideoPositionMs(1500);
+        QCOMPARE(c.playheadMs(), qint64(1500));
         c.removeScriptFolder(d.filePath("scripts"));
+        QStringList after;
+        for (const auto& v : c.variants()) after << v.toMap().value("display").toString();
+        QCOMPARE(after, QStringList{QStringLiteral("Main script")});
+        QCOMPARE(c.scriptPath(), script);
+        QCOMPARE(c.scriptName(), QStringLiteral("Clip.funscript"));
+        QCOMPARE(c.pointCount(), 41);
+        QCOMPARE(c.playheadMs(), qint64(1500));
+        QVERIFY(c.hasScript());
+        QCOMPARE(c.videoName(), QStringLiteral("Clip.mp4"));
+        QCOMPARE(c.variantIndex(), 0);
+    }
+
+    void addingScriptFolderRefreshesVariantsWithoutReload() {
+        QTemporaryDir d;
+        QDir().mkpath(d.filePath("more"));
+        writeFile(d.filePath("Clip.mp4"), "");
+        writeFile(d.filePath("Clip.funscript"), zigzag());
+        writeFile(d.filePath("more/Clip (Soft).funscript"), zigzag(11));
+        PlayerController c;
+        QVERIFY(c.openPath(d.filePath("Clip.mp4")));
+        QCOMPARE(c.variants().size(), 1);
+        QCOMPARE(c.scriptName(), QStringLiteral("Clip.funscript"));
+        QCOMPARE(c.pointCount(), 41);
+        const QString script = c.scriptPath();
+        c.setVideoPositionMs(4000);
+        QCOMPARE(c.playheadMs(), qint64(4000));
+        QSignalSpy scriptSpy(&c, &PlayerController::scriptChanged);
+        c.addScriptFolder(d.filePath("more"));
+        QCOMPARE(scriptSpy.count(), 0);
+        QCOMPARE(c.variants().size(), 2);
+        QStringList shown;
+        for (const auto& v : c.variants()) shown << v.toMap().value("display").toString();
+        QVERIFY2(shown.contains(QStringLiteral("Main script")), qPrintable(shown.join(", ")));
+        QVERIFY2(shown.contains(QStringLiteral("Soft · script folder")), qPrintable(shown.join(", ")));
+        QCOMPARE(c.scriptPath(), script);
+        QCOMPARE(c.scriptName(), QStringLiteral("Clip.funscript"));
+        QCOMPARE(c.pointCount(), 41);
+        QCOMPARE(c.playheadMs(), qint64(4000));
+        QVERIFY(c.variantIndex() >= 0);
+        QCOMPARE(c.variants().at(c.variantIndex()).toMap().value("path").toString(), script);
+        c.removeScriptFolder(d.filePath("more"));
+        QCOMPARE(c.variants().size(), 1);
+        QCOMPARE(c.scriptPath(), script);
+        QCOMPARE(c.playheadMs(), qint64(4000));
+        QCOMPARE(c.variants().at(0).toMap().value("display").toString(), QStringLiteral("Main script"));
     }
 
     void autoCreateAndVideoFiles() {
@@ -219,6 +270,12 @@ private slots:
         QVERIFY(again.isVideoFile(QStringLiteral("file:///x/Clip.M2TS")));
         QVERIFY(again.isVideoFile(QStringLiteral("/x/a.ogv")));
         QVERIFY(!again.isVideoFile(QStringLiteral("/x/a.funscript")));
+        // Dialog filters share Theme.videoGlobs with core VIDEO_EXTS.
+        const QString globs = samn::ui::Theme().videoGlobs();
+        for (const auto& ext : samn::VIDEO_EXTS)
+            QVERIFY2(globs.contains(QStringLiteral("*") + QString::fromStdString(ext)),
+                     qPrintable(QStringLiteral("missing %1 in %2").arg(QString::fromStdString(ext), globs)));
+        QVERIFY(again.isVideoFile(QStringLiteral("/x/clip.ts")));
     }
 
     void offsetSavedPerScriptAndPlayhead() {
@@ -932,6 +989,77 @@ private slots:
         QCOMPARE(flipped[1].pos, 90);
         QCOMPARE(flipped[2].pos, 80);
         QCOMPARE(flipped[3].pos, 20);
+    }
+
+    // Cap / Scale / Delete / Invert share the Generator's EditSession: one
+    // step before the write, undo and redo round-trip the file, and opening
+    // another script drops the history.
+    void curveEditUndoRedoRestoresFileAndClearsOnOpen() {
+        QTemporaryDir d;
+        const QString path = d.filePath("edit.funscript");
+        writeFile(path, R"({"actions":[{"at":0,"pos":10},{"at":1000,"pos":90},{"at":2000,"pos":20},{"at":3000,"pos":80}]})");
+        PlayerController c;
+        QVERIFY(c.openScript(path));
+        QCOMPARE(c.pointCount(), 4);
+        QVERIFY(!c.canUndo());
+        QVERIFY(!c.canRedo());
+        QVERIFY(!c.undo());
+        QVERIFY(!c.capSelection());
+        QVERIFY(!c.canUndo());
+
+        c.setMarker(500, 2500);
+        QSignalSpy history(&c, &PlayerController::historyChanged);
+        QVERIFY(c.deleteSelection());
+        QVERIFY(history.count() >= 1);
+        QCOMPARE(c.pointCount(), 2);
+        QVERIFY(c.canUndo());
+        QVERIFY(!c.canRedo());
+        QVERIFY(c.undoText().contains(QStringLiteral("Delete range")));
+
+        const auto edited = samn::LoadFunscript(std::filesystem::u8path(path.toStdString())).actions;
+        QCOMPARE(int(edited.size()), 2);
+        QCOMPARE(edited[0].at, int64_t(0));
+        QCOMPARE(edited[0].pos, 10);
+        QCOMPARE(edited[1].at, int64_t(3000));
+        QCOMPARE(edited[1].pos, 80);
+
+        QVERIFY(c.undo());
+        QCOMPARE(c.pointCount(), 4);
+        QVERIFY(!c.canUndo());
+        QVERIFY(c.canRedo());
+        QVERIFY(c.redoText().contains(QStringLiteral("Delete range")));
+        const auto restored = samn::LoadFunscript(std::filesystem::u8path(path.toStdString())).actions;
+        QCOMPARE(int(restored.size()), 4);
+        QCOMPARE(restored[0].pos, 10);
+        QCOMPARE(restored[1].at, int64_t(1000));
+        QCOMPARE(restored[1].pos, 90);
+        QCOMPARE(restored[2].at, int64_t(2000));
+        QCOMPARE(restored[2].pos, 20);
+        QCOMPARE(restored[3].at, int64_t(3000));
+        QCOMPARE(restored[3].pos, 80);
+
+        QVERIFY(c.redo());
+        QCOMPARE(c.pointCount(), 2);
+        QVERIFY(c.canUndo());
+        QVERIFY(!c.canRedo());
+        const auto again = samn::LoadFunscript(std::filesystem::u8path(path.toStdString())).actions;
+        QCOMPARE(int(again.size()), 2);
+        QCOMPARE(again[0].pos, 10);
+        QCOMPARE(again[1].at, int64_t(3000));
+        QCOMPARE(again[1].pos, 80);
+
+        const QString other = d.filePath("other.funscript");
+        writeFile(other, zigzag());
+        QVERIFY(c.openScript(other));
+        QVERIFY(!c.canUndo());
+        QVERIFY(!c.canRedo());
+        QCOMPARE(c.pointCount(), 41);
+        QVERIFY(!c.undo());
+        QCOMPARE(c.pointCount(), 41);
+        const auto kept = samn::LoadFunscript(std::filesystem::u8path(path.toStdString())).actions;
+        QCOMPARE(int(kept.size()), 2);
+        QCOMPARE(kept[1].at, int64_t(3000));
+        QCOMPARE(kept[1].pos, 80);
     }
 
     void speedHighlights() {
@@ -1744,6 +1872,53 @@ private slots:
         // A missing file fails cleanly.
         dec.start(dir.path() + "/missing.mp4");
         QCOMPARE(fail.count(), 1);
+    }
+
+    // Length cap: stop once the RMS windows cover maxMs, and don't reuse that
+    // envelope for a full-file (or different-cap) request.
+    void audioLevelCapsAtMaxMs() {
+        QTemporaryDir dir;
+        const QString wav = writeToneWav(dir.path());
+        AudioLevelDecoder dec;
+        QSignalSpy done(&dec, &AudioLevelDecoder::finished);
+        QSignalSpy fail(&dec, &AudioLevelDecoder::failed);
+        const int step = samn::kAudioLevelStepMs;
+        const qint64 capMs = 500;
+
+        dec.start(wav, step, capMs);
+        QTRY_VERIFY_WITH_TIMEOUT(done.count() + fail.count() > 0, 15000);
+        QCOMPARE(fail.count(), 0);
+        QCOMPARE(done.first().first().value<std::vector<double>>().size(), size_t(capMs / step));
+        QVERIFY(!dec.busy());
+
+        // Same cap, same file: served from the cache, synchronously.
+        dec.start(wav, step, capMs);
+        QCOMPARE(done.count(), 2);
+        QCOMPARE(done.at(1).first().value<std::vector<double>>().size(), size_t(capMs / step));
+
+        // A full-file decode must miss the capped cache.
+        dec.start(wav, step, -1);
+        QCOMPARE(done.count(), 2);
+        QVERIFY(dec.busy());
+        QTRY_VERIFY_WITH_TIMEOUT(done.count() + fail.count() >= 3, 15000);
+        QCOMPARE(fail.count(), 0);
+        const auto full = done.at(2).first().value<std::vector<double>>();
+        QVERIFY(full.size() >= 39 && full.size() <= 41);
+        QVERIFY(!dec.busy());
+
+        dec.start(wav);
+        QCOMPARE(done.count(), 4);
+        QCOMPARE(done.at(3).first().value<std::vector<double>>().size(), full.size());
+
+        // A different cap misses the full-file cache and stops at its own length.
+        const qint64 otherMs = 1000;
+        dec.start(wav, step, otherMs);
+        QCOMPARE(done.count(), 4);
+        QVERIFY(dec.busy());
+        QTRY_VERIFY_WITH_TIMEOUT(done.count() + fail.count() >= 5, 15000);
+        QCOMPARE(fail.count(), 0);
+        QCOMPARE(done.at(4).first().value<std::vector<double>>().size(), size_t(otherMs / step));
+        QVERIFY(!dec.busy());
     }
 
     void curveModes() {
