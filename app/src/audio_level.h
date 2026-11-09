@@ -24,8 +24,11 @@ public:
     explicit AudioLevelDecoder(QObject* parent = nullptr);
     ~AudioLevelDecoder() override;
     // Starts decoding; a running decode is cancelled. Results for the same
-    // unchanged file are served from the cache.
-    void start(const QString& path, int stepMs = samn::kAudioLevelStepMs);
+    // unchanged file, step, and length cap are served from the cache.
+    // maxMs < 0 reads the whole file. maxMs >= 0 stops once the RMS windows
+    // cover that many milliseconds (windows * stepMs >= maxMs) and finishes
+    // the same way as end-of-file.
+    void start(const QString& path, int stepMs = samn::kAudioLevelStepMs, qint64 maxMs = -1);
     void cancel();
     bool busy() const { return decoder_ != nullptr; }
 
@@ -37,16 +40,21 @@ private:
     void onBuffer();
     void onDone();
     void onError();
+    // Shared end of a decode. stopDecoder halts a still-running backend
+    // (the length cap); end-of-file has already stopped.
+    void finishDecode(bool stopDecoder);
 
     std::unique_ptr<QAudioDecoder> decoder_;
     std::optional<samn::WindowRms> rms_;
     QString path_;
     int stepMs_ = samn::kAudioLevelStepMs;
-    // Cache: the last decoded file.
+    qint64 maxMs_ = -1;
+    // Cache: the last decoded file. cacheMaxMs_ < 0 is a full-file decode.
     QString cachePath_;
     qint64 cacheSize_ = -1;
     QDateTime cacheTime_;
     int cacheStep_ = 0;
+    qint64 cacheMaxMs_ = -1;
     std::vector<double> cache_;
 };
 
