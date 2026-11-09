@@ -25,6 +25,7 @@
 #include "app_log.h"
 #include "icon_provider.h"
 #include "player_controller.h"
+#include "mode_registry.h"
 #include "plugins.h"
 #include "theme.h"
 #include "update_checker.h"
@@ -61,6 +62,13 @@ QList<QQuickItem*> itemsOfType(QQuickItem* root, const char* qmlType) {
     for (QQuickItem* i : descendants(root))
         if (isType(i, qmlType)) out << i;
     return out;
+}
+
+// True while a visual descendant has this objectName.
+bool hasNamedItem(QQuickItem* root, const char* name) {
+    for (QQuickItem* i : descendants(root))
+        if (i->objectName() == QLatin1String(name)) return true;
+    return false;
 }
 
 // Every bundled vector file: the resource path and its bytes.
@@ -817,6 +825,78 @@ private slots:
             auto* theme = s.engine.singletonInstance<samn::ui::Theme*>(qmlTypeId("SamN", 1, 0, "Theme"));
             QVERIFY(theme && theme->reducedMotion());
             theme->setReducedMotion(false);
+        }
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
+
+    // D-166: a mode registered at start gets a tab, a Ctrl+N key and a page; removing it hides all three.
+    void registeredModeGetsTabKeyAndPage() {
+        auto& registry = samn::ui::ModeRegistry::instance();
+        samn::ui::ModeDescriptor extra;
+        extra.id = "extratest";
+        extra.title = "Extra";
+        extra.icon = "layers";
+        extra.hue = QColor("#ff8a23");
+        extra.page = "AiTrainPage.qml";
+        {
+            QVERIFY(registry.registerMode(extra));  // before the window: "registered at startup"
+            Shell s;
+            loadShell(s);
+            QVERIFY(s.window);
+            QCOMPARE(s.window->property("modeNames").toStringList(), (QStringList{"Player", "Generator", "Training", "Extra"}));
+            QVERIFY(hasNamedItem(s.one("TopBar"), "modeTab_3"));
+            QTest::keyClick(s.window, Qt::Key_4, Qt::ControlModifier);
+            QTRY_COMPARE_WITH_TIMEOUT(s.mode(), 3, kWait);
+            QCOMPARE(s.pillName(), QStringLiteral("Extra"));
+            QTRY_VERIFY_WITH_TIMEOUT(s.one("AiTrainPage") && s.one("AiTrainPage")->isVisible(), kWait);
+            // Removed while shown: the tab, the page and the key go, the shell is back in the Player.
+            QVERIFY(registry.unregisterMode("extratest"));
+            QTRY_COMPARE_WITH_TIMEOUT(s.mode(), 0, kWait);
+            QCOMPARE(s.window->property("modeNames").toStringList(), (QStringList{"Player", "Generator", "Training"}));
+            QVERIFY(!s.one("AiTrainPage"));
+            QVERIFY(!hasNamedItem(s.one("TopBar"), "modeTab_3"));
+            QTest::keyClick(s.window, Qt::Key_4, Qt::ControlModifier);
+            QTest::qWait(150);
+            QCOMPARE(s.mode(), 0);
+            // Registered while running: it appears without a restart.
+            QVERIFY(registry.registerMode(extra));
+            QTRY_COMPARE_WITH_TIMEOUT(s.window->property("modeNames").toStringList().size(), 4, kWait);
+            QVERIFY(registry.unregisterMode("extratest"));
+        }
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
+
+    // The shell follows the current mode by id: removing or disabling an earlier extra mode keeps the shown one;
+    // removing or disabling the shown one goes back to the Player.
+    void currentModeSurvivesOtherModesLeaving() {
+        auto& registry = samn::ui::ModeRegistry::instance();
+        samn::ui::ModeDescriptor a, b;
+        a.id = "extra_a"; a.title = "ExtraA"; a.icon = "layers"; a.hue = QColor("#ff8a23"); a.page = "AiTrainPage.qml";
+        b = a; b.id = "extra_b"; b.title = "ExtraB";
+        QVERIFY(registry.registerMode(a));
+        QVERIFY(registry.registerMode(b));
+        {
+            Shell s;
+            loadShell(s);
+            QVERIFY(s.window);
+            QCOMPARE(s.window->property("modeNames").toStringList().size(), 5);
+            QTest::keyClick(s.window, Qt::Key_5, Qt::ControlModifier);
+            QTRY_COMPARE_WITH_TIMEOUT(s.mode(), 4, kWait);
+            QCOMPARE(s.pillName(), QStringLiteral("ExtraB"));
+            // An earlier extra mode goes: ExtraB moves to index 3 and stays shown.
+            QVERIFY(registry.unregisterMode("extra_a"));
+            QTRY_COMPARE_WITH_TIMEOUT(s.mode(), 3, kWait);
+            QCOMPARE(s.pillName(), QStringLiteral("ExtraB"));
+            // Re-added before it: still ExtraB.
+            QVERIFY(registry.registerMode(a));
+            QTRY_COMPARE_WITH_TIMEOUT(s.window->property("modeNames").toStringList().size(), 5, kWait);
+            QCOMPARE(s.pillName(), QStringLiteral("ExtraB"));
+            // Disabled while shown: back to the Player; the tab stays listed.
+            QVERIFY(registry.setEnabled("extra_b", false));
+            QTRY_COMPARE_WITH_TIMEOUT(s.mode(), 0, kWait);
+            QCOMPARE(s.window->property("modeNames").toStringList().size(), 5);
+            QVERIFY(registry.unregisterMode("extra_a"));
+            QVERIFY(registry.unregisterMode("extra_b"));
         }
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }
