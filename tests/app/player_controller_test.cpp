@@ -1746,6 +1746,53 @@ private slots:
         QCOMPARE(fail.count(), 1);
     }
 
+    // Length cap: stop once the RMS windows cover maxMs, and don't reuse that
+    // envelope for a full-file (or different-cap) request.
+    void audioLevelCapsAtMaxMs() {
+        QTemporaryDir dir;
+        const QString wav = writeToneWav(dir.path());
+        AudioLevelDecoder dec;
+        QSignalSpy done(&dec, &AudioLevelDecoder::finished);
+        QSignalSpy fail(&dec, &AudioLevelDecoder::failed);
+        const int step = samn::kAudioLevelStepMs;
+        const qint64 capMs = 500;
+
+        dec.start(wav, step, capMs);
+        QTRY_VERIFY_WITH_TIMEOUT(done.count() + fail.count() > 0, 15000);
+        QCOMPARE(fail.count(), 0);
+        QCOMPARE(done.first().first().value<std::vector<double>>().size(), size_t(capMs / step));
+        QVERIFY(!dec.busy());
+
+        // Same cap, same file: served from the cache, synchronously.
+        dec.start(wav, step, capMs);
+        QCOMPARE(done.count(), 2);
+        QCOMPARE(done.at(1).first().value<std::vector<double>>().size(), size_t(capMs / step));
+
+        // A full-file decode must miss the capped cache.
+        dec.start(wav, step, -1);
+        QCOMPARE(done.count(), 2);
+        QVERIFY(dec.busy());
+        QTRY_VERIFY_WITH_TIMEOUT(done.count() + fail.count() >= 3, 15000);
+        QCOMPARE(fail.count(), 0);
+        const auto full = done.at(2).first().value<std::vector<double>>();
+        QVERIFY(full.size() >= 39 && full.size() <= 41);
+        QVERIFY(!dec.busy());
+
+        dec.start(wav);
+        QCOMPARE(done.count(), 4);
+        QCOMPARE(done.at(3).first().value<std::vector<double>>().size(), full.size());
+
+        // A different cap misses the full-file cache and stops at its own length.
+        const qint64 otherMs = 1000;
+        dec.start(wav, step, otherMs);
+        QCOMPARE(done.count(), 4);
+        QVERIFY(dec.busy());
+        QTRY_VERIFY_WITH_TIMEOUT(done.count() + fail.count() >= 5, 15000);
+        QCOMPARE(fail.count(), 0);
+        QCOMPARE(done.at(4).first().value<std::vector<double>>().size(), size_t(otherMs / step));
+        QVERIFY(!dec.busy());
+    }
+
     void curveModes() {
         CurveItem curve;
         curve.setWidth(500);

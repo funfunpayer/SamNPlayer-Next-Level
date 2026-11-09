@@ -20,16 +20,18 @@ void AudioLevelDecoder::cancel() {
     rms_.reset();
 }
 
-void AudioLevelDecoder::start(const QString& path, int stepMs) {
+void AudioLevelDecoder::start(const QString& path, int stepMs, qint64 maxMs) {
     cancel();
     path_ = path;
     stepMs_ = stepMs > 0 ? stepMs : samn::kAudioLevelStepMs;
+    maxMs_ = maxMs;
     const QFileInfo fi(path);
     if (!fi.isFile()) {
         emit failed(tr("Video not found: %1").arg(path));
         return;
     }
-    if (path == cachePath_ && fi.size() == cacheSize_ && fi.lastModified() == cacheTime_ && stepMs_ == cacheStep_) {
+    if (path == cachePath_ && fi.size() == cacheSize_ && fi.lastModified() == cacheTime_ && stepMs_ == cacheStep_ &&
+        maxMs_ == cacheMaxMs_) {
         emit finished(cache_);
         return;
     }
@@ -53,20 +55,31 @@ void AudioLevelDecoder::onBuffer() {
     if (!rms_) rms_.emplace(static_cast<size_t>(std::max<qint64>(1, qint64(fmt.sampleRate()) * stepMs_ / 1000)));
     const auto* data = buf.constData<char>();
     const qsizetype frames = buf.frameCount();
+    const bool capped = maxMs_ >= 0;
     for (qsizetype f = 0; f < frames; ++f) {
         // Mono mix, as ffmpeg -ac 1 did in 0.7.
         float sum = 0;
         for (int c = 0; c < channels; ++c)
             sum += fmt.normalizedSampleValue(data + (f * channels + c) * bytesPerSample);
         rms_->Push(sum / static_cast<float>(channels));
+        // Stop inside the buffer: one buffer can hold far more than maxMs.
+        if (capped && qint64(rms_->Windows().size()) * qint64(stepMs_) >= maxMs_) {
+            finishDecode(true);
+            return;
+        }
     }
 }
 
-void AudioLevelDecoder::onDone() {
+void AudioLevelDecoder::onDone() { finishDecode(false); }
+
+void AudioLevelDecoder::finishDecode(bool stopDecoder) {
     if (!decoder_) return;
     const auto rms = rms_ ? rms_->Finish() : std::vector<double>{};
-    decoder_->disconnect(this);
-    decoder_.release()->deleteLater();
+    // Release first so a stop() that re-enters onBuffer / onDone is a no-op.
+    QAudioDecoder* dec = decoder_.release();
+    dec->disconnect(this);
+    if (stopDecoder) dec->stop();
+    dec->deleteLater();
     rms_.reset();
     if (rms.empty()) {
         emit failed(tr("No readable sound track"));
@@ -77,6 +90,7 @@ void AudioLevelDecoder::onDone() {
     cacheSize_ = fi.size();
     cacheTime_ = fi.lastModified();
     cacheStep_ = stepMs_;
+    cacheMaxMs_ = maxMs_;
     cache_ = samn::NormalizeLoudness(rms);
     emit finished(cache_);
 }
