@@ -27,7 +27,11 @@ Row {
         if (v !== root.value) root.changed(v)
     }
 
-    IconButton { width: 32; height: 32; icon: "minus"; onClicked: root.changed(root.value - 50) }
+    IconButton {
+        width: 32; height: 32; icon: "minus"
+        tip: qsTr("Offset −50 ms")
+        onClicked: root.changed(root.value - 50)
+    }
     Rectangle {
         width: 92; height: 32; radius: 10
         color: Qt.rgba(1, 1, 1, 0.03)
@@ -52,7 +56,11 @@ Row {
             Keys.onEnterPressed: { commitText(); focus = false }
         }
     }
-    IconButton { width: 32; height: 32; icon: "plus"; onClicked: root.changed(root.value + 50) }
+    IconButton {
+        width: 32; height: 32; icon: "plus"
+        tip: qsTr("Offset +50 ms")
+        onClicked: root.changed(root.value + 50)
+    }
 
     onValueChanged: {
         if (!input.activeFocus)

@@ -117,6 +117,7 @@ Column {
                 enabled: ctrl.offsetMs !== 0 && ctrl.scriptPath !== ""
                 onClicked: bakeConfirm.open()
             }
+            HelpChip { key: "pb-offset-bake"; anchors.verticalCenter: parent.verticalCenter }
             // 0.7 asked first: this rewrites the script file.
             MessageDialog {
                 id: bakeConfirm
@@ -537,12 +538,14 @@ Column {
             onPicked: (v) => ctrl.output.extendedORestoreMs = Math.round(v / 100) * 100
         }
         FlowButton {
+            visible: ctrl.hasScript
             text: qsTr("Auto in marked range"); checked: ctrl.autoExtendedO
             onClicked: ctrl.autoExtendedO = !ctrl.autoExtendedO
             HoverHandler { id: autoEoHover }
             ToolTipText { shown: autoEoHover.hovered; text: qsTr("Triggers Extended-O once when playback reaches the marked range of the heatmap.") }
         }
         InspectorNote {
+            visible: ctrl.hasScript
             text: !ctrl.output.extendedOEnabled ? qsTr("Switched off.")
                   : ctrl.autoExtendedO && !ctrl.hasMarker ? qsTr("Mark a range on the heatmap for the automatic trigger.")
                   : qsTr("Available while playing. A press while it runs is ignored.")
