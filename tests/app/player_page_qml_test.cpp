@@ -3,6 +3,7 @@
 // synthetic 4 s test pattern (tests/app/data).
 #include <QFile>
 #include <QGuiApplication>
+#include <QHoverEvent>
 #include <QMediaPlayer>
 #include <QQmlComponent>
 #include <QQmlEngine>
@@ -297,6 +298,35 @@ private:
         QTRY_VERIFY(named(page, "axisLane_twist"));
         QVERIFY(named(page, "axisLane_twist")->isVisible());
         QVERIFY(named(page, "axisLane_twist")->height() >= 34);
+        // Hover a channel lane: the same chart tip as the main curve (time · position).
+        // Delivered to the lane MouseArea: a window mouse move does not reach it here.
+        {
+            auto* lane = named(page, "axisLane_twist");
+            QQuickItem* area = nullptr;
+            for (QQuickItem* child : lane->childItems()) {
+                if (QString::fromLatin1(child->metaObject()->className()).startsWith(QLatin1String("QQuickMouseArea")))
+                    area = child;
+            }
+            QVERIFY(area);
+            const QPointF local(lane->width() * 0.55, lane->height() * 0.5);
+            const QPointF before(local.x() - 8, local.y());
+            // position() is the first point. Enter and move must differ or positionChanged is skipped.
+            QHoverEvent enter(QEvent::HoverEnter, before, before, before);
+            QCoreApplication::sendEvent(area, &enter);
+            QHoverEvent move(QEvent::HoverMove, local, local, before);
+            QCoreApplication::sendEvent(area, &move);
+            auto* tip = named(page, "chartTip");
+            QVERIFY(tip);
+            QTRY_VERIFY(tip->isVisible());
+            QString expect;
+            QVERIFY(QMetaObject::invokeMethod(lane, "hoverText", Q_RETURN_ARG(QString, expect),
+                                              Q_ARG(double, local.x())));
+            QCOMPARE(named(page, "chartTipText")->property("text").toString(), expect);
+            QVERIFY(expect.contains(QStringLiteral(" · ")));
+            QHoverEvent leave(QEvent::HoverLeave, local, local, local);
+            QCoreApplication::sendEvent(area, &leave);
+            QTRY_VERIFY(!tip->isVisible());
+        }
         // 0.7 legend chips: a click on a lane's name shows it in the main curve;
         // Up / Down move on (two lanes: stroke and twist, wrapping).
         auto* twistName = named(page, "laneName_twist");

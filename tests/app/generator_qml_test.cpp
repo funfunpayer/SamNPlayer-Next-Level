@@ -2,6 +2,7 @@
 // frame sets the tip box in video pixels, Create runs and the result is
 // handed on for review. The window is grabbed to a PNG when SAMN_TEST_SHOT
 // names a file (generated test clip only).
+#include <QFile>
 #include <QGuiApplication>
 #include <QQmlComponent>
 #include <QQmlEngine>
@@ -631,6 +632,70 @@ private slots:
         QTRY_VERIFY_WITH_TIMEOUT(!gen->finding(), 30000);
         QTest::qWait(200);
         QVERIFY(!gen->running());
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
+    }
+
+    // Align-bar and post-create Optimize combos remember gen.optimizeTarget.
+    // An empty choice shows "Any device" (general) on both, not Sam Neo 2.
+    void optimizeTargetCombosSaveTheChoice() {
+        g_messages.clear();
+        QTemporaryDir scripts;
+        QVERIFY(scripts.isValid());
+        const QString script = scripts.filePath(QStringLiteral("clip.funscript"));
+        {
+            QFile f(script);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(R"({"actions":[{"at":0,"pos":10},{"at":1000,"pos":90}]})");
+        }
+        QQmlEngine engine;
+        engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
+        engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+        engine.addImageProvider(QStringLiteral("frames"), new samn::ui::FrameProvider);
+        QQmlComponent comp(&engine);
+        comp.setData(R"(
+            import QtQuick
+            import SamN
+            Rectangle {
+                width: 1400; height: 820; color: "#021024"
+                property alias page: gp
+                GeneratorPage { id: gp; anchors.fill: parent; anchors.margins: 20 }
+            })",
+                     QUrl("qrc:/test/OptimizeTarget.qml"));
+        QVERIFY2(comp.status() == QQmlComponent::Ready, qPrintable(comp.errorString()));
+        QQuickWindow window;
+        window.resize(1400, 820);
+        std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
+        QVERIFY(root);
+        root->setParentItem(window.contentItem());
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto* page = root->property("page").value<QQuickItem*>();
+        auto* gen = page->property("controller").value<GeneratorController*>();
+        auto* edit = page->property("editor").value<QObject*>();
+        QVERIFY(page && gen && edit);
+        gen->setOptimizeTarget(QString());
+        QCOMPARE(gen->optimizeTarget(), QString());
+        bool opened = false;
+        QVERIFY(QMetaObject::invokeMethod(edit, "open", Q_RETURN_ARG(bool, opened), Q_ARG(QString, script)));
+        QVERIFY(opened);
+        QTRY_VERIFY(named(root.get(), "alignBar")->isVisible());
+        QTRY_VERIFY(named(root.get(), "postCreateAdapt")->isVisible());
+        auto* align = named(root.get(), "optimizeTarget");
+        auto* post = named(root.get(), "postAdaptTarget");
+        QVERIFY(align && post);
+        QCOMPARE(align->property("currentIndex").toInt(), 0);
+        QCOMPARE(post->property("currentIndex").toInt(), 0);
+
+        QVERIFY(QMetaObject::invokeMethod(align, "activated", Q_ARG(int, 1)));
+        QCOMPARE(gen->optimizeTarget(), QStringLiteral("neo2"));
+        QTRY_COMPARE(align->property("currentIndex").toInt(), 1);
+        QTRY_COMPARE(post->property("currentIndex").toInt(), 1);
+
+        QVERIFY(QMetaObject::invokeMethod(post, "activated", Q_ARG(int, 0)));
+        QCOMPARE(gen->optimizeTarget(), QStringLiteral("general"));
+        QTRY_COMPARE(align->property("currentIndex").toInt(), 0);
+        QTRY_COMPARE(post->property("currentIndex").toInt(), 0);
+        gen->setOptimizeTarget(QString());
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
     }
 };

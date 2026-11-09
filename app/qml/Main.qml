@@ -130,6 +130,8 @@ ApplicationWindow {
         onOpenRequested: { win.mode = 0; player.openFile() }
         onDeviceRequested: { win.mode = 0; player.showDevices() }
         onSettingsRequested: settingsPage.open = true
+        panelsHidden: player.theatre
+        onPanelsToggleRequested: { win.mode = 0; player.theatre = !player.theatre }
     }
 
     StackLayout {
@@ -223,6 +225,8 @@ ApplicationWindow {
     }
     // Ctrl+O from every mode opens in the Player (0.7 top-bar Open).
     Shortcut { sequence: StandardKey.Open; enabled: !win.overlayOpen; onActivated: { win.mode = 0; player.openFile() } }
+    // Alt+B: hide or show the Player's side panels (theatre). From any mode.
+    Shortcut { sequence: "Alt+B"; enabled: !win.overlayOpen; onActivated: { win.mode = 0; player.theatre = !player.theatre } }
 
     // 0.7 startup update banner: the new version, its notes, the download
     // page; × hides it until the next start.

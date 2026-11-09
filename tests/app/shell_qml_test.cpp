@@ -1325,6 +1325,66 @@ private slots:
         }
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }
+
+    // Top bar hide-panels and Alt+B are the Player theatre toggle.
+    void hidePanelsButtonAndAltBToggleTheatre() {
+        {
+            Shell s;
+            loadShell(s);
+            QVERIFY(s.window);
+            QQuickItem* player = s.one("PlayerPage");
+            QQuickItem* topBar = s.one("TopBar");
+            QVERIFY(player && topBar);
+            QVERIFY(!player->property("theatre").toBool());
+            QVERIFY(!topBar->property("panelsHidden").toBool());
+            QQuickItem* button = nullptr;
+            for (QQuickItem* i : descendants(topBar))
+                if (i->objectName() == QLatin1String("topHidePanelsButton")) button = i;
+            QVERIFY(button && button->isVisible());
+            QCOMPARE(button->property("icon").toString(), QStringLiteral("video"));
+            QCOMPARE(button->property("tip").toString(), QStringLiteral("Hide side panels (Alt+B / T)"));
+            QCOMPARE(button->opacity(), 0.45);
+            QQuickItem* library = s.one("LibraryPanel");
+            QQuickItem* inspector = s.one("InspectorPanel");
+            QVERIFY(library && inspector);
+            QVERIFY(library->isVisible() && inspector->isVisible());
+
+            QTest::mouseClick(s.window, Qt::LeftButton, {},
+                              button->mapToScene(QPointF(button->width() / 2, button->height() / 2)).toPoint());
+            QTRY_VERIFY_WITH_TIMEOUT(player->property("theatre").toBool(), kWait);
+            QVERIFY(topBar->property("panelsHidden").toBool());
+            QCOMPARE(button->property("icon").toString(), QStringLiteral("minimize"));
+            QCOMPARE(button->property("tip").toString(), QStringLiteral("Show side panels (Alt+B / T)"));
+            QCOMPARE(button->opacity(), 1.0);
+            QVERIFY(!library->isVisible() && !inspector->isVisible());
+
+            QTest::keyClick(s.window, Qt::Key_B, Qt::AltModifier);
+            QTRY_VERIFY_WITH_TIMEOUT(!player->property("theatre").toBool(), kWait);
+            QVERIFY(!topBar->property("panelsHidden").toBool());
+            QVERIFY(library->isVisible() && inspector->isVisible());
+            QCOMPARE(button->property("tip").toString(), QStringLiteral("Hide side panels (Alt+B / T)"));
+
+            // From another mode, Alt+B returns to the Player and hides the panels.
+            s.window->setProperty("mode", 2);
+            QTRY_COMPARE_WITH_TIMEOUT(s.mode(), 2, kWait);
+            QTest::keyClick(s.window, Qt::Key_B, Qt::AltModifier);
+            QTRY_COMPARE_WITH_TIMEOUT(s.mode(), 0, kWait);
+            QTRY_VERIFY_WITH_TIMEOUT(player->isVisible(), kWait);
+            QVERIFY(player->property("theatre").toBool());
+            QVERIFY(!library->isVisible() && !inspector->isVisible());
+
+            // Settings (or the handbook) blocks the shortcut.
+            QQuickItem* settings = s.one("SettingsPage");
+            QVERIFY(settings);
+            settings->setProperty("open", true);
+            QTRY_VERIFY_WITH_TIMEOUT(s.window->property("overlayOpen").toBool(), kWait);
+            QTest::keyClick(s.window, Qt::Key_B, Qt::AltModifier);
+            QTest::qWait(150);
+            QVERIFY(player->property("theatre").toBool());
+            QVERIFY(s.window->property("overlayOpen").toBool());
+        }
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
 };
 
 QTEST_MAIN(ShellQmlTest)
