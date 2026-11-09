@@ -828,7 +828,7 @@ private slots:
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }
 
-    // D-165: a mode registered at start gets a tab, a Ctrl+N key and a page; removing it hides all three.
+    // D-166: a mode registered at start gets a tab, a Ctrl+N key and a page; removing it hides all three.
     void registeredModeGetsTabKeyAndPage() {
         auto& registry = samn::ui::ModeRegistry::instance();
         samn::ui::ModeDescriptor extra;
@@ -861,6 +861,41 @@ private slots:
             QVERIFY(registry.registerMode(extra));
             QTRY_COMPARE_WITH_TIMEOUT(s.window->property("modeNames").toStringList().size(), 4, kWait);
             QVERIFY(registry.unregisterMode("extratest"));
+        }
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
+
+    // The shell follows the current mode by id: removing or disabling an earlier extra mode keeps the shown one;
+    // removing or disabling the shown one goes back to the Player.
+    void currentModeSurvivesOtherModesLeaving() {
+        auto& registry = samn::ui::ModeRegistry::instance();
+        samn::ui::ModeDescriptor a, b;
+        a.id = "extra_a"; a.title = "ExtraA"; a.icon = "layers"; a.hue = QColor("#ff8a23"); a.page = "AiTrainPage.qml";
+        b = a; b.id = "extra_b"; b.title = "ExtraB";
+        QVERIFY(registry.registerMode(a));
+        QVERIFY(registry.registerMode(b));
+        {
+            Shell s;
+            loadShell(s);
+            QVERIFY(s.window);
+            QCOMPARE(s.window->property("modeNames").toStringList().size(), 5);
+            QTest::keyClick(s.window, Qt::Key_5, Qt::ControlModifier);
+            QTRY_COMPARE_WITH_TIMEOUT(s.mode(), 4, kWait);
+            QCOMPARE(s.pillName(), QStringLiteral("ExtraB"));
+            // An earlier extra mode goes: ExtraB moves to index 3 and stays shown.
+            QVERIFY(registry.unregisterMode("extra_a"));
+            QTRY_COMPARE_WITH_TIMEOUT(s.mode(), 3, kWait);
+            QCOMPARE(s.pillName(), QStringLiteral("ExtraB"));
+            // Re-added before it: still ExtraB.
+            QVERIFY(registry.registerMode(a));
+            QTRY_COMPARE_WITH_TIMEOUT(s.window->property("modeNames").toStringList().size(), 5, kWait);
+            QCOMPARE(s.pillName(), QStringLiteral("ExtraB"));
+            // Disabled while shown: back to the Player; the tab stays listed.
+            QVERIFY(registry.setEnabled("extra_b", false));
+            QTRY_COMPARE_WITH_TIMEOUT(s.mode(), 0, kWait);
+            QCOMPARE(s.window->property("modeNames").toStringList().size(), 5);
+            QVERIFY(registry.unregisterMode("extra_a"));
+            QVERIFY(registry.unregisterMode("extra_b"));
         }
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }

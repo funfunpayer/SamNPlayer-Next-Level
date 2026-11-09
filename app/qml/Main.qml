@@ -152,10 +152,10 @@ ApplicationWindow {
             asynchronous: true
             sourceComponent: TrainingPage { overlayOpen: win.overlayOpen; device: deviceCtl; autostart: trainingStart }
         }
-        // The other modes of the registry (D-165, plugin modes D-155): one page each,
+        // The other modes of the registry (D-166, plugin modes D-155): one page each,
         // loaded while the mode is listed (visible), in the tab order after the built-in three.
         Repeater {
-            model: ModeRegistry.modes.filter(m => !m.builtin)
+            model: ModeRegistry.pages
             delegate: Loader {
                 required property var modelData
                 objectName: "modePage_" + modelData.id
@@ -164,10 +164,17 @@ ApplicationWindow {
             }
         }
     }
-    // A mode that is removed or switched off while it is shown: back to the Player.
+    // The current mode is followed by its id: a mode that is removed, hidden or
+    // disabled moves the others' indices; the shell stays on the same mode, or
+    // goes back to the Player when that one is gone.
+    property string modeId: "player"
+    onModeChanged: { const m = ModeRegistry.modes[win.mode]; if (m) win.modeId = m.id }
     Connections {
         target: ModeRegistry
-        function onChanged() { if (win.mode >= top.modes.length) win.mode = 0 }
+        function onChanged() {
+            const i = ModeRegistry.modes.findIndex(m => m.id === win.modeId && m.enabled)
+            win.mode = i < 0 ? 0 : i
+        }
     }
 
     // Drops anywhere in the window open in the Player (0.7 files:dropped,
@@ -418,7 +425,8 @@ ApplicationWindow {
     function smokePlay() { win.mode = 0; player.playWhenReady() }
 
     Component.onCompleted: {
-        if (win.mode >= top.modes.length) win.mode = 0  // a plugin mode that is off
+        if (win.mode >= ModeRegistry.modes.length) win.mode = 0  // a plugin mode that is off
+        win.modeId = ModeRegistry.modes[win.mode].id
         if (startupPaths.length > 0) player.controller.openPaths(startupPaths)
         updates.checkIfEnabled()
     }

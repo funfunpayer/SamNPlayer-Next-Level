@@ -16,11 +16,11 @@ const char* const kBlue = "#00b4ff";
 
 ModeRegistry::ModeRegistry() {
     // Player, Generator, Training (D-144, D-145), then the plugin modes (D-155).
-    registerMode({"player", tr("Player"), "player", QColor::fromString(kCyan), {}, {}, "PlayerPage.qml", true, true, true});
-    registerMode({"generator", tr("Generator"), "create", QColor::fromString(kOrange), {}, {}, "GeneratorPage.qml", true, true, true});
-    registerMode({"training", tr("Training"), "training", QColor::fromString(kBlue), {}, {}, "TrainingPage.qml", true, true, true});
-    registerMode({"aitrain", tr("AI Train"), "layers", QColor::fromString(kOrange), {}, {}, "AiTrainPage.qml",
-                  Plugins::aiTrainStored(), true, false});
+    add({"player", tr("Player"), "player", QColor::fromString(kCyan), {}, {}, "PlayerPage.qml", true, true, true});
+    add({"generator", tr("Generator"), "create", QColor::fromString(kOrange), {}, {}, "GeneratorPage.qml", true, true, true});
+    add({"training", tr("Training"), "training", QColor::fromString(kBlue), {}, {}, "TrainingPage.qml", true, true, true});
+    add({"aitrain", tr("AI Train"), "layers", QColor::fromString(kOrange), {}, {}, "AiTrainPage.qml",
+         Plugins::aiTrainStored(), true, false});
 }
 
 ModeRegistry& ModeRegistry::instance() {
@@ -49,6 +49,11 @@ bool ModeRegistry::contains(const QString& id) const {
 }
 
 bool ModeRegistry::registerMode(const ModeDescriptor& mode) {
+    if (mode.builtin) return false;
+    return add(mode);
+}
+
+bool ModeRegistry::add(const ModeDescriptor& mode) {
     if (mode.id.isEmpty() || mode.title.isEmpty() || contains(mode.id)) return false;
     all_.push_back(mode);
     rebuild();
@@ -78,7 +83,7 @@ bool ModeRegistry::setVisible(const QString& id, bool visible) {
 
 bool ModeRegistry::setEnabled(const QString& id, bool enabled) {
     ModeDescriptor* m = find(id);
-    if (!m) return false;
+    if (!m || m->builtin) return false;
     if (m->enabled != enabled) {
         m->enabled = enabled;
         rebuild();
@@ -88,8 +93,10 @@ bool ModeRegistry::setEnabled(const QString& id, bool enabled) {
 
 void ModeRegistry::rebuild() {
     QVariantList out;
+    QVariantList pages;
     for (const ModeDescriptor& m : all_) {
         if (!m.visible) continue;
+        if (!m.builtin) pages << QVariantMap{{"id", m.id}, {"page", m.page}};
         const int position = int(out.size()) + 1;
         QString shortcut = m.shortcut;
         if (shortcut.isEmpty() && position <= 9) shortcut = QStringLiteral("Ctrl+") + QString::number(position);
@@ -98,7 +105,10 @@ void ModeRegistry::rebuild() {
                            {"builtin", m.builtin}};
     }
     cache_ = out;
+    const bool pagesDiffer = pages != pages_;
+    pages_ = pages;
     emit changed();
+    if (pagesDiffer) emit pagesChanged();
 }
 
 }  // namespace samn::ui

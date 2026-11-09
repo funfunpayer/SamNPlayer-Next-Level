@@ -63,6 +63,7 @@ qt_add_qml_module(samn_app
     qml/TopBar.qml
     qml/PlayButton.qml
     qml/PlayerPage.qml
+    qml/PlayerTimeline.qml
     qml/GeneratorPage.qml
     qml/TrainingPage.qml
     qml/TrainingRing.qml

@@ -6,7 +6,7 @@ Item {
     id: root
     // The app's one device connection (Main.qml); null hides the chip.
     property DeviceController device: null
-    // The visible modes of the ModeRegistry (D-165): Player, Generator,
+    // The visible modes of the ModeRegistry (D-166): Player, Generator,
     // Training (D-144, D-145), then the plugin modes that are switched on (D-155).
     readonly property var modes: ModeRegistry.modes.map((m) => ({
         id: m.id, name: m.title, color: m.hue, icon: m.icon, tooltip: m.tooltip, enabled: m.enabled }))

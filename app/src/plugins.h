@@ -7,7 +7,7 @@ namespace samn::ui {
 
 // The plugin switches (D-155): extra tabs after Player · Generator · Training.
 // A mode is a QML page in the app's module and a descriptor in the ModeRegistry
-// (D-165); it shows only while its switch in Settings → General is on. One
+// (D-166); it shows only while its switch in Settings → General is on. One
 // instance for the app (a QML singleton), so Settings sees the same state.
 class Plugins : public QObject {
     Q_OBJECT
