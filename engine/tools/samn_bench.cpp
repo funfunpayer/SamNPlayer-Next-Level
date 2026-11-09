@@ -147,6 +147,58 @@ std::vector<SceneDef> Scenes() {
              c.camera.zoom = [](double t) { return 1 + 0.25 * std::sin(2 * tc::kPi * 0.15 * t); };
              return tc::WriteCameraScene(p, kSec, c);
          }});
+    // Noisy, small and busy pictures (PR #201 review): the 1 px inlier share
+    // of a noisy background falls under the gate in many frames.
+    add({"pan_noisy", "pan_x_fast on a sparse texture with blur 5, noise sigma 25, JPEG 20", false, kBoxX,
+         TrackAxis::kX, false, [](const fs::path& p) {
+             tc::CameraScene c;
+             c.stroke_x = true;
+             c.camera.pan_x = tc::Sine(45, 0.25);
+             c.texture_density = 0.6;
+             c.blur_px = 5;
+             c.noise_sigma = 25;
+             c.jpeg_quality = 20;
+             return tc::WriteCameraScene(p, kSec, c);
+         }});
+    add({"pan_lowres_noisy", "192x144, pan x +-27 px at 0.25 Hz, blur 3, noise sigma 20, JPEG 20, X stroke", false,
+         {60, 36, 72, 72}, TrackAxis::kX, false, [](const fs::path& p) {
+             tc::CameraScene c;
+             c.w = 192;
+             c.h = 144;
+             c.disc_r = 21;
+             c.amp = 48;
+             c.stroke_x = true;
+             c.camera.pan_x = tc::Sine(27, 0.25);
+             c.texture_density = 0.8;
+             c.blur_px = 3;
+             c.noise_sigma = 20;
+             c.jpeg_quality = 20;
+             return tc::WriteCameraScene(p, kSec, c);
+         }});
+    add({"pan_fg", "pan x +-40 px at 0.3 Hz under a large moving textured disc, X stroke", false, kBoxX, TrackAxis::kX,
+         false, [](const fs::path& p) {
+             tc::CameraScene c;
+             c.stroke_x = true;
+             c.camera.pan_x = tc::Sine(40, 0.3);
+             c.foreground = true;
+             return tc::WriteCameraScene(p, kSec, c);
+         }});
+    add({"pan_lowres_fg", "192x144 pan under the moving disc, sparse texture, blur 5, noise sigma 4, JPEG 30", false,
+         {60, 36, 72, 72}, TrackAxis::kX, false, [](const fs::path& p) {
+             tc::CameraScene c;
+             c.w = 192;
+             c.h = 144;
+             c.disc_r = 21;
+             c.amp = 48;
+             c.stroke_x = true;
+             c.camera.pan_x = tc::Sine(27, 0.25);
+             c.foreground = true;
+             c.texture_density = 0.6;
+             c.blur_px = 5;
+             c.noise_sigma = 4;
+             c.jpeg_quality = 30;
+             return tc::WriteCameraScene(p, kSec, c);
+         }});
     for (const double len : {0.5, 2.0, 4.0}) {
         char name[32];
         std::snprintf(name, sizeof name, "occl_%gs", len);

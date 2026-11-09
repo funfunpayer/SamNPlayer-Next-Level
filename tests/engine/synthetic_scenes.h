@@ -122,12 +122,14 @@ struct CameraScene {
     double amp = 80, hz = 1.0;  // the tip disc's stroke in the world
     bool stroke_x = false;      // stroke along x (else y)
     CameraPath camera;
+    int w = kW, h = kH;         // frame size; the tip disc and the foreground scale with w / 320
+    int disc_r = 35;            // the tip disc's radius in the world
     // A hard cut to another, darker world at this frame (-1: none). The
     // camera keeps its path; the disc starts under the camera centre again.
     int cut_frame = -1;
-    // A large textured disc (radius 95) in front of the camera (frame
-    // coordinates, not the world) right of the tip, swinging along y at
-    // 0.35 Hz, the tip drawn over it: its features move against the
+    // A large textured disc (radius 95 at 320 px) in front of the camera
+    // (frame coordinates, not the world) right of the tip, swinging along y
+    // at 0.35 Hz, the tip drawn over it: its features move against the
     // background and compete in the camera estimate.
     bool foreground = false;
     // Background boxes per 1000 px^2 of world (the other scenes: about 1.65).
@@ -135,22 +137,32 @@ struct CameraScene {
     // A fresh noise picture behind the disc in every frame: no stable
     // feature, so a camera estimate is a random walk (GD-22, REJ-09).
     bool noise_background = false;
+    // Degradations of the finished frame, in this order (0 = off): a box
+    // blur of blur_px, Gaussian noise of noise_sigma, a JPEG round trip.
+    int blur_px = 0;
+    double noise_sigma = 0;
+    int jpeg_quality = 0;
+    // The tip disc is not drawn in [hide_from_s, hide_to_s) (occlusion).
+    double hide_from_s = -1, hide_to_s = -1;
 };
 
-// The tip disc (radius 35) sits at the frame centre at t = 0 (and after a
-// cut). Truth: the stroke in the world; the camera is not part of it.
+// The tip disc sits at the frame centre at t = 0 (and after a cut). Truth:
+// the stroke in the world; the camera is not part of it.
 inline SceneInfo WriteCameraScene(const std::filesystem::path& p, int seconds, const CameraScene& c) {
     SceneInfo s;
-    auto w = Writer(p);
+    s.w = c.w;
+    s.h = c.h;
+    auto w = WriterFor(p, c.w, c.h, kFps);
     if (!w.isOpened()) return s;
     constexpr int pad = 220;
-    const int ww = kW + 2 * pad, wh = kH + 2 * pad;
+    const double k = c.w / double(kW);  // foreground scale
+    const int ww = c.w + 2 * pad, wh = c.h + 2 * pad;
     const int boxes = int(c.texture_density * ww * wh / 1000.0);
     const cv::Mat world1 = Texture(ww, wh, 11, boxes);
     cv::Mat world2 = Texture(ww, wh, 99, boxes);
     world2.convertTo(world2, -1, 0.4, 12);
-    const cv::Mat fg_texture = Texture(kW, kH, 31, 400);
-    cv::RNG rng(77);
+    const cv::Mat fg_texture = Texture(c.w, c.h, 31, int(400 * k * k));
+    cv::RNG rng(77), noise_rng(1234);
     s.frames = int(kFps * seconds);
     for (int i = 0; i < s.frames; ++i) {
         const double t = i / kFps;
@@ -160,29 +172,48 @@ inline SceneInfo WriteCameraScene(const std::filesystem::path& p, int seconds, c
         const double d = Stroke(t, c.amp, c.hz);
         cv::Mat world = (after_cut ? world2 : world1).clone();
         if (c.noise_background) rng.fill(world, cv::RNG::UNIFORM, 0, 160);
-        Disc(world, int(std::lround(ax + (c.stroke_x ? d : 0))), int(std::lround(ay + (c.stroke_x ? 0 : d))));
+        const bool hidden = t >= c.hide_from_s && t < c.hide_to_s;
+        if (!hidden)
+            DiscR(world, int(std::lround(ax + (c.stroke_x ? d : 0))), int(std::lround(ay + (c.stroke_x ? 0 : d))),
+                  c.disc_r);
         const double z = c.camera.zoom(t);
         const double cx = ww / 2.0 + c.camera.pan_x(t), cy = wh / 2.0 + c.camera.pan_y(t);
-        const cv::Mat m = (cv::Mat_<double>(2, 3) << z, 0, kW / 2.0 - z * cx, 0, z, kH / 2.0 - z * cy);
+        const cv::Mat m = (cv::Mat_<double>(2, 3) << z, 0, c.w / 2.0 - z * cx, 0, z, c.h / 2.0 - z * cy);
         cv::Mat f;
-        cv::warpAffine(world, f, m, {kW, kH}, cv::INTER_LINEAR, cv::BORDER_REPLICATE);
+        cv::warpAffine(world, f, m, {c.w, c.h}, cv::INTER_LINEAR, cv::BORDER_REPLICATE);
         if (c.foreground) {
-            const int fy = int(std::lround(50 * std::sin(2 * kPi * 0.35 * t)));
-            cv::Mat mask = cv::Mat::zeros(kH, kW, CV_8U), moved;
-            cv::circle(mask, {275, 120 + fy}, 95, cv::Scalar(255), cv::FILLED);
+            const int fy = int(std::lround(50 * k * std::sin(2 * kPi * 0.35 * t)));
+            cv::Mat mask = cv::Mat::zeros(c.h, c.w, CV_8U), moved;
+            cv::circle(mask, {int(std::lround(275 * k)), c.h / 2 + fy}, int(std::lround(95 * k)), cv::Scalar(255),
+                       cv::FILLED);
             const cv::Mat shift = (cv::Mat_<double>(2, 3) << 1, 0, 0, 0, 1, fy);
-            cv::warpAffine(fg_texture, moved, shift, {kW, kH}, cv::INTER_NEAREST, cv::BORDER_WRAP);
+            cv::warpAffine(fg_texture, moved, shift, {c.w, c.h}, cv::INTER_NEAREST, cv::BORDER_WRAP);
             moved.copyTo(f, mask);
             // The tip stays in front: this is about the camera estimate, not occlusion.
             const double tx = ax + (c.stroke_x ? d : 0), ty = ay + (c.stroke_x ? 0 : d);
-            DiscR(f, int(std::lround(z * (tx - cx) + kW / 2.0)), int(std::lround(z * (ty - cy) + kH / 2.0)),
-                  int(std::lround(35 * z)));
+            if (!hidden)
+                DiscR(f, int(std::lround(z * (tx - cx) + c.w / 2.0)), int(std::lround(z * (ty - cy) + c.h / 2.0)),
+                      int(std::lround(c.disc_r * z)));
+        }
+        if (c.blur_px > 1) cv::blur(f, f, {c.blur_px, c.blur_px});
+        if (c.noise_sigma > 0) {
+            cv::Mat noise(f.size(), CV_32FC3), fl;
+            noise_rng.fill(noise, cv::RNG::NORMAL, 0.0, c.noise_sigma);
+            f.convertTo(fl, CV_32FC3);
+            fl += noise;
+            fl.convertTo(f, CV_8UC3);
+        }
+        if (c.jpeg_quality > 0) {
+            std::vector<uchar> buf;
+            cv::imencode(".jpg", f, buf, {cv::IMWRITE_JPEG_QUALITY, c.jpeg_quality});
+            f = cv::imdecode(buf, cv::IMREAD_COLOR);
         }
         w.write(f);
     }
     const double amp = c.amp, hz = c.hz;
     s.signal = [amp, hz](double t) { return -Stroke(t, amp, hz); };
     if (c.cut_frame >= 0) s.cut_frames = {c.cut_frame};
+    if (c.hide_to_s > c.hide_from_s && c.hide_from_s >= 0) s.hidden_s.push_back({c.hide_from_s, c.hide_to_s});
     s.ok = true;
     return s;
 }

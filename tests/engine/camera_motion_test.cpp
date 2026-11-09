@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -356,4 +357,109 @@ TEST_CASE("camera: the track cache keeps the frame pixels of both axes") {
     CHECK(back->xs == r.xs);
     CHECK(back->frame_xs == r.frame_xs);
     CHECK(back->frame_ys == r.frame_ys);
+}
+
+// Noisy and small pictures (PR #201 review). At the 1 px RANSAC distance a
+// noisy background's inlier share falls under the gate in many frames
+// (here 47 of 300 at 192x144, 84 of 300 at 320x240); a gated frame that adds
+// nothing drops its whole camera step for good, and the pan comes back as a
+// drift. 0.7's 3 px fit tracked these at r 0.994 / 0.998.
+namespace {
+
+tc::CameraScene NoisyPan(int w) {
+    tc::CameraScene c = PanX(45 * w / 320.0, 0.25, true);
+    c.w = w;
+    c.h = w * 3 / 4;
+    c.disc_r = int(std::lround(35 * w / 320.0));
+    c.amp = 80 * w / 320.0;
+    c.texture_density = w < 320 ? 0.8 : 0.6;
+    c.blur_px = w < 320 ? 3 : 5;
+    c.noise_sigma = w < 320 ? 20 : 25;
+    c.jpeg_quality = 20;
+    return c;
+}
+
+cv::Rect BoxX(int w) {
+    const int b = int(std::lround(120 * w / 320.0));
+    return {w / 2 - b / 2, w * 3 / 8 - b / 2, b, b};
+}
+
+double Median(std::vector<double> v) {
+    std::sort(v.begin(), v.end());
+    return v.empty() ? 0.0 : v[v.size() / 2];
+}
+
+}  // namespace
+
+TEST_CASE("camera: a noisy picture keeps its compensation (a gated frame does not drop the pan)") {
+    TempDir dir;
+    for (const int w : {320, 192}) {
+        const fs::path clip = dir.path / ("noisy_" + std::to_string(w) + ".mp4");
+        const tc::SceneInfo s = Scene(clip, NoisyPan(w));
+        const TrackResult raw = Track(clip, BoxX(w), Cam(TrackAxis::kX, false));
+        const TrackResult comp = Track(clip, BoxX(w), Cam(TrackAxis::kX));
+        INFO(w << " px: raw r " << R(raw, s) << ", compensated r " << R(comp, s) << ", frames without a step "
+                << comp.stats.camera_frames_lost << " of " << comp.stats.total_frames);
+        CHECK(R(raw, s) < 0.9);
+        CHECK(R(comp, s) >= 0.99);
+    }
+}
+
+TEST_CASE("camera: the self-check's camera trust stays 0.7's 3 px inlier share") {
+    TempDir dir;
+    const fs::path clip = dir.path / "noisy_checks.mp4";
+    const tc::SceneInfo s = Scene(clip, NoisyPan(320));
+    TrackOptions o = Cam(TrackAxis::kX);
+    o.record_checks = true;
+    const TrackResult r = Track(clip, BoxX(320), o);
+    std::vector<double> shares;
+    for (const double v : r.checks.camera_inliers)
+        if (!std::isnan(v)) shares.push_back(v);
+    REQUIRE(shares.size() > 120);
+    // c6 (self_check.h, c6_min 0.4) was calibrated on the 3 px share; the
+    // 1 px share of this clip has a median near 0.52, the 3 px share near 0.82.
+    CHECK_MESSAGE(Median(shares) >= 0.7, "median recorded share " << Median(shares));
+    CHECK(R(r, s) >= 0.99);  // recording does not change the track
+}
+
+TEST_CASE("camera: an implausible or broken estimate is not used") {
+    // A fit with every point an inlier can still be no camera of a stroke
+    // video: a zoom of 1.3 or a turn of 0.3 rad (17 degrees) in one frame,
+    // or a matrix that is not finite.
+    const auto fit = [](double scale, double angle) {
+        CameraMotion c;
+        c.ok = true;
+        c.inliers = 1;
+        c.m = cv::Matx23d(scale * std::cos(angle), -scale * std::sin(angle), 0, scale * std::sin(angle),
+                          scale * std::cos(angle), 0);
+        return c;
+    };
+    CHECK(fit(1.05, 0.02).Usable());
+    CHECK_FALSE(fit(1.3, 0).Usable());
+    CHECK_FALSE(fit(0.75, 0).Usable());
+    CHECK_FALSE(fit(1, 0.3).Usable());
+    CameraMotion broken = fit(1, 0);
+    broken.m(0, 2) = std::numeric_limits<double>::quiet_NaN();
+    CHECK_FALSE(broken.Usable());
+}
+
+TEST_CASE("camera: a held box stays where it was in the scene") {
+    TempDir dir;
+    const fs::path clip = dir.path / "held.mp4";
+    tc::CameraScene c = PanX(45, 0.25, true);
+    c.hide_from_s = 2.0;
+    c.hide_to_s = 3.6;
+    c.texture_density = 0.2;  // little to latch onto: the tracker reports the loss
+    Scene(clip, c);
+    const TrackResult r = Track(clip, kBoxX, Cam(TrackAxis::kX));
+    int held = 0, moved = 0;
+    for (size_t i = 1; i < r.lost.size(); ++i) {
+        if (r.lost[i] != kLostTracker) continue;
+        ++held;
+        // The tracker repeats its last box; the camera moved on: that is no
+        // motion of the tip in the scene.
+        if (r.xs[i] != r.xs[i - 1] || r.ys[i] != r.ys[i - 1]) ++moved;
+    }
+    REQUIRE(held >= 10);
+    CHECK_MESSAGE(moved == 0, moved << " of " << held << " held frames moved");
 }
