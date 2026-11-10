@@ -27,8 +27,10 @@
 #include "samn/marks.h"
 #include "samn/playback.h"
 #include "samn/playback_mapping.h"
+#include "samn/polarity.h"
 #include "samn/project.h"
 #include "samn/range_edit.h"
+#include "samn/ringdown.h"
 #include "samn/samn_file.h"
 #include "samn/script_finder.h"
 #include "samn/script_quality.h"
@@ -595,6 +597,43 @@ bool PlayerController::invertAll() {
         false);
 }
 
+QVariantMap PlayerController::suggestPolarity() {
+    // stroke_ is the curve Play shows (an OFS inverted flag is already baked
+    // in when that setting is on). A hint only: nothing is flipped here.
+    if (scriptPath_.isEmpty() || stroke_.empty())
+        return {{"suggestInvert", false}, {"reason", QString()}, {"error", tr("no script loaded")}};
+    const samn::PolarityHint hint = samn::SuggestPolarity(stroke_);
+    return {{"suggestInvert", hint.suggest_invert},
+            {"reason", QString::fromStdString(hint.reason)},
+            {"error", QString()}};
+}
+
+bool PlayerController::applyRingDown(int cycles) {
+    if (scriptPath_.isEmpty() || stroke_.empty()) {
+        setError(tr("no script loaded"));
+        return false;
+    }
+    int64_t atMs = playheadMs_;
+    if (atMs < 0) atMs = 0;
+    int lastPos = 0;
+    for (const auto& act : stroke_) {
+        if (act.at > atMs) break;
+        lastPos = act.pos;
+    }
+    if (lastPos < 10) {
+        setError(tr("position too low for ring-down (%1)").arg(lastPos));
+        return false;
+    }
+    if (cycles < 1) cycles = 1;
+    if (cycles > 2) cycles = 2;
+    return applySelectionEdit(
+        tr("Ring-down"),
+        [atMs, lastPos, cycles](const std::vector<samn::Action>& actions) {
+            return samn::RingDown(actions, atMs, lastPos, cycles);
+        },
+        false, true);
+}
+
 QString PlayerController::undoText() const {
     return canUndo() ? tr("Undo: %1").arg(QString::fromStdString(editSession_.UndoLabel())) : tr("Nothing to undo");
 }
@@ -699,7 +738,7 @@ bool PlayerController::redo() {
 
 bool PlayerController::applySelectionEdit(const QString& label,
                                          const std::function<std::vector<samn::Action>(const std::vector<samn::Action>&)>& op,
-                                         bool needMarker) {
+                                         bool needMarker, bool forceStroke) {
     if (scriptPath_.isEmpty() || stroke_.size() < 2) {
         setError(tr("Open a script first."));
         return false;
@@ -708,7 +747,9 @@ bool PlayerController::applySelectionEdit(const QString& label,
         setError(tr("Mark a range on the heatmap first."));
         return false;
     }
-    const auto lane = ParseEditLane(activeLane_, vibrationFromScript_, suctionFromScript_);
+    std::optional<EditLane> lane;
+    if (forceStroke) lane = EditLane::Stroke;
+    else lane = ParseEditLane(activeLane_, vibrationFromScript_, suctionFromScript_);
     if (!lane) {
         setError(tr("Pick the Stroke lane, or Adapt for Sam Neo 2 so vibration/suction are in the script."));
         return false;

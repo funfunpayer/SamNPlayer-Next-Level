@@ -229,6 +229,79 @@ Column {
         InspectorNote { text: qsTr("Curve picks the lane the main curve shows. + Axis… creates a centred companion file (surge/sway/twist/roll/pitch) beside the script. Drive Recipe/Axes and Save Emotion Script write the .samn.") }
         InspectorNote { objectName: "bakeNote"; visible: ctrl.toolNote !== ""; text: ctrl.toolNote }
     }
+    InspectorCard {
+        id: suggest
+        objectName: "suggestCard"
+        title: qsTr("Suggest")
+        property int polarityTick: 0
+        // hasScript notifies on every script change, so the reason shows as
+        // soon as a script is open. The button bumps polarityTick to ask again.
+        readonly property string polarityReason: {
+            if (polarityTick < 0 || !ctrl.hasScript) return ""
+            const hint = ctrl.suggestPolarity()
+            return hint.error ? hint.error : (hint.reason || "")
+        }
+        property string zoneNote: ""
+        property string actionNote: ""
+        InspectorNote {
+            objectName: "polarityReason"
+            visible: suggest.polarityReason !== ""
+            text: suggest.polarityReason
+        }
+        FlowButton {
+            objectName: "checkPolarity"
+            text: qsTr("Check polarity")
+            enabled: ctrl.hasScript
+            onClicked: suggest.polarityTick += 1
+        }
+        FlowButton {
+            objectName: "applySuggestedOZone"
+            text: qsTr("Apply suggested O-zone")
+            enabled: ctrl.hasScript
+            onClicked: {
+                const zone = ctrl.applySuggestedOZone()
+                if (zone.error) {
+                    suggest.zoneNote = zone.error
+                    rootPanel.projectStatus = zone.error
+                } else if (zone.ok) {
+                    suggest.zoneNote = qsTr("O-zone suggested: %1 s–%2 s")
+                        .arg((zone.startMs / 1000).toFixed(1))
+                        .arg((zone.endMs / 1000).toFixed(1))
+                } else {
+                    suggest.zoneNote = zone.reason || ""
+                }
+            }
+        }
+        InspectorNote { objectName: "ozoneNote"; visible: suggest.zoneNote !== ""; text: suggest.zoneNote }
+        Row {
+            spacing: 8
+            FlowButton {
+                objectName: "ringDown"
+                text: qsTr("Ring-down at playhead")
+                enabled: ctrl.hasScript
+                onClicked: {
+                    if (ctrl.applyRingDown(1)) suggest.actionNote = ctrl.toolNote
+                    else {
+                        suggest.actionNote = ctrl.lastError
+                        rootPanel.projectStatus = ctrl.lastError
+                    }
+                }
+            }
+            FlowButton {
+                objectName: "ringDownTwo"
+                text: qsTr("2 cycles")
+                enabled: ctrl.hasScript
+                onClicked: {
+                    if (ctrl.applyRingDown(2)) suggest.actionNote = ctrl.toolNote
+                    else {
+                        suggest.actionNote = ctrl.lastError
+                        rootPanel.projectStatus = ctrl.lastError
+                    }
+                }
+            }
+        }
+        InspectorNote { objectName: "ringDownNote"; visible: suggest.actionNote !== ""; text: suggest.actionNote }
+    }
     // Effects (0.7 Player Inspector → Effects and "Playback &
     // Extended-O"): the presets, Intensity and the mapping
     // settings. A change maps the script again at once.

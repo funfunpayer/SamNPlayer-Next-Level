@@ -2,7 +2,13 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 10 Nov 2026, Cursor, branch `cursor/player-thumbs-quality-635a`: sharper scene-strip thumbs (72 px) + PARITY tick for #211; #226 on main; #225/#228/#229 in flight. Owner rule: quality first; CPU/RAM for speed+quality. #217 still owner-reviewed. Do not touch feel_heatbands / Speech-Hold / handbook / .sam.
+**Last update:** 10 Nov 2026, Cursor, branch `cursor/player-ringdown-ozone-635a`: Player Suggest card — polarity hint, apply suggested O-zone (`AutoOZoneMarkers`), ring-down at the playhead. Do not touch feel_heatbands / Speech-Hold / handbook / .sam.
+
+## Handover: ring-down and suggested O-zone (10 Nov)
+
+- **Core:** `ringdown.h` ports 0.7 `RingDown` (cycles clamp to 1–2, 180 ms steps, the existing points stay, the last point is 0).
+- **Player:** `suggestPolarity` (hint only), `applySuggestedOZone` (marker range plus `AutoOZoneMarkers`, no invert), `applyRingDown` on the stroke axis through the curve-edit save. Inspector → Playback → Suggest.
+- **Tests:** `tests/core/ringdown_test.cpp`; `suggestPolarityReturnsReason`, `applyRingDownRejectsLowAndAppendsEndingAtZero`, `applySuggestedOZoneWritesMarkerAndOMarker`; QML `playbackSuggestCard`.
 
 
 
@@ -234,7 +240,7 @@ Owner: finish Player/Editor GUI except Claude #168.
 ## Still open (non-Claude, Player/Editor)
 
 - Speech-Hold / Feel segment strip + heatmap bands (needs `audio_check` segments)
-- Scene strip thumbnails in Player (#211; 72 px decode quality)
+- Scene strip thumbnails in Player (markers done; thumbs Generator-side)
 
 ## Handover: `cursor/player-bpm-audio-635a` (8 Nov, BPM From audio) — merged #183
 
