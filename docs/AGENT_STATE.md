@@ -1,8 +1,4 @@
-# Agent state
-
-**Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
-
-**Last update:** 10 Nov 2026, Cursor, branch `cursor/player-script-analysis-635a`: script analysis summary (motion states and chapters) on the Player's Script check card. Automatic chapters are display only. Do not touch feel_heatbands / Speech-Hold / handbook / .sam.
+**Last update:** 10 Nov 2026, Cursor, branch `cursor/readme-player-gui-635a`: README Player (scenes/thumbs/legend/Alt+B); LaneName Left/Right/Home/End; PARITY axis-legend tick. Rebased onto main after script analysis (#229) and ring-down (#230). Quality first; CPU/RAM for speed+quality. #217 still owner-reviewed. Do not touch feel_heatbands / Speech-Hold / handbook / .sam.
 
 ## Handover: script analysis (10 Nov)
 

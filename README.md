@@ -44,9 +44,12 @@ The device connection, the folder button and Settings sit on the right and are s
 ### Player
 
 Play a script with its video and your device. The Library is on the left and the Inspector
-on the right (devices, audio, playback, view); both slide away for more room. The timeline below
-shows the stroke curve, the audio level, chapters and the heatmap. A fast script seen from far away
-becomes a calm **tempo** wave; zooming in shows the single strokes.
+on the right (devices, audio, playback, view); both slide away for more room (top-bar toggle or
+<kbd>Alt</kbd>+<kbd>B</kbd>). The timeline below shows the stroke curve, feel lanes, audio level,
+chapters and the heatmap. Turn on **Scene markers** to see chapter bands and a strip of video
+thumbnails under the lanes (click a thumb to seek). A fast script seen from far away becomes a
+calm **tempo** wave; zooming in shows the single strokes. Lane names on the left are the axis
+legend — click one (or use the arrow keys) to show that channel on the main curve.
 
 <p align="center">
   <img src="docs/media/gui-player.png" alt="Player mode — video stage, transport, timeline, Inspector" width="900" />

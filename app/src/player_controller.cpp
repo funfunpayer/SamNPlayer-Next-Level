@@ -181,8 +181,17 @@ void PlayerController::setActiveLane(const QString& lane) {
 void PlayerController::stepActiveLane(int delta) {
     const QStringList choices = laneChoices();
     if (choices.size() < 2) return;
-    const int i = std::max<int>(0, int(choices.indexOf(activeLane_)));
     const int n = int(choices.size());
+    // |delta| >= n: Home / End from the legend (first / last lane).
+    if (delta <= -n) {
+        setActiveLane(choices.first());
+        return;
+    }
+    if (delta >= n) {
+        setActiveLane(choices.last());
+        return;
+    }
+    const int i = std::max<int>(0, int(choices.indexOf(activeLane_)));
     setActiveLane(choices[((i + delta) % n + n) % n]);
 }
 
