@@ -544,7 +544,12 @@ Item {
                         ColumnLayout {
                             id: rawCol
                             anchors.fill: parent; anchors.margins: 14; spacing: 10
-                            Text { textFormat: Text.PlainText; text: qsTr("Raw value test"); color: Theme.text; font.family: Theme.font; font.pixelSize: 15 }
+                            RowLayout {
+                                spacing: 8
+                                Text { textFormat: Text.PlainText; text: qsTr("Raw value test"); color: Theme.text; font.family: Theme.font; font.pixelSize: 15 }
+                                HelpChip { key: "device.raw-value-test" }
+                                Item { Layout.fillWidth: true }
+                            }
                             Text {
                                 textFormat: Text.PlainText
                                 Layout.fillWidth: true; wrapMode: Text.WordWrap
@@ -589,7 +594,12 @@ Item {
                         ColumnLayout {
                             id: diagCol
                             anchors.fill: parent; anchors.margins: 14; spacing: 10
-                            Text { textFormat: Text.PlainText; text: qsTr("Device diagnostics"); color: Theme.text; font.family: Theme.font; font.pixelSize: 15 }
+                            RowLayout {
+                                spacing: 8
+                                Text { textFormat: Text.PlainText; text: qsTr("Device diagnostics"); color: Theme.text; font.family: Theme.font; font.pixelSize: 15 }
+                                HelpChip { key: "device.device-diagnostics" }
+                                Item { Layout.fillWidth: true }
+                            }
                             Text {
                                 textFormat: Text.PlainText
                                 Layout.fillWidth: true; wrapMode: Text.WordWrap
@@ -686,6 +696,11 @@ Item {
                         Layout.fillWidth: true; elide: Text.ElideRight
                         text: sysCtl.running ? qsTr("Checking …") : sysCtl.items.length === 0 ? qsTr("Not checked yet.") : sysCtl.summary
                         color: Theme.text; font.family: Theme.font; font.pixelSize: 15
+                    }
+                    HelpChip {
+                        objectName: "systemHardwareHelp"
+                        // 0.7 "Check hardware" lives here (D-162 / D-167), not a separate Tools Home row.
+                        text: qsTr("This is the hardware and runtime check (GPUs, codecs, ffmpeg, Python, RAM). It replaces 0.7's Tools Home status and Settings → Check hardware.")
                     }
                     FlowButton {
                         objectName: "systemCheckAgain"

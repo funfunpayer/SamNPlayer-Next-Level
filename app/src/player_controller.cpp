@@ -662,6 +662,7 @@ bool PlayerController::openScript(const QString& pathIn, const QString& videoIn)
 
     scriptPath_ = path;
     loadMarks(path);
+    refreshScriptAnalysis();
     {
         const auto v = settings().get("playback.omarker_intensity", 0.5);
         oMarkerIntensity_ = v.is_number() ? std::clamp(v.get<double>(), 0.0, 1.0) : 0.5;
@@ -890,6 +891,10 @@ void PlayerController::clearScript() {
     playbackSource_ = QStringLiteral("recipe");
     emit mappedChanged();
     stroke_.clear();
+    if (!scriptAnalysisSummary_.isEmpty()) {
+        scriptAnalysisSummary_.clear();
+        emit scriptAnalysisSummaryChanged();
+    }
     vibration_.clear();
     suction_.clear();
     axisActions_.clear();

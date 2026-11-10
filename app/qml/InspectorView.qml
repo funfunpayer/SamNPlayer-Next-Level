@@ -35,11 +35,15 @@ Column {
             HelpChip { key: "pb-pos-overlay-row"; anchors.verticalCenter: parent.verticalCenter }
         }
         // 0.7 "Show contact areas" with its hint, when the script stores marks.
-        FlowButton {
-            objectName: "showContactMarks"
+        Row {
+            spacing: 8
             visible: ctrl.contactMarks.hint !== undefined
-            text: qsTr("Show contact areas"); checked: ctrl.showContactMarks
-            onClicked: ctrl.showContactMarks = !ctrl.showContactMarks
+            FlowButton {
+                objectName: "showContactMarks"
+                text: qsTr("Show contact areas"); checked: ctrl.showContactMarks
+                onClicked: ctrl.showContactMarks = !ctrl.showContactMarks
+            }
+            HelpChip { key: "pb-contact-marks-toggle"; anchors.verticalCenter: parent.verticalCenter }
         }
         Text {
             objectName: "contactMarksHint"
@@ -125,6 +129,7 @@ Column {
                 ToolTipText { shown: hlThHover.hovered; text: qsTr("Intensity threshold for Speed highlights on the curve (500×|Δpos|/|Δt|). Lower = more red bands.") }
             }
             Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; text: Math.round(ctrl.speedHighlightThresh); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
+            HelpChip { key: "playback.hl"; anchors.verticalCenter: parent.verticalCenter }
         }
         Row {
             spacing: 8
@@ -213,6 +218,7 @@ Column {
                 enabled: ctrl.hasScript && ctrl.hasMarker
                 onClicked: ctrl.scaleSelection(1.25)
             }
+            HelpChip { key: "playback.scale"; anchors.verticalCenter: parent.verticalCenter }
             FlowButton {
                 objectName: "curveDelete"
                 text: qsTr("Delete range")
@@ -266,7 +272,7 @@ Column {
             FlowSlider {
                 objectName: "fpsSnap"
                 anchors.verticalCenter: parent.verticalCenter
-                width: curveEdit.width - 24 - 78 - 48
+                width: curveEdit.width - 24 - 78 - 48 - 26
                 from: 0; to: 60; value: ctrl.fpsSnap
                 onMoved: (v) => ctrl.fpsSnap = Math.round(v)
             }
@@ -276,6 +282,7 @@ Column {
                 text: ctrl.fpsSnap > 0 ? qsTr("%1").arg(Math.round(ctrl.fpsSnap)) : qsTr("off")
                 color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
             }
+            HelpChip { key: "playback.fps-snap"; anchors.verticalCenter: parent.verticalCenter }
         }
         InspectorNote { text: qsTr("Seeks snap to frame boundaries when FPS-Snap is on (0 = off).") }
         InspectorNote { visible: !ctrl.hasMarker; text: qsTr("Mark a range for Cap / Scale / Delete. Invert all works without one.") }
@@ -339,6 +346,7 @@ Column {
                 onMoved: (v) => ctrl.oMarkerIntensity = Math.round(v * 20) / 20
             }
             Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; text: Math.round(ctrl.oMarkerIntensity * 100) + "%"; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
+            HelpChip { key: "playback.intensity"; anchors.verticalCenter: parent.verticalCenter }
         }
         FlowButton {
             text: qsTr("Apply as O-marker"); enabled: ctrl.hasMarker
@@ -357,6 +365,7 @@ Column {
     }
     InspectorCard {
         title: qsTr("Full curve editing")
+        help: "pb-curve-edit-hint"
         InspectorNote { text: qsTr("Point drag, undo and scenes are in the Generator (the Editor). Cap / Softer / Stronger / Delete / Invert on a heatmap mark are under Curve edit above.") }
         FlowButton { objectName: "editScript"; text: qsTr("Edit this script"); icon: "edit"; enabled: ctrl.hasScript; onClicked: rootPanel.editRequested(false) }
     }

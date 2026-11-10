@@ -33,6 +33,7 @@ qt_add_qml_module(samn_app
     src/player_controller.h src/player_controller.cpp
     src/player_internal.h
     src/player_script_io.cpp
+    src/player_analysis.cpp
     src/player_audio_jobs.cpp
     src/player_marks.cpp
     src/script_clock.h src/script_clock.cpp

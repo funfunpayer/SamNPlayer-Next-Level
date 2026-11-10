@@ -25,6 +25,7 @@
 #include "samn/improve.h"
 #include "samn/mapper.h"
 #include "samn/marks.h"
+#include "samn/ozone.h"
 #include "samn/playback.h"
 #include "samn/playback_mapping.h"
 #include "samn/project.h"
@@ -48,6 +49,15 @@ void PlayerController::loadMarks(const QString& path) {
 namespace {
 
 QString Secs(int64_t ms) { return QString::number(ms / 1000.0, 'f', 1) + QLatin1Char('s'); }
+
+QVariantMap ZoneMap(const samn::OZoneSuggestion& zone, const QString& error) {
+    return {{"ok", zone.ok},
+            {"startMs", qint64(zone.start_ms)},
+            {"endMs", qint64(zone.end_ms)},
+            {"reason", QString::fromStdString(zone.reason)},
+            {"mean", zone.mean},
+            {"error", error}};
+}
 
 QString CleanName(const QString& name, const QString& fallback) {
     const QString n = name.trimmed().left(80);
@@ -121,6 +131,9 @@ bool PlayerController::commitMarks(std::vector<T>& list, std::vector<T> next, Sa
         return false;  // the old list stays (0.7: rollback)
     }
     list = std::move(next);
+    // 0.7 re-runs describeScript after chapter saves; bookmarks/O-markers are cheap no-ops
+    // when stored chapters are empty (auto motion kinds unchanged).
+    refreshScriptAnalysis();
     emit marksChanged();
     emit scriptEdited(scriptPath_);
     pushMarks();
@@ -229,6 +242,35 @@ bool PlayerController::removeOMarker(int index) {
     auto next = marks_.o_markers;
     next.erase(next.begin() + index);
     return commitMarks(marks_.o_markers, std::move(next), samn::SaveScriptOMarkers);
+}
+
+QVariantMap PlayerController::applySuggestedOZone() {
+    if (scriptPath_.isEmpty() || stroke_.empty()) return ZoneMap({}, tr("no script loaded"));
+    const samn::OZoneSuggestion zone = samn::SuggestOZone(stroke_);
+    if (!zone.ok) return ZoneMap(zone, {});  // a suggestion only; nothing is written
+    const auto path = std::filesystem::u8path(U8(scriptPath_));
+    try {
+        samn::SaveMarker(path, {zone.start_ms, zone.end_ms});
+    } catch (const std::exception& e) {
+        return ZoneMap(zone, FromU8(e.what()));
+    }
+    const samn::RangeMarker marked{zone.start_ms, zone.end_ms};
+    if (!(marker_ == marked)) {
+        marker_ = marked;
+        emit markerChanged();
+        emit loopChanged();
+    }
+    // Primary at intensity 1, secondaries at mean/primary clamped 0.2–0.8
+    // (AutoOZoneMarkers). Appended; existing O-markers stay. Never inverted.
+    auto next = marks_.o_markers;
+    const auto added = samn::AutoOZoneMarkers(stroke_);
+    next.insert(next.end(), added.begin(), added.end());
+    std::stable_sort(next.begin(), next.end(), [](const samn::OMarker& a, const samn::OMarker& b) {
+        return a.start_ms < b.start_ms;
+    });
+    if (!commitMarks(marks_.o_markers, std::move(next), samn::SaveScriptOMarkers)) return ZoneMap(zone, lastError_);
+    setError({});
+    return ZoneMap(zone, {});
 }
 
 void PlayerController::setOMarkerIntensity(double v) {

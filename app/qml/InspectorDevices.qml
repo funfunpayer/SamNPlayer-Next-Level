@@ -278,6 +278,7 @@ Column {
                 currentIndex: Math.max(0, values.indexOf(ctrl.output.smooth))
                 onActivated: (i) => ctrl.output.smooth = values[i]
             }
+            HelpChip { key: "pb-stroke-smooth"; anchors.verticalCenter: parent.verticalCenter }
         }
         Row {
             spacing: 8
@@ -291,6 +292,7 @@ Column {
                 currentIndex: Math.max(0, values.indexOf(ctrl.output.maxSpeed))
                 onActivated: (i) => ctrl.output.maxSpeed = values[i]
             }
+            HelpChip { key: "pb-stroke-speed"; anchors.verticalCenter: parent.verticalCenter }
         }
         Row {
             spacing: 8

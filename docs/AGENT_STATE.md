@@ -2,9 +2,28 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 8 Nov 2026, Claude, branch `claude/samn2-intensity-arc`: intro and climaxes from an intensity arc (D-165, core only; third review answered; handover below). Before it: the playhead extrapolation (#163, D-164), Cursor's Editor tools surface (#171), Player BPM from stroke (#170), Adapt for device (#169). Rebased onto main after #201 (2-D camera). Rebased onto main after #215 (intensity-arc). Rebased onto main after #213 (intensity-arc). Rebased onto main after #198 (intensity-arc). Rebased onto main after #214.
+**Last update:** 10 Nov 2026, Cursor, branch `cursor/player-script-analysis-635a`: script analysis summary (motion states and chapters) on the Player's Script check card. Automatic chapters are display only. Do not touch feel_heatbands / Speech-Hold / handbook / .sam.
+
+## Handover: script analysis (10 Nov)
+
+- **Core:** `motion_classify.h` (0.7 `motionx.Classify`), `motion_chapters.h` (`Chapters`), `script_analysis.h` (`AnalyzeScript` / `summarizeStates`). An empty `ClassifyOptions` does not smooth; only `AnalyzeScriptActions` sets `SmoothRadius` 2. `ScriptChapters` classifies with smoothing off.
+- **Player:** `scriptAnalysisSummary` after a script with at least 4 points, on the Playback card "Script check & analysis" (title gains "· summary ready"). Stored `metadata.chapters` replace the automatic labels (empty name → "chapter", end at or before the start → start+1). Nothing is written back.
+- **Tests:** `tests/core/motion_classify_test.cpp`, `motion_chapters_test.cpp`, `script_analysis_test.cpp`, `tests/app/player_controller_test.cpp` `scriptAnalysisOnOpen`.
 
 
+
+## Handover: `claude/samn2-label-vfr` (9 Nov, label tracking: VFR fix and long-GOP window)
+
+Follow-up to #198 (label tracking memory), which was merged before its review finished. **#198 broke variable-frame-rate clips** (phone footage): the backward decode seeked by the nominal rate and required the exact frame time, so it failed with "the video changed between two reads" where the old code worked. This PR fixes that and the rest of the review. Below: the whole current design.
+
+Owner priority: CPU/RAM efficient AI. `TrackBetweenKeys` (`engine/src/label_tracking.cpp`) kept every small frame of the stretch in a `std::vector<cv::Mat>` (about 0.7 MB per frame at 640 px wide, up to `max_frames` = 1500, so about 1 GB) because the backward run needs the frames in reverse.
+
+- **Change:** the forward run streams (read, track, drop; frames nothing will track are only grabbed). The backward run decodes the stretch in chunks (24 frames, growing to at most 96 when seeks are measured to be costly, i.e. a long GOP) and decodes the next chunk on another thread into a second reused buffer; at most two windows are alive. The wanted frame is found by its time (seek, grab until the time, retry further back if the seek landed after it), so variable-frame-rate clips work. A lost track stops the backward run. New `FrameReader::Grab` / `Retrieve` (Read is both). `BetweenKeysOptions` got `window_frames`, `max_window_frames`, `stats`; `samn_engine` links Threads.
+- **Result (synthetic, `docs/benchmarks/LABEL_MEMORY_2026-11-08.md`):** GOP 12 720p: RSS 758 to 137 MB (5.5x), CPU -2 %. Long GOP (H.264, GOP 250): RSS 769 to 243 MB (720p, 3.2x, CPU +5 %) and 802 to 281 MB (1080p, 2.9x, CPU +18 %). The acceptance of 5x and +10 % holds for the short GOP only; the long GOP is the second decode plus the seeks. Boxes bit-identical in every case.
+- **Tools/tests:** `samn_label_mem` (`--make`, `--track`; by hand, `EXCLUDE_FROM_ALL`); engine tests against a copy of the old algorithm: bounded window, cut clip, cancel after k polls, box-vs-stretch check order, VFR and long-GOP clips (these use the ffmpeg program and say SKIPPED where it is missing; CI has it).
+- **VFR:** fixed and tested: the engine test makes VFR clips with ffmpeg; on main's code (#198) it fails with "the video changed between two reads", with this change boxes equal the old algorithm's.
+- **Not verified:** Windows/MSVC, real clips (phones: B-frames, GOP 30 to 60; only synthetic VFR and GOP made by ffmpeg were tried), the Qt `label_controller` (not built here; its call site is unchanged).
+- **Ideas not done:** keep the forward run's last chunk instead of decoding it again; a `FrameReader` that reports the GOP.
 
 ## Handover: `claude/samn2-intensity-arc` (6-8 Nov, D-165 first slice: intro and climaxes)
 
@@ -54,16 +73,6 @@ Owner: find the intro and the climaxes ("Höhepunkte") of a video from its sound
   4. beat tracking (Ellis dynamic programming) as the AU-04 fallback for rounds without a visible beat bar;
   5. a speech / music / silence gate.
 - **Cleanup list (found by the read-only analysis, not done here):** `AutoFillGapThreshold` always gives 800 (min of at least 2000 and `kDefaultFillGapMs` 800: a dead rule); `ImproveOptions::audio_hz` has no caller; three percentile helpers in core (`audio_envelope.cpp`, `script_quality.cpp`, and the one that moved from `phase_rules.cpp` to `intensity_arc.cpp`); three owners of an `AudioLevelDecoder` (label controller, editor controller, each `AudioLevelItem`), each decoding the same file again.
-
-## Handover: `claude/samn2-label-memory` (9 Nov, label tracking memory)
-
-Owner priority: CPU/RAM efficient AI. `TrackBetweenKeys` (`engine/src/label_tracking.cpp`) kept every small frame of the stretch in a `std::vector<cv::Mat>` (about 0.7 MB per frame at 640 px wide, up to `max_frames` = 1500, so about 1 GB) because the backward run needs the frames in reverse.
-
-- **Change:** the forward run streams (read, track, drop; one reused buffer). The backward run decodes the stretch in chunks of `window_frames` (24) from a frame-exact `SeekMs`, tracks each chunk last frame to first, and decodes the next chunk on another thread into a second reused buffer. At most two windows of frames are alive. A lost track stops the backward run (the earlier frames are not decoded or tracked). `BetweenKeysOptions` got `window_frames` and `stats`.
-- **Result:** synthetic 1280x720, 1000 frames: peak RSS 758 MB to 135 MB (5.6x), ms per frame within noise (+4 % wall, +1 % CPU), boxes bit-identical (same hash from `samn_label_mem`; test compares against the old algorithm bit for bit). Table: `docs/benchmarks/LABEL_MEMORY_2026-11-08.md`.
-- **Tools/tests:** `samn_label_mem` (`--make`, `--track`; by hand, `EXCLUDE_FROM_ALL`); new engine test "tracking between keys holds a bounded window and gives the same boxes".
-- **Not verified:** Windows/MSVC, real clips (long-GOP H.264 makes each backward seek decode up to a GOP; the synthetic clip has GOP 12), the Qt `label_controller` (not built here; its call site is unchanged).
-- **Not done:** the old code never skipped frames, so there was nothing to `grab()`; the FrameReader API has no grab-only call.
 
 ## Handover: `claude/samn2-kernel-device-service` (9 Nov, kernel / modules, slice 2: DeviceService)
 

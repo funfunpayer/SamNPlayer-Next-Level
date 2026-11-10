@@ -135,7 +135,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 | `parse_compat_test.go` | `TestLoadChaptersAndBookmarksTimestampStrings` | ported | tests/core/marks_test.cpp "marks: load chapters and bookmarks timestamp strings" |
 | `phase_test.go` | `TestBestLagCorrelationShiftedSine`, `TestBestLagCorrelationInverted`, `TestBestLagCorrelationConstantUndefined`, `TestBestLagCorrelationIrregular`, `TestBestLagCorrelationLowConfidence`, `TestDiagnosePhaseTimingVsShape`, `TestWindowedBestLagCorrelationConstantLag`, `TestWindowedBestLagCorrelationDriftingLag`, `TestPeriodicityAliasingCharacterization`, `TestAliasingRiskFlag_doesNotChangeReportedLag`, `TestDominantPeriodMsRequiresGenuineLocalPeak` | ported | `tests/core/motion_fidelity_test.cpp` (`samn/motion_fidelity.h`); the aliasing characterisation is strict here (deterministic: lag -860 = -300 - 2 x 280, windows swing and flip). |
 | `pipeline_hint_test.go` | `TestSuggestPipelineTwoROIUsesStroke`, `TestSuggestPipelineSmallUsesCSRTGo`, `TestSuggestPipelineLargeUsesCSRT` | todo-later | P3.5 (backends): `SuggestPipeline` is not ported. |
-| `polarity_test.go` | `TestSuggestPolarityLowFirstHalf`, `TestSuggestPolarityHighFirstHalf`, `TestSuggestPolarityTooFewPoints` | todo-later | P3.3 (Review) / P4 Editor (Suggest polarity): `SuggestPolarity` is not ported. |
+| `polarity_test.go` | `TestSuggestPolarityLowFirstHalf`, `TestSuggestPolarityHighFirstHalf`, `TestSuggestPolarityTooFewPoints` | ported | `tests/core/polarity_test.cpp`. Player `suggestPolarity` (test `suggestPolarityReturnsReason`) shows the reason and does not invert. |
 | `project_test.go` | `TestBookmarksRoundTrip` | ported | tests/core/marks_test.cpp "marks: bookmarks round trip" |
 | `project_test.go` | `TestBookmarksAcceptFloatSeconds` | ported | tests/core/marks_test.cpp "marks: bookmarks accept float seconds" |
 | `project_test.go` | `TestChaptersRoundTrip` | ported | tests/core/marks_test.cpp "marks: chapters round trip" |
@@ -148,7 +148,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 | `project_test.go` | `TestExportHeatmapPNG` | ported | tests/core/heatmap_image_test.cpp "TestExportHeatmapPNG" |
 | `recipe_test.go` | `TestNormalizeProfile`, `TestRecipeTJSuctionOnlyNoVibration`, `TestRecipeTJSuctionNoDoubleFloor`, `TestRecipeTJContactVibrationOffByDefault`, `TestRecipeTJContactVibrationTracksPosition`, `TestRecipeTJContactVibrationBriefGraze`, `TestRecipeTJContactVibrationNeedsSpan`, `TestRecipeTJContactVibrationSpanEarlier`, `TestRecipeTJContactVibrationCurves`, `TestApplyContactCurveImpulsePeaks`, `TestRecipeTJContactVibrationMutedInTrackingGap`, `TestRecipeTJContactGapWinsOverEnvelopeAndSmoothing`, `TestRecipeStandardContactVibrationTracksPosition`, `TestRecipeTFEqualsTJ` | ported | tests/core/recipe_test.cpp (14 cases named "recipe: ..."; `TestNormalizeProfile` is "recipe: profile names and default sync", without the `IsStrokeProfile` / `AllowsContactSettings` checks, which have no C++ counterpart yet) |
 | `rhythm_bridge_test.go` | `TestRhythmBridgeRestoresRegularStrokes`, `TestRhythmBridgeReadsDenseScripts`, `TestRhythmBridgeLeavesSpanWithoutRhythm`, `TestImproveHealRhythmIsOptIn`, `TestImproveRepairSpansFallsBackToLine` | todo-later | P3.3 / P3.4 (Review: heal rhythm, repair spans; rhythm grid): the rhythm bridge is not ported. |
-| `ringdown_test.go` | `TestRingDownEndsAtZeroAndKeepsPrefix`, `TestRingDownClampsCycles` | todo-later | P4 Editor (Apply ring-down): `RingDown` is not ported. |
+| `ringdown_test.go` | `TestRingDownEndsAtZeroAndKeepsPrefix`, `TestRingDownClampsCycles` | ported | `tests/core/ringdown_test.cpp`. Player `applyRingDown` (test `applyRingDownRejectsLowAndAppendsEndingAtZero`). |
 | `scene_map_test.go` | `TestEncodeDecodeSceneMapScore` | todo-later | P4 Scene Map: `EncodeSceneMapScore` / `DecodeSceneMapScore` are not ported (`score_b64` is kept as an opaque string). |
 | `scene_map_test.go` | `TestSceneMapDataJSONRoundTrip` | covered | tests/core/samn_file_test.cpp "samn_file: round trip funscript <-> samn" and "samn_file: Go file reads and rewrites identically" (a SceneMapData with window, marks and score survive the .samn round trip; the snake_case keys are checked by "JSON keys and order match Go") |
 | `score_test.go` | `TestScorePairIdenticalIsGood`, `TestScorePairShiftedIsReviewTiming`, `TestScorePairUnrelatedIsBad`, `TestScorePairQualityFailForcesReview` | todo-later | P3.8 (benchmark): `ScorePair` is not ported. |
@@ -300,13 +300,14 @@ One row per old test function (grouped when a whole file shares the same answer)
 
 ### 2.8 `motionx`
 
-2 files, 10 tests: 4 ported, 0 covered, 0 todo-now, 6 todo-later, 0 n/a.
+2 files, 10 tests: 9 ported, 0 covered, 0 todo-now, 1 todo-later, 0 n/a.
 
 | Old file | Test function(s) | Status | Where / why |
 |---|---|---|---|
-| `chapters_test.go` | `TestChaptersMapsStates`, `TestChaptersNil` | todo-later | P4 (Analysis, Scene Map): `motionx` chapters-from-states is not ported. |
+| `chapters_test.go` | `TestChaptersMapsStates`, `TestChaptersNil` | ported | `tests/core/motion_chapters_test.cpp` (`MotionChaptersFromSegments`). |
 | `motionx_test.go` | `TestSimplifyKeepsEndpoints`, `TestSimplifyRespectsTolerance`, `TestSimplifyStraightLineCollapses`, `TestSimplifyDeepCurveDoesNotRecurse` | ported | `tests/core/simplify_test.cpp` (`samn::SimplifyIndices`, used by the post-processing RDP step). |
-| `motionx_test.go` | `TestDedup`, `TestClassifyStaticCurve`, `TestClassifyStartStop`, `TestClassifySegmentsAreContiguousAndLongEnough` | todo-later | P4 (Analysis, Scene Map): `Dedup`, `Classify` are not ported. |
+| `motionx_test.go` | `TestClassifyStaticCurve`, `TestClassifyStartStop`, `TestClassifySegmentsAreContiguousAndLongEnough` | ported | `tests/core/motion_classify_test.cpp` (`ClassifyMotion`). |
+| `motionx_test.go` | `TestDedup` | todo-later | P4 (Analysis, Scene Map): `Dedup` is not ported. |
 
 ### 2.9 `pluginhost`
 
@@ -357,12 +358,12 @@ One row per old test function (grouped when a whole file shares the same answer)
 
 ### 2.14 `cmd/gui-wails (Go)`
 
-68 files, 188 tests: 21 ported, 18 covered, 0 todo-now, 136 todo-later, 13 n/a.
+68 files, 188 tests: 24 ported, 18 covered, 0 todo-now, 133 todo-later, 13 n/a.
 
 | Old file | Test function(s) | Status | Where / why |
 |---|---|---|---|
 | `app_aiscript_test.go` | `TestExportAIScriptImitation`, `TestDraftAndKeepAIScript` | todo-later | P4 (AI draft script, opt-in D-058). |
-| `app_analysis_test.go` | `TestAnalyzeScriptFindsStaticStretches`, `TestAnalyzeScriptWithoutScript`, `TestAnalyzeScriptSteadyMotion` | todo-later | P4 (Analysis shortcuts): `AnalyzeScript` needs `motionx`, not ported. |
+| `app_analysis_test.go` | `TestAnalyzeScriptFindsStaticStretches`, `TestAnalyzeScriptWithoutScript`, `TestAnalyzeScriptSteadyMotion` | ported | `tests/core/script_analysis_test.cpp` (`AnalyzeScriptActions`). The Player line is `scriptAnalysisOnOpen`. |
 | `app_audio_level_test.go` | `TestAudioLevelEnvelopeSharesDecodeWithAudioVibration` | todo-later | P2/P3 (vibration from sound): the Audio Level lane decodes once (`audioLevelFromSound`), but the shared decode with the vibration output is not built. |
 | `app_audio_level_test.go` | `TestSetChannelLevelsStoresClampedCut` | covered | tests/app/playback_output_test.cpp `channelOffAndLevelScaleTheOutput`, `outputChoicesAreRemembered` (clamp: see `player/speed_test.go TestChannelLevelsDefaultFullAndClamp` in list A) |
 | `app_audio_level_test.go` | `TestSetPeakReduceStored` | todo-later | P2 (Reduce peaks): not ported. |
@@ -437,7 +438,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 | `app_snapshot_test.go` | `TestSaveVideoSnapshot` | ported | tests/app/player_controller_test.cpp `snapshotNameAndSave` (cancel is the dialog's own) |
 | `app_sound_vibration_test.go` | `TestBakeSoundVibrationFollowsLoudness`, `TestBakeSoundVibrationWithContactKeepsScriptVibration`, `TestBakeSoundVibrationRejects` | partly | Editor bake → `SoundVibrationLane` / `vibrationFollowsTheSound`; Player Sound Curve → `VibrationCurveFromSound` + `soundCurveWritesVibrationAndUndoes`. |
 | `app_stroke_filter_test.go` | `TestStrokeFilterSettingsRoundTrip` | covered | tests/app/playback_output_test.cpp `outputChoicesAreRemembered`, `speedLimitFilterShapesWhatIsSent` |
-| `app_suggest_test.go` | `TestSuggestPolarityAndInvertRoundtrip`, `TestSuggestOZoneOnLoadedScript`, `TestApplyRingDownOnLoadedScript`, `TestHonorInvertedSetting`, `TestInvertLoadedScriptExportsSamnCompanion` | todo-later | P4 Editor (Suggest polarity / O-zone, ring-down, honor inverted, invert + export .samn). |
+| `app_suggest_test.go` | `TestSuggestPolarityAndInvertRoundtrip`, `TestSuggestOZoneOnLoadedScript`, `TestApplyRingDownOnLoadedScript`, `TestHonorInvertedSetting`, `TestInvertLoadedScriptExportsSamnCompanion` | partly | Player `suggestPolarity`, `applySuggestedOZone`, `applyRingDown` (`suggestPolarityReturnsReason`, `applySuggestedOZoneWritesMarkerAndOMarker`, `applyRingDownRejectsLowAndAppendsEndingAtZero`). `TestHonorInvertedSetting` is `honorInvertedAndRemoveScriptFolder`. Still open: invert that clears the OFS flag and re-exports a .samn companion. |
 | `app_tcode_test.go` | `TestConnectDeviceViaTCode` | covered | tests/app/device_controller_test.cpp `tcodeOverTcp`, `tcodeOverUdpDefaultScheme` |
 | `app_tcode_test.go` | `TestConnectDeviceViaTCodeNeedsAddress` | covered | tests/app/device_controller_test.cpp `tcodeBadAddress` |
 | `app_tcode_test.go` | `TestSetMotorLevelsClampsAndStores` | covered | tests/app/device_controller_test.cpp `motorLevelsAreAccepted` |

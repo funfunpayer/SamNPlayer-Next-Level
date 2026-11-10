@@ -28,6 +28,7 @@ Column {
                 checked: ctrl.bpmGrid
                 onClicked: ctrl.bpmGrid = !ctrl.bpmGrid
             }
+            HelpChip { key: "pb-bpm-grid"; anchors.verticalCenter: parent.verticalCenter }
         }
         Row {
             spacing: 8
@@ -43,6 +44,7 @@ Column {
                 enabled: ctrl.videoName !== ""
                 onClicked: ctrl.guessBpmFromAudio()
             }
+            HelpChip { key: "pb-bpm-auto"; anchors.verticalCenter: parent.verticalCenter }
         }
         InspectorNote { text: qsTr("Beat lines on the curve (every 4th is a bar). Display only. Leave BPM blank to use the stroke's own tempo when the grid is on. From audio measures the linked video's sound (first 10 min).") }
         InspectorNote { objectName: "bpmNote"; visible: ctrl.toolNote !== "" && (ctrl.toolNote.indexOf("BPM") >= 0 || ctrl.toolNote.indexOf("audio") >= 0 || ctrl.toolNote.indexOf("sound") >= 0); text: ctrl.toolNote }

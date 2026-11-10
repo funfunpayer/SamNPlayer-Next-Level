@@ -52,6 +52,9 @@ class PlayerController : public QObject {
     Q_PROPERTY(bool noScriptForVideo READ noScriptForVideo NOTIFY scriptChanged)
     Q_PROPERTY(int pointCount READ pointCount NOTIFY scriptChanged)
     Q_PROPERTY(qint64 scriptDurationMs READ scriptDurationMs NOTIFY scriptChanged)
+    // 0.7 describeScript: state summary plus chapter spans. Empty below 4 points.
+    // Own notify so a chapter edit can refresh the line without clearing Script Doctor.
+    Q_PROPERTY(QString scriptAnalysisSummary READ scriptAnalysisSummary NOTIFY scriptAnalysisSummaryChanged)
     Q_PROPERTY(int offsetMs READ offsetMs WRITE setOffsetMs NOTIFY offsetMsChanged)
     Q_PROPERTY(qint64 playheadMs READ playheadMs NOTIFY playheadMsChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
@@ -346,6 +349,19 @@ public:
     Q_INVOKABLE bool deleteSelection();
     Q_INVOKABLE bool invertSelection();
     Q_INVOKABLE bool invertAll();
+    // 0.7 SuggestPolarity on the curve Play shows. {suggestInvert, reason, error}.
+    Q_INVOKABLE QVariantMap suggestPolarity();
+    // 0.7 Check / invert direction: flips 100−pos of the played curve only when
+    // suggest_invert, clears the OFS inverted flag, reloads. Otherwise returns
+    // the reason and writes nothing. {applied, suggestInvert, reason, error}.
+    Q_INVOKABLE QVariantMap applyPolaritySuggestion();
+    // 0.7 ApplySuggestedOZone: saves the suggested range as the marker and
+    // appends primary + secondary O-markers (AutoOZoneMarkers). Never inverts.
+    // {ok, startMs, endMs, reason, mean, error}.
+    Q_INVOKABLE QVariantMap applySuggestedOZone();
+    // 0.7 ApplyRingDown at the playhead (script time), on the stroke axis.
+    // cycles clamps to 1–2 (0.7 button uses 2). A position under 10 is refused.
+    Q_INVOKABLE bool applyRingDown(int cycles = 2);
     Q_INVOKABLE bool undo();
     Q_INVOKABLE bool redo();
     bool canUndo() const { return editSession_.CanUndo(); }
@@ -358,6 +374,13 @@ public:
     // 0.7 Script Doctor (ScriptQuality): signal quality of the loaded script
     // from its file. {score 0-1, passed, warnings[], error}.
     Q_INVOKABLE QVariantMap scriptQuality();
+    // 0.7 AnalyzeScript. {segments, shareByState, totalMs, summary, error}.
+    // Fewer than 4 points sets error and leaves the rest empty.
+    Q_INVOKABLE QVariantMap analyzeScript();
+    // 0.7 ScriptChapters. Stored metadata.chapters replace the automatic
+    // labels; an empty name becomes "chapter"; an end at or before the start
+    // becomes start+1 ms. Automatic chapters are never written to the file.
+    Q_INVOKABLE QVariantList scriptMotionChapters();
     // 0.7 SavePlaybackProject: "<video or script>.snp.json" with video,
     // script, offset, the video position and the marked range. The path, or
     // "" with lastError.
@@ -402,6 +425,7 @@ public:
     bool noScriptForVideo() const { return stroke_.empty() && !videoPath_.isEmpty(); }
     int pointCount() const { return static_cast<int>(stroke_.size()); }
     qint64 scriptDurationMs() const { return stroke_.empty() ? 0 : stroke_.back().at; }
+    QString scriptAnalysisSummary() const { return scriptAnalysisSummary_; }
     int offsetMs() const { return offsetMs_; }
     QString toolNote() const { return toolNote_; }
     void setOffsetMs(int ms);
@@ -580,6 +604,7 @@ signals:
     void viewChanged();
     void markerChanged();
     void marksChanged();
+    void scriptAnalysisSummaryChanged();
     void bpmChanged();
     void viewOptionsChanged();
     void audioVibrationReadyChanged();
@@ -614,10 +639,12 @@ private:
     void pushToViews();
     // Cap / Scale / Delete / Invert for the active script lane.
     // needMarker: Cap/Scale/Delete/invertSelection require a heatmap mark.
+    // forceStroke: ring-down always writes the general/stroke axis, even
+    // when the curve is showing vibration or suction.
     // Pushes one EditSession step before the file write.
     bool applySelectionEdit(const QString& label,
                             const std::function<std::vector<samn::Action>(const std::vector<samn::Action>&)>& op,
-                            bool needMarker = true);
+                            bool needMarker = true, bool forceStroke = false);
     // Fresh EditSession from the file's lanes (open / no script). Not used
     // when a curve edit is reloading the script it just wrote.
     void resetCurveHistory(const samn::Document& doc);
@@ -655,6 +682,9 @@ private:
     std::string activeStrength_;
     QPointer<DeviceService> device_;
     std::vector<samn::Action> stroke_, vibration_, suction_;
+    // describeScript text. Display only; never saved back as metadata.chapters.
+    QString scriptAnalysisSummary_;
+    void refreshScriptAnalysis();
     samn::ScriptMarks marks_;
     std::vector<float> heat_;
     QVariantList variants_;

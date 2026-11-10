@@ -12,6 +12,7 @@
 #include <QVideoFrame>
 #include <QImage>
 #include <QPainter>
+#include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <memory>
@@ -23,6 +24,8 @@
 #include "player_controller.h"
 #include "theme.h"
 #include "samn/marks.h"
+#include "samn/ozone.h"
+#include "samn/ringdown.h"
 #include "samn/script_finder.h"
 #include "samn/playback_mapping.h"
 #include "samn/range_edit.h"
@@ -1192,6 +1195,80 @@ private slots:
         QVERIFY(r.value("warnings").canConvert<QStringList>());
     }
 
+    // 0.7 describeScript: the summary appears once a script has 4 points.
+    // Automatic chapters are display only. Stored metadata.chapters win,
+    // and opening the script does not write either kind back.
+    void scriptAnalysisOnOpen() {
+        QTemporaryDir d;
+        PlayerController none;
+        QVERIFY(none.scriptAnalysisSummary().isEmpty());
+        QCOMPARE(none.analyzeScript().value(QStringLiteral("error")).toString(),
+                 QStringLiteral("no script loaded (or too few points)"));
+        QVERIFY(none.scriptMotionChapters().isEmpty());
+
+        writeFile(d.filePath("short.funscript"), zigzag(3));
+        PlayerController few;
+        QVERIFY(few.openScript(d.filePath("short.funscript")));
+        QCOMPARE(few.pointCount(), 3);
+        QVERIFY(few.scriptAnalysisSummary().isEmpty());
+        QVERIFY(!few.analyzeScript().value(QStringLiteral("error")).toString().isEmpty());
+
+        const QString path = d.filePath("Q.funscript");
+        writeFile(path, zigzag());
+        QFile beforeFile(path);
+        QVERIFY(beforeFile.open(QIODevice::ReadOnly));
+        const QByteArray before = beforeFile.readAll();
+        beforeFile.close();
+        PlayerController c;
+        QVERIFY(c.openScript(path));
+        const QString summary = c.scriptAnalysisSummary();
+        QVERIFY(summary.contains(QStringLiteral("seconds")));
+        QVERIFY(summary.contains(QStringLiteral(" \u00b7 Chapters: ")));
+        QVERIFY(!c.scriptMotionChapters().isEmpty());
+        QCOMPARE(c.analyzeScript().value(QStringLiteral("error")).toString(), QString());
+        QVERIFY(c.analyzeScript().value(QStringLiteral("summary")).toString().contains(QStringLiteral("seconds")));
+        QFile afterFile(path);
+        QVERIFY(afterFile.open(QIODevice::ReadOnly));
+        QCOMPARE(afterFile.readAll(), before);
+
+        QByteArray js = zigzag();
+        js.chop(1);
+        js += ",\"metadata\":{\"chapters\":[{\"name\":\"Warmup\",\"startTime\":0,\"endTime\":4000},"
+              "{\"name\":\"\",\"startTime\":4000,\"endTime\":4000}]}}";
+        const QString marked = d.filePath("M.funscript");
+        writeFile(marked, js);
+        QFile markedFile(marked);
+        QVERIFY(markedFile.open(QIODevice::ReadOnly));
+        const QByteArray markedBefore = markedFile.readAll();
+        markedFile.close();
+        PlayerController m;
+        QVERIFY(m.openScript(marked));
+        const QString over = m.scriptAnalysisSummary();
+        const QString warmup = QStringLiteral("Warmup 0:00") + QChar(0x2013) + QStringLiteral("0:04");
+        const QString unnamed = QStringLiteral("chapter 0:04") + QChar(0x2013) + QStringLiteral("0:04");
+        QVERIFY(over.contains(warmup));
+        QVERIFY(over.contains(unnamed));
+        const auto chapters = m.scriptMotionChapters();
+        QCOMPARE(chapters.size(), 2);
+        QCOMPARE(chapters[0].toMap().value(QStringLiteral("kind")).toString(), QStringLiteral("Warmup"));
+        QCOMPARE(chapters[1].toMap().value(QStringLiteral("kind")).toString(), QStringLiteral("chapter"));
+        QCOMPARE(chapters[1].toMap().value(QStringLiteral("endMs")).toDouble(), 4001.0);
+        {
+            QFile markedAfter(marked);
+            QVERIFY(markedAfter.open(QIODevice::ReadOnly));
+            QCOMPARE(markedAfter.readAll(), markedBefore);
+        }  // close before rename — Windows cannot replace an open file
+
+        // Chapter edit refreshes the analysis line without a re-open (0.7 describeScript).
+        QSignalSpy doctorCleared(&m, &PlayerController::scriptChanged);
+        QSignalSpy analysisSpy(&m, &PlayerController::scriptAnalysisSummaryChanged);
+        QVERIFY(m.renameChapter(0, QStringLiteral("Intro")));
+        QVERIFY(analysisSpy.count() >= 1);
+        QVERIFY(m.scriptAnalysisSummary().contains(QStringLiteral("Intro 0:00")));
+        QVERIFY(!m.scriptAnalysisSummary().contains(warmup));
+        QCOMPARE(doctorCleared.count(), 0);  // Script Doctor result must stay
+    }
+
     void sleepTimer() {
         PlayerController c;
         QSignalSpy reached(&c, &PlayerController::sleepReached);
@@ -2045,6 +2122,220 @@ private slots:
         curve.setViewEndMs(100000);
         curve.paint(&painter);
         QCOMPARE(curve.layerRenders(), 2);
+    }
+
+    void suggestPolarityReturnsReason() {
+        PlayerController bare;
+        const QVariantMap none = bare.suggestPolarity();
+        QCOMPARE(none.value("suggestInvert").toBool(), false);
+        QVERIFY(none.value("error").toString().contains("no script loaded"));
+
+        QTemporaryDir d;
+        const QString path = d.filePath("pol.funscript");
+        writeFile(path, R"({"actions":[{"at":0,"pos":10},{"at":100,"pos":20},{"at":200,"pos":15},{"at":300,"pos":80},{"at":400,"pos":90}]})");
+        PlayerController c;
+        QVERIFY(c.openScript(path));
+        const QVariantMap hint = c.suggestPolarity();
+        QCOMPARE(hint.value("error").toString(), QString());
+        QCOMPARE(hint.value("suggestInvert").toBool(), true);
+        QVERIFY(hint.value("reason").toString().contains("invert"));
+
+        const QVariantMap applied = c.applyPolaritySuggestion();
+        QCOMPARE(applied.value("error").toString(), QString());
+        QCOMPARE(applied.value("applied").toBool(), true);
+        QCOMPARE(samn::LoadFunscript(std::filesystem::u8path(path.toStdString())).actions[0].pos, 90);
+        QVERIFY(!samn::LoadFunscript(std::filesystem::u8path(path.toStdString())).inverted);
+
+        // High first half: reason only, no write.
+        const QString high = d.filePath("high.funscript");
+        writeFile(high, R"({"actions":[{"at":0,"pos":80},{"at":100,"pos":90},{"at":200,"pos":85},{"at":300,"pos":20},{"at":400,"pos":10}]})");
+        PlayerController h;
+        QVERIFY(h.openScript(high));
+        const QVariantMap skip = h.applyPolaritySuggestion();
+        QCOMPARE(skip.value("applied").toBool(), false);
+        QCOMPARE(skip.value("suggestInvert").toBool(), false);
+        QCOMPARE(samn::LoadFunscript(std::filesystem::u8path(high.toStdString())).actions[0].pos, 80);
+    }
+
+    void applyRingDownRejectsLowAndAppendsEndingAtZero() {
+        QTemporaryDir d;
+        const QString path = d.filePath("ring.funscript");
+        writeFile(path, R"({"actions":[{"at":0,"pos":5},{"at":1000,"pos":90}]})");
+        PlayerController c;
+        QVERIFY(c.openScript(path));
+        const auto before = samn::LoadFunscript(std::filesystem::u8path(path.toStdString())).actions;
+        QVERIFY(!c.applyRingDown());
+        QVERIFY(c.lastError().contains("position too low"));
+        const auto rejected = samn::LoadFunscript(std::filesystem::u8path(path.toStdString())).actions;
+        QCOMPARE(int(rejected.size()), int(before.size()));
+        QCOMPARE(rejected[0].pos, 5);
+        QCOMPARE(rejected[1].pos, 90);
+
+        c.setVideoPositionMs(1000);
+        QVERIFY(c.applyRingDown(1));
+        QVERIFY(c.toolNote().contains("Ring-down"));
+        const auto once = samn::LoadFunscript(std::filesystem::u8path(path.toStdString())).actions;
+        const auto expect1 = samn::RingDown(before, 1000, 90, 1);
+        QCOMPARE(int(once.size()), int(expect1.size()));
+        for (size_t i = 0; i < once.size(); ++i) {
+            QCOMPARE(once[i].at, expect1[i].at);
+            QCOMPARE(once[i].pos, expect1[i].pos);
+        }
+        QCOMPARE(once.back().pos, 0);
+        QVERIFY(once.back().at > 1000);
+        QVERIFY(c.undo());
+        QCOMPARE(c.pointCount(), 2);
+
+        c.setVideoPositionMs(1000);
+        QVERIFY(c.applyRingDown(9));  // clamps to 2
+        const auto twice = samn::LoadFunscript(std::filesystem::u8path(path.toStdString())).actions;
+        const auto expect2 = samn::RingDown(before, 1000, 90, 2);
+        QCOMPARE(int(twice.size()), int(expect2.size()));
+        QCOMPARE(twice.back().pos, 0);
+        QCOMPARE(twice.back().at, expect2.back().at);
+        QVERIFY(c.undo());
+
+        c.setVideoPositionMs(1000);
+        QVERIFY(c.applyRingDown(0));  // clamps to 1
+        const auto clamped = samn::LoadFunscript(std::filesystem::u8path(path.toStdString())).actions;
+        QCOMPARE(int(clamped.size()), int(expect1.size()));
+        QCOMPARE(clamped.back().at, expect1.back().at);
+
+        // The stroke (general) axis is written even when another lane is showing.
+        const QString strokePath = d.filePath("stroke.funscript");
+        writeFile(strokePath, R"({"actions":[{"at":0,"pos":40},{"at":1000,"pos":80}]})");
+        samn::Document doc = samn::LoadFunscriptFile(std::filesystem::u8path(strokePath.toStdString()));
+        doc.vibration = {{0, 11}, {1000, 22}};
+        const QString samnPath = d.filePath("lanes.samn");
+        samn::SaveDocument(std::filesystem::u8path(samnPath.toStdString()), doc);
+        PlayerController vib;
+        QVERIFY(vib.openScript(samnPath));
+        vib.setActiveLane(QStringLiteral("vibration"));
+        QCOMPARE(vib.activeLane(), QStringLiteral("vibration"));
+        vib.setVideoPositionMs(1000);
+        QVERIFY(vib.applyRingDown(1));
+        const samn::Document saved = samn::LoadDocument(std::filesystem::u8path(samnPath.toStdString()));
+        QCOMPARE(int(saved.vibration.size()), 2);
+        QCOMPARE(saved.vibration[0].pos, 11);
+        QCOMPARE(saved.vibration[1].pos, 22);
+        QVERIFY(saved.general.size() > 2);
+        QCOMPARE(saved.general.back().pos, 0);
+    }
+
+    void applySuggestedOZoneWritesMarkerAndOMarker() {
+        PlayerController bare;
+        const QVariantMap none = bare.applySuggestedOZone();
+        QCOMPARE(none.value("ok").toBool(), false);
+        QVERIFY(none.value("error").toString().contains("no script loaded"));
+
+        QTemporaryDir d;
+        const QString flatPath = d.filePath("flat.funscript");
+        {
+            QByteArray body = "{\"actions\":[";
+            for (int i = 0; i <= 50; ++i) {
+                if (i) body += ',';
+                body += QStringLiteral("{\"at\":%1,\"pos\":20}").arg(i * 100).toUtf8();
+            }
+            body += "]}";
+            writeFile(flatPath, body);
+        }
+        PlayerController flat;
+        QVERIFY(flat.openScript(flatPath));
+        const QVariantMap noZone = flat.applySuggestedOZone();
+        QCOMPARE(noZone.value("ok").toBool(), false);
+        QCOMPARE(noZone.value("error").toString(), QString());
+        QVERIFY(!noZone.value("reason").toString().isEmpty());
+        QVERIFY(flat.oMarkers().isEmpty());
+        QVERIFY(!QFile::exists(flatPath + ".marker.json"));
+
+        const QString path = d.filePath("peak.funscript");
+        {
+            QByteArray body = "{\"actions\":[";
+            for (int i = 0; i <= 100; ++i) {
+                if (i) body += ',';
+                body += QStringLiteral("{\"at\":%1,\"pos\":%2}").arg(i * 100).arg(i >= 90 ? 90 : 20).toUtf8();
+            }
+            body += "]}";
+            writeFile(path, body);
+        }
+        PlayerController c;
+        QVERIFY(c.openScript(path));
+        const auto original = samn::LoadFunscript(std::filesystem::u8path(path.toStdString())).actions;
+        const samn::OZoneSuggestion zone = samn::SuggestOZone(original);
+        QVERIFY(zone.ok);
+        QVERIFY(c.addOMarkerAt(500));
+        QCOMPARE(c.oMarkers().size(), 1);
+
+        const QVariantMap applied = c.applySuggestedOZone();
+        QCOMPARE(applied.value("error").toString(), QString());
+        QCOMPARE(applied.value("ok").toBool(), true);
+        QCOMPARE(applied.value("startMs").toLongLong(), qlonglong(zone.start_ms));
+        QCOMPARE(applied.value("endMs").toLongLong(), qlonglong(zone.end_ms));
+        QCOMPARE(c.markerStartMs(), double(zone.start_ms));
+        QCOMPARE(c.markerEndMs(), double(zone.end_ms));
+        const auto autoMarkers = samn::AutoOZoneMarkers(original);
+        QVERIFY(!autoMarkers.empty());
+        QCOMPARE(c.oMarkers().size(), 1 + int(autoMarkers.size()));
+        bool sawPrimary = false;
+        for (const QVariant& item : c.oMarkers()) {
+            const QVariantMap m = item.toMap();
+            if (m.value("kind").toString() == QLatin1String("primary") && m.value("startMs").toLongLong() == zone.start_ms) {
+                sawPrimary = true;
+                QCOMPARE(m.value("intensity").toDouble(), 1.0);
+            }
+        }
+        QVERIFY(sawPrimary);
+        // Never auto-invert: the stroke is the same curve.
+        const auto after = samn::LoadFunscript(std::filesystem::u8path(path.toStdString())).actions;
+        QCOMPARE(int(after.size()), int(original.size()));
+        QCOMPARE(after[0].pos, original[0].pos);
+        QCOMPARE(after.back().pos, original.back().pos);
+
+        PlayerController again;
+        QVERIFY(again.openScript(path));
+        QCOMPARE(again.markerStartMs(), double(zone.start_ms));
+        QCOMPARE(again.oMarkers().size(), c.oMarkers().size());
+
+        // Earlier, weaker rise: secondary intensity comes from AutoOZoneMarkers (0.2–0.8).
+        const QString bumps = d.filePath("bumps.funscript");
+        {
+            QByteArray body = "{\"actions\":[";
+            for (int64_t at = 0; at <= 100000; at += 100) {
+                if (at) body += ',';
+                int pos = 10;
+                if (at >= 20000 && at < 25000) pos = 55;
+                if (at >= 90000) pos = 90;
+                body += QStringLiteral("{\"at\":%1,\"pos\":%2}").arg(at).arg(pos).toUtf8();
+            }
+            body += "]}";
+            writeFile(bumps, body);
+        }
+        PlayerController sec;
+        QVERIFY(sec.openScript(bumps));
+        const auto bumpActions = samn::LoadFunscript(std::filesystem::u8path(bumps.toStdString())).actions;
+        auto expected = samn::AutoOZoneMarkers(bumpActions);
+        std::stable_sort(expected.begin(), expected.end(), [](const samn::OMarker& a, const samn::OMarker& b) {
+            return a.start_ms < b.start_ms;
+        });
+        QVERIFY(expected.size() >= 2);
+        const QVariantMap secZone = sec.applySuggestedOZone();
+        QCOMPARE(secZone.value("error").toString(), QString());
+        QCOMPARE(secZone.value("ok").toBool(), true);
+        QCOMPARE(sec.oMarkers().size(), int(expected.size()));
+        bool sawSecondary = false;
+        for (int i = 0; i < sec.oMarkers().size(); ++i) {
+            const QVariantMap m = sec.oMarkers()[i].toMap();
+            QCOMPARE(m.value("startMs").toLongLong(), qlonglong(expected[size_t(i)].start_ms));
+            QCOMPARE(m.value("endMs").toLongLong(), qlonglong(expected[size_t(i)].end_ms));
+            QCOMPARE(m.value("kind").toString(), QString::fromStdString(expected[size_t(i)].kind));
+            QCOMPARE(m.value("intensity").toDouble(), expected[size_t(i)].intensity);
+            if (m.value("kind").toString() == QLatin1String("secondary")) {
+                sawSecondary = true;
+                QVERIFY(m.value("intensity").toDouble() >= 0.2);
+                QVERIFY(m.value("intensity").toDouble() <= 0.8);
+            }
+        }
+        QVERIFY(sawSecondary);
     }
 };
 

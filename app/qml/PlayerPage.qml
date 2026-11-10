@@ -823,13 +823,20 @@ Item {
                             text: qsTr("Pause playback after this many minutes (Sleep off = never).")
                         }
                     },
-                    FlowButton {
-                        text: qsTr("Loop"); checked: ctrl.loopEnabled
-                        onClicked: ctrl.loopEnabled = !ctrl.loopEnabled
-                        HoverHandler { id: loopHover }
-                        ToolTipText {
-                            shown: loopHover.hovered
-                            text: qsTr("Repeat the marked heatmap range (L).")
+                    Row {
+                        spacing: 4
+                        FlowButton {
+                            text: qsTr("Loop"); checked: ctrl.loopEnabled
+                            onClicked: ctrl.loopEnabled = !ctrl.loopEnabled
+                            HoverHandler { id: loopHover }
+                            ToolTipText {
+                                shown: loopHover.hovered
+                                text: qsTr("Repeat the marked heatmap range (L).")
+                            }
+                        }
+                        HelpChip {
+                            key: "pb-loop"
+                            anchors.verticalCenter: parent.verticalCenter
                         }
                     },
                     FlowCombo {

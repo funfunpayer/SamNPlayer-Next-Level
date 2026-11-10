@@ -52,10 +52,14 @@ Functions use PascalCase and struct fields use snake_case.
 | `improve.h` | Script polish after Create: trim ends, heal tracking-loss windows, fill long gaps (straight lines; `FillGapsRhythmic` strokes on the script's own tempo, the audio tempo or the heart rhythm, behind `generator.rhythmic_fill`, off, D-168) | 0.7 `funscript/improve.go` | ✅ |
 | `motion_fidelity.h` | Motion Fidelity: how well a script follows a reference (rhythm, phase, amplitude, lag window) | 0.7 `funscript/phase.go` | ✅ |
 | `script_quality.h` | Script Doctor: jitter, jumps, gaps and device limits from the points alone | 0.7 `script_quality.go`, `device_compat.go` | ✅ |
+| `motion_classify.h` | Motion states of a curve: static, starting, accelerating, regular, decelerating, stopping. An empty options value does not smooth | 0.7 `motionx/state.go` `Classify` | ✅ |
+| `motion_chapters.h` | Coarser chapters from those states: pause, build, steady, crescendo, wind-down | 0.7 `motionx/chapters.go` | ✅ |
+| `script_analysis.h` | `AnalyzeScriptActions`: shares and one English summary line; chapter labels and the m:ss clock | 0.7 `AnalyzeScript` / `summarizeStates`, `playback.js` `CHAPTER_LABELS` | ✅ |
 | `ozone.h` | O-zone suggestions for the primary O-marker | 0.7 `funscript/ozone.go` | ✅ |
 | `intensity_arc.h` | `ComputeArc`: the clip's intensity (motion against its busy level plus loudness) at a 4 s detail and a 20 s arc scale, where the intro ends and up to three climaxes with prominence and confidence; no model, no FFT, deterministic | D-165 | ✅ `intensity_arc_test.cpp`; bench `tests/bench/phase_bench.cpp` |
 | `phase_rules.h` | Phase suggestions (empty, intro, climaxes, cool-down) from the picture and the intensity arc, without a model; always unconfirmed | D-157, D-165 | ✅ |
 | `polarity.h` | Which way is up: a hint after Create, never applied alone | 0.7 `funscript/polarity.go` | ✅ |
+| `ringdown.h` | Damped half-cycles after a time so a hold does not drop to 0 in one tick (`RingDown`, cycles 1–2, 180 ms) | 0.7 `funscript/ringdown.go` | ✅ `ringdown_test.cpp` |
 | `scenes.h` | Chapter scenes: feel names, proposals from `<clip>.scene.json`, suggested feel | 0.7 `app_feel.go`, `scene_proposals.go` | ✅ |
 | `simplify.h` | Ramer-Douglas-Peucker on a (time, position) curve, iterative | 0.7 `motionx.Simplify` | ✅ |
 | `sound_vibration.h` | Vibration written into a script from the video's sound (Editor tool) | 0.7 `sam/audio_vibration.go` | ✅ |
@@ -99,7 +103,7 @@ Frames, tracking and detection for the Generator and AI Train (P3, D-133). Built
 
 | File | What |
 |---|---|
-| `include/samn/vision/frame_reader.h` | `FrameReader`: FFmpeg backend only, every frame with `index` and `pts_us` (video time), frame-exact `SeekMs`. |
+| `include/samn/vision/frame_reader.h` | `FrameReader`: FFmpeg backend only, every frame with `index` and `pts_us` (video time), frame-exact `SeekMs` by the nominal rate; `Grab` (decode only) and `Retrieve` (picture) as the two halves of `Read`. |
 | `include/samn/vision/tracker.h` | `CreateTracker(kCsrt)`, the one tracker factory (no fallback, GD-02); `VisionSelfCheck()`, `OpenCvVersion()`. |
 | `include/samn/vision/onnx_detector.h` | `OnnxDetector`: an ONNX object detector run with ONNX Runtime; YOLOv8 (NudeNet) and DETR (RF-DETR student) outputs, told apart by the model's outputs (D-155 steps 4, 5). |
 | `include/samn/vision/canceled.h` | `samn::kCanceled`: the error text of a stopped run, set by the frame loops here and in the engine and compared by the app. |
@@ -123,7 +127,7 @@ The Generator's engine (P3, D-140, D-142): tracking, signal chain, runs, self-ch
 | `generate_queue.h` | One video of the Generator's queue: Find tip, then Generate with the queue's settings. |
 | `self_check.h` | The self-checking engine's maths (SC-1, SC-3): sample gate, short-gap interpolation, per-window trust; no OpenCV. |
 | `repair.h` | Verified repair (SC-5): failed windows are tracked again from a fresh Find tip start and kept only where they pass the checks. |
-| `label_tracking.h` | Tracking between two label keyframes: CSRT forward and backward, blended with disagreement marked (D-155 step 3). The forward run streams; the backward run decodes in chunks, two windows of 24 small frames alive at most (peak memory no longer grows with the stretch, `docs/benchmarks/LABEL_MEMORY_2026-11-08.md`). |
+| `label_tracking.h` | Tracking between two label keyframes: CSRT forward and backward, blended with disagreement marked (D-155 step 3). The forward run streams; the backward run decodes in chunks, two windows of 24 to 96 small frames alive at most; VFR-safe (peak memory no longer grows with the stretch, `docs/benchmarks/LABEL_MEMORY_2026-11-08.md`). |
 | `beatbar_video.h` | Beat bar from a video file: find the strip, then time every beat (the Editor's beat-bar tool). |
 | `compare.h` | The comparison controller: runs the engine on clips and scores it against a reference script and 0.7's output (GD-04, GD-05, GD-06). |
 | `tools/samn_bench.cpp` | `samn_bench`: the detection benchmark. The real Generate pipeline (Recommended profile) on 23 fixed-seed synthetic scenes with ground truth; windowed r, peak timing, extrema, amplitude, cuts, loss, jumps, ms/frame, peak RSS; CSV + markdown; acceptance rule in `--help`. Not run by ctest except `samn_bench_smoke`. Scenes: `tests/engine/synthetic_scenes.h` (on `synthetic_clips.h`). Baseline: `docs/benchmarks/DETECTION_BASELINE_2026-11-06.md`; 2-D camera compensation: `DETECTION_CAMERA2D_2026-11-08.md`, review fixes `DETECTION_CAMERA2D_FIXES_2026-11-10.md`. |
