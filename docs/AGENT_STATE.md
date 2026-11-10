@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 10 Nov 2026, Cursor, branch `cursor/player-helpchips-635a`: Player HelpChips on live controls (Loop, BPM grid / From audio, Contact vibration off, FPS-Snap). #216 (label VFR) merged by owner; #217 still owner-reviewed. Do not touch feel_heatbands / Speech-Hold / handbook / .sam.
+**Last update:** 10 Nov 2026, Cursor, branch `cursor/parity-settings-refresh-635a`: PARITY window/brand marked replaced (D-150/D-151); HelpChips for Auto sync, chapters, bookmarks; System tab notes it is the hardware check. After #219 (Loop / BPM / Contact off / FPS-Snap chips). #216 merged by owner; #217 still owner-reviewed. Do not touch feel_heatbands / Speech-Hold / handbook / .sam.
 
 
 

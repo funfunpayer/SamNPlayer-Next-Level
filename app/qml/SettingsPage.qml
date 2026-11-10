@@ -687,6 +687,11 @@ Item {
                         text: sysCtl.running ? qsTr("Checking …") : sysCtl.items.length === 0 ? qsTr("Not checked yet.") : sysCtl.summary
                         color: Theme.text; font.family: Theme.font; font.pixelSize: 15
                     }
+                    HelpChip {
+                        objectName: "systemHardwareHelp"
+                        // 0.7 "Check hardware" lives here (D-162 / D-167), not a separate Tools Home row.
+                        text: qsTr("This is the hardware and runtime check (GPUs, codecs, ffmpeg, Python, RAM). It replaces 0.7's Tools Home status and Settings → Check hardware.")
+                    }
                     FlowButton {
                         objectName: "systemCheckAgain"
                         text: qsTr("Check again")
