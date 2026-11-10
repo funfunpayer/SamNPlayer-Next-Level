@@ -346,7 +346,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends -o Acquire::Retries=3 \
             -o Dir::Cache::Archives="$HOME/apt-cache" \
-            libopencv-dev libopencv-contrib-dev nlohmann-json3-dev locales ffmpeg
+            libopencv-dev libopencv-contrib-dev nlohmann-json3-dev locales
           sudo rm -f ~/apt-cache/lock
           sudo chown -R "$USER" ~/apt-cache
 

@@ -5,6 +5,7 @@
 #include <chrono>
 #include <cmath>
 #include <functional>
+#include <memory>
 #include <future>
 #include <opencv2/imgproc.hpp>
 
@@ -194,24 +195,42 @@ std::optional<BetweenKeysResult> TrackBetweenKeys(const std::filesystem::path& v
             // k-th after it.
             size_t k = 0;
             while (k < c.lo && times[c.lo - 1 - k] == target) ++k;
-            // The first run of equal times may be cut short (the first seek can
-            // land inside it, so times holds fewer of them than the stream): only
-            // a seek to the first key's own position sees the same frames as the
-            // forward run did.
+            // The first run of equal times is special: a seek to the first key
+            // can drop frames of the run it lands in (OpenCV counts frames by
+            // time), so after a seek the stream does not start with the same
+            // frames as the forward run saw. Only a reader opened and sought
+            // the way the forward run's was sees them again.
             const bool first_run = c.lo == k;
+            // Whether the wanted frame has a neighbour of the same time, before or
+            // after it: then a landing on the time can be inside the run.
+            const bool in_run = k > 0 || (c.lo + 1 < n && times[c.lo + 1] == target);
+            // The first seek goes to the time before the run (when there is one),
+            // so that it lands before the run and not in it.
+            const int64_t first_at = in_run && !first_run ? times[c.lo - k - 1] : target;
             int64_t margin = first_run ? target - from_ms : 0;
+            vision::FrameReader* rd = reader.get();
+            std::unique_ptr<vision::FrameReader> replay;  // the forward run's own start, again
             for (bool found = false; !found;) {
-                const bool last_try = margin >= target - from_ms;
-                const int64_t at = margin == 0 ? target : (last_try ? from_ms : target - margin);
+                const bool last_try = first_run || margin >= target - from_ms;
+                const int64_t at = margin == 0 ? first_at : target - margin;
                 const auto t0 = Clock::now();
-                if (!reader->SeekMs(at)) {
+                if (last_try) {
+                    // Last resort and the first run: decode from the first key on a
+                    // fresh reader, frame for frame what the forward run read.
+                    replay = vision::FrameReader::Open(video, &d.error);
+                    if (!replay || !replay->SeekMs(from_ms)) {
+                        if (d.error.empty()) d.error = "cannot seek in the video";
+                        return d;
+                    }
+                    rd = replay.get();
+                } else if (!rd->SeekMs(at)) {
                     d.error = "cannot seek in the video";
                     return d;
                 }
                 bool saw_before = false;  // a frame earlier than the target came first
                 for (;;) {
                     int64_t pts_us = 0;
-                    if (!reader->Grab(&pts_us)) {
+                    if (!rd->Grab(&pts_us)) {
                         d.error = "the video changed between two reads";
                         return d;
                     }
@@ -221,10 +240,10 @@ std::optional<BetweenKeysResult> TrackBetweenKeys(const std::filesystem::path& v
                         saw_before = true;
                         continue;
                     }
-                    // With equal times before lo, only a landing after an earlier
-                    // frame (or at the first key's own position) is known to be on
-                    // the first of the run, not inside it.
-                    if (ms == target && (k == 0 || saw_before || at == from_ms)) {
+                    // In a run of equal times only a landing after an earlier frame
+                    // (or the replay of the forward run) is known to be on the first
+                    // of the run, not inside it.
+                    if (ms == target && (!in_run || saw_before || last_try)) {
                         found = true;
                         d.warm_ms = ms_since(t0);
                     }
@@ -241,7 +260,7 @@ std::optional<BetweenKeysResult> TrackBetweenKeys(const std::filesystem::path& v
             }
             for (size_t j = 0; j < k; ++j) {  // step over the equal-time frames before lo
                 int64_t pts_us = 0;
-                if (!reader->Grab(&pts_us) || pts_us / 1000 != target) {
+                if (!rd->Grab(&pts_us) || pts_us / 1000 != target) {
                     d.error = "the video changed between two reads";
                     return d;
                 }
@@ -250,13 +269,13 @@ std::optional<BetweenKeysResult> TrackBetweenKeys(const std::filesystem::path& v
             for (size_t i = c.lo; i < c.hi; ++i) {
                 if (i > c.lo) {
                     int64_t pts_us = 0;
-                    if (!reader->Grab(&pts_us) || pts_us / 1000 != times[i]) {
+                    if (!rd->Grab(&pts_us) || pts_us / 1000 != times[i]) {
                         d.error = "the video changed between two reads";
                         return d;
                     }
                     ++d.frames;
                 }
-                if (!reader->Retrieve(g)) {
+                if (!rd->Retrieve(g)) {
                     d.error = "the video changed between two reads";
                     return d;
                 }
