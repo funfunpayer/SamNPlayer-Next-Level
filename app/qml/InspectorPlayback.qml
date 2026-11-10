@@ -165,12 +165,13 @@ Column {
             }
             FlowCombo {
                 objectName: "curveSelect"
-                width: scriptTools.width - 24 - 86
+                width: scriptTools.width - 24 - 86 - 26
                 enabled: ctrl.hasScript && ctrl.laneChoices.length > 0
                 model: ctrl.laneChoices.map((l) => rootPanel.laneTitle(l))
                 currentIndex: Math.max(0, ctrl.laneChoices.indexOf(ctrl.activeLane))
                 onActivated: (i) => ctrl.activeLane = ctrl.laneChoices[i]
             }
+            HelpChip { key: "playback.curve"; anchors.verticalCenter: parent.verticalCenter }
         }
         Row {
             spacing: 8
@@ -207,12 +208,13 @@ Column {
             }
             FlowCombo {
                 objectName: "driveSource"
-                width: scriptTools.width - 24 - 86
+                width: scriptTools.width - 24 - 86 - 26
                 enabled: ctrl.hasScript
                 model: [qsTr("Recipe"), qsTr("Axes")]
                 currentIndex: ctrl.playbackSource === "axes" ? 1 : 0
                 onActivated: (i) => ctrl.setPlaybackSource(i === 1 ? "axes" : "recipe")
             }
+            HelpChip { key: "playback.drive"; anchors.verticalCenter: parent.verticalCenter }
         }
         FlowButton {
             objectName: "saveEmotionScript"
@@ -374,12 +376,13 @@ Column {
             Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; width: 78; text: qsTr("Curve"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13 }
             FlowCombo {
                 objectName: "contactCurve"
-                width: contact.width - 24 - 86
+                width: contact.width - 24 - 86 - 26
                 enabled: ctrl.contactKnobsLive; opacity: enabled ? 1 : 0.45
                 model: [qsTr("Linear"), qsTr("Soft (contact-like)"), qsTr("Peak"), qsTr("Impulse (peaks only)")]
                 currentIndex: Math.max(0, contact.mapping.contactCurves.indexOf(contact.mapping.contactCurve))
                 onActivated: (i) => contact.mapping.contactCurve = contact.mapping.contactCurves[i]
             }
+            HelpChip { key: "playback.contact-curve"; anchors.verticalCenter: parent.verticalCenter }
         }
         // 0.7 Contact feel probe: synthetic bounce through Sensitivity / Curve / Strength.
         Column {
@@ -492,11 +495,12 @@ Column {
                    ToolTipText { shown: strengthHover.hovered; text: qsTr("Soft / normal / strong feel of this Emotion Script. Saved in the script.") } }
             FlowCombo {
                 objectName: "strengthPreset"
-                width: contact.width - 24 - 86
+                width: contact.width - 24 - 86 - 26
                 model: ["—"].concat(ctrl.strengthPresets)
                 currentIndex: ctrl.activeStrength === "" ? 0 : 1 + ctrl.strengthPresets.indexOf(ctrl.activeStrength)
                 onActivated: (i) => ctrl.activeStrength = i === 0 ? "" : ctrl.strengthPresets[i - 1]
             }
+            HelpChip { key: "playback.strength"; anchors.verticalCenter: parent.verticalCenter }
         }
     }
     // Extended-O (0.7 "Playback & Extended-O" and the transport's
@@ -542,12 +546,16 @@ Column {
             valueText: ctrl.output.extendedORestoreMs === 0 ? qsTr("At once") : qsTr("%1 ms").arg(ctrl.output.extendedORestoreMs)
             onPicked: (v) => ctrl.output.extendedORestoreMs = Math.round(v / 100) * 100
         }
-        FlowButton {
+        Row {
+            spacing: 8
             visible: ctrl.hasScript
-            text: qsTr("Auto in marked range"); checked: ctrl.autoExtendedO
-            onClicked: ctrl.autoExtendedO = !ctrl.autoExtendedO
-            HoverHandler { id: autoEoHover }
-            ToolTipText { shown: autoEoHover.hovered; text: qsTr("Triggers Extended-O once when playback reaches the marked range of the heatmap.") }
+            FlowButton {
+                text: qsTr("Auto in marked range"); checked: ctrl.autoExtendedO
+                onClicked: ctrl.autoExtendedO = !ctrl.autoExtendedO
+                HoverHandler { id: autoEoHover }
+                ToolTipText { shown: autoEoHover.hovered; text: qsTr("Triggers Extended-O once when playback reaches the marked range of the heatmap.") }
+            }
+            HelpChip { key: "pb-marker-auto"; anchors.verticalCenter: parent.verticalCenter }
         }
         InspectorNote {
             visible: ctrl.hasScript

@@ -35,11 +35,15 @@ Column {
             HelpChip { key: "pb-pos-overlay-row"; anchors.verticalCenter: parent.verticalCenter }
         }
         // 0.7 "Show contact areas" with its hint, when the script stores marks.
-        FlowButton {
-            objectName: "showContactMarks"
+        Row {
+            spacing: 8
             visible: ctrl.contactMarks.hint !== undefined
-            text: qsTr("Show contact areas"); checked: ctrl.showContactMarks
-            onClicked: ctrl.showContactMarks = !ctrl.showContactMarks
+            FlowButton {
+                objectName: "showContactMarks"
+                text: qsTr("Show contact areas"); checked: ctrl.showContactMarks
+                onClicked: ctrl.showContactMarks = !ctrl.showContactMarks
+            }
+            HelpChip { key: "pb-contact-marks-toggle"; anchors.verticalCenter: parent.verticalCenter }
         }
         Text {
             objectName: "contactMarksHint"
@@ -125,6 +129,7 @@ Column {
                 ToolTipText { shown: hlThHover.hovered; text: qsTr("Intensity threshold for Speed highlights on the curve (500×|Δpos|/|Δt|). Lower = more red bands.") }
             }
             Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; text: Math.round(ctrl.speedHighlightThresh); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
+            HelpChip { key: "playback.hl"; anchors.verticalCenter: parent.verticalCenter }
         }
         Row {
             spacing: 8
