@@ -353,7 +353,8 @@ IntensityArc ComputeArc(const PhaseSignals& s, const ArcOptions& o) {
     IntensityArc out;
     out.step_ms = s.step_ms;
     const size_t n = !s.motion.empty() ? s.motion.size() : s.loudness.size();
-    if (n == 0 || s.step_ms <= 0) return out;
+    // A step so long that the clip's times overflow 64 bits gives no arc.
+    if (n == 0 || s.step_ms <= 0 || s.step_ms > std::numeric_limits<int64_t>::max() / int64_t(n + 1)) return out;
     const auto steps = [&](int64_t ms) {
         const int64_t m = std::clamp<int64_t>(ms, 0, std::numeric_limits<int64_t>::max() - s.step_ms);
         return std::max<size_t>(1, size_t((m + s.step_ms - 1) / s.step_ms));

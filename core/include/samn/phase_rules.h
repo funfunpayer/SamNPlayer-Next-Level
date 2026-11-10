@@ -34,7 +34,9 @@ struct PhaseRuleOptions {
 // The suggested phases, sorted and not overlapping: empty stretches, the
 // intro before the first steady action, up to three climaxes where the
 // intensity arc (intensity_arc.h) peaks anywhere after the intro, and the
-// cool-down after the last one.
+// cool-down after the last one. The arc sees the span from the first to the
+// last picture that is not empty; an empty stretch of 10 s or more reaches it
+// without motion or sound (a codec's noise on black frames is no action).
 std::vector<LabelPhase> SuggestPhases(const PhaseSignals& s, const PhaseRuleOptions& o = {});
 
 // Adds suggestions to a project without touching what the user set: only

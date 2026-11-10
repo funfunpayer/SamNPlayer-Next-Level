@@ -7,16 +7,18 @@ The phase rules (D-157) against the intensity arc (D-165) on synthetic clips who
 - **Tool:** `tests/bench/phase_bench.cpp`, target `phase_bench`, built with the tests, not in ctest. It keeps the old rules as `LegacyRules`, the regression oracle: the code of `core/src/phase_rules.cpp` at `33a5723`, less the script tempo and `active_share`, which no caller ever set. Both rule sets see the same clips and are graded on their suggested phases.
 - **Two parts:**
   - 24 hand-made scenarios, 25 clips each (seeded LCG).
-  - 17 families of random arcs, 300 clips each, from a **train** and a **held-out** set of seeds. The action is piecewise linear through 3-8 knots varying +-15 %, jitter is +-5 to +-25 % (+-50 % in the two noisy families, +-35 % with the loud opening), and the loudness is divided by its loudest step, as the label editor does.
+  - 18 families of random arcs, 300 clips each, from a **train** and a **held-out** set of seeds. The action is piecewise linear through 3-8 knots varying +-15 %, jitter is +-5 to +-25 % (+-50 % in the two noisy families, +-35 % with the loud opening), and the loudness is divided by its loudest step, as the label editor does.
 - **Families added in the third review** (same rules, train and held-out):
   - *peak, then a long black and silent end:* the peak before 45 % of the clip, black and silent from 50-60 % to the end;
   - *loud opening, later peak, jitter +-35 %:* 20-60 s at 2x the motion and 2.2x the loudness, the peak at 60-90 % of the clip;
   - *50-80 % black or still and silent between:* steady action on either side of one long empty stretch, black or lit;
   - *40-60 % black at the start or end;*
   - *scene cuts, no sound:* a calm intro, steady motion, and on 2 % of the samples one step of 3-20x the motion.
+- **Family added in the fourth review:** *50-70 % black with codec noise, silent or music.* Steady action either side of one long black stretch (luma 0.02). In it the motion is 0.002 +-50 %, as a codec's noise on black frames gives it, and the sound is silent or music at 0.25 +-20 %, half the clips each.
 - **Seeds, and how often the held-out set was looked at.** The constants were chosen on the train seeds. The held-out seeds were evaluated once at the end of the second review. In the third review they were looked at more than once, so **the held-out numbers below are no longer from untouched data**:
   1. With the code frozen, they failed one row: *scene cuts, no sound*, 0.023 false climaxes per clip against a bound of 0.020. Four of its seven false climaxes sat on a cut in the clip's last two steps, which the running median did not cover yet. The train seeds had one such case. The median was extended to the clip's ends, with a unit test for that edge, and both seed sets were run again: no row worse.
-  2. A later attempt to fix the quantised random walk (see Limits) passed the train seeds but made the held-out *loud opening* row fail (0.023 against 0.020). That attempt was reverted. The state described here is the one of step 1, and re-running it gave the same numbers.
+  2. A later attempt to fix the quantised random walk (see Limits) passed the train seeds but made the held-out *loud opening* row fail (0.023 against 0.020). That attempt was reverted. The state of the third review is the one of step 1, and re-running it gave the same numbers.
+  3. In the fourth review, the fix for codec noise on black (long empty stretches reach the arc without motion or sound) left every earlier row identical on both seed sets. The new family was run on both: 0 false climaxes per clip, against 0.873 / 0.840 before the fix.
 - **Hits:**
   - A climax is hit when a suggested climax stretch has its midpoint within 5 s of the truth.
   - In the families it may also lie anywhere on a wider flat top: within max(5 s, the top's half-width) of its centre. Both rule sets are graded the same way; the strict 5 s numbers are below too.
@@ -117,6 +119,7 @@ Error of the climax stretch's midpoint and of the intro end, in seconds (+ late,
 | no peak: 50-80 % black or still and silent between | - | - | 0.003 | 0.000 | 300/300 | 300/300 |
 | no peak: 40-60 % black at the start or end | - | - | 0.000 | 0.000 | 300/300 | 300/300 |
 | no peak: scene cuts, no sound | - | - | 0.000 | 0.013 | 294/300 | 300/300 |
+| no peak: 50-70 % black with codec noise, silent or music | - | - | 0.000 | 0.000 | 300/300 | 300/300 |
 
 ## Random arcs, held-out seeds (not untouched, see Method)
 
@@ -139,10 +142,23 @@ Error of the climax stretch's midpoint and of the intro end, in seconds (+ late,
 | no peak: 50-80 % black or still and silent between | - | - | 0.000 | 0.000 | 300/300 | 300/300 |
 | no peak: 40-60 % black at the start or end | - | - | 0.000 | 0.000 | 300/300 | 300/300 |
 | no peak: scene cuts, no sound | - | - | 0.000 | 0.010 | 295/300 | 300/300 |
+| no peak: 50-70 % black with codec noise, silent or music | - | - | 0.000 | 0.000 | 300/300 | 300/300 |
 
 No family or scenario is worse than the old rules under the acceptance above, on either seed set. The margins are small:
 - The held-out motion-only peak has 290 intro hits against 296, exactly the 2 % allowed.
 - The loud opening and the scene cuts are 1-3 clips in 300 below their bound of 0.020 false climaxes per clip.
+
+## What the fourth review's fix changed
+
+Black frames are not exactly still: the app's motion is the mean absolute difference of 64x36 grey frames, so a codec's noise on black gives a small motion that is not 0. Such samples were empty for the phase rules (dark) but not for the arc. Now an empty stretch of at least 10 s (`kEmptyRunMs`) reaches the arc without motion or sound; shorter ones (a black cut inside a climax) keep theirs, since zeroing those splits the climax (the scenario's hits fell from 25 to 21 when every empty sample was zeroed). False climaxes per clip:
+
+| Probe (600 s of steady action, the middle black with motion 0.002 +-50 %) | Old rules | `664744c` | Now |
+|---|---|---|---|
+| 50 % / 70 % black, silent (the review's probe) | 0 | 0.873 / 1.043 | 0 |
+| 50 % / 70 % black, music at 0.25 (the review's probe) | 0 | 0.800 / 0.993 | 0 |
+| the bench family, train / held-out | 0 / 0 | 0.873 / 0.840 | 0 / 0 |
+
+Every other bench row is identical before and after.
 
 ## What the third review's fixes changed
 
@@ -276,13 +292,19 @@ The review's generators (`rv-arc4` probes and families, 300 clips per family, it
 - **Quantised random walks got worse in this round:** 0.443 false climaxes per clip, against 0.143 at `6e4d314` and 0.273 for the old rules.
   - Cause: the running median against scene cuts turns motion that flickers between two quanta into clean steps, and such a step passes as a sudden edge, which needs only `climax_gain`.
   - Three fixes were tried: the noise measured before the median; the sudden edge read before the median; and that edge required at three quarters at the top's edge. The best of them still left 0.317, above the old rules, and made a held-out row fail, so all three were reverted.
-  - Real motion is a mean frame difference, not quantised this coarsely, but a strobing or flickering picture may act alike.
+  - In the app it cannot occur: the motion is a mean of absolute 8-bit differences over 64x36 pixels divided by 255, so its quantum is about 1.7e-6, and the loudness is a float RMS in dB. The fourth review accepted the limit on this ground.
 - **A climax in the sound alone needs a much larger rise than one in the picture.** The arc blends motion and loudness 0.6 / 0.4, so a rise of the loudness moves it less.
   - The review found that a sound-only climax needs about 1.63x the rest of the action: a sound-only 1.5x peak was found in 0 % of its clips, against 99 % for a motion-only one.
   - A probe here used a 12 s top, +-20 % jitter and 200 clips per row. Sound-only peaks were found in 0 % at 1.2-1.6x, 4-6 % at 1.7-1.8x and 30 % at 2x.
   - Motion-only peaks with even sound were found in 27 % at 1.4x and 78-98 % at 1.5-2x; without sound, 67 % at 1.3x.
   - The bench's sound-only family (1.75-3.8x) gets 89 %.
-- **Calm tails:** 0.023-0.032 false climaxes per clip in the review's calm-tail family at `6e4d314` (old 0.001); 0.010 at this state, against 0.
+- **Calm tails:** 0.023-0.032 false climaxes per clip in the review's calm-tail family at `6e4d314` (old 0.001). At the third review's state it was 0.010 on the review's default seed against 0, but 0.023 on a fresh seed.
+- **App-like loudness adds spurious intros on ramps and staircases.** Measured by the fourth review with the loudness passed through `NormalizeLoudness` (RMS, dB, a floor at the 20th percentile, a gate):
+  - intro hits on ramp and spike fall from 994 to 891, and on a staircase up then down from 809 to 624;
+  - `6e4d314` had the same (881 / 622);
+  - cause: the quietest 20 % of a ramp maps to loudness 0 and looks like a calm intro;
+  - peak hits stay far above the old rules under this loudness (1 h clips: 85 % against 31 %).
+- **A short black cut inside a climax with its motion gone** (codec noise, the sound going on) splits the climax into two bursts. The suggested climax lies inside the true one, but it may be either burst: 90-98 s instead of 101-109 s in the test's clip, where the true climax is 92-110 s.
 - **Strict grading:** on wide or ripply tops the arc often places the climax more than 5 s off the centre. In the review's plateau with ripple that gives 0.937 false climaxes per clip under strict grading, against 0.010 under wide grading.
 - **A lit, still and quiet but not silent lead-in** (loudness 0.06, above the 0.05 silence threshold) over the first 60 % of the clip, then action: 0.53 false climaxes per clip (old 0). The lead-in is not empty, and it is longer than the 40 % the intro may take.
 - **Slow build-ups** of 100-500 s: 15 of 25 in the scenario, all early.
@@ -290,6 +312,6 @@ The review's generators (`rv-arc4` probes and families, 300 clips per family, it
 - **A last staircase step below 1.15x the step before** is no climax.
 - **A clip that opens at its top** gets no climax suggestion there: a conservative choice, since the arc cannot tell a cold open from a film cut inside its climax.
 - **Confidence** ranks climaxes and is no probability.
-- **CPU:** a call costs about 4x the old rules: 110 us against 28 us over the 24 scenarios. On a 2 h clip of 14 400 steps it is 4.1-4.4 ms against 0.9-1.3 ms (3.5 ms against 0.75-1.1 ms in the second review, on a less loaded machine). That is still small next to decoding the picture. Memory: about a dozen vectors of one double per step, around 1.4 MB for 2 h.
+- **CPU:** a call costs about 4x the old rules: 110 us against 28 us over the 24 scenarios. On a 2 h clip of 14 400 steps it is 4.1-4.4 ms against 0.9-1.3 ms (3.5 ms against 0.75-1.1 ms in the second review, on a less loaded machine). That is still small next to decoding the picture. Adversarial inputs cost more (the fourth review): up to 10 ms on a 2 h clip, and 102 ms on a 10 h train of spikes. Memory: about a dozen vectors of one double per step, around 1.4 MB for 2 h.
 
 Run it again: `cmake --build build --target phase_bench && build/tests/phase_bench [--split train|held-out|both] [--strict-hits] [--family-clips N] [--variants N]`.
