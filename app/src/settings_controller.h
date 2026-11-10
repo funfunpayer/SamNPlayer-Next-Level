@@ -24,6 +24,9 @@ class SettingsController : public QObject {
     Q_PROPERTY(bool connectTest READ connectTest WRITE setConnectTest NOTIFY settingsChanged)
     // 0.7 "playback.honor_inverted" (default on): a script's "inverted": true flips it.
     Q_PROPERTY(bool honorInverted READ honorInverted WRITE setHonorInverted NOTIFY settingsChanged)
+    // 0.7 "generator.reportPath" (default empty = no recording). Choose… stores a
+    // local path; Default clears it. There is no report engine yet — path only.
+    Q_PROPERTY(QString reportPath READ reportPath WRITE setReportPath NOTIFY settingsChanged)
     // The Log tab: "HH:MM:SS.mmm  LEVEL  message" lines, newest last.
     Q_PROPERTY(bool warningsOnly READ warningsOnly WRITE setWarningsOnly NOTIFY logChanged)
     Q_PROPERTY(QString logText READ logText NOTIFY logChanged)
@@ -45,6 +48,8 @@ public:
     void setConnectTest(bool on);
     bool honorInverted() const { return honor_inverted_; }
     void setHonorInverted(bool on);
+    QString reportPath() const { return report_path_; }
+    void setReportPath(const QString& path);
     bool warningsOnly() const { return warnings_only_; }
     void setWarningsOnly(bool on);
     QString logText() const;
@@ -76,6 +81,7 @@ private:
     QString log_level_ = QStringLiteral("info");
     bool connect_test_ = false;
     bool honor_inverted_ = true;
+    QString report_path_;
     bool warnings_only_ = false;
 };
 

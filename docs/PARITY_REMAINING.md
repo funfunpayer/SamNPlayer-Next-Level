@@ -8,10 +8,10 @@ Made on 8 Nov 2026 from the audit in [`PARITY.md`](PARITY.md) (113 open and 139 
 
 1. ~~**Player key tests**~~ — done (`headerKeysAndShortcuts`: Space, arrows, `+` `-`, L, T, O; header + keys hint).
 2. ~~**Undo / Redo on the Player's curve edit**~~ — done earlier (Ctrl+Z / Ctrl+Y + Undo/Redo under Curve edit).
-3. **Plain settings keys** (§2.3): `generator.reportPath`, the `playback.feel_heatbands` pair. ~~`device.diagnosticsHistoryPath` and the diagnostics history list in Settings → Device (§8, §13 `GetDiagnosticsHistory`)~~ — done (`DeviceController::getDiagnosticsHistory`, JSONL, Settings → Device previous runs).
+3. **Plain settings keys** (§2.3): the `playback.feel_heatbands` pair. ~~`generator.reportPath`~~ — done (`SettingsController::reportPath`, Settings → System, empty = no recording, test `reportPathRoundTripsAndClearsToEmpty`). ~~`device.diagnosticsHistoryPath` and the diagnostics history list in Settings → Device (§8, §13 `GetDiagnosticsHistory`)~~ — done (`DeviceController::getDiagnosticsHistory`, JSONL, Settings → Device previous runs).
 4. ~~**Window and brand wording**~~ — replaced (D-150 / D-151): "SamNPlayer Next", 1440×900, two-colour wordmark + Next.
 5. ~~**Player polish**~~ — header "Player" / "No Emotion Script selected", lane hover tips, heatmap wheel zoom + `pb-marker-hint` chip, keys-hint chip (remaining: soft-curve edit-dots hint belongs to the Generator editor).
-6. **Settings → Hardware and metrics** (§2.2 last collapsible, §13 `GetHardwareInfo`): "Check hardware" is Settings → System (D-162 / D-167). Still missing: `generator.reportPath`, "Show summary", "Show model", "Learn from judgments".
+6. **Settings → Hardware and metrics** (§2.2 last collapsible, §13 `GetHardwareInfo`): "Check hardware" is Settings → System (D-162 / D-167). ~~`generator.reportPath`~~ — done (Settings → System path field, empty = no recording). Still missing: "Show summary", "Show model", "Learn from judgments".
 
 ### Medium (M)
 

@@ -2,7 +2,14 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 10 Nov 2026, Cursor, branch `cursor/gen-improve-panel-635a`: Generator review-card Improve script (Start/End trim + Fill gaps + Heal tracking gaps). Quality first. Do not touch HealRhythm / RepairSpans / StampTrackingGaps / audio check / Speech-Hold / feel_heatbands / handbook / `.sam` / intensity-arc.
+**Last update:** 10 Nov 2026, Cursor, branch `cursor/gen-report-path-635a`: Settings → System `generator.reportPath` (empty = no recording). Quality first. Do not touch feel_heatbands / Speech-Hold / handbook / `.sam` / intensity-arc.
+
+## Handover: generator.reportPath (10 Nov)
+
+PARITY_REMAINING item 3/6 (the path key only). Settings → System (health check tab) has a Generator metrics card: path field, Choose… (`FileDialog` SaveFile), Default (clears to `""`), status empty → "No metrics recorded yet (path empty)." / non-empty → the path. Empty means no recording; there is no report engine yet, so no Show summary / Show model / Learn from judgments. Left open: `playback.feel_heatbands`, the three report-engine buttons.
+
+- **App:** `SettingsController::reportPath` / `setReportPath` (`generator.reportPath`; `file:` URLs stored as a local path). QML `reportPathField` / `reportPathChoose` / `reportPathDefault` / `reportPathStatus`.
+- **Tests:** `settings_controller_test` `reportPathRoundTripsAndClearsToEmpty`; `shell_qml_test` System tab empty/set/clear status.
 
 ## Handover: Generator Improve panel (10 Nov)
 
@@ -12,7 +19,7 @@ PARITY_REMAINING item 10 (the panel pieces only). Review card on Generator Creat
 - **Tests:** `editor_controller_test` `improveScriptTrimsFillsAndHeals`; `generator_qml_test` `improvePanelShowsAndRuns`.
 ## Handover: device diagnostics history (10 Nov)
 
-PARITY_REMAINING item 3 (the history piece only). After each finished `RunDiagnostics` (including interrupted) the worker appends one JSONL line. Empty `device.diagnosticsHistoryPath` → `config_dir()/device_diagnostics_history.jsonl`. `DeviceController::getDiagnosticsHistory` returns newest-first; Settings → Device lists `date (Mock|device) — N commands, M errors[, interrupted]`. Name/kind are stamped from the session (the report JSON has none). No Choose… path field (override is the settings key, tested in C++). Left open: `generator.reportPath`, feel_heatbands.
+PARITY_REMAINING item 3 (the history piece only). After each finished `RunDiagnostics` (including interrupted) the worker appends one JSONL line. Empty `device.diagnosticsHistoryPath` → `config_dir()/device_diagnostics_history.jsonl`. `DeviceController::getDiagnosticsHistory` returns newest-first; Settings → Device lists `date (Mock|device) — N commands, M errors[, interrupted]`. Name/kind are stamped from the session (the report JSON has none). No Choose… path field (override is the settings key, tested in C++). Left open from that slice: feel_heatbands (`generator.reportPath` is Settings → System).
 
 - **Core:** `diagnostics.h` `DiagnosticsHistoryEntry`, `AppendDiagnosticsHistory` / `LoadDiagnosticsHistory`, `HistoryEntryFromReport`. Tests in `device_diagnostics_test.cpp`.
 - **App:** `DeviceWorker::RunDiagnostics` appends; `getDiagnosticsHistory` / `diagnosticsHistoryPath` / `setDiagnosticsHistoryPath`. QML under the Device diagnostics card (`diagHistoryLine`). Tests: `diagnosticsOnMock`, `diagnosticsCanBeCancelled`, `diagnosticsHistoryPathDefaultAndOverride`, `settingsDeviceTabTestsTheMockDevice`.
