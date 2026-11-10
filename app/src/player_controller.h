@@ -52,6 +52,8 @@ class PlayerController : public QObject {
     Q_PROPERTY(bool noScriptForVideo READ noScriptForVideo NOTIFY scriptChanged)
     Q_PROPERTY(int pointCount READ pointCount NOTIFY scriptChanged)
     Q_PROPERTY(qint64 scriptDurationMs READ scriptDurationMs NOTIFY scriptChanged)
+    // 0.7 describeScript: state summary plus chapter spans. Empty below 4 points.
+    Q_PROPERTY(QString scriptAnalysisSummary READ scriptAnalysisSummary NOTIFY scriptChanged)
     Q_PROPERTY(int offsetMs READ offsetMs WRITE setOffsetMs NOTIFY offsetMsChanged)
     Q_PROPERTY(qint64 playheadMs READ playheadMs NOTIFY playheadMsChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
@@ -371,6 +373,13 @@ public:
     // 0.7 Script Doctor (ScriptQuality): signal quality of the loaded script
     // from its file. {score 0-1, passed, warnings[], error}.
     Q_INVOKABLE QVariantMap scriptQuality();
+    // 0.7 AnalyzeScript. {segments, shareByState, totalMs, summary, error}.
+    // Fewer than 4 points sets error and leaves the rest empty.
+    Q_INVOKABLE QVariantMap analyzeScript();
+    // 0.7 ScriptChapters. Stored metadata.chapters replace the automatic
+    // labels; an empty name becomes "chapter"; an end at or before the start
+    // becomes start+1 ms. Automatic chapters are never written to the file.
+    Q_INVOKABLE QVariantList scriptMotionChapters();
     // 0.7 SavePlaybackProject: "<video or script>.snp.json" with video,
     // script, offset, the video position and the marked range. The path, or
     // "" with lastError.
@@ -415,6 +424,7 @@ public:
     bool noScriptForVideo() const { return stroke_.empty() && !videoPath_.isEmpty(); }
     int pointCount() const { return static_cast<int>(stroke_.size()); }
     qint64 scriptDurationMs() const { return stroke_.empty() ? 0 : stroke_.back().at; }
+    QString scriptAnalysisSummary() const { return scriptAnalysisSummary_; }
     int offsetMs() const { return offsetMs_; }
     QString toolNote() const { return toolNote_; }
     void setOffsetMs(int ms);
@@ -670,6 +680,9 @@ private:
     std::string activeStrength_;
     QPointer<DeviceService> device_;
     std::vector<samn::Action> stroke_, vibration_, suction_;
+    // describeScript text. Display only; never saved back as metadata.chapters.
+    QString scriptAnalysisSummary_;
+    void refreshScriptAnalysis();
     samn::ScriptMarks marks_;
     std::vector<float> heat_;
     QVariantList variants_;

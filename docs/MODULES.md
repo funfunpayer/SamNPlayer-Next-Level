@@ -52,6 +52,9 @@ Functions use PascalCase and struct fields use snake_case.
 | `improve.h` | Script polish after Create: trim ends, heal tracking-loss windows, fill long gaps (straight lines; `FillGapsRhythmic` strokes on the script's own tempo, the audio tempo or the heart rhythm, behind `generator.rhythmic_fill`, off, D-168) | 0.7 `funscript/improve.go` | ✅ |
 | `motion_fidelity.h` | Motion Fidelity: how well a script follows a reference (rhythm, phase, amplitude, lag window) | 0.7 `funscript/phase.go` | ✅ |
 | `script_quality.h` | Script Doctor: jitter, jumps, gaps and device limits from the points alone | 0.7 `script_quality.go`, `device_compat.go` | ✅ |
+| `motion_classify.h` | Motion states of a curve: static, starting, accelerating, regular, decelerating, stopping. An empty options value does not smooth | 0.7 `motionx/state.go` `Classify` | ✅ |
+| `motion_chapters.h` | Coarser chapters from those states: pause, build, steady, crescendo, wind-down | 0.7 `motionx/chapters.go` | ✅ |
+| `script_analysis.h` | `AnalyzeScriptActions`: shares and one English summary line; chapter labels and the m:ss clock | 0.7 `AnalyzeScript` / `summarizeStates`, `playback.js` `CHAPTER_LABELS` | ✅ |
 | `ozone.h` | O-zone suggestions for the primary O-marker | 0.7 `funscript/ozone.go` | ✅ |
 | `intensity_arc.h` | `ComputeArc`: the clip's intensity (motion against its busy level plus loudness) at a 4 s detail and a 20 s arc scale, where the intro ends and up to three climaxes with prominence and confidence; no model, no FFT, deterministic | D-165 | ✅ `intensity_arc_test.cpp`; bench `tests/bench/phase_bench.cpp` |
 | `phase_rules.h` | Phase suggestions (empty, intro, climaxes, cool-down) from the picture and the intensity arc, without a model; always unconfirmed | D-157, D-165 | ✅ |
