@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "samn/audio_envelope.h"
+
 namespace samn {
 
 namespace {
@@ -372,6 +374,28 @@ TempoReliability AssessTempo(const std::vector<AudioBlock>& blocks, const TempoE
         r.reliable = true;
     }
     return r;
+}
+
+PlaybackBpmGuess PickPlaybackAudioBpm(const TempoEstimate& tempo, const TempoReliability& reliability,
+                                      const std::vector<double>& loudness, int step_ms) {
+    PlaybackBpmGuess out;
+    if (reliability.reliable && tempo.bpm > 0) {
+        const double bpm = FoldBpmIntoRange(tempo.bpm);
+        if (bpm > 0) {
+            out.bpm = bpm;
+            out.source = PlaybackBpmSource::kOnsets;
+            out.confidence = tempo.confidence;
+            return out;
+        }
+    }
+    out.reason = reliability.reason;
+    out.confidence = tempo.confidence;
+    const double fallback = EstimateBpmFromLoudness(loudness, step_ms);
+    if (fallback > 0) {
+        out.bpm = fallback;
+        out.source = PlaybackBpmSource::kLoudness;
+    }
+    return out;
 }
 
 }  // namespace samn

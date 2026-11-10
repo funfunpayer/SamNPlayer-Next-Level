@@ -23,6 +23,15 @@ README Player / Generator / Devices / Status only — no version bump, no 100 % 
 - **Tests:** `generator_qml_test` `improvePanelShowsAndRuns` opens a second script and the status hides; `inspector_qml_test` `playbackSuggestCard` same for O-zone / ring-down notes.
 - **Left open:** Improve extras (audio tempo / rhythm / repair span), report engine buttons, feel_heatbands.
 
+## Handover: Player BPM from onsets (10 Nov)
+
+Owner: wire D-168 `EstimateTempo` / `AssessTempo` into Player "From audio". Core already had onsets/tempo; the Player still called `EstimateBpmFromLoudness` only.
+
+- **Core:** `PickPlaybackAudioBpm` (`audio_tempo.h`). Onsets win when `AssessTempo.reliable` (thresholds unchanged: `kTempoMinConfidence` 0.30, `kTempoMinConfidenceStrict` 0.60 when the active sound is mostly noise or speech-like, mostly-silence at `active_share` < 0.25). Else `EstimateBpmFromLoudness`. Folded 20–240.
+- **Player:** `guessBpmFromAudio` decodes the first 10 min with `AudioLevelDecoder` `withOnsets` (same pass as loudness; `OnsetCurve` values drained into `TempoAccumulator`, no whole-file PCM). Status "N BPM from audio." when onsets win, "N BPM from audio (loudness)." on fallback.
+- **Tests:** `tests/core/audio_bpm_test.cpp` (high-confidence onsets win over a conflicting loudness beat; silence / weak pulse / speech → loudness; both fail → 0; music/silence/speech through `EstimateTempo` + `AssessTempo`). App: `guessBpmFromAudioMeasuresClickTrack`, `audioLevelOnsetsOptional`.
+- **Stay off:** feel_heatbands, Speech-Hold, handbook, `.sam`, POV, AI tip, Training audio paths.
+
 ## Handover: generator.reportPath (10 Nov)
 
 PARITY_REMAINING item 3/6 (the path key only). Settings → System (health check tab) has a Generator metrics card: path field, Choose… (`FileDialog` SaveFile), Default (clears to `""`), status empty → "No metrics recorded yet (path empty)." / non-empty → the path. Empty means no recording; there is no report engine yet, so no Show summary / Show model / Learn from judgments. Left open: `playback.feel_heatbands`, the three report-engine buttons.
