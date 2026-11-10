@@ -456,6 +456,7 @@ GlassCard {
                 text: qsTr("Add from selection"); enabled: ctrl.hasMarker
                 onClicked: if (ctrl.addChapterFromSelection(chapterName.text)) chapterName.text = ""
             }
+            HelpChip { key: "pb-chapter-hint"; anchors.verticalCenter: parent.verticalCenter }
             Text {
                 textFormat: Text.PlainText
                 anchors.verticalCenter: parent.verticalCenter
@@ -486,6 +487,7 @@ GlassCard {
                 text: qsTr("Add at playhead"); enabled: ctrl.hasScript
                 onClicked: if (ctrl.addBookmark(bookmarkName.text, root.playheadPosition)) bookmarkName.text = ""
             }
+            HelpChip { key: "pb-bookmark-hint"; anchors.verticalCenter: parent.verticalCenter }
         }
         MarkList {
             anchors.top: bookmarkAdd.bottom; anchors.topMargin: 10

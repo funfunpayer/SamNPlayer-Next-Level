@@ -9,9 +9,9 @@ Made on 8 Nov 2026 from the audit in [`PARITY.md`](PARITY.md) (113 open and 139 
 1. ~~**Player key tests**~~ — done (`headerKeysAndShortcuts`: Space, arrows, `+` `-`, L, T, O; header + keys hint).
 2. ~~**Undo / Redo on the Player's curve edit**~~ — done earlier (Ctrl+Z / Ctrl+Y + Undo/Redo under Curve edit).
 3. **Plain settings keys** (§2.3): `generator.reportPath`, `device.diagnosticsHistoryPath`, the `playback.feel_heatbands` pair; plus the diagnostics history list in Settings → Device (§8, §13 `GetDiagnosticsHistory`).
-4. **Window and brand wording** (§1 Window, brand lock-up): the title is "SamNPlayer Next" and the size is 1440x900 on purpose (D-150, D-151). Record that as "replaced" with the decision instead of leaving two partly lines.
+4. ~~**Window and brand wording**~~ — replaced (D-150 / D-151): "SamNPlayer Next", 1440×900, two-colour wordmark + Next.
 5. ~~**Player polish**~~ — header "Player" / "No Emotion Script selected", lane hover tips, heatmap wheel zoom + `pb-marker-hint` chip, keys-hint chip (remaining: soft-curve edit-dots hint belongs to the Generator editor).
-6. **Settings → Hardware and metrics** (§2.2 last collapsible, §13 `GetHardwareInfo`): reuse the System tab's adapter list as the "Check hardware" text; add the metrics file path and "Show summary".
+6. **Settings → Hardware and metrics** (§2.2 last collapsible, §13 `GetHardwareInfo`): "Check hardware" is Settings → System (D-162 / D-167). Still missing: `generator.reportPath`, "Show summary", "Show model", "Learn from judgments".
 
 ### Medium (M)
 

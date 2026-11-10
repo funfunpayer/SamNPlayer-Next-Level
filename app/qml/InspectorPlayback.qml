@@ -136,6 +136,7 @@ Column {
                 enabled: ctrl.hasScript && ctrl.videoName !== "" && !ctrl.autoSyncBusy
                 onClicked: ctrl.suggestAudioSync()
             }
+            HelpChip { key: "pb-auto-sync"; anchors.verticalCenter: parent.verticalCenter }
             FlowButton {
                 objectName: "autoSyncApply"
                 text: ctrl.autoSyncConfidence !== "none"
