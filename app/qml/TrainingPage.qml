@@ -433,14 +433,18 @@ Item {
                 }
                 // The stage switch (0.8 Clip · Rings · Waves · Video; the waves
                 // have their own card here, D-152).
-                FlowTabs {
-                    objectName: "stageSwitch"
+                Row {
                     anchors.right: parent.right; anchors.rightMargin: 12
                     anchors.top: parent.top; anchors.topMargin: 6
-                    readonly property var modes: ["rings", "figure", "video"]
-                    model: [qsTr("Rings"), qsTr("Figure"), qsTr("Video")]
-                    current: Math.max(0, modes.indexOf(ctl.stage))
-                    onPicked: (i) => ctl.stage = modes[i]
+                    spacing: 6
+                    HelpChip { key: "training.stage"; anchors.verticalCenter: parent.verticalCenter }
+                    FlowTabs {
+                        objectName: "stageSwitch"
+                        readonly property var modes: ["rings", "figure", "video"]
+                        model: [qsTr("Rings"), qsTr("Figure"), qsTr("Video")]
+                        current: Math.max(0, modes.indexOf(ctl.stage))
+                        onPicked: (i) => ctl.stage = modes[i]
+                    }
                 }
                 Row {
                     id: rings
@@ -663,6 +667,7 @@ Item {
                             Layout.fillWidth: true
                             Text { textFormat: Text.PlainText; text: qsTr("Session Settings"); color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 15; font.weight: Font.Medium; Layout.fillWidth: true }
                             Text { textFormat: Text.PlainText; text: qsTr("Mock (test without device)"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11 }
+                            HelpChip { key: "training.mock"; Layout.alignment: Qt.AlignVCenter }
                             FlowToggle { checked: ctl.mock; enabled: ctl.state === "idle"; onToggled: (on) => ctl.mock = on }
                         }
                         // Soft ceilings on what leaves for the device (1 = no cap).
@@ -695,6 +700,7 @@ Item {
                             RowLayout {
                                 Layout.fillWidth: true; spacing: 6
                                 Text { textFormat: Text.PlainText; text: qsTr("Intensity"); color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 13; Layout.preferredWidth: 90 }
+                                HelpChip { key: "training.tier"; Layout.alignment: Qt.AlignVCenter }
                                 Repeater {
                                     model: [[0.8, qsTr("Gentle")], [1, qsTr("Standard")], [1.2, qsTr("Intense")]]
                                     delegate: FlowButton {
@@ -738,7 +744,11 @@ Item {
                         id: mode
                         x: 14; y: 14; width: parent.width - 28
                         spacing: 8
-                        Text { textFormat: Text.PlainText; text: qsTr("Session Mode"); color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 15; font.weight: Font.Medium }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Text { textFormat: Text.PlainText; text: qsTr("Session Mode"); color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 15; font.weight: Font.Medium; Layout.fillWidth: true }
+                            HelpChip { key: "training.session-mode" }
+                        }
                         RowLayout {
                             Layout.fillWidth: true; spacing: 8
                             Repeater {
@@ -806,7 +816,11 @@ Item {
                         id: feedback
                         x: 14; y: 14; width: parent.width - 28
                         spacing: 8
-                        Text { textFormat: Text.PlainText; text: qsTr("Feedback"); color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 15; font.weight: Font.Medium }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Text { textFormat: Text.PlainText; text: qsTr("Feedback"); color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 15; font.weight: Font.Medium; Layout.fillWidth: true }
+                            HelpChip { key: "training.feedback" }
+                        }
                         Text {
                             textFormat: Text.PlainText; Layout.fillWidth: true; wrapMode: Text.WordWrap
                             text: qsTr("Arousal 1–10. Stay mostly at 5–7. At 8: Interrupt (or lower intensity) and lengthen the out-breath. 9–10 interrupt the cycle for you and soften the next one. Target is 7.")

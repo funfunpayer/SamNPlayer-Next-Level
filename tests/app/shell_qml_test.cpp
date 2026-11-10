@@ -302,6 +302,42 @@ private slots:
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }
 
+    // PARITY item 21: Library HelpChips on Local Files / Recent / Favorites /
+    // Scripts / Analysis resolve and a click opens the popover.
+    void libraryHelpChipsResolve() {
+        {
+            Shell s;
+            loadShell(s, 0);
+            QVERIFY(s.one("LibraryPanel"));
+            struct Row { const char* key; const char* snippet; };
+            const Row rows[] = {
+                {"library.local-files", "Opens a video or script"},
+                {"library.recent", "Newest scripts you opened"},
+                {"library.favorites", "Scripts you starred"},
+                {"library.scripts", "Imported = opened from disk"},
+                {"library.analysis", "Audio Analysis opens the waveform"},
+            };
+            QQuickItem* local = nullptr;
+            for (const Row& row : rows) {
+                QQuickItem* chip = nullptr;
+                for (QQuickItem* c : itemsOfType(s.root(), "HelpChip"))
+                    if (c->property("key").toString() == QLatin1String(row.key) && c->isVisible()) chip = c;
+                QVERIFY2(chip, row.key);
+                QVERIFY2(chip->property("text").toString().contains(QLatin1String(row.snippet)),
+                         qPrintable(QString("%1: %2").arg(row.key, chip->property("text").toString())));
+                if (QLatin1String(row.key) == QLatin1String("library.local-files")) local = chip;
+            }
+            QVERIFY(local);
+            QVERIFY(!local->property("open").toBool());
+            QTest::mouseClick(s.window, Qt::LeftButton, {},
+                              local->mapToScene(QPointF(local->width() / 2, local->height() / 2)).toPoint());
+            QTRY_VERIFY_WITH_TIMEOUT(local->property("open").toBool(), kWait);
+            QTest::keyClick(s.window, Qt::Key_Escape);
+            QTRY_VERIFY_WITH_TIMEOUT(!local->property("open").toBool(), kWait);
+        }
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
+
     void shellLoadsWithoutWarningsAndShowsItsIcons() {
         {
             Shell s;

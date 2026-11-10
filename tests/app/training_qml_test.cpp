@@ -38,6 +38,26 @@ int visibleRings(QQuickItem* root) {
         if (item->isVisible() && item->property("label").isValid() && item->property("level").isValid()) ++n;
     return n;
 }
+
+bool isQmlType(const QObject* o, const char* qmlType) {
+    return QString::fromLatin1(o->metaObject()->className()).startsWith(QLatin1String(qmlType) + "_QMLTYPE");
+}
+
+bool effectivelyVisible(QQuickItem* item) {
+    for (QQuickItem* p = item; p; p = p->parentItem())
+        if (!p->isVisible()) return false;
+    return true;
+}
+
+QQuickItem* visibleHelpChip(QQuickItem* root, const char* key) {
+    for (auto* item : root->findChildren<QQuickItem*>()) {
+        if (!isQmlType(item, "HelpChip")) continue;
+        if (item->property("key").toString() != QLatin1String(key)) continue;
+        if (!effectivelyVisible(item)) continue;
+        return item;
+    }
+    return nullptr;
+}
 }  // namespace
 
 class TrainingQmlTest : public QObject {
@@ -272,6 +292,57 @@ private slots:
         }
         qInstallMessageHandler(g_previous);
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
+
+    // PARITY item 21: Training HelpChips next to Mock / Session Mode / Stage /
+    // Feedback (and Intensity once a named program is selected) resolve.
+    void helpChipsResolveOnThePage() {
+        QQmlEngine engine;
+        engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
+        engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+        QQmlComponent comp(&engine);
+        comp.setData(R"(
+            import QtQuick
+            import SamN
+            Item {
+                width: 1440; height: 860
+                property alias page: tp
+                DeviceController { id: dev }
+                TrainingPage { id: tp; anchors.fill: parent; device: dev }
+            })",
+                     QUrl("qrc:/test/Wrapper.qml"));
+        QVERIFY2(comp.status() == QQmlComponent::Ready, qPrintable(comp.errorString()));
+        QQuickWindow window;
+        window.resize(1440, 860);
+        std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
+        QVERIFY(root);
+        root->setParentItem(window.contentItem());
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto* page = root->property("page").value<QQuickItem*>();
+        auto* ctl = page->property("controller").value<TrainingController*>();
+        QVERIFY(page && ctl);
+
+        struct Row { const char* key; const char* snippet; };
+        const Row custom[] = {
+            {"training.mock", "simulated device"},
+            {"training.session-mode", "Stop-Start"},
+            {"training.stage", "Rings"},
+            {"training.feedback", "Arousal"},
+            {"training.cycles", "Number of training cycles"},
+        };
+        for (const Row& row : custom) {
+            auto* chip = visibleHelpChip(page, row.key);
+            QVERIFY2(chip, row.key);
+            QVERIFY2(chip->property("text").toString().contains(QLatin1String(row.snippet)),
+                     qPrintable(QString("%1: %2").arg(row.key, chip->property("text").toString())));
+        }
+        QVERIFY(!visibleHelpChip(page, "training.tier"));  // Intensity is for named programs
+        QVERIFY(!ctl->programs().isEmpty());
+        ctl->setScriptName(ctl->programs().first().toMap().value("name").toString());
+        QVERIFY(ctl->scriptName() != QString());
+        QTRY_VERIFY(visibleHelpChip(page, "training.tier"));
+        QVERIFY(visibleHelpChip(page, "training.tier")->property("text").toString().contains(QLatin1String("Gentle")));
     }
 };
 
