@@ -266,7 +266,7 @@ Column {
             FlowSlider {
                 objectName: "fpsSnap"
                 anchors.verticalCenter: parent.verticalCenter
-                width: curveEdit.width - 24 - 78 - 48
+                width: curveEdit.width - 24 - 78 - 48 - 26
                 from: 0; to: 60; value: ctrl.fpsSnap
                 onMoved: (v) => ctrl.fpsSnap = Math.round(v)
             }
@@ -276,6 +276,7 @@ Column {
                 text: ctrl.fpsSnap > 0 ? qsTr("%1").arg(Math.round(ctrl.fpsSnap)) : qsTr("off")
                 color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
             }
+            HelpChip { key: "playback.fps-snap"; anchors.verticalCenter: parent.verticalCenter }
         }
         InspectorNote { text: qsTr("Seeks snap to frame boundaries when FPS-Snap is on (0 = off).") }
         InspectorNote { visible: !ctrl.hasMarker; text: qsTr("Mark a range for Cap / Scale / Delete. Invert all works without one.") }

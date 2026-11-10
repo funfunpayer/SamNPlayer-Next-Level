@@ -336,13 +336,17 @@ Column {
         readonly property var mapping: ctrl.mapping
         readonly property var probe: ctrl.contactFeelProbe
         readonly property bool contactLive: ctrl.contactControls && ctrl.playbackSource !== "axes"
-        FlowButton {
-            objectName: "contactOff"
+        Row {
+            spacing: 8
             visible: contact.contactLive
-            text: qsTr("Contact vibration off"); checked: contact.mapping.contactOff
-            onClicked: contact.mapping.contactOff = !contact.mapping.contactOff
-            HoverHandler { id: offHover }
-            ToolTipText { shown: offHover.hovered; text: qsTr("Turns off the contact vibration the script carries, without changing the file.") }
+            FlowButton {
+                objectName: "contactOff"
+                text: qsTr("Contact vibration off"); checked: contact.mapping.contactOff
+                onClicked: contact.mapping.contactOff = !contact.mapping.contactOff
+                HoverHandler { id: offHover }
+                ToolTipText { shown: offHover.hovered; text: qsTr("Turns off the contact vibration the script carries, without changing the file.") }
+            }
+            HelpChip { key: "pb-contact-off"; anchors.verticalCenter: parent.verticalCenter }
         }
         InspectorSliderRow {
             visible: contact.contactLive
