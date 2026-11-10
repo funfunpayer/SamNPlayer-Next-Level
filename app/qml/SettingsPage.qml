@@ -544,7 +544,12 @@ Item {
                         ColumnLayout {
                             id: rawCol
                             anchors.fill: parent; anchors.margins: 14; spacing: 10
-                            Text { textFormat: Text.PlainText; text: qsTr("Raw value test"); color: Theme.text; font.family: Theme.font; font.pixelSize: 15 }
+                            RowLayout {
+                                spacing: 8
+                                Text { textFormat: Text.PlainText; text: qsTr("Raw value test"); color: Theme.text; font.family: Theme.font; font.pixelSize: 15 }
+                                HelpChip { key: "device.raw-value-test" }
+                                Item { Layout.fillWidth: true }
+                            }
                             Text {
                                 textFormat: Text.PlainText
                                 Layout.fillWidth: true; wrapMode: Text.WordWrap
@@ -589,7 +594,12 @@ Item {
                         ColumnLayout {
                             id: diagCol
                             anchors.fill: parent; anchors.margins: 14; spacing: 10
-                            Text { textFormat: Text.PlainText; text: qsTr("Device diagnostics"); color: Theme.text; font.family: Theme.font; font.pixelSize: 15 }
+                            RowLayout {
+                                spacing: 8
+                                Text { textFormat: Text.PlainText; text: qsTr("Device diagnostics"); color: Theme.text; font.family: Theme.font; font.pixelSize: 15 }
+                                HelpChip { key: "device.device-diagnostics" }
+                                Item { Layout.fillWidth: true }
+                            }
                             Text {
                                 textFormat: Text.PlainText
                                 Layout.fillWidth: true; wrapMode: Text.WordWrap

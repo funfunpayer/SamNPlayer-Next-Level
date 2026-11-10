@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 10 Nov 2026, Cursor, branch `cursor/player-helpchips-curve-635a`: HelpChip `pb-curve-edit-hint` on Full curve editing. #216/#218/#219/#222 on main; #223–#225 in flight; #217 still owner-reviewed. Do not touch feel_heatbands / Speech-Hold / handbook / .sam.
+**Last update:** 10 Nov 2026, Cursor, branch `cursor/settings-device-helpchips-635a`: Settings Device HelpChips for Raw value test and Device diagnostics. #216/#218/#219/#222 on main; #223/#224 in flight; #217 still owner-reviewed. Do not touch feel_heatbands / Speech-Hold / handbook / .sam.
 
 
 
