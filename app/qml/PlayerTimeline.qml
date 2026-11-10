@@ -257,7 +257,9 @@ GlassCard {
             objectName: "chapterStrip"
             width: parent.width
             readonly property int bandH: 30
-            readonly property int thumbH: 36
+            // 0.7 strip thumbs were 72 px high; keep the row a bit shorter than
+            // the decode height so PreserveAspectCrop still looks sharp.
+            readonly property int thumbH: 48
             height: sceneThumbStrip.visible ? bandH + thumbH : bandH
             // 0.7 pb.scenes: off by default in the Player.
             visible: ctrl.hasScript && ctrl.showScenes
@@ -295,8 +297,8 @@ GlassCard {
                         height: sceneThumbStrip.height
                         asynchronous: true
                         fillMode: Image.PreserveAspectCrop
-                        sourceSize.height: 40
-                        source: "image://frames/" + Math.round(ms) + "/40/" + encodeURIComponent(ctrl.videoPath)
+                        sourceSize.height: 72
+                        source: "image://frames/" + Math.round(ms) + "/72/" + encodeURIComponent(ctrl.videoPath)
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor

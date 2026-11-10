@@ -15,7 +15,7 @@ Made on 8 Nov 2026 from the audit in [`PARITY.md`](PARITY.md) (113 open and 139 
 
 ### Medium (M)
 
-7. **Scene strip thumbnails in the Player** (§3 scene strip, §13 `GetVideoThumbnails`): 24 frames from `FrameCache` under the lanes; the Generator already shows them.
+7. ~~**Scene strip thumbnails in the Player**~~ — done (#211; 72 px decode quality pass follows).
 8. **Script analysis** (§3 analysis summary, §9 `AnalyzeScript`, §13 `ScriptChapters`): motion states (pause, build, steady, crescendo, wind-down) in core with a test, shown in Script Doctor.
 9. **Polarity suggestion, ring-down, apply O-zone** (§9 polarity item, §13 `SuggestPolarity`, `ApplyRingDown`, `ApplySuggestedOZone`): `polarity.h` and `ozone.h` exist; add the missing pieces and the buttons.
 10. **Improve panel** (§4 review panel, §9 Improve ops, §13 `ImproveGeneratedScript`): Start / End trim, align fill to audio tempo, audio check, rhythm bridge, repair span. Fill and heal already run through Optimize for.

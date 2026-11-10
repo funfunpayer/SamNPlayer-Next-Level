@@ -686,7 +686,7 @@ private:
             *why = src;
             return false;
         }
-        if (rest.mid(s1 + 1, s2 - s1 - 1) != QLatin1String("40")) {
+        if (rest.mid(s1 + 1, s2 - s1 - 1) != QLatin1String("72")) {
             *why = src;
             return false;
         }

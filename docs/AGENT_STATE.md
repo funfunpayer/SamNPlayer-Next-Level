@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 10 Nov 2026, Cursor, branch `cursor/settings-device-helpchips-635a`: Settings Device HelpChips for Raw value test and Device diagnostics. #216/#218/#219/#222 on main; #223/#224 in flight; #217 still owner-reviewed. Do not touch feel_heatbands / Speech-Hold / handbook / .sam.
+**Last update:** 10 Nov 2026, Cursor, branch `cursor/player-thumbs-quality-635a`: sharper scene-strip thumbs (72 px) + PARITY tick for #211; #226 on main; #225/#228/#229 in flight. Owner rule: quality first; CPU/RAM for speed+quality. #217 still owner-reviewed. Do not touch feel_heatbands / Speech-Hold / handbook / .sam.
 
 
 
@@ -234,7 +234,7 @@ Owner: finish Player/Editor GUI except Claude #168.
 ## Still open (non-Claude, Player/Editor)
 
 - Speech-Hold / Feel segment strip + heatmap bands (needs `audio_check` segments)
-- Scene strip thumbnails in Player (markers done; thumbs Generator-side)
+- Scene strip thumbnails in Player (#211; 72 px decode quality)
 
 ## Handover: `cursor/player-bpm-audio-635a` (8 Nov, BPM From audio) — merged #183
 
