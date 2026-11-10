@@ -346,6 +346,19 @@ public:
     Q_INVOKABLE bool deleteSelection();
     Q_INVOKABLE bool invertSelection();
     Q_INVOKABLE bool invertAll();
+    // 0.7 SuggestPolarity on the curve Play shows. {suggestInvert, reason, error}.
+    Q_INVOKABLE QVariantMap suggestPolarity();
+    // 0.7 Check / invert direction: flips 100−pos of the played curve only when
+    // suggest_invert, clears the OFS inverted flag, reloads. Otherwise returns
+    // the reason and writes nothing. {applied, suggestInvert, reason, error}.
+    Q_INVOKABLE QVariantMap applyPolaritySuggestion();
+    // 0.7 ApplySuggestedOZone: saves the suggested range as the marker and
+    // appends primary + secondary O-markers (AutoOZoneMarkers). Never inverts.
+    // {ok, startMs, endMs, reason, mean, error}.
+    Q_INVOKABLE QVariantMap applySuggestedOZone();
+    // 0.7 ApplyRingDown at the playhead (script time), on the stroke axis.
+    // cycles clamps to 1–2 (0.7 button uses 2). A position under 10 is refused.
+    Q_INVOKABLE bool applyRingDown(int cycles = 2);
     Q_INVOKABLE bool undo();
     Q_INVOKABLE bool redo();
     bool canUndo() const { return editSession_.CanUndo(); }
@@ -614,10 +627,12 @@ private:
     void pushToViews();
     // Cap / Scale / Delete / Invert for the active script lane.
     // needMarker: Cap/Scale/Delete/invertSelection require a heatmap mark.
+    // forceStroke: ring-down always writes the general/stroke axis, even
+    // when the curve is showing vibration or suction.
     // Pushes one EditSession step before the file write.
     bool applySelectionEdit(const QString& label,
                             const std::function<std::vector<samn::Action>(const std::vector<samn::Action>&)>& op,
-                            bool needMarker = true);
+                            bool needMarker = true, bool forceStroke = false);
     // Fresh EditSession from the file's lanes (open / no script). Not used
     // when a curve edit is reloading the script it just wrote.
     void resetCurveHistory(const samn::Document& doc);

@@ -56,6 +56,7 @@ Functions use PascalCase and struct fields use snake_case.
 | `intensity_arc.h` | `ComputeArc`: the clip's intensity (motion against its busy level plus loudness) at a 4 s detail and a 20 s arc scale, where the intro ends and up to three climaxes with prominence and confidence; no model, no FFT, deterministic | D-165 | ✅ `intensity_arc_test.cpp`; bench `tests/bench/phase_bench.cpp` |
 | `phase_rules.h` | Phase suggestions (empty, intro, climaxes, cool-down) from the picture and the intensity arc, without a model; always unconfirmed | D-157, D-165 | ✅ |
 | `polarity.h` | Which way is up: a hint after Create, never applied alone | 0.7 `funscript/polarity.go` | ✅ |
+| `ringdown.h` | Damped half-cycles after a time so a hold does not drop to 0 in one tick (`RingDown`, cycles 1–2, 180 ms) | 0.7 `funscript/ringdown.go` | ✅ `ringdown_test.cpp` |
 | `scenes.h` | Chapter scenes: feel names, proposals from `<clip>.scene.json`, suggested feel | 0.7 `app_feel.go`, `scene_proposals.go` | ✅ |
 | `simplify.h` | Ramer-Douglas-Peucker on a (time, position) curve, iterative | 0.7 `motionx.Simplify` | ✅ |
 | `sound_vibration.h` | Vibration written into a script from the video's sound (Editor tool) | 0.7 `sam/audio_vibration.go` | ✅ |
