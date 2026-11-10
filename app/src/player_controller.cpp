@@ -891,7 +891,10 @@ void PlayerController::clearScript() {
     playbackSource_ = QStringLiteral("recipe");
     emit mappedChanged();
     stroke_.clear();
-    scriptAnalysisSummary_.clear();
+    if (!scriptAnalysisSummary_.isEmpty()) {
+        scriptAnalysisSummary_.clear();
+        emit scriptAnalysisSummaryChanged();
+    }
     vibration_.clear();
     suction_.clear();
     axisActions_.clear();

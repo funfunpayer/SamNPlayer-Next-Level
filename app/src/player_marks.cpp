@@ -131,6 +131,9 @@ bool PlayerController::commitMarks(std::vector<T>& list, std::vector<T> next, Sa
         return false;  // the old list stays (0.7: rollback)
     }
     list = std::move(next);
+    // 0.7 re-runs describeScript after chapter saves; bookmarks/O-markers are cheap no-ops
+    // when stored chapters are empty (auto motion kinds unchanged).
+    refreshScriptAnalysis();
     emit marksChanged();
     emit scriptEdited(scriptPath_);
     pushMarks();

@@ -1256,6 +1256,15 @@ private slots:
         QFile markedAfter(marked);
         QVERIFY(markedAfter.open(QIODevice::ReadOnly));
         QCOMPARE(markedAfter.readAll(), markedBefore);
+
+        // Chapter edit refreshes the analysis line without a re-open (0.7 describeScript).
+        QSignalSpy doctorCleared(&m, &PlayerController::scriptChanged);
+        QSignalSpy analysisSpy(&m, &PlayerController::scriptAnalysisSummaryChanged);
+        QVERIFY(m.renameChapter(0, QStringLiteral("Intro")));
+        QVERIFY(analysisSpy.count() >= 1);
+        QVERIFY(m.scriptAnalysisSummary().contains(QStringLiteral("Intro 0:00")));
+        QVERIFY(!m.scriptAnalysisSummary().contains(warmup));
+        QCOMPARE(doctorCleared.count(), 0);  // Script Doctor result must stay
     }
 
     void sleepTimer() {

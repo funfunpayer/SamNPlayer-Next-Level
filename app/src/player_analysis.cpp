@@ -62,11 +62,14 @@ QString Describe(const samn::ScriptAnalysis& analysis, const std::vector<samn::M
 }  // namespace
 
 void PlayerController::refreshScriptAnalysis() {
-    scriptAnalysisSummary_.clear();
-    if (stroke_.size() < 4) return;
-    const samn::ScriptAnalysis analysis = samn::AnalyzeScriptActions(stroke_);
-    if (!analysis.error.empty()) return;
-    scriptAnalysisSummary_ = Describe(analysis, ChaptersFor(stroke_, marks_.chapters));
+    QString next;
+    if (stroke_.size() >= 4) {
+        const samn::ScriptAnalysis analysis = samn::AnalyzeScriptActions(stroke_);
+        if (analysis.error.empty()) next = Describe(analysis, ChaptersFor(stroke_, marks_.chapters));
+    }
+    if (next == scriptAnalysisSummary_) return;
+    scriptAnalysisSummary_ = std::move(next);
+    emit scriptAnalysisSummaryChanged();
 }
 
 QVariantMap PlayerController::analyzeScript() {

@@ -53,7 +53,8 @@ class PlayerController : public QObject {
     Q_PROPERTY(int pointCount READ pointCount NOTIFY scriptChanged)
     Q_PROPERTY(qint64 scriptDurationMs READ scriptDurationMs NOTIFY scriptChanged)
     // 0.7 describeScript: state summary plus chapter spans. Empty below 4 points.
-    Q_PROPERTY(QString scriptAnalysisSummary READ scriptAnalysisSummary NOTIFY scriptChanged)
+    // Own notify so a chapter edit can refresh the line without clearing Script Doctor.
+    Q_PROPERTY(QString scriptAnalysisSummary READ scriptAnalysisSummary NOTIFY scriptAnalysisSummaryChanged)
     Q_PROPERTY(int offsetMs READ offsetMs WRITE setOffsetMs NOTIFY offsetMsChanged)
     Q_PROPERTY(qint64 playheadMs READ playheadMs NOTIFY playheadMsChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
@@ -603,6 +604,7 @@ signals:
     void viewChanged();
     void markerChanged();
     void marksChanged();
+    void scriptAnalysisSummaryChanged();
     void bpmChanged();
     void viewOptionsChanged();
     void audioVibrationReadyChanged();
