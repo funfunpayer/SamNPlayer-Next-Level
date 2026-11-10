@@ -55,6 +55,9 @@ public:
     bool batteryOk() const override { return battery_ >= 0; }
     void connectDevice(const QString& kind, const QString& target = QString()) override {
         calls << QStringLiteral("connect %1 %2").arg(kind, target);
+        // The real controller refuses both (device_controller.cpp) and reports an error.
+        if (!holders_.empty()) { refuse("playback or training is in progress"); return; }
+        if (connected_ || connecting_) { refuse("already connected"); return; }
         // Like the real controller, the answer comes later from the event loop, never inside the call.
         if (connect_succeeds) {
             QMetaObject::invokeMethod(this, [this] { setConnected(true); }, Qt::QueuedConnection);
@@ -65,6 +68,7 @@ public:
     }
     void disconnectDevice() override {
         calls << QStringLiteral("disconnect");
+        if (!holders_.empty()) { refuse("playback or training is using this connection"); return; }
         if (connected_ || connecting_) QMetaObject::invokeMethod(this, [this] { setConnected(false); }, Qt::QueuedConnection);
     }
     QString savedKind() const override { return kind_saved; }
@@ -98,6 +102,10 @@ public:
     }
 
 private:
+    void refuse(const QString& why) {
+        calls << QStringLiteral("refused %1").arg(why);
+        error_ = why;
+    }
     bool connected_ = false, connecting_ = false, vib_ = false, suc_ = false, lin_ = false;
     QStringList axes_;
     QString identity_, error_;

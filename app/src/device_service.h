@@ -8,7 +8,7 @@
 namespace samn::ui {
 
 // What Player, Training and the PlaybackOutput need of the device connection
-// (D-169): connection state, the channels, the levels, Stop and the session
+// (D-169; the battery, `generation` and `sessionActive` are for the UI and tests): connection state, the channels, the levels, Stop and the session
 // holds. The one real implementation is DeviceController; tests use a fake
 // (tests/app/fake_device_service.h). Everything is called on the GUI thread.
 // No kernel logic here: the worker, the drivers and the transports stay

@@ -145,6 +145,7 @@ private slots:
         p.setPlaying(true);
         p.setVideoPositionMs(1000);
         QTRY_VERIFY_WITH_TIMEOUT(fake->count("vibration") > 0, 5000);
+        QVERIFY(fake->sessionActive());
         fake.reset();  // the QPointer goes null: no call into a dead object
         QCOMPARE(p.deviceService(), nullptr);
         p.setVideoPositionMs(1500);
@@ -152,6 +153,59 @@ private slots:
         p.output()->emergencyStop();
         p.setPlaying(false);
         QVERIFY(!p.output()->playing());
+        QVERIFY(p.output()->device() == nullptr);
+    }
+
+    // The old device gives its hold up when the output's device changes mid-play; the new one takes it.
+    void swappingTheOutputsDeviceMovesTheHold() {
+        const QString script = writeScript(files_.path(), "swap.funscript", zigzag(60, 250));
+        FakeDeviceService first, second;
+        first.setConnected(true);
+        second.setConnected(true);
+        PlayerController p;
+        p.setDeviceService(&first);
+        QVERIFY(p.openScript(script));
+        p.setPlaying(true);
+        QVERIFY(first.sessionActive());
+        p.setDeviceService(&second);
+        QVERIFY(!first.sessionActive());
+        QVERIFY(second.sessionActive());
+        p.setPlaying(false);
+        QVERIFY(!second.sessionActive());
+        // The old one can be disconnected again: nothing refused it.
+        first.disconnectDevice();
+        QCOMPARE(first.count("refused"), 0);
+    }
+
+    // The Player's lanes follow the device: a status change emits lanesChanged.
+    void aStatusChangeUpdatesThePlayersLanes() {
+        FakeDeviceService fake;
+        PlayerController p;
+        p.setDeviceService(&fake);
+        QSignalSpy lanes(&p, &PlayerController::lanesChanged);
+        fake.setConnected(true, {"L0"}, false, false);
+        QCOMPARE(lanes.count(), 1);
+        fake.setConnected(false);
+        QCOMPARE(lanes.count(), 2);
+        p.setDeviceService(nullptr);
+        const int after = lanes.count();  // dropping the device updates the lanes once itself
+        fake.setConnected(true);
+        QCOMPARE(lanes.count(), after);  // no longer followed
+    }
+
+    void theFakeRefusesWhatTheRealControllerRefuses() {
+        FakeDeviceService fake;
+        QObject owner;
+        fake.setConnected(true);
+        fake.connectDevice("mock");  // already connected
+        QCOMPARE(fake.count("refused"), 1);
+        fake.setSessionActiveFor(&owner, true);
+        fake.disconnectDevice();  // a hold is active
+        QCOMPARE(fake.count("refused"), 2);
+        QVERIFY(fake.connected());
+        fake.setSessionActiveFor(&owner, false);
+        fake.disconnectDevice();
+        QTRY_VERIFY(!fake.connected());
     }
 
     void aLostConnectionStopsSending() {
@@ -210,8 +264,10 @@ private slots:
         QTRY_COMPARE_WITH_TIMEOUT(done.count(), 1, 10000);
         QCOMPARE(fake.callsOf("connect").size(), 1);
         QVERIFY(fake.callsOf("connect").first().startsWith("connect mock"));
+        // The hold is released before the disconnect: the real controller refuses it otherwise.
+        QCOMPARE(fake.count("refused"), 0);
         QVERIFY(fake.count("disconnect") >= 1);  // the connection Training made is closed
-        QVERIFY(!fake.connected());
+        QTRY_VERIFY(!fake.connected());
     }
 
     void trainingEndsWhenTheDeviceChangesOrIsLost() {

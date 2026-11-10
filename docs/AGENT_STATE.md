@@ -50,6 +50,13 @@ Owner priority: CPU/RAM efficient AI. `TrackBetweenKeys` (`engine/src/label_trac
 - **Not verified:** Windows/MSVC, real clips (phones: B-frames, GOP 30 to 60; only synthetic VFR and GOP made by ffmpeg were tried), the Qt `label_controller` (not built here; its call site is unchanged).
 - **Ideas not done:** keep the forward run's last chunk instead of decoding it again; a `FrameReader` that reports the GOP.
 
+## Handover: `claude/samn2-device-service-fixes` (9 Nov, follow-up to #213)
+
+- **Fixed:** `class DeviceController : public samn::ui::DeviceService` (the unqualified base made qmltyperegistrar drop the prototype and `statusChanged` in the qmltypes on Qt 6.4); D-169 and `device_service.h` no longer claim "exactly what the consumers call" (battery, `generation`, `sessionActive` are for the UI and tests).
+- **Fake is as strict as the controller:** `FakeDeviceService` refuses connect / disconnect while a hold is active and connect while connected (records `refused ...`).
+- **New tests, each shown failing with its mutation:** Training releases its hold before it disconnects (`trainingConnectsAMockAndClosesItAgain`); a changed PlaybackOutput device hands the hold over (`swappingTheOutputsDeviceMovesTheHold`); a status change emits `lanesChanged` (`aStatusChangeUpdatesThePlayersLanes`); `theFakeRefusesWhatTheRealControllerRefuses`.
+- **Not modelled:** `emergencyStop` dropping queued levels (the fake has no queue).
+
 ## Handover: `claude/samn2-intensity-arc` (6-8 Nov, D-165 first slice: intro and climaxes)
 
 Owner: find the intro and the climaxes ("Höhepunkte") of a video from its sound and samples of its picture; cinema-grade, clean, lean, measured before and after, little CPU and memory. This slice is core only: no decoder change, no FFT, no Generator change. PR #168, reviewed and refuted three times, then verified with caveats and merged at the third review's state; the fourth review's fix follows in `claude/samn2-intensity-arc-fixes`. This state answers the third review (empty stretches, scene cuts without sound, the loud-opening guard, test bounds, the documented limits, `steps()` overflow) and the fourth (black stretches with codec noise: empty runs of 10 s or more reach the arc without motion or sound, `kEmptyRunMs`; a step that would overflow the clip's times is rejected).
