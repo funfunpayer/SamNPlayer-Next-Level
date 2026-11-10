@@ -42,12 +42,15 @@ std::unique_ptr<FrameReader> FrameReader::Open(const std::filesystem::path& path
 bool FrameReader::Grab(int64_t* pts_us) {
     if (!impl_->cap.grab()) return false;
     const int64_t index = impl_->next_index++;
-    // The decoder's time of the frame just grabbed; streams without one get the
-    // nominal time of the frame number (constant frame rate).
+    // The decoder's time of the frame just grabbed. Zero is a real time (some
+    // streams put two frames at t=0); treating it as "missing" and substituting
+    // the nominal frame time made that second frame unseekable. A negative
+    // POS_MSEC still means the decoder did not report a time: those frames get
+    // the nominal time of the frame number (constant frame rate).
     const double ms = impl_->cap.get(cv::CAP_PROP_POS_MSEC);
     impl_->grabbed_index = index;
-    impl_->grabbed_pts_us = (ms > 0 || index == 0) ? static_cast<int64_t>(std::llround(ms * 1000.0))
-                                                   : static_cast<int64_t>(std::llround(index * 1e6 / fps_));
+    impl_->grabbed_pts_us = (ms >= 0) ? static_cast<int64_t>(std::llround(ms * 1000.0))
+                                       : static_cast<int64_t>(std::llround(index * 1e6 / fps_));
     if (pts_us) *pts_us = impl_->grabbed_pts_us;
     return true;
 }

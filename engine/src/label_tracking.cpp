@@ -5,8 +5,8 @@
 #include <chrono>
 #include <cmath>
 #include <functional>
-#include <memory>
 #include <future>
+#include <memory>
 #include <opencv2/imgproc.hpp>
 
 #include "samn/vision/canceled.h"
@@ -190,33 +190,35 @@ std::optional<BetweenKeysResult> TrackBetweenKeys(const std::filesystem::path& v
         const auto decode = [&](const Chunk& c, std::vector<cv::Mat>& dst) {
             Decoded d;
             const int64_t target = times[c.lo];
-            // Frames before lo with the same millisecond (a stream with equal
-            // timestamps): the landing is on the first of them, lo is the
-            // k-th after it.
+            // Frames before lo with the same millisecond: lo is the k-th of
+            // that run in `times`.
             size_t k = 0;
             while (k < c.lo && times[c.lo - 1 - k] == target) ++k;
-            // The first run of equal times is special: a seek to the first key
-            // can drop frames of the run it lands in (OpenCV counts frames by
-            // time), so after a seek the stream does not start with the same
-            // frames as the forward run saw. Only a reader opened and sought
-            // the way the forward run's was sees them again.
-            const bool first_run = c.lo == k;
-            // Whether the wanted frame has a neighbour of the same time, before or
-            // after it: then a landing on the time can be inside the run.
+            // Neighbour of the same time, before or after: a seek to `target`
+            // can land on any frame of the run, including when lo is the first
+            // of the group (k == 0).
             const bool in_run = k > 0 || (c.lo + 1 < n && times[c.lo + 1] == target);
-            // The first seek goes to the time before the run (when there is one),
-            // so that it lands before the run and not in it.
-            const int64_t first_at = in_run && !first_run ? times[c.lo - k - 1] : target;
-            int64_t margin = first_run ? target - from_ms : 0;
+            // Distinct time before this run, in `times`. The first seek goes
+            // there so it lands before the run; decode does not restart from 0.
+            const bool has_prev = c.lo > k;
+            // The first group of the stretch has no previous time in `times`
+            // (the forward seek may already have started inside it): start
+            // from the first key, as the forward run did, then step k.
+            const bool first_group = c.lo == k;
+            const int64_t first_at = in_run && has_prev ? times[c.lo - k - 1]
+                                                       : (first_group ? from_ms : target);
+            int64_t margin = 0;
             vision::FrameReader* rd = reader.get();
-            std::unique_ptr<vision::FrameReader> replay;  // the forward run's own start, again
+            std::unique_ptr<vision::FrameReader> replay;
             for (bool found = false; !found;) {
-                const bool last_try = first_run || margin >= target - from_ms;
-                const int64_t at = margin == 0 ? first_at : target - margin;
+                const bool last_try = margin >= target - from_ms;
+                const int64_t at = margin == 0 ? first_at : (last_try ? from_ms : target - margin);
                 const auto t0 = Clock::now();
-                if (last_try) {
-                    // Last resort and the first run: decode from the first key on a
-                    // fresh reader, frame for frame what the forward run read.
+                // The first group: OpenCV can drop frames of the run a seek
+                // lands in (mjpeg), so a re-seek on the used reader does not
+                // match the forward run. A fresh reader sought like the
+                // forward run's does. Only those few chunks (not every chunk).
+                if (first_group && margin == 0) {
                     replay = vision::FrameReader::Open(video, &d.error);
                     if (!replay || !replay->SeekMs(from_ms)) {
                         if (d.error.empty()) d.error = "cannot seek in the video";
@@ -240,10 +242,12 @@ std::optional<BetweenKeysResult> TrackBetweenKeys(const std::filesystem::path& v
                         saw_before = true;
                         continue;
                     }
-                    // In a run of equal times only a landing after an earlier frame
-                    // (or the replay of the forward run) is known to be on the first
-                    // of the run, not inside it.
-                    if (ms == target && (!in_run || saw_before || last_try)) {
+                    // First frame of a same-timestamp group too: a landing on
+                    // the time is the first of the run only after an earlier
+                    // frame. last_try does not waive that. The fresh replay
+                    // of the first group matches times[0] even mid-run.
+                    if (ms == target &&
+                        (!in_run || saw_before || (first_group && margin == 0 && rd == replay.get()))) {
                         found = true;
                         d.warm_ms = ms_since(t0);
                     }
