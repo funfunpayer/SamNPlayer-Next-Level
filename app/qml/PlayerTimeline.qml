@@ -124,13 +124,15 @@ GlassCard {
                 model: axisLegend.visible ? ctrl.laneChoices : []
                 delegate: LaneName {
                     required property string modelData
-                    objectName: "axisChip_" + modelData
+                    // Capture the lane id — modelData can be stale in signal handlers.
+                    readonly property string laneId: modelData
+                    objectName: "axisChip_" + laneId
                     chip: true
-                    name: root.laneTitle(modelData)
-                    dot: root.laneColor(modelData)
+                    name: root.laneTitle(laneId)
+                    dot: root.laneColor(laneId)
                     selectable: true
-                    active: ctrl.activeLane === modelData
-                    onPicked: ctrl.activeLane = modelData
+                    active: ctrl.activeLane === laneId
+                    onPicked: ctrl.activeLane = laneId
                     onStepped: (d) => ctrl.stepActiveLane(d)
                 }
             }

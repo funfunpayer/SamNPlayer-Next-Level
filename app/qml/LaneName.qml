@@ -66,10 +66,12 @@ Item {
     }
     MouseArea {
         id: hover
+        z: 10
         anchors.fill: parent
         enabled: root.selectable
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
-        onClicked: { root.forceActiveFocus(); root.picked() }
+        // Pick first; focus second — forceActiveFocus can fail offscreen.
+        onClicked: { root.picked(); root.forceActiveFocus() }
     }
 }
