@@ -1253,9 +1253,11 @@ private slots:
         QCOMPARE(chapters[0].toMap().value(QStringLiteral("kind")).toString(), QStringLiteral("Warmup"));
         QCOMPARE(chapters[1].toMap().value(QStringLiteral("kind")).toString(), QStringLiteral("chapter"));
         QCOMPARE(chapters[1].toMap().value(QStringLiteral("endMs")).toDouble(), 4001.0);
-        QFile markedAfter(marked);
-        QVERIFY(markedAfter.open(QIODevice::ReadOnly));
-        QCOMPARE(markedAfter.readAll(), markedBefore);
+        {
+            QFile markedAfter(marked);
+            QVERIFY(markedAfter.open(QIODevice::ReadOnly));
+            QCOMPARE(markedAfter.readAll(), markedBefore);
+        }  // close before rename — Windows cannot replace an open file
 
         // Chapter edit refreshes the analysis line without a re-open (0.7 describeScript).
         QSignalSpy doctorCleared(&m, &PlayerController::scriptChanged);
