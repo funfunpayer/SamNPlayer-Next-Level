@@ -1,4 +1,5 @@
 #include <QElapsedTimer>
+#include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -16,6 +17,7 @@
 #include "fake_servers.h"
 #include "samn/device/protocol.h"
 #include "samn/device/tcode.h"
+#include "samn/settings.h"
 
 using samn::ui::DeviceController;
 using namespace samn_test;
@@ -107,6 +109,12 @@ private slots:
     void initTestCase() {
         QVERIFY(config_.isValid());
         qputenv("SAMN_CONFIG_DIR", config_.path().toUtf8());
+    }
+    void init() {
+        try {
+            samn::Settings().set("device.diagnosticsHistoryPath", "");
+        } catch (const std::exception&) {
+        }
     }
 
     // --- Mock, through the controller ---
@@ -758,6 +766,13 @@ private slots:
     // --- Diagnostics ---
     void diagnosticsOnMock() {
         DeviceController c;
+        QTemporaryDir hist;
+        QVERIFY(hist.isValid());
+        const QString histPath = hist.filePath(QStringLiteral("device_diagnostics_history.jsonl"));
+        c.setDiagnosticsHistoryPath(histPath);
+        QCOMPARE(c.diagnosticsHistoryPath(), histPath);
+        QCOMPARE(QString::fromStdString(samn::Settings().get("device.diagnosticsHistoryPath", "").get<std::string>()),
+                 histPath);
         samn::device::DiagnosticsOptions o;
         o.update_rate_intervals = {std::chrono::milliseconds(1), std::chrono::milliseconds(1)};
         o.commands_per_rate_step = 2;
@@ -771,6 +786,7 @@ private slots:
         c.runDiagnostics();  // nothing connected
         QTRY_VERIFY(c.lastError().contains("no device connected"));
         QTRY_VERIFY(!c.diagnosticsRunning());
+        QVERIFY(c.getDiagnosticsHistory().isEmpty());
 
         c.connectMock();
         QTRY_COMPARE(c.state(), QString("connected"));
@@ -788,10 +804,27 @@ private slots:
         QCOMPARE(entries.count(), static_cast<int>(log.size()));
         QVERIFY(!report.value("notes").toArray().isEmpty());
         QVERIFY(running.count() >= 2);
+
+        QVERIFY(QFile::exists(histPath));
+        const QVariantList history = c.getDiagnosticsHistory();
+        QCOMPARE(history.size(), 1);
+        const QVariantMap row = history.at(0).toMap();
+        QCOMPARE(row.value("kind").toString(), QString("mock"));
+        QVERIFY(row.value("name").toString().contains(QStringLiteral("Mock")));
+        QVERIFY(row.value("commands").toInt() > 0);
+        QCOMPARE(row.value("errors").toInt(), 0);
+        QVERIFY(!row.value("interrupted").toBool());
+        QVERIFY(row.value("text").toString().contains(QStringLiteral("(Mock)")));
+        QVERIFY(row.value("text").toString().contains(QStringLiteral("commands")));
+        QVERIFY(!row.value("text").toString().contains(QStringLiteral("interrupted")));
+        c.setDiagnosticsHistoryPath(QString());
     }
 
     void diagnosticsCanBeCancelled() {
         DeviceController c;
+        QTemporaryDir hist;
+        QVERIFY(hist.isValid());
+        c.setDiagnosticsHistoryPath(hist.filePath(QStringLiteral("device_diagnostics_history.jsonl")));
         samn::device::DiagnosticsOptions o;
         o.update_rate_intervals = {std::chrono::milliseconds(5000)};
         o.commands_per_rate_step = 50;
@@ -812,6 +845,44 @@ private slots:
         const QJsonObject report = QJsonDocument::fromJson(done.first().at(0).toString().toUtf8()).object();
         QVERIFY(report.value("interrupted").toBool());
         QTRY_VERIFY(!c.diagnosticsRunning());
+        const QVariantList history = c.getDiagnosticsHistory();
+        QCOMPARE(history.size(), 1);
+        QVERIFY(history.at(0).toMap().value("interrupted").toBool());
+        QVERIFY(history.at(0).toMap().value("text").toString().contains(QStringLiteral("interrupted")));
+        c.setDiagnosticsHistoryPath(QString());
+    }
+
+    void diagnosticsHistoryPathDefaultAndOverride() {
+        DeviceController c;
+        const QString def = c.diagnosticsHistoryPath();
+        QVERIFY(def.endsWith(QStringLiteral("device_diagnostics_history.jsonl")));
+        QVERIFY(def.startsWith(config_.path()));
+
+        QTemporaryDir other;
+        QVERIFY(other.isValid());
+        const QString custom = other.filePath(QStringLiteral("custom.jsonl"));
+        c.setDiagnosticsHistoryPath(custom);
+        QCOMPARE(c.diagnosticsHistoryPath(), custom);
+        QCOMPARE(QString::fromStdString(samn::Settings().get("device.diagnosticsHistoryPath").get<std::string>()),
+                 custom);
+
+        samn::device::DiagnosticsOptions o;
+        o.update_rate_intervals = {std::chrono::milliseconds(1), std::chrono::milliseconds(1)};
+        o.commands_per_rate_step = 2;
+        o.offset_change_delay = std::chrono::milliseconds(1);
+        o.rapid_switch_delay = std::chrono::milliseconds(1);
+        c.setDiagnosticsOptions(o);
+        QSignalSpy done(&c, &DeviceController::diagnosticsFinished);
+        c.connectMock();
+        QTRY_COMPARE(c.state(), QString("connected"));
+        c.runDiagnostics();
+        QTRY_COMPARE_WITH_TIMEOUT(done.count(), 1, 15000);
+        QVERIFY(QFile::exists(custom));
+        QCOMPARE(c.getDiagnosticsHistory().size(), 1);
+
+        c.setDiagnosticsHistoryPath(QString());
+        QCOMPARE(c.diagnosticsHistoryPath(), def);
+        QCOMPARE(samn::Settings().get("device.diagnosticsHistoryPath").get<std::string>(), std::string());
     }
 };
 

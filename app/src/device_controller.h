@@ -127,6 +127,13 @@ public:
     // as diagnosticsEntry, the report arrives as diagnosticsFinished.
     Q_INVOKABLE void runDiagnostics();
     Q_INVOKABLE void cancelDiagnostics();
+    // JSONL of past diagnostics runs, newest first. Each map: startedAt, name,
+    // kind, commands, errors, interrupted, text (0.7 Settings line).
+    Q_INVOKABLE QVariantList getDiagnosticsHistory() const;
+    // Empty setting → config_dir()/device_diagnostics_history.jsonl. The getter
+    // returns the resolved path; set empty to go back to the default.
+    Q_INVOKABLE QString diagnosticsHistoryPath() const;
+    Q_INVOKABLE void setDiagnosticsHistoryPath(const QString& path);
 
     // --- C++ knobs (tests) ---
     // Interval of the keepalive / ping / battery timer (default 2 s).

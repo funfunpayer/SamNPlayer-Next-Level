@@ -1,7 +1,15 @@
 #include <doctest/doctest.h>
 
+#include <atomic>
+#include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <random>
+#include <string>
+
 #include "samn/device/diagnostics.h"
 #include "samn/device/mock.h"
+#include "samn/settings.h"
 
 using namespace samn::device;
 using namespace std::chrono_literals;
@@ -140,4 +148,80 @@ TEST_CASE("device/diagnostics: sweep values, durations, JSON") {  // new (Go raw
     r.started_at_unix_ms = 1760000000123;
     r.duration_ms = 5;
     CHECK(ToJson(r).rfind(R"({"startedAt":"2025-10-09T08:53:20.123Z","durationMs":5,"rawCapable":false,)", 0) == 0);
+}
+
+namespace {
+
+struct TempDir {
+    std::filesystem::path path;
+    TempDir() {
+        static std::atomic<int> counter{0};
+        std::random_device rd;
+        path = std::filesystem::temp_directory_path() /
+               ("samn_diag_" + std::to_string(rd()) + "_" +
+                std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + "_" +
+                std::to_string(counter++));
+        std::filesystem::create_directories(path);
+    }
+    ~TempDir() {
+        std::error_code ec;
+        std::filesystem::remove_all(path, ec);
+    }
+    TempDir(const TempDir&) = delete;
+    TempDir& operator=(const TempDir&) = delete;
+};
+
+}  // namespace
+
+TEST_CASE("device/diagnostics: history JSONL round-trip, newest first") {
+    DiagnosticsReport r;
+    r.started_at_unix_ms = 1760000000123;
+    r.interrupted = true;
+    DiagnosticsPhaseSummary a, b;
+    a.commands = 12;
+    a.errors = 1;
+    b.commands = 4;
+    b.errors = 0;
+    r.phases.push_back(a);
+    r.phases.push_back(b);
+
+    const DiagnosticsHistoryEntry e = HistoryEntryFromReport(r, "Mock device", "mock");
+    CHECK(e.started_at == "2025-10-09T08:53:20.123Z");
+    CHECK(e.name == "Mock device");
+    CHECK(e.kind == "mock");
+    CHECK(e.commands == 16);
+    CHECK(e.errors == 1);
+    CHECK(e.interrupted);
+    CHECK(FormatDiagnosticsHistoryLine(e) ==
+          "2025-10-09 (Mock) \xE2\x80\x94 16 commands, 1 errors, interrupted");
+    CHECK(ToJson(e) ==
+          R"({"startedAt":"2025-10-09T08:53:20.123Z","name":"Mock device","kind":"mock","commands":16,"errors":1,"interrupted":true})");
+
+    DiagnosticsHistoryEntry ble;
+    ble.started_at = "2025-10-10T00:00:00.000Z";
+    ble.name = "Sam Neo 2";
+    ble.kind = "ble";
+    ble.commands = 8;
+    ble.errors = 0;
+    CHECK(FormatDiagnosticsHistoryLine(ble) == "2025-10-10 (Sam Neo 2) \xE2\x80\x94 8 commands, 0 errors");
+
+    TempDir t;
+    const auto path = t.path / "nested" / "device_diagnostics_history.jsonl";
+    CHECK(LoadDiagnosticsHistory(path).empty());  // missing file is not an error
+
+    AppendDiagnosticsHistory(path, e);
+    AppendDiagnosticsHistory(path, ble);
+    {
+        std::ofstream(path, std::ios::binary | std::ios::app) << "not json\n{\"commands\":\"x\"}\n";
+    }
+    const auto loaded = LoadDiagnosticsHistory(path);
+    REQUIRE(loaded.size() == 2);
+    CHECK(loaded[0].kind == "ble");  // newest first
+    CHECK(loaded[0].name == "Sam Neo 2");
+    CHECK(loaded[1].kind == "mock");
+    CHECK(loaded[1].interrupted);
+
+    CHECK(ResolveDiagnosticsHistoryPath("").filename() == "device_diagnostics_history.jsonl");
+    CHECK(ResolveDiagnosticsHistoryPath("  \t ").filename() == "device_diagnostics_history.jsonl");
+    CHECK(ResolveDiagnosticsHistoryPath(path.u8string()) == path);
 }

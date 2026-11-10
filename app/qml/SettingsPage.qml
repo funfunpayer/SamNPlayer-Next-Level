@@ -417,12 +417,17 @@ Item {
                 readonly property bool canTest: connected && !dev.sessionActive
                 property var report: null
                 property string diagStatus: ""
+                property var diagHistory: []
                 // 0.7 levels: vibration 0-10, suction 0-5.
                 function level(pct, steps) { return Math.round(pct / 100 * steps) }
                 function showReport(json) {
                     try { report = JSON.parse(json) } catch (e) { report = null }
                     diagStatus = report ? qsTr("Done.") : ""
                 }
+                function refreshHistory() {
+                    diagHistory = root.device ? root.device.getDiagnosticsHistory() : []
+                }
+                onVisibleChanged: if (visible) refreshHistory()
                 Connections {
                     target: root.device
                     function onDiagnosticsEntry(json) {
@@ -434,7 +439,10 @@ Item {
                                 + (e.error ? " · " + qsTr("error: %1").arg(e.error) : "")
                         } catch (err) {}
                     }
-                    function onDiagnosticsFinished(json) { devTab.showReport(json) }
+                    function onDiagnosticsFinished(json) {
+                        devTab.showReport(json)
+                        devTab.refreshHistory()
+                    }
                 }
                 Timer {
                     id: pulseTimer
@@ -674,6 +682,25 @@ Item {
                                     required property string modelData
                                     Layout.fillWidth: true; wrapMode: Text.WordWrap
                                     textFormat: Text.PlainText; text: modelData
+                                    color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
+                                }
+                            }
+                            Text {
+                                objectName: "diagHistoryHeading"
+                                visible: devTab.diagHistory.length > 0
+                                textFormat: Text.PlainText
+                                text: qsTr("Previous runs")
+                                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12; font.weight: Font.Medium
+                            }
+                            Repeater {
+                                objectName: "diagHistory"
+                                model: devTab.diagHistory
+                                delegate: Text {
+                                    objectName: "diagHistoryLine"
+                                    required property var modelData
+                                    Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                    textFormat: Text.PlainText
+                                    text: modelData && modelData.text ? modelData.text : ""
                                     color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
                                 }
                             }

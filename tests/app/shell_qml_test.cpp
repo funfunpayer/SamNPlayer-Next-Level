@@ -686,6 +686,25 @@ private slots:
                 if (c->isVisible() && c->property("text").isValid()) cells << c->property("text").toString();
             QCOMPARE(cells.mid(5), QStringList({"raw sweep vibration", "12", "1", "4.3 ms", "9.5 ms"}));
             QCOMPARE(byName("diagStatus")->property("text").toString(), QStringLiteral("Done."));
+            QVERIFY(!byName("diagHistoryHeading") || !byName("diagHistoryHeading")->isVisible());
+            {
+                QFile hist(dev->diagnosticsHistoryPath());
+                QVERIFY(hist.open(QIODevice::WriteOnly | QIODevice::Truncate));
+                hist.write("{\"startedAt\":\"2025-01-01T00:00:00.000Z\",\"name\":\"Old\",\"kind\":\"ble\",\"commands\":3,\"errors\":0,\"interrupted\":false}\n");
+                hist.write("{\"startedAt\":\"2025-06-02T12:00:00.000Z\",\"name\":\"Mock device\",\"kind\":\"mock\",\"commands\":12,\"errors\":1,\"interrupted\":true}\n");
+            }
+            QVERIFY(QMetaObject::invokeMethod(tab, "refreshHistory"));
+            QTRY_VERIFY(byName("diagHistoryHeading") && byName("diagHistoryHeading")->isVisible());
+            QStringList histLines;
+            for (QQuickItem* i : descendants(tab))
+                if (i->objectName() == QLatin1String("diagHistoryLine") && i->isVisible())
+                    histLines << i->property("text").toString();
+            QCOMPARE(histLines.size(), 2);
+            QVERIFY(histLines.at(0).contains(QStringLiteral("2025-06-02 (Mock)")));
+            QVERIFY(histLines.at(0).contains(QStringLiteral("12 commands, 1 errors, interrupted")));
+            QVERIFY(histLines.at(1).contains(QStringLiteral("2025-01-01 (Old)")));
+            QVERIFY(histLines.at(1).contains(QStringLiteral("3 commands, 0 errors")));
+            QVERIFY(!histLines.at(1).contains(QStringLiteral("interrupted")));
             if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT_DEVICE"); !shot.isEmpty()) {
                 QTest::qWait(300);
                 s.window->grabWindow().save(QString::fromLocal8Bit(shot));

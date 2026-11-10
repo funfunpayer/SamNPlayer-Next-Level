@@ -1,10 +1,15 @@
 #include "samn/device/diagnostics.h"
 
+#include <algorithm>
 #include <cstdio>
+#include <fstream>
 #include <map>
+#include <stdexcept>
+#include <system_error>
 #include <thread>
 
 #include "samn/device/go_json.h"
+#include "samn/settings.h"
 
 namespace samn::device {
 
@@ -314,6 +319,112 @@ std::string ToJson(const DiagnosticsReport& r) {
     j["notes"] = r.notes;
     j["interrupted"] = r.interrupted;
     return GoJsonDump(j);
+}
+
+DiagnosticsHistoryEntry HistoryEntryFromReport(const DiagnosticsReport& r, std::string name,
+                                               std::string kind) {
+    DiagnosticsHistoryEntry e;
+    e.started_at = IsoUtc(r.started_at_unix_ms);
+    e.name = std::move(name);
+    e.kind = std::move(kind);
+    e.interrupted = r.interrupted;
+    for (const auto& p : r.phases) {
+        e.commands += p.commands;
+        e.errors += p.errors;
+    }
+    return e;
+}
+
+std::string FormatDiagnosticsHistoryLine(const DiagnosticsHistoryEntry& e) {
+    std::string date = e.started_at.size() >= 10 ? e.started_at.substr(0, 10) : e.started_at;
+    if (date.empty()) date = "?";
+    std::string who;
+    if (e.kind == "mock")
+        who = "Mock";
+    else if (!e.name.empty())
+        who = e.name;
+    else if (!e.kind.empty())
+        who = e.kind;
+    else
+        who = "device";
+    std::string line = date + " (" + who + ") \xE2\x80\x94 " + std::to_string(e.commands) + " commands, " +
+                       std::to_string(e.errors) + " errors";
+    if (e.interrupted) line += ", interrupted";
+    return line;
+}
+
+std::string ToJson(const DiagnosticsHistoryEntry& e) {
+    nlohmann::ordered_json j = nlohmann::ordered_json::object();
+    j["startedAt"] = e.started_at;
+    if (!e.name.empty()) j["name"] = e.name;
+    if (!e.kind.empty()) j["kind"] = e.kind;
+    j["commands"] = e.commands;
+    j["errors"] = e.errors;
+    j["interrupted"] = e.interrupted;
+    return GoJsonDump(j);
+}
+
+std::filesystem::path DefaultDiagnosticsHistoryPath() {
+    return samn::config_dir() / "device_diagnostics_history.jsonl";
+}
+
+std::filesystem::path ResolveDiagnosticsHistoryPath(std::string stored) {
+    const auto first = stored.find_first_not_of(" \t");
+    if (first == std::string::npos) return DefaultDiagnosticsHistoryPath();
+    stored.erase(0, first);
+    const auto last = stored.find_last_not_of(" \t");
+    if (last != std::string::npos) stored.erase(last + 1);
+    if (stored.empty()) return DefaultDiagnosticsHistoryPath();
+    return std::filesystem::u8path(stored);
+}
+
+void AppendDiagnosticsHistory(const std::filesystem::path& path, const DiagnosticsHistoryEntry& e) {
+    std::filesystem::path dir = path.parent_path();
+    if (dir.empty()) dir = ".";
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    if (ec) throw std::runtime_error("cannot create " + dir.u8string());
+    std::ofstream out(path, std::ios::binary | std::ios::app);
+    if (!out) throw std::runtime_error("cannot append " + path.u8string());
+    out << ToJson(e) << '\n';
+    out.flush();
+    if (!out) throw std::runtime_error("cannot append " + path.u8string());
+}
+
+std::vector<DiagnosticsHistoryEntry> LoadDiagnosticsHistory(const std::filesystem::path& path) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in) return {};
+    std::vector<DiagnosticsHistoryEntry> out;
+    std::string line;
+    while (std::getline(in, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (line.empty()) continue;
+        nlohmann::json j;
+        try {
+            j = nlohmann::json::parse(line);
+        } catch (const std::exception&) {
+            continue;
+        }
+        if (!j.is_object()) continue;
+        DiagnosticsHistoryEntry e;
+        try {
+            e.started_at = j.value("startedAt", std::string());
+            e.name = j.value("name", std::string());
+            e.kind = j.value("kind", std::string());
+            e.commands = j.value("commands", 0);
+            e.errors = j.value("errors", 0);
+            e.interrupted = j.value("interrupted", false);
+        } catch (const std::exception&) {
+            continue;
+        }
+        out.push_back(std::move(e));
+    }
+    std::reverse(out.begin(), out.end());
+    std::stable_sort(out.begin(), out.end(),
+                     [](const DiagnosticsHistoryEntry& a, const DiagnosticsHistoryEntry& b) {
+                         return a.started_at > b.started_at;
+                     });
+    return out;
 }
 
 }  // namespace samn::device

@@ -28,6 +28,7 @@ namespace dev = samn::device;
 // Settings keys of 0.7 (app_settings.go). The key of each kind's last
 // target is its driver's (DriverInfo::target_setting).
 constexpr const char* kPrefTransport = "device.transport";
+constexpr const char* kPrefDiagnosticsHistoryPath = "device.diagnosticsHistoryPath";
 
 inline QString Q(const std::string& s) { return QString::fromStdString(s); }
 
