@@ -6,6 +6,7 @@
 #include <cmath>
 #include <functional>
 #include <future>
+#include <memory>
 #include <opencv2/imgproc.hpp>
 
 #include "samn/vision/canceled.h"
@@ -189,48 +190,96 @@ std::optional<BetweenKeysResult> TrackBetweenKeys(const std::filesystem::path& v
         const auto decode = [&](const Chunk& c, std::vector<cv::Mat>& dst) {
             Decoded d;
             const int64_t target = times[c.lo];
+            // Frames before lo with the same millisecond: lo is the k-th of
+            // that run in `times`.
+            size_t k = 0;
+            while (k < c.lo && times[c.lo - 1 - k] == target) ++k;
+            // Neighbour of the same time, before or after: a seek to `target`
+            // can land on any frame of the run, including when lo is the first
+            // of the group (k == 0).
+            const bool in_run = k > 0 || (c.lo + 1 < n && times[c.lo + 1] == target);
+            // Distinct time before this run, in `times`. The first seek goes
+            // there so it lands before the run; decode does not restart from 0.
+            const bool has_prev = c.lo > k;
+            // The first group of the stretch has no previous time in `times`
+            // (the forward seek may already have started inside it): start
+            // from the first key, as the forward run did, then step k.
+            const bool first_group = c.lo == k;
+            const int64_t first_at = in_run && has_prev ? times[c.lo - k - 1]
+                                                       : (first_group ? from_ms : target);
             int64_t margin = 0;
+            vision::FrameReader* rd = reader.get();
+            std::unique_ptr<vision::FrameReader> replay;
             for (bool found = false; !found;) {
                 const bool last_try = margin >= target - from_ms;
-                const int64_t at = margin == 0 ? target : (last_try ? from_ms : target - margin);
+                const int64_t at = margin == 0 ? first_at : (last_try ? from_ms : target - margin);
                 const auto t0 = Clock::now();
-                if (!reader->SeekMs(at)) {
+                // The first group: OpenCV can drop frames of the run a seek
+                // lands in (mjpeg), so a re-seek on the used reader does not
+                // match the forward run. A fresh reader sought like the
+                // forward run's does. Only those few chunks (not every chunk).
+                if (first_group && margin == 0) {
+                    replay = vision::FrameReader::Open(video, &d.error);
+                    if (!replay || !replay->SeekMs(from_ms)) {
+                        if (d.error.empty()) d.error = "cannot seek in the video";
+                        return d;
+                    }
+                    rd = replay.get();
+                } else if (!rd->SeekMs(at)) {
                     d.error = "cannot seek in the video";
                     return d;
                 }
+                bool saw_before = false;  // a frame earlier than the target came first
                 for (;;) {
                     int64_t pts_us = 0;
-                    if (!reader->Grab(&pts_us)) {
+                    if (!rd->Grab(&pts_us)) {
                         d.error = "the video changed between two reads";
                         return d;
                     }
                     ++d.frames;
                     const int64_t ms = pts_us / 1000;
-                    if (ms < target) continue;  // the warm-up after the seek: grabbed, not converted
-                    if (ms == target) {
+                    if (ms < target) {  // the warm-up after the seek: grabbed, not converted
+                        saw_before = true;
+                        continue;
+                    }
+                    // First frame of a same-timestamp group too: a landing on
+                    // the time is the first of the run only after an earlier
+                    // frame. last_try does not waive that. The fresh replay
+                    // of the first group matches times[0] even mid-run.
+                    if (ms == target &&
+                        (!in_run || saw_before || (first_group && margin == 0 && rd == replay.get()))) {
                         found = true;
                         d.warm_ms = ms_since(t0);
                     }
                     break;
                 }
                 if (found) break;
-                // Landed after the frame: try again from further back.
+                // Landed after the frame, or inside a run of equal times: try
+                // again from further back.
                 if (last_try) {
                     d.error = "the video changed between two reads";
                     return d;
                 }
                 margin = margin == 0 ? 2000 : margin * 4;
             }
+            for (size_t j = 0; j < k; ++j) {  // step over the equal-time frames before lo
+                int64_t pts_us = 0;
+                if (!rd->Grab(&pts_us) || pts_us / 1000 != target) {
+                    d.error = "the video changed between two reads";
+                    return d;
+                }
+                ++d.frames;
+            }
             for (size_t i = c.lo; i < c.hi; ++i) {
                 if (i > c.lo) {
                     int64_t pts_us = 0;
-                    if (!reader->Grab(&pts_us) || pts_us / 1000 != times[i]) {
+                    if (!rd->Grab(&pts_us) || pts_us / 1000 != times[i]) {
                         d.error = "the video changed between two reads";
                         return d;
                     }
                     ++d.frames;
                 }
-                if (!reader->Retrieve(g)) {
+                if (!rd->Retrieve(g)) {
                     d.error = "the video changed between two reads";
                     return d;
                 }
