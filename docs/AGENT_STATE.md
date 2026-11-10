@@ -1,4 +1,15 @@
-**Last update:** 10 Nov 2026, Cursor, branch `cursor/readme-player-gui-635a`: README Player (scenes/thumbs/legend/Alt+B); LaneName Left/Right/Home/End; axis-legend chip pick tests. Rebased onto main after script analysis (#229) and ring-down (#230). Quality first; CPU/RAM for speed+quality. #217 still owner-reviewed. Do not touch feel_heatbands / Speech-Hold / handbook / .sam.
+# Agent state
+
+**Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
+
+**Last update:** 10 Nov 2026, Cursor, branch `cursor/settings-diag-history-635a`: Settings → Device diagnostics history (JSONL). Rebased onto main after axis legend (#228). Quality first; CPU/RAM for speed+quality. #217 still owner-reviewed. Do not touch feel_heatbands / Speech-Hold / intensity-arc / handbook / `.sam`.
+
+## Handover: device diagnostics history (10 Nov)
+
+PARITY_REMAINING item 3 (the history piece only). After each finished `RunDiagnostics` (including interrupted) the worker appends one JSONL line. Empty `device.diagnosticsHistoryPath` → `config_dir()/device_diagnostics_history.jsonl`. `DeviceController::getDiagnosticsHistory` returns newest-first; Settings → Device lists `date (Mock|device) — N commands, M errors[, interrupted]`. Name/kind are stamped from the session (the report JSON has none). No Choose… path field (override is the settings key, tested in C++). Left open: `generator.reportPath`, feel_heatbands.
+
+- **Core:** `diagnostics.h` `DiagnosticsHistoryEntry`, `AppendDiagnosticsHistory` / `LoadDiagnosticsHistory`, `HistoryEntryFromReport`. Tests in `device_diagnostics_test.cpp`.
+- **App:** `DeviceWorker::RunDiagnostics` appends; `getDiagnosticsHistory` / `diagnosticsHistoryPath` / `setDiagnosticsHistoryPath`. QML under the Device diagnostics card (`diagHistoryLine`). Tests: `diagnosticsOnMock`, `diagnosticsCanBeCancelled`, `diagnosticsHistoryPathDefaultAndOverride`, `settingsDeviceTabTestsTheMockDevice`.
 
 ## Handover: axis legend chips (10 Nov, #228)
 

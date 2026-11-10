@@ -14,6 +14,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <filesystem>
 #include <functional>
 #include <optional>
 #include <string>
@@ -84,5 +85,36 @@ std::string DurationString(std::chrono::milliseconds d);
 // startedAt is UTC ISO-8601 with milliseconds.
 std::string ToJson(const DiagnosticsEntry& e);
 std::string ToJson(const DiagnosticsReport& r);
+
+// One JSONL line of a finished diagnostics run (including interrupted).
+// The report JSON has no device identity: stamp `name` / `kind` from the session.
+struct DiagnosticsHistoryEntry {
+    std::string started_at;
+    std::string name;
+    std::string kind;
+    int commands = 0;
+    int errors = 0;
+    bool interrupted = false;
+};
+
+DiagnosticsHistoryEntry HistoryEntryFromReport(const DiagnosticsReport& r, std::string name,
+                                               std::string kind);
+
+// 0.7 Settings → Device line: "date (Mock|device) — N commands, M errors[, interrupted]".
+std::string FormatDiagnosticsHistoryLine(const DiagnosticsHistoryEntry& e);
+
+std::string ToJson(const DiagnosticsHistoryEntry& e);
+
+// Empty stored setting (or whitespace) → config_dir()/device_diagnostics_history.jsonl.
+std::filesystem::path DefaultDiagnosticsHistoryPath();
+std::filesystem::path ResolveDiagnosticsHistoryPath(std::string stored);
+
+// Append one compact JSON object and a newline. Creates parent folders.
+// Throws std::runtime_error when the file cannot be written.
+void AppendDiagnosticsHistory(const std::filesystem::path& path, const DiagnosticsHistoryEntry& e);
+
+// Newest first. A missing file is empty, not an error. Broken / non-object
+// lines are skipped (the rest of the file is kept).
+std::vector<DiagnosticsHistoryEntry> LoadDiagnosticsHistory(const std::filesystem::path& path);
 
 }  // namespace samn::device
