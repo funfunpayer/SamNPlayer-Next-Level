@@ -2,7 +2,15 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 10 Nov 2026, Cursor, branch `cursor/training-library-helpchips-635a`: Training + Library HelpChip placements (PARITY_REMAINING item 21 placements). Quality first. Do not touch feel_heatbands / Speech-Hold / handbook / `.sam` / intensity-arc.
+**Last update:** 10 Nov 2026, Cursor, branch `cursor/core-pov-635a`: camera POV core slice 1 (`pov.h` ClassifyPov). Quality first. Do not touch vision MeasurePovSignals / UI / `.scene.json` / scene_roles / ONNX / feel_heatbands.
+
+## Handover: camera POV core slice 1 (10 Nov)
+
+Core only. `ClassifyPov` reads a 3×3 occupancy grid per step and returns `unknown` | `first_person` | `third_person`. Fail closed: all-zero, NaN/Inf, large-and-split, a run shorter than `min_run_ms`. Fitted `scale_gate` / `split_gate` / `cy_gate` / `min_run_ms` on the synthetic grids in `tests/core/pov_test.cpp` (no real frames yet). No OpenCV in core.
+
+- **API:** `core/include/samn/pov.h` — `PovKind`, `PovKindName`, `PovSignals` (`step_ms`, `grid`), `PovSegment`, `PovOptions`, `ClassifyPov`. Caller's options are not modified.
+- **Tests:** `tests/core/pov_test.cpp` (synthetic grids only).
+- **Left open:** vision `MeasurePovSignals`, UI, `.scene.json` write, scene_roles, ONNX. Not in 0.7 (note in `PARITY_REMAINING.md`).
 
 ## Handover: Training + Library HelpChips (10 Nov)
 
