@@ -565,6 +565,20 @@ private slots:
             page->setProperty("tab", 2);
             QTRY_VERIFY_WITH_TIMEOUT(byName("systemTab")->isVisible(), kWait);
             QVERIFY(byName("systemCheckAgain") && byName("systemCopyReport"));
+            QVERIFY(byName("reportPathField") && byName("reportPathChoose") && byName("reportPathDefault"));
+            QCOMPARE(byName("reportPathStatus")->property("text").toString(),
+                     QStringLiteral("No metrics recorded yet (path empty)."));
+            {
+                QObject* settings = page->property("settings").value<QObject*>();
+                QVERIFY(settings);
+                QCOMPARE(settings->property("reportPath").toString(), QString());
+                settings->setProperty("reportPath", QStringLiteral("/tmp/metrics.jsonl"));
+                QCOMPARE(byName("reportPathField")->property("text").toString(), QStringLiteral("/tmp/metrics.jsonl"));
+                QCOMPARE(byName("reportPathStatus")->property("text").toString(), QStringLiteral("/tmp/metrics.jsonl"));
+                settings->setProperty("reportPath", QString());
+                QCOMPARE(byName("reportPathStatus")->property("text").toString(),
+                         QStringLiteral("No metrics recorded yet (path empty)."));
+            }
             QMetaObject::invokeMethod(page->property("system").value<QObject*>(), "refresh");
             QTRY_VERIFY_WITH_TIMEOUT(byName("systemItem_settings"), kWait);
             QVERIFY(byName("systemItem_gpu") && byName("systemItem_ai-gpu"));
