@@ -218,6 +218,7 @@ Column {
                 enabled: ctrl.hasScript && ctrl.hasMarker
                 onClicked: ctrl.scaleSelection(1.25)
             }
+            HelpChip { key: "playback.scale"; anchors.verticalCenter: parent.verticalCenter }
             FlowButton {
                 objectName: "curveDelete"
                 text: qsTr("Delete range")
@@ -345,6 +346,7 @@ Column {
                 onMoved: (v) => ctrl.oMarkerIntensity = Math.round(v * 20) / 20
             }
             Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; text: Math.round(ctrl.oMarkerIntensity * 100) + "%"; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
+            HelpChip { key: "playback.intensity"; anchors.verticalCenter: parent.verticalCenter }
         }
         FlowButton {
             text: qsTr("Apply as O-marker"); enabled: ctrl.hasMarker

@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 10 Nov 2026, Cursor, branch `cursor/player-helpchips-more-635a`: more Player Inspector HelpChips (Curve/Drive, contact curve, strength, Auto Extended-O, contact-marks, speed-hl threshold, stroker Motion/Speed). #216/#218/#219 on main; #217 still owner-reviewed. Do not touch feel_heatbands / Speech-Hold / handbook / .sam.
+**Last update:** 10 Nov 2026, Cursor, branch `cursor/player-helpchips-scale-635a`: HelpChips for Softer/Stronger scale, secondary O-marker intensity, Extended-O Minimum. #216/#218/#219/#222 on main; #217 still owner-reviewed. Do not touch feel_heatbands / Speech-Hold / handbook / .sam.
 
 
 
