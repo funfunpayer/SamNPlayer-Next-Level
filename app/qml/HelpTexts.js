@@ -218,6 +218,8 @@ const texts = {
     "pb-aa-detect": "Measure the beat of the video's sound (same as View → From audio). Display only.",
     // src/playback.js:424 (Write as vibration curve)
     "pb-aa-write": "Sound Curve: write the loudness of the video's sound into the script as the Vibration curve (smoothed, about 4 points per second). Undo brings the old curve back. In a .samn file, playback then uses the written channels (axes mode).",
+    // SamN2: Save automatic analysis chapters (Inspector → Playback)
+    "pb-analysis-chapters": "Writes the automatic analysis chapters (Pause, Build-up, steady, Crescendo, Wind-down) into the loaded script as named ranges. Stored chapters then replace the on-screen summary. Manual add and rename still work afterwards. Nothing is written until you press the button.",
     // src/playback.js:207
     "pb-audio-lane-row": "Audio Level lane under the curve: loudness of the video's sound over time (needs a linked video and ffmpeg). On by default.",
     // src/playback.js:536 (Vibration from video audio only)

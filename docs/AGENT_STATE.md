@@ -2,7 +2,14 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 10 Nov 2026, Cursor, branch `cursor/training-library-helpchips-635a`: Training + Library HelpChip placements (PARITY_REMAINING item 21 placements). Quality first. Do not touch feel_heatbands / Speech-Hold / handbook / `.sam` / intensity-arc.
+**Last update:** 10 Nov 2026, Cursor, branch `cursor/player-auto-chapters-635a`: Save as chapters from script analysis. Rebased onto main after #234/#235. Do not touch feel_heatbands / Speech-Hold / handbook / `.sam`.
+
+## Handover: Save auto chapters (10 Nov)
+
+PARITY_REMAINING item 8 note (write path). Script analysis already showed automatic chapters (display only). Inspector → Playback "Script check & analysis" now has **Save as chapters**: builds the same Pause / Build-up / steady / Crescendo / Wind-down labels as the summary and writes them through `SaveScriptChapters` (`.funscript` metadata.chapters and `.samn`). Opening a script still does not write. Fewer than 4 points or no auto chapters is a no-op (`lastError`). Manual add / rename still use the same chapter list. HelpChip `pb-analysis-chapters`.
+
+- **App:** `PlayerController::applyAutoChapters` / `autoChaptersForSave`; QML `saveAutoChapters` on the Playback analysis card.
+- **Tests:** `player_controller_test` `applyAutoChaptersWritesAndReloads`; `inspector_qml_test` `playbackSaveAutoChapters`.
 
 ## Handover: Training + Library HelpChips (10 Nov)
 
@@ -56,8 +63,8 @@ PARITY_REMAINING item 3 (the history piece only). After each finished `RunDiagno
 ## Handover: script analysis (10 Nov, merged #229)
 
 - **Core:** `motion_classify.h` (0.7 `motionx.Classify`), `motion_chapters.h` (`Chapters`), `script_analysis.h` (`AnalyzeScript` / `summarizeStates`). An empty `ClassifyOptions` does not smooth; only `AnalyzeScriptActions` sets `SmoothRadius` 2. `ScriptChapters` classifies with smoothing off.
-- **Player:** `scriptAnalysisSummary` after a script with at least 4 points, on the Playback card "Script check & analysis" (title gains "· summary ready"). Stored `metadata.chapters` replace the automatic labels (empty name → "chapter", end at or before the start → start+1). Nothing is written back.
-- **Tests:** `tests/core/motion_classify_test.cpp`, `motion_chapters_test.cpp`, `script_analysis_test.cpp`, `tests/app/player_controller_test.cpp` `scriptAnalysisOnOpen`.
+- **Player:** `scriptAnalysisSummary` after a script with at least 4 points, on the Playback card "Script check & analysis" (title gains "· summary ready"). Stored `metadata.chapters` replace the automatic labels (empty name → "chapter", end at or before the start → start+1). Opening does not write them; **Save as chapters** (`applyAutoChapters`) does.
+- **Tests:** `tests/core/motion_classify_test.cpp`, `motion_chapters_test.cpp`, `script_analysis_test.cpp`, `tests/app/player_controller_test.cpp` `scriptAnalysisOnOpen`, `applyAutoChaptersWritesAndReloads`.
 
 ## Handover: `claude/samn2-label-dupms` (10 Nov, label tracking: equal timestamps; no silent skips)
 

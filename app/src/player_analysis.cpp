@@ -1,12 +1,13 @@
 // Script analysis line for the Playback card (0.7 describeScript).
-// Automatic motion chapters are a label for that line. They are never
-// written into metadata.chapters; a script that already has chapters shows
-// those names instead.
+// Automatic motion chapters label that line. Opening a script never writes
+// them; applyAutoChapters writes the same labels via SaveScriptChapters.
+// A script that already has chapters shows those names instead.
 #include "player_controller.h"
 
 #include <QStringList>
 #include <QVariantList>
 #include <QVariantMap>
+#include <cmath>
 
 #include "qt_paths.h"
 #include "samn/script_analysis.h"
@@ -20,6 +21,11 @@ std::vector<samn::MotionPoint> PointsOf(const std::vector<samn::Action>& stroke)
     for (const auto& a : stroke)
         pts.push_back(samn::MotionPoint{static_cast<double>(a.at), static_cast<double>(a.pos)});
     return pts;
+}
+
+std::vector<samn::MotionChapter> AutoFromStroke(const std::vector<samn::Action>& stroke) {
+    if (stroke.size() < 4) return {};
+    return samn::MotionChaptersFromSegments(samn::ClassifyMotion(PointsOf(stroke), {}));
 }
 
 // 0.7 ScriptChapters. Stored marks win. ClassifyOptions{} leaves smoothing
@@ -41,7 +47,7 @@ std::vector<samn::MotionChapter> ChaptersFor(const std::vector<samn::Action>& st
         }
         return out;
     }
-    return samn::MotionChaptersFromSegments(samn::ClassifyMotion(PointsOf(stroke), {}));
+    return AutoFromStroke(stroke);
 }
 
 QString Describe(const samn::ScriptAnalysis& analysis, const std::vector<samn::MotionChapter>& chapters) {
@@ -99,6 +105,21 @@ QVariantList PlayerController::scriptMotionChapters() {
         out << QVariantMap{{QStringLiteral("kind"), FromU8(c.kind)},
                            {QStringLiteral("startMs"), c.start_ms},
                            {QStringLiteral("endMs"), c.end_ms}};
+    }
+    return out;
+}
+
+std::vector<samn::Chapter> PlayerController::autoChaptersForSave() const {
+    std::vector<samn::Chapter> out;
+    const auto auto_ch = AutoFromStroke(stroke_);
+    out.reserve(auto_ch.size());
+    for (const auto& c : auto_ch) {
+        samn::Chapter ch;
+        ch.name = samn::MotionChapterLabel(c.kind);
+        ch.start_ms = static_cast<int64_t>(std::llround(c.start_ms));
+        ch.end_ms = static_cast<int64_t>(std::llround(c.end_ms));
+        if (ch.end_ms <= ch.start_ms) ch.end_ms = ch.start_ms + 1;
+        out.push_back(std::move(ch));
     }
     return out;
 }

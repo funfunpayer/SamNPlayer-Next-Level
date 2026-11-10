@@ -655,6 +655,22 @@ Column {
             visible: ctrl.scriptAnalysisSummary !== ""
             text: ctrl.scriptAnalysisSummary
         }
+        Row {
+            spacing: 8
+            visible: ctrl.hasScript
+            FlowButton {
+                objectName: "saveAutoChapters"
+                text: qsTr("Save as chapters")
+                enabled: ctrl.scriptAnalysisSummary !== ""
+                onClicked: ctrl.applyAutoChapters()
+                HoverHandler { id: saveChaptersHover }
+                ToolTipText {
+                    shown: saveChaptersHover.hovered
+                    text: qsTr("Write the automatic analysis chapters into the script. Stored names then replace the on-screen summary.")
+                }
+            }
+            HelpChip { key: "pb-analysis-chapters"; anchors.verticalCenter: parent.verticalCenter }
+        }
         FlowButton {
             text: qsTr("Check script"); enabled: ctrl.hasScript
             onClicked: doctor.result = ctrl.scriptQuality()

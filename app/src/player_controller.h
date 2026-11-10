@@ -294,6 +294,10 @@ public:
     Q_INVOKABLE bool addSceneMarker(qint64 videoMs);
     Q_INVOKABLE bool renameChapter(int index, const QString& name);
     Q_INVOKABLE bool removeChapter(int index);
+    // Writes automatic analysis chapters into the script (same labels as
+    // the Playback summary). Explicit only — opening a script never writes.
+    // No-op (false, lastError) with fewer than 4 points or no chapters.
+    Q_INVOKABLE bool applyAutoChapters();
     // O-markers: from the marked range; "primary" (intensity 1) or
     // "secondary" (oMarkerIntensity).
     Q_INVOKABLE bool addOMarkerFromSelection(const QString& kind);
@@ -379,7 +383,8 @@ public:
     Q_INVOKABLE QVariantMap analyzeScript();
     // 0.7 ScriptChapters. Stored metadata.chapters replace the automatic
     // labels; an empty name becomes "chapter"; an end at or before the start
-    // becomes start+1 ms. Automatic chapters are never written to the file.
+    // becomes start+1 ms. Automatic chapters stay display-only until
+    // applyAutoChapters writes them.
     Q_INVOKABLE QVariantList scriptMotionChapters();
     // 0.7 SavePlaybackProject: "<video or script>.snp.json" with video,
     // script, offset, the video position and the marked range. The path, or
@@ -682,9 +687,12 @@ private:
     std::string activeStrength_;
     QPointer<DeviceService> device_;
     std::vector<samn::Action> stroke_, vibration_, suction_;
-    // describeScript text. Display only; never saved back as metadata.chapters.
+    // describeScript text. Display only until applyAutoChapters writes it.
     QString scriptAnalysisSummary_;
     void refreshScriptAnalysis();
+    // Motion chapters from the stroke, ignoring stored marks. Empty when
+    // there are fewer than 4 points or Classify yields nothing.
+    std::vector<samn::Chapter> autoChaptersForSave() const;
     samn::ScriptMarks marks_;
     std::vector<float> heat_;
     QVariantList variants_;

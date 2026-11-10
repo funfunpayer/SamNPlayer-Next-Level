@@ -49,7 +49,11 @@ SAMN2 = [
     ('training.feedback',
      'Arousal 1–10 while a session runs. Stay at 5–7; 8: Interrupt; 9–10 interrupt the cycle and soften the next. Target is 7.',
      'SamN2, Training → Feedback', 'Feedback'),
-]
+('pb-analysis-chapters',
+     'Writes the automatic analysis chapters (Pause, Build-up, steady, Crescendo, Wind-down) into the loaded script '
+     'as named ranges. Stored chapters then replace the on-screen summary. Manual add and rename still work afterwards. '
+     'Nothing is written until you press the button.',
+     'SamN2, Inspector → Playback Save as chapters', 'Save as chapters'),]
 
 
 def slug(s):

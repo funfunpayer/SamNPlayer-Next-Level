@@ -1196,8 +1196,8 @@ private slots:
     }
 
     // 0.7 describeScript: the summary appears once a script has 4 points.
-    // Automatic chapters are display only. Stored metadata.chapters win,
-    // and opening the script does not write either kind back.
+    // Automatic chapters are display only until applyAutoChapters. Stored
+    // metadata.chapters win, and opening the script does not write either kind.
     void scriptAnalysisOnOpen() {
         QTemporaryDir d;
         PlayerController none;
@@ -1267,6 +1267,66 @@ private slots:
         QVERIFY(m.scriptAnalysisSummary().contains(QStringLiteral("Intro 0:00")));
         QVERIFY(!m.scriptAnalysisSummary().contains(warmup));
         QCOMPARE(doctorCleared.count(), 0);  // Script Doctor result must stay
+    }
+
+    // Save as chapters: writes analysis labels via SaveScriptChapters.
+    // Opening never writes; fewer than 4 points / no chapters is a no-op;
+    // rename still works after the write; a reload shows the stored names.
+    void applyAutoChaptersWritesAndReloads() {
+        QTemporaryDir d;
+        PlayerController none;
+        QVERIFY(!none.applyAutoChapters());
+        QVERIFY(!none.lastError().isEmpty());
+        QVERIFY(none.chapters().isEmpty());
+
+        writeFile(d.filePath("short.funscript"), zigzag(3));
+        PlayerController few;
+        QVERIFY(few.openScript(d.filePath("short.funscript")));
+        QCOMPARE(few.pointCount(), 3);
+        QVERIFY(few.scriptAnalysisSummary().isEmpty());
+        QVERIFY(!few.applyAutoChapters());
+        QVERIFY(few.chapters().isEmpty());
+        QCOMPARE(samn::LoadScriptMarks(std::filesystem::u8path(d.filePath("short.funscript").toStdString())).chapters.size(),
+                 size_t(0));
+
+        const QString path = d.filePath("A.funscript");
+        writeFile(path, zigzag());
+        QFile beforeFile(path);
+        QVERIFY(beforeFile.open(QIODevice::ReadOnly));
+        const QByteArray before = beforeFile.readAll();
+        beforeFile.close();
+        PlayerController c;
+        QVERIFY(c.openScript(path));
+        QVERIFY(c.chapters().isEmpty());
+        const auto preview = c.scriptMotionChapters();
+        QVERIFY(!preview.isEmpty());
+        {
+            QFile still(path);
+            QVERIFY(still.open(QIODevice::ReadOnly));
+            QCOMPARE(still.readAll(), before);  // open does not write
+        }
+
+        QSignalSpy marksSpy(&c, &PlayerController::marksChanged);
+        QVERIFY(c.applyAutoChapters());
+        QVERIFY(marksSpy.count() >= 1);
+        QCOMPARE(c.chapters().size(), preview.size());
+        const QString name0 = c.chapters()[0].toMap().value(QStringLiteral("name")).toString();
+        QVERIFY(!name0.isEmpty());
+        QCOMPARE(c.chapters()[0].toMap().value(QStringLiteral("startMs")).toLongLong(),
+                 qint64(std::llround(preview[0].toMap().value(QStringLiteral("startMs")).toDouble())));
+        QVERIFY(c.scriptAnalysisSummary().contains(name0));
+        // Stored chapters now win: scriptMotionChapters kind is the saved name.
+        QCOMPARE(c.scriptMotionChapters()[0].toMap().value(QStringLiteral("kind")).toString(), name0);
+
+        QVERIFY(c.renameChapter(0, QStringLiteral("Intro")));
+        QCOMPARE(c.chapters()[0].toMap().value(QStringLiteral("name")).toString(), QStringLiteral("Intro"));
+        QVERIFY(c.scriptAnalysisSummary().contains(QStringLiteral("Intro")));
+
+        PlayerController again;
+        QVERIFY(again.openScript(path));
+        QCOMPARE(again.chapters().size(), preview.size());
+        QCOMPARE(again.chapters()[0].toMap().value(QStringLiteral("name")).toString(), QStringLiteral("Intro"));
+        QVERIFY(again.scriptAnalysisSummary().contains(QStringLiteral("Intro")));
     }
 
     void sleepTimer() {

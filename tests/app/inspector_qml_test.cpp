@@ -477,6 +477,65 @@ private slots:
         qInstallMessageHandler(g_previous);
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }
+
+    // Playback → Script check: Save as chapters writes analysis labels.
+    void playbackSaveAutoChapters() {
+        QTemporaryDir files;
+        const QString src = files.filePath("zig.funscript");
+        {
+            QByteArray body = "{\"actions\":[";
+            for (int i = 0; i < 41; ++i) {
+                if (i) body += ',';
+                body += QStringLiteral("{\"at\":%1,\"pos\":%2}").arg(i * 250).arg(i % 2 ? 0 : 100).toUtf8();
+            }
+            body += "]}";
+            QFile f(src);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(body);
+        }
+        g_messages.clear();
+        g_previous = qInstallMessageHandler(capture);
+        {
+            QQmlEngine engine;
+            engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
+            engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+            QQmlComponent comp(&engine);
+            comp.setData(R"(
+                import QtQuick
+                import SamN
+                Item {
+                    width: 360; height: 2200
+                    property alias player: pc
+                    DeviceController { id: dev }
+                    PlayerController { id: pc; device: dev }
+                    InspectorPanel { anchors.fill: parent; ctrl: pc; device: dev; tab: 2 }
+                })",
+                         QUrl("qrc:/test/WrapperSaveChapters.qml"));
+            QVERIFY2(comp.status() == QQmlComponent::Ready, qPrintable(comp.errorString()));
+            QQuickWindow window;
+            window.resize(360, 900);
+            std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
+            QVERIFY(root);
+            root->setParentItem(window.contentItem());
+            window.show();
+            QVERIFY(QTest::qWaitForWindowExposed(&window));
+            auto* player = root->property("player").value<PlayerController*>();
+            QVERIFY(player);
+            auto* save = root->findChild<QQuickItem*>("saveAutoChapters");
+            QVERIFY(save);
+            QCOMPARE(save->property("text").toString(), QStringLiteral("Save as chapters"));
+            QVERIFY(!save->isEnabled());
+            QVERIFY(player->openPath(src));
+            QTRY_VERIFY(save->isEnabled());
+            QVERIFY(player->chapters().isEmpty());
+            QVERIFY(QMetaObject::invokeMethod(save, "clicked"));
+            QTRY_VERIFY(!player->chapters().isEmpty());
+            QVERIFY(player->scriptAnalysisSummary().contains(
+                player->chapters()[0].toMap().value(QStringLiteral("name")).toString()));
+        }
+        qInstallMessageHandler(g_previous);
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
 };
 
 QTEST_MAIN(InspectorQmlTest)

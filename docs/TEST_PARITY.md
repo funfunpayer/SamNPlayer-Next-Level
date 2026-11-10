@@ -363,7 +363,7 @@ One row per old test function (grouped when a whole file shares the same answer)
 | Old file | Test function(s) | Status | Where / why |
 |---|---|---|---|
 | `app_aiscript_test.go` | `TestExportAIScriptImitation`, `TestDraftAndKeepAIScript` | todo-later | P4 (AI draft script, opt-in D-058). |
-| `app_analysis_test.go` | `TestAnalyzeScriptFindsStaticStretches`, `TestAnalyzeScriptWithoutScript`, `TestAnalyzeScriptSteadyMotion` | ported | `tests/core/script_analysis_test.cpp` (`AnalyzeScriptActions`). The Player line is `scriptAnalysisOnOpen`. |
+| `app_analysis_test.go` | `TestAnalyzeScriptFindsStaticStretches`, `TestAnalyzeScriptWithoutScript`, `TestAnalyzeScriptSteadyMotion` | ported | `tests/core/script_analysis_test.cpp` (`AnalyzeScriptActions`). The Player line is `scriptAnalysisOnOpen`; write-back is `applyAutoChaptersWritesAndReloads`. |
 | `app_audio_level_test.go` | `TestAudioLevelEnvelopeSharesDecodeWithAudioVibration` | todo-later | P2/P3 (vibration from sound): the Audio Level lane decodes once (`audioLevelFromSound`), but the shared decode with the vibration output is not built. |
 | `app_audio_level_test.go` | `TestSetChannelLevelsStoresClampedCut` | covered | tests/app/playback_output_test.cpp `channelOffAndLevelScaleTheOutput`, `outputChoicesAreRemembered` (clamp: see `player/speed_test.go TestChannelLevelsDefaultFullAndClamp` in list A) |
 | `app_audio_level_test.go` | `TestSetPeakReduceStored` | todo-later | P2 (Reduce peaks): not ported. |

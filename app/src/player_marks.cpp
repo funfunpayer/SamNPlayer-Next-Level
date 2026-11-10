@@ -204,6 +204,23 @@ bool PlayerController::removeChapter(int index) {
     return commitMarks(marks_.chapters, std::move(next), samn::SaveScriptChapters);
 }
 
+bool PlayerController::applyAutoChapters() {
+    if (scriptPath_.isEmpty()) {
+        setError(tr("Open a script first."));
+        return false;
+    }
+    if (stroke_.size() < 4) {
+        setError(tr("Need at least 4 points for automatic chapters."));
+        return false;
+    }
+    auto next = autoChaptersForSave();
+    if (next.empty()) {
+        setError(tr("No automatic chapters to save."));
+        return false;
+    }
+    return commitMarks(marks_.chapters, std::move(next), samn::SaveScriptChapters);
+}
+
 bool PlayerController::addOMarkerFromSelection(const QString& kind) {
     if (!marker_.Valid()) {
         setError(tr("Mark a range on the heatmap first."));
