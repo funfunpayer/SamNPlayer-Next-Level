@@ -2430,6 +2430,118 @@ Item {
                             }
                         }
                     }
+                    // 0.7 review "Improve script": Start/End trim, fill gaps,
+                    // heal tracking gaps. Align-to-audio / audio check / rhythm
+                    // bridge / repair span are not on this panel.
+                    ColumnLayout {
+                        id: improvePanel
+                        objectName: "improvePanel"
+                        visible: edit.hasScript && !gen.running
+                        Layout.fillWidth: true
+                        spacing: 6
+                        property bool fillGaps: true
+                        property bool healGaps: true
+                        property string lastStatus: ""
+                        Text {
+                            textFormat: Text.PlainText
+                            Layout.fillWidth: true
+                            text: qsTr("Improve script")
+                            color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold
+                        }
+                        Text {
+                            textFormat: Text.PlainText
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            text: qsTr("Trim the ends, heal tracker-loss windows, and fill long gaps. Does not invent motion from audio.")
+                            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 6
+                            enabled: !edit.busy
+                            Text {
+                                textFormat: Text.PlainText
+                                text: qsTr("Start (s)")
+                                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                            HelpChip { key: "generator.start-s"; Layout.alignment: Qt.AlignVCenter }
+                            FlowTextField {
+                                id: improveStart
+                                objectName: "improveStart"
+                                Layout.preferredWidth: 56
+                                maxLength: 10
+                                placeholder: "0"
+                            }
+                            Text {
+                                textFormat: Text.PlainText
+                                text: qsTr("End (s)")
+                                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                            HelpChip { key: "generator.end-s"; Layout.alignment: Qt.AlignVCenter }
+                            FlowTextField {
+                                id: improveEnd
+                                objectName: "improveEnd"
+                                Layout.preferredWidth: 56
+                                maxLength: 10
+                                placeholder: "0"
+                            }
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            enabled: !edit.busy
+                            Text {
+                                textFormat: Text.PlainText
+                                Layout.fillWidth: true
+                                text: qsTr("Fill gaps")
+                                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                            }
+                            HelpChip { key: "gen-improve-fill"; Layout.alignment: Qt.AlignVCenter }
+                            FlowToggle {
+                                objectName: "improveFill"
+                                checked: improvePanel.fillGaps
+                                onToggled: (c) => improvePanel.fillGaps = c
+                            }
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            enabled: !edit.busy
+                            Text {
+                                textFormat: Text.PlainText
+                                Layout.fillWidth: true
+                                text: qsTr("Heal tracking gaps")
+                                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                            }
+                            HelpChip { key: "gen-improve-heal"; Layout.alignment: Qt.AlignVCenter }
+                            FlowToggle {
+                                objectName: "improveHeal"
+                                checked: improvePanel.healGaps
+                                onToggled: (c) => improvePanel.healGaps = c
+                            }
+                        }
+                        FlowButton {
+                            objectName: "improveButton"
+                            text: qsTr("Improve script"); icon: "sliders"
+                            enabled: !edit.busy
+                            onClicked: {
+                                const rawStart = improveStart.text.replace(",", ".")
+                                const rawEnd = improveEnd.text.replace(",", ".")
+                                const start = parseFloat(rawStart)
+                                const end = parseFloat(rawEnd)
+                                improvePanel.lastStatus = edit.improveScript(
+                                    (!rawStart || isNaN(start) || start < 0) ? 0 : start,
+                                    (!rawEnd || isNaN(end) || end < 0) ? 0 : end,
+                                    improvePanel.fillGaps, improvePanel.healGaps)
+                            }
+                        }
+                        Text {
+                            objectName: "improveStatus"
+                            textFormat: Text.PlainText
+                            visible: improvePanel.lastStatus !== ""
+                            Layout.fillWidth: true; wrapMode: Text.WordWrap
+                            text: improvePanel.lastStatus
+                            color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 12
+                        }
+                    }
                     // After Create (or with an open script): adapt for the toy
                     // before handing off to the Player — same actions as Tools…
                     // Optimize, kept visible so the convert path is obvious.

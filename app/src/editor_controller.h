@@ -168,6 +168,11 @@ public:
     // writes vibration and suction from the stroke. One undo step; returns the
     // message (empty when nothing could be done).
     Q_INVOKABLE QString optimizeFor(const QString& target);
+    // Review-panel Improve script (0.7 ImproveGeneratedScript, trim/fill/heal
+    // only): Start/End in seconds (0 = unbound), then heal tracker-loss windows,
+    // then fill long gaps. Core order. One undo step; same save/reload as
+    // optimizeFor. Returns the status (empty when nothing could be done).
+    Q_INVOKABLE QString improveScript(double startSec, double endSec, bool fillGaps, bool healTrackingGaps);
     // Vibration from the video's sound (0.7 "Write as vibration curve");
     // withContact keeps the script's own vibration where it is stronger.
     // Asynchronous: busy until the sound is decoded. A script without a
