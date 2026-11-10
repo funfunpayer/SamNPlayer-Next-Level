@@ -258,18 +258,33 @@ bool Reencode(const fs::path& in, const fs::path& out, const std::string& flags)
     const std::string cmd = "ffmpeg -y -i \"" + in.string() + "\" " + flags + " \"" + out.string() + "\"" + quiet;
     return std::system(cmd.c_str()) == 0;
 }
+// True when ffmpeg can be run. When it cannot: on CI (env CI or
+// SAMN_NATIVE_REQUIRED) that fails the case, so a missing program is never a
+// silent pass; on Windows the skip is accepted, loudly (the Windows runner has
+// no ffmpeg program; the Linux and sanitizer jobs install it); elsewhere it
+// is a message, for a developer machine.
+bool FfmpegOrFail() {
+    if (HaveFfmpeg()) return true;
+#ifdef _WIN32
+    MESSAGE("SKIPPED ON WINDOWS (accepted): the ffmpeg program is not installed; the clips made with it were NOT tested here");
+#else
+    if (std::getenv("CI") || std::getenv("SAMN_NATIVE_REQUIRED")) {
+        FAIL_CHECK("ffmpeg is not installed, but CI or SAMN_NATIVE_REQUIRED is set: these checks must run, not skip");
+    } else {
+        MESSAGE("SKIPPED: ffmpeg is not installed here; the clips made with it were NOT tested");
+    }
+#endif
+    return false;
+}
 }  // namespace
 
 // Variable frame rate (phones record it) and a long GOP: a seek lands by the
 // nominal rate, after the wanted frame on VFR. The old algorithm worked on
 // these; so must the windowed one, with the same boxes. Needs the ffmpeg
 // program (synthetic pattern re-encoded; nothing is stored); without it the
-// case says so and passes vacuously: CI has ffmpeg.
+// case fails on CI and says so loudly elsewhere (see FfmpegOrFail).
 TEST_CASE("tracking between keys on variable-rate and long-GOP clips equals the reference") {
-    if (!HaveFfmpeg()) {
-        MESSAGE("SKIPPED: ffmpeg is not installed here; the VFR and long-GOP checks did not run");
-        return;
-    }
+    if (!FfmpegOrFail()) return;
     const fs::path src = TempPath("samn_between_cfr").replace_extension(".mp4");
     REQUIRE(WriteMoving(src, 4, 60.0, 0.5));  // 100 frames
     struct Variant { std::string name; std::string flags; };
@@ -304,5 +319,60 @@ TEST_CASE("tracking between keys on variable-rate and long-GOP clips equals the 
         }
         fs::remove(clip);
     }
+    fs::remove(src);
+}
+
+// Frames that share a millisecond (equal timestamps, as some muxers and cuts
+// leave them): the seek-and-grab for a chunk starting inside such a run must
+// land on the first frame of the run and step over the ones before the wanted
+// frame. Before, a window of 1 returned boxes of the wrong frames and a larger
+// window stopped with "the video changed between two reads".
+TEST_CASE("tracking between keys on a clip with duplicate timestamps equals the reference") {
+    if (!FfmpegOrFail()) return;
+    const fs::path src = TempPath("samn_between_dup_src").replace_extension(".mp4");
+    REQUIRE(WriteMoving(src, 4, 60.0, 0.5));  // 100 frames
+    // The encoder refuses equal timestamps (and so does setpts), so the clip is
+    // encoded without B-frames and the timestamps are rewritten in the copy
+    // (setts), into Matroska, which keeps them.
+    const fs::path plain = TempPath("samn_between_dup_plain").replace_extension(".mkv");
+    if (!Reencode(src, plain, "-c:v mpeg4 -bf 0")) {
+        FAIL_CHECK("this ffmpeg could not make the base clip for the duplicate-timestamp checks");
+        return;
+    }
+    struct Variant { std::string name; std::string flags; };
+    const Variant variants[] = {
+        // Two frames per timestamp, 80 ms apart.
+        {"pairs", "-c copy -bsf:v \"setts=ts='floor(N/2)*0.08/TB'\""},
+        // Three frames per timestamp, 120 ms apart.
+        {"triples", "-c copy -bsf:v \"setts=ts='floor(N/3)*0.12/TB'\""},
+    };
+    for (const auto& v : variants) {
+        INFO(v.name);
+        const fs::path clip = TempPath("samn_between_dup").replace_extension(".mkv");
+        if (!Reencode(plain, clip, v.flags)) {
+            FAIL_CHECK("this ffmpeg could not make the duplicate-timestamp clip " << v.name);
+            continue;
+        }
+        for (const int64_t from : {int64_t(0), int64_t(500)}) {
+            const int64_t to = from + 2500;
+            const samn::LabelBox a = DiscAt(from, 60, 0.5), b = DiscAt(to, 60, 0.5);
+            const auto ref = HoldEverything(clip, from, a, to, b, 200, 640);
+            REQUIRE(ref.forward.size() >= 10);
+            for (const int window : {1, 3, 24}) {
+                INFO("from " << from << " window " << window);
+                samn::engine::BetweenKeysOptions o;
+                o.window_frames = window;
+                o.max_window_frames = window;
+                std::string error;
+                const auto r = samn::engine::TrackBetweenKeys(clip, from, a, to, b, o, &error);
+                INFO(error);
+                REQUIRE(r);
+                CheckSameRun(r->forward, ref.forward);
+                CheckSameRun(r->backward, ref.backward);
+            }
+        }
+        fs::remove(clip);
+    }
+    fs::remove(plain);
     fs::remove(src);
 }

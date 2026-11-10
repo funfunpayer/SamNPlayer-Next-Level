@@ -189,7 +189,17 @@ std::optional<BetweenKeysResult> TrackBetweenKeys(const std::filesystem::path& v
         const auto decode = [&](const Chunk& c, std::vector<cv::Mat>& dst) {
             Decoded d;
             const int64_t target = times[c.lo];
-            int64_t margin = 0;
+            // Frames before lo with the same millisecond (a stream with equal
+            // timestamps): the landing is on the first of them, lo is the
+            // k-th after it.
+            size_t k = 0;
+            while (k < c.lo && times[c.lo - 1 - k] == target) ++k;
+            // The first run of equal times may be cut short (the first seek can
+            // land inside it, so times holds fewer of them than the stream): only
+            // a seek to the first key's own position sees the same frames as the
+            // forward run did.
+            const bool first_run = c.lo == k;
+            int64_t margin = first_run ? target - from_ms : 0;
             for (bool found = false; !found;) {
                 const bool last_try = margin >= target - from_ms;
                 const int64_t at = margin == 0 ? target : (last_try ? from_ms : target - margin);
@@ -198,6 +208,7 @@ std::optional<BetweenKeysResult> TrackBetweenKeys(const std::filesystem::path& v
                     d.error = "cannot seek in the video";
                     return d;
                 }
+                bool saw_before = false;  // a frame earlier than the target came first
                 for (;;) {
                     int64_t pts_us = 0;
                     if (!reader->Grab(&pts_us)) {
@@ -206,20 +217,35 @@ std::optional<BetweenKeysResult> TrackBetweenKeys(const std::filesystem::path& v
                     }
                     ++d.frames;
                     const int64_t ms = pts_us / 1000;
-                    if (ms < target) continue;  // the warm-up after the seek: grabbed, not converted
-                    if (ms == target) {
+                    if (ms < target) {  // the warm-up after the seek: grabbed, not converted
+                        saw_before = true;
+                        continue;
+                    }
+                    // With equal times before lo, only a landing after an earlier
+                    // frame (or at the first key's own position) is known to be on
+                    // the first of the run, not inside it.
+                    if (ms == target && (k == 0 || saw_before || at == from_ms)) {
                         found = true;
                         d.warm_ms = ms_since(t0);
                     }
                     break;
                 }
                 if (found) break;
-                // Landed after the frame: try again from further back.
+                // Landed after the frame, or inside a run of equal times: try
+                // again from further back.
                 if (last_try) {
                     d.error = "the video changed between two reads";
                     return d;
                 }
                 margin = margin == 0 ? 2000 : margin * 4;
+            }
+            for (size_t j = 0; j < k; ++j) {  // step over the equal-time frames before lo
+                int64_t pts_us = 0;
+                if (!reader->Grab(&pts_us) || pts_us / 1000 != target) {
+                    d.error = "the video changed between two reads";
+                    return d;
+                }
+                ++d.frames;
             }
             for (size_t i = c.lo; i < c.hi; ++i) {
                 if (i > c.lo) {

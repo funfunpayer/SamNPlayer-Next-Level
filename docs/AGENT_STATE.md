@@ -21,6 +21,10 @@ PARITY_REMAINING item 10 (the panel pieces only). Review card on Generator Creat
 
 PARITY_REMAINING item 3 (the history piece only). After each finished `RunDiagnostics` (including interrupted) the worker appends one JSONL line. Empty `device.diagnosticsHistoryPath` → `config_dir()/device_diagnostics_history.jsonl`. `DeviceController::getDiagnosticsHistory` returns newest-first; Settings → Device lists `date (Mock|device) — N commands, M errors[, interrupted]`. Name/kind are stamped from the session (the report JSON has none). No Choose… path field (override is the settings key, tested in C++). Left open from that slice: feel_heatbands (`generator.reportPath` is Settings → System).
 
+## Handover: device diagnostics history (10 Nov, merged #231)
+
+PARITY_REMAINING item 3 (the history piece only). After each finished `RunDiagnostics` (including interrupted) the worker appends one JSONL line. Empty `device.diagnosticsHistoryPath` → `config_dir()/device_diagnostics_history.jsonl`. `DeviceController::getDiagnosticsHistory` returns newest-first; Settings → Device lists `date (Mock|device) — N commands, M errors[, interrupted]`. Name/kind are stamped from the session (the report JSON has none). No Choose… path field (override is the settings key, tested in C++). Left open: `generator.reportPath`, feel_heatbands.
+
 - **Core:** `diagnostics.h` `DiagnosticsHistoryEntry`, `AppendDiagnosticsHistory` / `LoadDiagnosticsHistory`, `HistoryEntryFromReport`. Tests in `device_diagnostics_test.cpp`.
 - **App:** `DeviceWorker::RunDiagnostics` appends; `getDiagnosticsHistory` / `diagnosticsHistoryPath` / `setDiagnosticsHistoryPath`. QML under the Device diagnostics card (`diagHistoryLine`). Tests: `diagnosticsOnMock`, `diagnosticsCanBeCancelled`, `diagnosticsHistoryPathDefaultAndOverride`, `settingsDeviceTabTestsTheMockDevice`.
 
@@ -36,6 +40,16 @@ PARITY_REMAINING item 3 (the history piece only). After each finished `RunDiagno
 - **Player:** `scriptAnalysisSummary` after a script with at least 4 points, on the Playback card "Script check & analysis" (title gains "· summary ready"). Stored `metadata.chapters` replace the automatic labels (empty name → "chapter", end at or before the start → start+1). Nothing is written back.
 - **Tests:** `tests/core/motion_classify_test.cpp`, `motion_chapters_test.cpp`, `script_analysis_test.cpp`, `tests/app/player_controller_test.cpp` `scriptAnalysisOnOpen`.
 
+## Handover: `claude/samn2-label-dupms` (10 Nov, label tracking: equal timestamps; no silent skips)
+
+Follow-up to the review of #216 (merged).
+
+- **Bug:** frames that share a millisecond (equal timestamps) were found wrongly by the backward decode of `TrackBetweenKeys`: the seek landed on the second frame of a run, window 1 silently tracked the wrong frames (boxes differed by a pixel), a larger window stopped with "the video changed between two reads". **Fix** (`engine/src/label_tracking.cpp`): count `k`, the frames before the chunk's first frame with the same millisecond; a landing on the wanted time counts only if an earlier frame was grabbed first or the seek was to the first key's own position (checked only when `k > 0`); then `k` frames are stepped over. The first run of equal times is special: the forward run's seek can land inside it, so `times` holds fewer of them than the stream; the chunk that starts in it always seeks to the first key's position, as the forward run did.
+- **Test:** `tracking between keys on a clip with duplicate timestamps equals the reference` makes Matroska clips with pairs and triples of equal timestamps (the encoder and `setpts` refuse equal timestamps, so the clip is encoded without B-frames and `-bsf:v setts` rewrites them in a stream copy), from 0 and from 500 ms (inside a run), windows 1, 3, 24, bit-exact against the old hold-everything copy. On the old code it fails with both symptoms; with the fix it passes.
+- **No silent skip:** the ffmpeg-based label tests call `FfmpegOrFail()`: no ffmpeg and env `CI` or `SAMN_NATIVE_REQUIRED` set fails the test; on Windows the skip is accepted with a loud `SKIPPED ON WINDOWS` message (the Windows runner has no ffmpeg program and sets `SAMN_NATIVE_REQUIRED`); elsewhere a plain `SKIPPED` message. The Linux build job and both sanitizer jobs install `ffmpeg` with apt.
+- **TSan:** the label tests are not in the TSan filter: the tracking tests take about 2.5 minutes in Release and the CSRT tracker would run many times slower under TSan. The ASan/UBSan job runs the whole `engine_tests`.
+- **Docs:** the claim "the output never depends on the window" in `docs/benchmarks/LABEL_MEMORY_2026-11-08.md` was too strong; it now says what is tested (windows 1, 3, 24 on CFR, cut, VFR, long-GOP and equal-timestamp clips) and that `window_used` is not part of the result.
+- **Not verified:** Windows/MSVC, real clips with equal timestamps (only ffmpeg-made ones), the sanitizer jobs locally.
 
 ## Handover: `claude/samn2-label-vfr` (9 Nov, label tracking: VFR fix and long-GOP window)
 
