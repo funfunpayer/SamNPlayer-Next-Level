@@ -1,8 +1,10 @@
 // Memory and speed of label tracking between two keys (docs/benchmarks/LABEL_MEMORY_2026-11-08.md).
 //   samn_label_mem --make clip.mp4 [seconds]   writes a synthetic clip (a disc on a texture; no media)
-//   samn_label_mem --track clip.mp4 [seconds]  tracks it between two keys, prints peak RSS, time, a hash
+//   samn_label_mem --track clip.mp4 [seconds [box_scale]]  tracks it between two keys, prints peak RSS, wall and CPU time, a hash
+// Any other clip (a long-GOP H.264 re-encode of the synthetic one, for instance) works with --track.
 // The two steps run as two processes so that the clip writer does not count in the peak.
 #include <chrono>
+#include <ctime>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -22,9 +24,12 @@ constexpr double kAmp = 200.0, kFreq = 0.25;
 
 double CenterY(double seconds) { return kBigH / 2.0 + kAmp / 2 * std::sin(2 * samn::engine::testclips::kPi * kFreq * seconds); }
 
+double g_box_scale = 1.0;  // a clip re-encoded larger than 1280x720: the box scales with it
+
 samn::LabelBox DiscAt(int64_t ms) {
     const double y = CenterY(double(ms) / 1000.0);
-    return {kBigW / 2.0 - kRadius, y - kRadius, 2.0 * kRadius, 2.0 * kRadius};
+    return {g_box_scale * (kBigW / 2.0 - kRadius), g_box_scale * (y - kRadius), g_box_scale * 2.0 * kRadius,
+            g_box_scale * 2.0 * kRadius};
 }
 
 bool Make(const std::filesystem::path& p, int seconds) {
@@ -59,11 +64,14 @@ int main(int argc, char** argv) {
     const std::string mode = argv[1];
     const std::filesystem::path clip = argv[2];
     const int seconds = argc > 3 ? std::atoi(argv[3]) : 40;
+    if (argc > 4) g_box_scale = std::atof(argv[4]);
     if (mode == "--make") return Make(clip, seconds) ? 0 : 1;
     if (mode != "--track") return 2;
 
     samn::engine::BetweenKeysOptions o;
     o.max_frames = 100000;
+    samn::engine::BetweenKeysStats stats;
+    o.stats = &stats;
     std::string error;
     const int64_t to_ms = int64_t(seconds) * 1000 - 100;
     const auto t0 = std::chrono::steady_clock::now();
@@ -87,8 +95,10 @@ int main(int argc, char** argv) {
             if (s.box) { mix(s.box->x); mix(s.box->y); mix(s.box->w); mix(s.box->h); }
         }
     const int frames = int(std::llround(double(seconds) * samn::engine::testclips::kFps));
-    std::printf("samples=%zu/%zu frames=%d peak_rss_mb=%.1f wall_ms=%.0f ms_per_frame=%.2f hash=%016llx\n",
+    std::printf("samples=%zu/%zu frames=%d peak_rss_mb=%.1f wall_ms=%.0f ms_per_frame=%.2f cpu_ms_per_frame=%.2f "
+                "hash=%016llx window=%d peak_frames=%d grabbed=%d\n",
                 r->forward.size(), r->backward.size(), frames, PeakRssKb() / 1024.0, ms, ms / frames,
-                static_cast<unsigned long long>(h));
+                1000.0 * double(std::clock()) / CLOCKS_PER_SEC / frames, static_cast<unsigned long long>(h),
+                stats.window_used, stats.peak_frames_held.load(), stats.frames_decoded);
     return 0;
 }

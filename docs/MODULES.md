@@ -99,7 +99,7 @@ Frames, tracking and detection for the Generator and AI Train (P3, D-133). Built
 
 | File | What |
 |---|---|
-| `include/samn/vision/frame_reader.h` | `FrameReader`: FFmpeg backend only, every frame with `index` and `pts_us` (video time), frame-exact `SeekMs`. |
+| `include/samn/vision/frame_reader.h` | `FrameReader`: FFmpeg backend only, every frame with `index` and `pts_us` (video time), frame-exact `SeekMs` by the nominal rate; `Grab` (decode only) and `Retrieve` (picture) as the two halves of `Read`. |
 | `include/samn/vision/tracker.h` | `CreateTracker(kCsrt)`, the one tracker factory (no fallback, GD-02); `VisionSelfCheck()`, `OpenCvVersion()`. |
 | `include/samn/vision/onnx_detector.h` | `OnnxDetector`: an ONNX object detector run with ONNX Runtime; YOLOv8 (NudeNet) and DETR (RF-DETR student) outputs, told apart by the model's outputs (D-155 steps 4, 5). |
 | `include/samn/vision/canceled.h` | `samn::kCanceled`: the error text of a stopped run, set by the frame loops here and in the engine and compared by the app. |
@@ -123,7 +123,7 @@ The Generator's engine (P3, D-140, D-142): tracking, signal chain, runs, self-ch
 | `generate_queue.h` | One video of the Generator's queue: Find tip, then Generate with the queue's settings. |
 | `self_check.h` | The self-checking engine's maths (SC-1, SC-3): sample gate, short-gap interpolation, per-window trust; no OpenCV. |
 | `repair.h` | Verified repair (SC-5): failed windows are tracked again from a fresh Find tip start and kept only where they pass the checks. |
-| `label_tracking.h` | Tracking between two label keyframes: CSRT forward and backward, blended with disagreement marked (D-155 step 3). The forward run streams; the backward run decodes in chunks, two windows of 24 small frames alive at most (peak memory no longer grows with the stretch, `docs/benchmarks/LABEL_MEMORY_2026-11-08.md`). |
+| `label_tracking.h` | Tracking between two label keyframes: CSRT forward and backward, blended with disagreement marked (D-155 step 3). The forward run streams; the backward run decodes in chunks, two windows of 24 to 96 small frames alive at most; VFR-safe (peak memory no longer grows with the stretch, `docs/benchmarks/LABEL_MEMORY_2026-11-08.md`). |
 | `beatbar_video.h` | Beat bar from a video file: find the strip, then time every beat (the Editor's beat-bar tool). |
 | `compare.h` | The comparison controller: runs the engine on clips and scores it against a reference script and 0.7's output (GD-04, GD-05, GD-06). |
 | `tools/samn_bench.cpp` | `samn_bench`: the detection benchmark. The real Generate pipeline (Recommended profile) on 19 fixed-seed synthetic scenes with ground truth; windowed r, peak timing, extrema, amplitude, cuts, loss, jumps, ms/frame, peak RSS; CSV + markdown; acceptance rule in `--help`. Not run by ctest except `samn_bench_smoke`. Scenes: `tests/engine/synthetic_scenes.h` (on `synthetic_clips.h`). Baseline: `docs/benchmarks/DETECTION_BASELINE_2026-11-06.md`; 2-D camera compensation: `DETECTION_CAMERA2D_2026-11-08.md`. |

@@ -1,6 +1,8 @@
 #include "samn/engine/label_tracking.h"
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <cmath>
 #include <functional>
 #include <future>
@@ -42,21 +44,37 @@ std::optional<BetweenKeysResult> TrackBetweenKeys(const std::filesystem::path& v
         if (error && error->empty()) *error = "cannot seek in the video";
         return std::nullopt;
     }
-    const int window = std::max(1, o.window_frames);
+    using Clock = std::chrono::steady_clock;
+    const auto ms_since = [](Clock::time_point t) {
+        return std::chrono::duration<double, std::milli>(Clock::now() - t).count();
+    };
+    const int base_window = std::max(1, o.window_frames);
+    const int max_window = std::max(base_window, o.max_window_frames);
     BetweenKeysStats local;
     BetweenKeysStats& st = o.stats ? *o.stats : local;
-    st = {};
+    st.peak_frames_held = 0;
+    st.frames_decoded = 0;
+    st.window_used = 0;
 
-    // One window of small frames, reused for every chunk of both runs, and
-    // one read buffer: nothing else holds pixels. Times and the sample
+    // Frames alive at once: the small buffers (reused; counted when first
+    // filled) and the two full-size read buffers. Times and the sample
     // indices are all that is kept for the whole stretch.
-    std::vector<cv::Mat> win(static_cast<size_t>(window));
-    vision::VideoFrame f;
+    std::atomic<int> held{0};
+    const auto note_held = [&] {
+        const int h = ++held;
+        int p = st.peak_frames_held.load();
+        while (h > p && !st.peak_frames_held.compare_exchange_weak(p, h)) {}
+    };
     double scale = 1.0;
-    const auto shrink = [&scale](const vision::VideoFrame& src, cv::Mat& dst) {
+    const auto shrink = [&scale, &note_held](const vision::VideoFrame& src, cv::Mat& dst) {
+        const bool fresh = dst.empty();
         if (scale < 1.0) cv::resize(src.bgr, dst, cv::Size(), scale, scale, cv::INTER_AREA);
         else src.bgr.copyTo(dst);
+        if (fresh) note_held();
     };
+    std::vector<cv::Mat> win(1);  // the forward run's one small frame
+    vision::VideoFrame f;
+    bool have_f = false;
 
     std::vector<int64_t> times;
     std::vector<size_t> samples;  // the first frame at or after each step
@@ -73,15 +91,31 @@ std::optional<BetweenKeysResult> TrackBetweenKeys(const std::filesystem::path& v
         return false;
     };
 
-    // Forward run, streaming: each frame is read, tracked and dropped.
+    // Forward run, streaming: each frame is read, tracked and dropped. (A
+    // missing tracker is reported before the stretch is read, not after.)
+    cv::Size small_size;
+    double update_ms = 0;  // time in the tracker during the forward run: what a frame costs to track
+    int updates = 0;
     {
         auto tracker = vision::CreateTracker(vision::TrackerKind::kCsrt, error);
         if (!tracker) return std::nullopt;
         bool lost = false;
-        while (reader->Read(f)) {
+        bool bad_box = false;  // reported after the stretch checks, as before
+        for (;;) {
+            int64_t pts_us = 0;
+            if (!reader->Grab(&pts_us)) break;
+            const bool track_it = !lost && !bad_box;
+            // A frame that nothing will track is grabbed only, not converted.
+            if (track_it || times.empty()) {
+                if (!reader->Retrieve(f)) break;
+                if (!have_f) {
+                    have_f = true;
+                    note_held();
+                }
+            }
             ++st.frames_decoded;
             if (cancelled()) return std::nullopt;
-            const int64_t ms = f.pts_us / 1000;
+            const int64_t ms = pts_us / 1000;
             if (ms > to_ms) break;
             const size_t i = times.size();
             if (i == 0) scale = std::min(1.0, double(o.max_side) / std::max(f.bgr.cols, f.bgr.rows));
@@ -97,19 +131,28 @@ std::optional<BetweenKeysResult> TrackBetweenKeys(const std::filesystem::path& v
             }
             if (i == 0) {
                 shrink(f, win[0]);
-                const cv::Rect init = ToRect(from_box, scale, win[0].size());
+                small_size = win[0].size();
+                const cv::Rect init = ToRect(from_box, scale, small_size);
                 if (init.width < 2 || init.height < 2) {
-                    if (error) *error = "the key's box is outside the frame";
-                    return std::nullopt;
+                    bad_box = true;
+                } else {
+                    tracker->Init(win[0], init);
+                    fwd_at[0] = from_box;
                 }
-                tracker->Init(win[0], init);
-                fwd_at[0] = from_box;
-            } else if (!lost) {
+            } else if (track_it) {
                 shrink(f, win[0]);
-                if (auto r = tracker->Update(win[0])) fwd_at[i] = FromRect(*r, scale);
+                const auto t0 = Clock::now();
+                const auto r = tracker->Update(win[0]);
+                update_ms += ms_since(t0);
+                ++updates;
+                if (r) fwd_at[i] = FromRect(*r, scale);
                 else lost = true;  // gone stays gone for this run
             }
             if (o.progress) o.progress(int(std::clamp<int64_t>((ms - from_ms) * 50 / span, 0, 50)));
+        }
+        if (times.size() >= 2 && bad_box) {
+            if (error) *error = "the key's box is outside the frame";
+            return std::nullopt;
         }
     }
     const size_t n = times.size();
@@ -117,65 +160,135 @@ std::optional<BetweenKeysResult> TrackBetweenKeys(const std::filesystem::path& v
         if (error) *error = "no frames between the keys";
         return std::nullopt;
     }
+    if (ToRect(to_box, scale, small_size).width < 2 || ToRect(to_box, scale, small_size).height < 2) {
+        if (error) *error = "the key's box is outside the frame";
+        return std::nullopt;
+    }
     for (const size_t i : samples) out.forward.push_back({times[i], fwd_at[i]});
     fwd_at = {};
 
     // Backward run: the frames come back in chunks, each decoded forward from
-    // a frame-exact seek and tracked from its last frame to its first. The
-    // next chunk is decoded on another thread while this one is tracked (two
-    // buffers), so the second read of the stretch costs wall time only where
-    // there is no spare core.
+    // a seek and tracked from its last frame to its first. The next chunk is
+    // decoded on another thread while this one is tracked (two buffers).
+    //
+    // A seek goes to the key frame before the target, so on a stream with a
+    // long GOP every chunk pays for the frames before it; the window grows
+    // (up to max_window_frames) when the measured cost of a seek says so.
+    // The frame wanted is found by its time: a seek lands by the nominal frame
+    // rate, which on a variable-rate stream can be after the frame, so the
+    // seek is retried further back, down to the first key's own position.
     {
         auto tracker = vision::CreateTracker(vision::TrackerKind::kCsrt, error);
         if (!tracker) return std::nullopt;
         struct Chunk { size_t lo, hi; };
-        std::vector<Chunk> chunks;
-        for (size_t hi = n; hi > 0;) {
-            const size_t lo = hi > size_t(window) ? hi - size_t(window) : 0;
-            chunks.push_back({lo, hi});
-            hi = lo;
-        }
-        std::vector<cv::Mat> spare(static_cast<size_t>(window));
-        std::vector<cv::Mat>* bufs[2] = {&win, &spare};
-        struct Decoded { std::string error; int frames = 0; };
+        std::vector<cv::Mat> bufs[2] = {std::vector<cv::Mat>(size_t(max_window)),
+                                        std::vector<cv::Mat>(size_t(max_window))};
+        struct Decoded { std::string error; int frames = 0; double warm_ms = 0; };
+        vision::VideoFrame g;
+        bool have_g = false;
         const auto decode = [&](const Chunk& c, std::vector<cv::Mat>& dst) {
             Decoded d;
-            if (!reader->SeekMs(times[c.lo])) {
-                d.error = "cannot seek in the video";
-                return d;
-            }
-            vision::VideoFrame g;
-            for (size_t i = c.lo; i < c.hi; ++i) {
-                if (!reader->Read(g) || g.pts_us / 1000 != times[i]) {
+            const int64_t target = times[c.lo];
+            int64_t margin = 0;
+            for (bool found = false; !found;) {
+                const bool last_try = margin >= target - from_ms;
+                const int64_t at = margin == 0 ? target : (last_try ? from_ms : target - margin);
+                const auto t0 = Clock::now();
+                if (!reader->SeekMs(at)) {
+                    d.error = "cannot seek in the video";
+                    return d;
+                }
+                for (;;) {
+                    int64_t pts_us = 0;
+                    if (!reader->Grab(&pts_us)) {
+                        d.error = "the video changed between two reads";
+                        return d;
+                    }
+                    ++d.frames;
+                    const int64_t ms = pts_us / 1000;
+                    if (ms < target) continue;  // the warm-up after the seek: grabbed, not converted
+                    if (ms == target) {
+                        found = true;
+                        d.warm_ms = ms_since(t0);
+                    }
+                    break;
+                }
+                if (found) break;
+                // Landed after the frame: try again from further back.
+                if (last_try) {
                     d.error = "the video changed between two reads";
                     return d;
                 }
-                ++d.frames;
+                margin = margin == 0 ? 2000 : margin * 4;
+            }
+            for (size_t i = c.lo; i < c.hi; ++i) {
+                if (i > c.lo) {
+                    int64_t pts_us = 0;
+                    if (!reader->Grab(&pts_us) || pts_us / 1000 != times[i]) {
+                        d.error = "the video changed between two reads";
+                        return d;
+                    }
+                    ++d.frames;
+                }
+                if (!reader->Retrieve(g)) {
+                    d.error = "the video changed between two reads";
+                    return d;
+                }
+                if (!have_g) {
+                    have_g = true;
+                    note_held();
+                }
                 shrink(g, dst[i - c.lo]);
             }
             return d;
         };
         std::vector<std::optional<LabelBox>> at(n);
         bool lost = false;
-        auto pending = std::async(std::launch::async, decode, chunks[0], std::ref(*bufs[0]));
-        for (size_t c = 0; c < chunks.size() && !lost; ++c) {
+        int window = base_window;
+        double warm_sum_ms = 0;
+        int warm_n = 0;
+        st.window_used = window;
+        size_t hi_next = n;
+        const auto take = [&] {
+            const Chunk c{hi_next > size_t(window) ? hi_next - size_t(window) : 0, hi_next};
+            hi_next = c.lo;
+            return c;
+        };
+        Chunk cur = take();
+        auto pending = std::async(std::launch::async, decode, cur, std::ref(bufs[0]));
+        for (size_t c = 0;; ++c) {
             const Decoded d = pending.get();
             st.frames_decoded += d.frames;
             if (!d.error.empty()) {
                 if (error) *error = d.error;
                 return std::nullopt;
             }
-            if (c + 1 < chunks.size()) pending = std::async(std::launch::async, decode, chunks[c + 1], std::ref(*bufs[(c + 1) & 1]));
-            const std::vector<cv::Mat>& cur = *bufs[c & 1];
-            for (size_t i = chunks[c].hi; i-- > chunks[c].lo;) {
-                const cv::Mat& frame = cur[i - chunks[c].lo];
+            if (updates > 0 && update_ms > 0) {
+                // What a seek costs the run: the mean seek time of the chunks so
+                // far, spread over a chunk, against the time to track a frame.
+                // Short GOP: a few percent of the tracking, the window stays.
+                // Long GOP: a seek runs through up to a GOP of frames, and the
+                // window grows (to max_window_frames) until that is about 5 %.
+                warm_sum_ms += d.warm_ms;
+                ++warm_n;
+                if (warm_n >= 2) {
+                    const double track_ms = update_ms / updates;
+                    const double want = (warm_sum_ms / warm_n) / (0.05 * track_ms);
+                    window = std::clamp(std::max(window, int(std::min(want, double(max_window)))), base_window,
+                                        max_window);
+                }
+                st.window_used = std::max(st.window_used, window);
+            }
+            const Chunk now = cur;
+            if (hi_next > 0) {
+                cur = take();
+                pending = std::async(std::launch::async, decode, cur, std::ref(bufs[(c + 1) & 1]));
+            }
+            const std::vector<cv::Mat>& frames = bufs[c & 1];
+            for (size_t i = now.hi; i-- > now.lo;) {
+                const cv::Mat& frame = frames[i - now.lo];
                 if (i == n - 1) {
-                    const cv::Rect init = ToRect(to_box, scale, frame.size());
-                    if (init.width < 2 || init.height < 2) {
-                        if (error) *error = "the key's box is outside the frame";
-                        return std::nullopt;
-                    }
-                    tracker->Init(frame, init);
+                    tracker->Init(frame, ToRect(to_box, scale, frame.size()));
                     at[i] = to_box;
                     continue;
                 }
@@ -187,9 +300,8 @@ std::optional<BetweenKeysResult> TrackBetweenKeys(const std::filesystem::path& v
                 }
                 if (o.progress) o.progress(50 + int((n - 1 - i) * 50 / n));
             }
+            if (lost || now.lo == 0) break;
         }
-        st.peak_frames_held = int(std::count_if(win.begin(), win.end(), [](const cv::Mat& m) { return !m.empty(); }) +
-                                  std::count_if(spare.begin(), spare.end(), [](const cv::Mat& m) { return !m.empty(); }));
         for (const size_t i : samples) out.backward.push_back({times[i], at[i]});
     }
     if (o.progress) o.progress(100);

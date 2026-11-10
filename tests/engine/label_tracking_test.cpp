@@ -3,6 +3,7 @@
 #include <doctest/doctest.h>
 
 #include <cmath>
+#include <cstdlib>
 #include <algorithm>
 #include <filesystem>
 #include <random>
@@ -150,7 +151,7 @@ void CheckSameRun(const std::vector<samn::TrackSample>& a, const std::vector<sam
 // whole, and the tracked boxes are exactly those of the hold-everything
 // version, for a window larger than the stretch, a few chunks, and one frame.
 TEST_CASE("tracking between keys holds a bounded window and gives the same boxes") {
-    const fs::path p = TempPath("samn_between_window") .replace_extension(".mp4");
+    const fs::path p = TempPath("samn_between_window").replace_extension(".mp4");
     REQUIRE(WriteMoving(p, 4, 60.0, 0.5));  // 100 frames
     const samn::LabelBox a = DiscAt(0, 60, 0.5), b = DiscAt(3000, 60, 0.5);
     const auto ref = HoldEverything(p, 0, a, 3000, b, 200, 640);
@@ -159,6 +160,7 @@ TEST_CASE("tracking between keys holds a bounded window and gives the same boxes
         INFO("window " << window);
         samn::engine::BetweenKeysOptions o;
         o.window_frames = window;
+        o.max_window_frames = window;  // no growth: the bound is the one asked for
         samn::engine::BetweenKeysStats st;
         o.stats = &st;
         std::string error;
@@ -167,12 +169,140 @@ TEST_CASE("tracking between keys holds a bounded window and gives the same boxes
         REQUIRE(r);
         CheckSameRun(r->forward, ref.forward);
         CheckSameRun(r->backward, ref.backward);
-        CHECK(st.peak_frames_held >= 1);
-        CHECK(st.peak_frames_held <= 2 * window);  // the chunk in use and the one being decoded
-        if (window < 38) CHECK(st.peak_frames_held < 76);  // 76 frames in the stretch: never all of them
-        // Both runs read every frame once; the backward chunks add no more.
+        // Over time: the two chunk buffers plus the full-size read buffers (one
+        // for each of the two threads); never the 76 frames of the stretch
+        // unless the window is that large.
+        const int peak = st.peak_frames_held.load();
+        CHECK(peak >= 2);
+        CHECK(peak <= 2 * window + 3);
+        if (window < 36) CHECK(peak < 76);
         CHECK(st.frames_decoded >= 2 * 75);
         CHECK(st.frames_decoded <= 2 * 76 + 1);
     }
     fs::remove(p);
+}
+
+// Both runs lose the disc at a hard cut: gone stays gone, and the boxes (here
+// nothing after the cut) equal the reference, with the backward run stopping early.
+TEST_CASE("tracking between keys on a cut clip equals the reference") {
+    const fs::path p = TempPath("samn_between_cut").replace_extension(".mp4");
+    REQUIRE(WriteHardCut(p, 4, 50, 60.0));
+    const samn::LabelBox a = DiscAt(0, 60, 0.5);
+    for (const int window : {3, 24}) {
+        INFO("window " << window);
+        const auto ref = HoldEverything(p, 0, a, 3000, a, 200, 640);
+        samn::engine::BetweenKeysOptions o;
+        o.window_frames = window;
+        std::string error;
+        const auto r = samn::engine::TrackBetweenKeys(p, 0, a, 3000, a, o, &error);
+        INFO(error);
+        REQUIRE(r);
+        CheckSameRun(r->forward, ref.forward);
+        CheckSameRun(r->backward, ref.backward);
+    }
+    fs::remove(p);
+}
+
+// Cancel at the k-th poll, wherever it falls (decode, forward, backward chunk
+// edges): always "canceled", never a hang or another error.
+TEST_CASE("tracking between keys cancels after k polls") {
+    const fs::path p = TempPath("samn_between_cancel").replace_extension(".mp4");
+    REQUIRE(WriteMoving(p, 3, 60.0, 0.5));
+    for (const int k : {1, 2, 10, 40, 51, 60, 80, 95}) {
+        INFO("poll " << k);
+        samn::engine::BetweenKeysOptions o;
+        o.window_frames = 8;
+        int polls = 0;
+        o.cancel = [&] { return ++polls >= k; };
+        std::string error;
+        CHECK_FALSE(samn::engine::TrackBetweenKeys(p, 0, DiscAt(0, 60, 0.5), 2000, DiscAt(2000, 60, 0.5), o, &error));
+        CHECK(error == "canceled");
+    }
+    fs::remove(p);
+}
+
+// A key box outside the frame is reported after the checks on the stretch, as
+// it was: a too-long stretch says "too long", not the box.
+TEST_CASE("tracking between keys reports the stretch before the box") {
+    const fs::path p = TempPath("samn_between_box").replace_extension(".mp4");
+    REQUIRE(WriteMoving(p, 3, 60.0, 0.5));
+    const samn::LabelBox outside{5000, 5000, 70, 70};
+    samn::engine::BetweenKeysOptions o;
+    std::string error;
+    CHECK_FALSE(samn::engine::TrackBetweenKeys(p, 0, outside, 2000, DiscAt(2000, 60, 0.5), o, &error));
+    CHECK(error.find("outside the frame") != std::string::npos);
+    CHECK_FALSE(samn::engine::TrackBetweenKeys(p, 0, DiscAt(0, 60, 0.5), 2000, outside, o, &error));
+    CHECK(error.find("outside the frame") != std::string::npos);
+    o.max_frames = 5;
+    CHECK_FALSE(samn::engine::TrackBetweenKeys(p, 0, outside, 2000, DiscAt(2000, 60, 0.5), o, &error));
+    CHECK(error.find("too long") != std::string::npos);
+    fs::remove(p);
+}
+
+namespace {
+bool HaveFfmpeg() {
+#ifdef _WIN32
+    return std::system("ffmpeg -version >nul 2>&1") == 0;
+#else
+    return std::system("ffmpeg -version >/dev/null 2>&1") == 0;
+#endif
+}
+// Re-encodes `in` with ffmpeg; the filter and flags make it variable frame rate
+// or long-GOP. False when ffmpeg fails.
+bool Reencode(const fs::path& in, const fs::path& out, const std::string& flags) {
+#ifdef _WIN32
+    const std::string quiet = " >nul 2>&1";
+#else
+    const std::string quiet = " >/dev/null 2>&1";
+#endif
+    const std::string cmd = "ffmpeg -y -i \"" + in.string() + "\" " + flags + " \"" + out.string() + "\"" + quiet;
+    return std::system(cmd.c_str()) == 0;
+}
+}  // namespace
+
+// Variable frame rate (phones record it) and a long GOP: a seek lands by the
+// nominal rate, after the wanted frame on VFR. The old algorithm worked on
+// these; so must the windowed one, with the same boxes. Needs the ffmpeg
+// program (synthetic pattern re-encoded; nothing is stored); without it the
+// case says so and passes vacuously: CI has ffmpeg.
+TEST_CASE("tracking between keys on variable-rate and long-GOP clips equals the reference") {
+    if (!HaveFfmpeg()) {
+        MESSAGE("SKIPPED: ffmpeg is not installed here; the VFR and long-GOP checks did not run");
+        return;
+    }
+    const fs::path src = TempPath("samn_between_cfr").replace_extension(".mp4");
+    REQUIRE(WriteMoving(src, 4, 60.0, 0.5));  // 100 frames
+    struct Variant { std::string name; std::string flags; };
+    const Variant variants[] = {
+        {"vfr irregular drops", "-vf \"select='not(eq(mod(n,5),1)+eq(mod(n,7),3))'\" -fps_mode vfr -c:v mpeg4"},
+        {"vfr every third dropped", "-vf \"select='gt(mod(n,3),0)'\" -fps_mode vfr -c:v mpeg4"},
+        {"long gop", "-c:v mpeg4 -g 300 -bf 0"},
+    };
+    for (const auto& v : variants) {
+        INFO(v.name);
+        const fs::path clip = TempPath("samn_between_var").replace_extension(".mp4");
+        if (!Reencode(src, clip, v.flags)) {
+            MESSAGE("SKIPPED " << v.name << ": this ffmpeg could not make it");
+            continue;
+        }
+        for (const int64_t from : {int64_t(0), int64_t(500)}) {
+            const int64_t to = from + 2500;
+            const samn::LabelBox a = DiscAt(from, 60, 0.5), b = DiscAt(to, 60, 0.5);
+            const auto ref = HoldEverything(clip, from, a, to, b, 200, 640);
+            REQUIRE(ref.forward.size() >= 10);
+            for (const int window : {1, 3, 24}) {
+                INFO("from " << from << " window " << window);
+                samn::engine::BetweenKeysOptions o;
+                o.window_frames = window;
+                std::string error;
+                const auto r = samn::engine::TrackBetweenKeys(clip, from, a, to, b, o, &error);
+                INFO(error);
+                REQUIRE(r);
+                CheckSameRun(r->forward, ref.forward);
+                CheckSameRun(r->backward, ref.backward);
+            }
+        }
+        fs::remove(clip);
+    }
+    fs::remove(src);
 }
