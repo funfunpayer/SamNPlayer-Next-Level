@@ -430,12 +430,11 @@ private slots:
             QVERIFY(player);
             auto* apply = root->findChild<QQuickItem*>("applySuggestedOZone");
             auto* ring = root->findChild<QQuickItem*>("ringDown");
-            auto* ring2 = root->findChild<QQuickItem*>("ringDownTwo");
             auto* check = root->findChild<QQuickItem*>("checkPolarity");
-            QVERIFY(apply && ring && ring2 && check);
+            QVERIFY(apply && ring && check);
             QCOMPARE(apply->property("text").toString(), QStringLiteral("Apply suggested O-zone"));
             QCOMPARE(ring->property("text").toString(), QStringLiteral("Ring-down at playhead"));
-            QCOMPARE(ring2->property("text").toString(), QStringLiteral("2 cycles"));
+            QCOMPARE(check->property("text").toString(), QStringLiteral("Check / invert direction"));
             QVERIFY(!apply->isEnabled());
             QVERIFY(!ring->isEnabled());
             QVERIFY(player->openPath(src));
@@ -444,8 +443,6 @@ private slots:
             auto* reason = root->findChild<QQuickItem*>("polarityReason");
             QVERIFY(reason);
             QTRY_VERIFY(reason->isVisible());
-            QVERIFY(!reason->property("text").toString().isEmpty());
-            QVERIFY(QMetaObject::invokeMethod(check, "clicked"));
             QVERIFY(!reason->property("text").toString().isEmpty());
 
             const int points = player->pointCount();

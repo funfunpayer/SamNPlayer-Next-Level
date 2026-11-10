@@ -250,9 +250,20 @@ Column {
         }
         FlowButton {
             objectName: "checkPolarity"
-            text: qsTr("Check polarity")
+            text: qsTr("Check / invert direction")
             enabled: ctrl.hasScript
-            onClicked: suggest.polarityTick += 1
+            onClicked: {
+                const r = ctrl.applyPolaritySuggestion()
+                suggest.polarityTick += 1
+                if (r.error) {
+                    suggest.actionNote = r.error
+                    rootPanel.projectStatus = r.error
+                } else if (r.applied) {
+                    suggest.actionNote = ctrl.toolNote || r.reason
+                } else {
+                    suggest.actionNote = r.reason || ""
+                }
+            }
         }
         FlowButton {
             objectName: "applySuggestedOZone"
@@ -273,30 +284,16 @@ Column {
             }
         }
         InspectorNote { objectName: "ozoneNote"; visible: suggest.zoneNote !== ""; text: suggest.zoneNote }
-        Row {
-            spacing: 8
-            FlowButton {
-                objectName: "ringDown"
-                text: qsTr("Ring-down at playhead")
-                enabled: ctrl.hasScript
-                onClicked: {
-                    if (ctrl.applyRingDown(1)) suggest.actionNote = ctrl.toolNote
-                    else {
-                        suggest.actionNote = ctrl.lastError
-                        rootPanel.projectStatus = ctrl.lastError
-                    }
-                }
-            }
-            FlowButton {
-                objectName: "ringDownTwo"
-                text: qsTr("2 cycles")
-                enabled: ctrl.hasScript
-                onClicked: {
-                    if (ctrl.applyRingDown(2)) suggest.actionNote = ctrl.toolNote
-                    else {
-                        suggest.actionNote = ctrl.lastError
-                        rootPanel.projectStatus = ctrl.lastError
-                    }
+        FlowButton {
+            objectName: "ringDown"
+            text: qsTr("Ring-down at playhead")
+            enabled: ctrl.hasScript
+            onClicked: {
+                // 0.7 always uses 2 cycles.
+                if (ctrl.applyRingDown(2)) suggest.actionNote = ctrl.toolNote
+                else {
+                    suggest.actionNote = ctrl.lastError
+                    rootPanel.projectStatus = ctrl.lastError
                 }
             }
         }

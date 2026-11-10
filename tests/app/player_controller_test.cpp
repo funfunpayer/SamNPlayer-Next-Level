@@ -2065,8 +2065,22 @@ private slots:
         QCOMPARE(hint.value("error").toString(), QString());
         QCOMPARE(hint.value("suggestInvert").toBool(), true);
         QVERIFY(hint.value("reason").toString().contains("invert"));
-        // A hint only: the file is not flipped.
-        QCOMPARE(samn::LoadFunscript(std::filesystem::u8path(path.toStdString())).actions[0].pos, 10);
+
+        const QVariantMap applied = c.applyPolaritySuggestion();
+        QCOMPARE(applied.value("error").toString(), QString());
+        QCOMPARE(applied.value("applied").toBool(), true);
+        QCOMPARE(samn::LoadFunscript(std::filesystem::u8path(path.toStdString())).actions[0].pos, 90);
+        QVERIFY(!samn::LoadFunscript(std::filesystem::u8path(path.toStdString())).inverted);
+
+        // High first half: reason only, no write.
+        const QString high = d.filePath("high.funscript");
+        writeFile(high, R"({"actions":[{"at":0,"pos":80},{"at":100,"pos":90},{"at":200,"pos":85},{"at":300,"pos":20},{"at":400,"pos":10}]})");
+        PlayerController h;
+        QVERIFY(h.openScript(high));
+        const QVariantMap skip = h.applyPolaritySuggestion();
+        QCOMPARE(skip.value("applied").toBool(), false);
+        QCOMPARE(skip.value("suggestInvert").toBool(), false);
+        QCOMPARE(samn::LoadFunscript(std::filesystem::u8path(high.toStdString())).actions[0].pos, 80);
     }
 
     void applyRingDownRejectsLowAndAppendsEndingAtZero() {

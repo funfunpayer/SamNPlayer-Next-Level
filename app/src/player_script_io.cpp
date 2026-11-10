@@ -3,8 +3,11 @@
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QImage>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
@@ -599,13 +602,83 @@ bool PlayerController::invertAll() {
 
 QVariantMap PlayerController::suggestPolarity() {
     // stroke_ is the curve Play shows (an OFS inverted flag is already baked
-    // in when that setting is on). A hint only: nothing is flipped here.
+    // in when that setting is on).
     if (scriptPath_.isEmpty() || stroke_.empty())
         return {{"suggestInvert", false}, {"reason", QString()}, {"error", tr("no script loaded")}};
     const samn::PolarityHint hint = samn::SuggestPolarity(stroke_);
     return {{"suggestInvert", hint.suggest_invert},
             {"reason", QString::fromStdString(hint.reason)},
             {"error", QString()}};
+}
+
+QVariantMap PlayerController::applyPolaritySuggestion() {
+    const QVariantMap hint = suggestPolarity();
+    if (!hint.value(QStringLiteral("error")).toString().isEmpty())
+        return {{"applied", false},
+                {"suggestInvert", false},
+                {"reason", QString()},
+                {"error", hint.value(QStringLiteral("error"))}};
+    const QString reason = hint.value(QStringLiteral("reason")).toString();
+    const bool suggest = hint.value(QStringLiteral("suggestInvert")).toBool();
+    if (!suggest) {
+        setError({});
+        return {{"applied", false}, {"suggestInvert", false}, {"reason", reason}, {"error", QString()}};
+    }
+    // Store 100−pos of the played curve (0.7 InvertLoadedScript). Not invertAll:
+    // that would leave an inverted flag in place and flip twice on reload.
+    if (!applySelectionEdit(
+            tr("Invert polarity"),
+            [](std::vector<samn::Action> a) {
+                for (auto& x : a) x.pos = 100 - x.pos;
+                return a;
+            },
+            false, true)) {
+        return {{"applied", false},
+                {"suggestInvert", true},
+                {"reason", reason},
+                {"error", lastError_}};
+    }
+    // Clear OFS inverted so Play does not flip the baked curve again.
+    namespace fs = std::filesystem;
+    const std::string openedU8 = U8(scriptPath_);
+    const bool wasSamn = samn::IsSamnPath(openedU8);
+    const fs::path funscript =
+        fs::u8path(wasSamn ? samn::CompanionFunscriptPath(openedU8) : openedU8);
+    if (fs::exists(funscript)) {
+        try {
+            QFile f(FromU8(funscript.u8string()));
+            if (f.open(QIODevice::ReadOnly)) {
+                const QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
+                f.close();
+                if (doc.isObject()) {
+                    QJsonObject o = doc.object();
+                    if (o.contains(QStringLiteral("inverted"))) {
+                        o.remove(QStringLiteral("inverted"));
+                        if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate) ||
+                            f.write(QJsonDocument(o).toJson(QJsonDocument::Indented)) < 0) {
+                            setFailure(tr("Could not clear the inverted flag."));
+                            return {{"applied", true},
+                                    {"suggestInvert", true},
+                                    {"reason", reason},
+                                    {"error", lastError_}};
+                        }
+                        f.close();
+                        // Reload so stroke_ matches the cleared flag.
+                        if (!reloadKeepingCurveHistory(scriptPath_)) {
+                            return {{"applied", true},
+                                    {"suggestInvert", true},
+                                    {"reason", reason},
+                                    {"error", lastError_}};
+                        }
+                    }
+                }
+            }
+        } catch (...) {
+        }
+    }
+    toolNote_ = tr("Polarity inverted · %1").arg(reason);
+    emit toolNoteChanged();
+    return {{"applied", true}, {"suggestInvert", true}, {"reason", reason}, {"error", QString()}};
 }
 
 bool PlayerController::applyRingDown(int cycles) {

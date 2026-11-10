@@ -346,16 +346,19 @@ public:
     Q_INVOKABLE bool deleteSelection();
     Q_INVOKABLE bool invertSelection();
     Q_INVOKABLE bool invertAll();
-    // 0.7 SuggestPolarity: a hint on the curve Play shows. Never flips it.
-    // {suggestInvert, reason, error}.
+    // 0.7 SuggestPolarity on the curve Play shows. {suggestInvert, reason, error}.
     Q_INVOKABLE QVariantMap suggestPolarity();
+    // 0.7 Check / invert direction: flips 100−pos of the played curve only when
+    // suggest_invert, clears the OFS inverted flag, reloads. Otherwise returns
+    // the reason and writes nothing. {applied, suggestInvert, reason, error}.
+    Q_INVOKABLE QVariantMap applyPolaritySuggestion();
     // 0.7 ApplySuggestedOZone: saves the suggested range as the marker and
     // appends primary + secondary O-markers (AutoOZoneMarkers). Never inverts.
     // {ok, startMs, endMs, reason, mean, error}.
     Q_INVOKABLE QVariantMap applySuggestedOZone();
     // 0.7 ApplyRingDown at the playhead (script time), on the stroke axis.
-    // cycles clamps to 1–2. A position under 10 is refused.
-    Q_INVOKABLE bool applyRingDown(int cycles = 1);
+    // cycles clamps to 1–2 (0.7 button uses 2). A position under 10 is refused.
+    Q_INVOKABLE bool applyRingDown(int cycles = 2);
     Q_INVOKABLE bool undo();
     Q_INVOKABLE bool redo();
     bool canUndo() const { return editSession_.CanUndo(); }
