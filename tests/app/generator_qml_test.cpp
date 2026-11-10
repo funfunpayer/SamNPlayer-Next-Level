@@ -698,6 +698,61 @@ private slots:
         gen->setOptimizeTarget(QString());
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
     }
+
+    // Review-card Improve panel: Start/End, Fill and Heal defaults, button
+    // runs EditorController::improveScript on the open script.
+    void improvePanelShowsAndRuns() {
+        g_messages.clear();
+        QTemporaryDir scripts;
+        QVERIFY(scripts.isValid());
+        const QString script = scripts.filePath(QStringLiteral("clip.funscript"));
+        {
+            QFile f(script);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(R"({"actions":[{"at":0,"pos":10},{"at":2000,"pos":90}]})");
+        }
+        QQmlEngine engine;
+        engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
+        engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+        engine.addImageProvider(QStringLiteral("frames"), new samn::ui::FrameProvider);
+        QQmlComponent comp(&engine);
+        comp.setData(R"(
+            import QtQuick
+            import SamN
+            Rectangle {
+                width: 1400; height: 820; color: "#021024"
+                property alias page: gp
+                GeneratorPage { id: gp; anchors.fill: parent; anchors.margins: 20 }
+            })",
+                     QUrl("qrc:/test/ImprovePanel.qml"));
+        QVERIFY2(comp.status() == QQmlComponent::Ready, qPrintable(comp.errorString()));
+        QQuickWindow window;
+        window.resize(1400, 820);
+        std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
+        QVERIFY(root);
+        root->setParentItem(window.contentItem());
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto* page = root->property("page").value<QQuickItem*>();
+        auto* edit = page->property("editor").value<QObject*>();
+        QVERIFY(page && edit);
+        bool opened = false;
+        QVERIFY(QMetaObject::invokeMethod(edit, "open", Q_RETURN_ARG(bool, opened), Q_ARG(QString, script)));
+        QVERIFY(opened);
+        QTRY_VERIFY(named(root.get(), "improvePanel")->isVisible());
+        QVERIFY(named(root.get(), "improveStart"));
+        QVERIFY(named(root.get(), "improveEnd"));
+        QCOMPARE(named(root.get(), "improveFill")->property("checked").toBool(), true);
+        QCOMPARE(named(root.get(), "improveHeal")->property("checked").toBool(), true);
+        QVERIFY(named(root.get(), "improveButton")->isVisible());
+        QMetaObject::invokeMethod(named(root.get(), "improveButton"), "clicked");
+        const QString status = edit->property("status").toString();
+        QVERIFY2(status.startsWith("Improved:"), qPrintable(status));
+        QTRY_VERIFY(named(root.get(), "improveStatus")->isVisible());
+        QVERIFY2(named(root.get(), "improveStatus")->property("text").toString().startsWith("Improved:"),
+                 qPrintable(named(root.get(), "improveStatus")->property("text").toString()));
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
+    }
 };
 
 QTEST_MAIN(GeneratorQmlTest)

@@ -754,6 +754,64 @@ private slots:
         QCOMPARE(LaneAt(Actions(path), 2000), edited);
     }
 
+    // Review-panel Improve script: Start/End trim, fill gaps, heal tracking
+    // gaps. Same save/reload as optimizeFor (one undo step).
+    void improveScriptTrimsFillsAndHeals() {
+        EditorController empty;
+        QVERIFY(empty.improveScript(0, 0, true, true).isEmpty());
+
+        const QString trimPath = dir_.filePath("improve-trim.funscript");
+        std::ofstream(Fs(trimPath)) << R"({"version":"1.0","actions":[)"
+                                       R"({"at":0,"pos":0},{"at":1000,"pos":50},{"at":2000,"pos":100},)"
+                                       R"({"at":3000,"pos":50},{"at":4000,"pos":0}]})";
+        EditorController trim;
+        QVERIFY(trim.open(trimPath));
+        const QString trimmed = trim.improveScript(1.0, 3.0, false, false);
+        QVERIFY2(trimmed.startsWith("Improved:"), qPrintable(trimmed));
+        QVERIFY2(trimmed.contains("trimmed"), qPrintable(trimmed));
+        const auto& tStroke = trim.session().Axis("stroke");
+        QCOMPARE(tStroke.front().at, int64_t(1000));
+        QCOMPARE(tStroke.back().at, int64_t(3000));
+        QCOMPARE(int(samn::LoadFunscript(Fs(trimPath)).actions.size()), int(tStroke.size()));
+        QCOMPARE(trim.undoText(), QStringLiteral("Undo: Improve script"));
+        QVERIFY(trim.undo());
+        QCOMPARE(trim.session().Axis("stroke").front().at, int64_t(0));
+        QCOMPARE(trim.session().Axis("stroke").back().at, int64_t(4000));
+
+        const QString fillPath = dir_.filePath("improve-fill.funscript");
+        std::ofstream(Fs(fillPath)) << R"({"version":"1.0","actions":[{"at":0,"pos":0},{"at":2000,"pos":100}]})";
+        EditorController fill;
+        QVERIFY(fill.open(fillPath));
+        const size_t fillBefore = fill.session().Axis("stroke").size();
+        const QString filled = fill.improveScript(0, 0, true, false);
+        QVERIFY2(filled.startsWith("Improved:"), qPrintable(filled));
+        QVERIFY2(filled.contains("+") && filled.contains("pts"), qPrintable(filled));
+        QVERIFY(fill.session().Axis("stroke").size() > fillBefore);
+        QCOMPARE(int(samn::LoadFunscript(Fs(fillPath)).actions.size()), int(fill.session().Axis("stroke").size()));
+
+        const QString healPath = dir_.filePath("improve-heal.funscript");
+        {
+            std::ofstream f(Fs(healPath));
+            f << R"({"version":"1.0","actions":[)";
+            for (int t = 0; t <= 1000; t += 100) f << R"({"at":)" << t << R"(,"pos":)" << (t / 100 % 2 ? 90 : 10) << "},";
+            f << R"({"at":1500,"pos":99},{"at":4000,"pos":90},{"at":4100,"pos":10},{"at":4200,"pos":90}],)"
+              << R"("metadata":{"tracking_gaps":[{"start_ms":1100,"end_ms":1900}]}})";
+        }
+        EditorController heal;
+        QVERIFY(heal.open(healPath));
+        const size_t healBefore = heal.session().Axis("stroke").size();
+        const QString healed = heal.improveScript(0, 0, true, true);
+        QVERIFY2(healed.startsWith("Improved:"), qPrintable(healed));
+        QVERIFY2(healed.contains("healed 1"), qPrintable(healed));
+        const auto& hStroke = heal.session().Axis("stroke");
+        QVERIFY(hStroke.size() > healBefore);
+        for (const auto& a : hStroke) QVERIFY(!(a.at == 1500 && a.pos == 99));
+        QVERIFY(samn::LoadFunscript(Fs(healPath)).metadata.tracking_gaps.empty());
+        QCOMPARE(int(samn::LoadFunscript(Fs(healPath)).actions.size()), int(hStroke.size()));
+        QVERIFY(heal.undo());
+        QCOMPARE(heal.session().Axis("stroke").size(), healBefore);
+    }
+
     // A chapter removed in the Player (from the .samn) stays removed in the
     // Editor, even though the .funscript beside it still lists it.
     void theSamnScenesCountEvenWhenEmpty() {

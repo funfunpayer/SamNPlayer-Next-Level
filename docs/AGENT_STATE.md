@@ -2,7 +2,14 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 10 Nov 2026, Cursor, branch `cursor/settings-diag-history-635a`: Settings → Device diagnostics history (JSONL). Rebased onto main after axis legend (#228). Quality first; CPU/RAM for speed+quality. #217 still owner-reviewed. Do not touch feel_heatbands / Speech-Hold / intensity-arc / handbook / `.sam`.
+**Last update:** 10 Nov 2026, Cursor, branch `cursor/gen-improve-panel-635a`: Generator review-card Improve script (Start/End trim + Fill gaps + Heal tracking gaps). Quality first. Do not touch HealRhythm / RepairSpans / StampTrackingGaps / audio check / Speech-Hold / feel_heatbands / handbook / `.sam` / intensity-arc.
+
+## Handover: Generator Improve panel (10 Nov)
+
+PARITY_REMAINING item 10 (the panel pieces only). Review card on Generator Create: Start (s) / End (s) trim (0 = unbound), Fill gaps (default on), Heal tracking gaps (default on), button Improve script. `EditorController::improveScript` wraps `samn::ImproveScript` (trim → heal → fill); same save/reload as Optimize for. Status `Improved: N points (healed N · +N pts · trimmed) — open Play to edit dots/curve.` Left open: Align fill to audio tempo, audio check, Rhythm bridge, Repair this span.
+
+- **App:** `EditorController::improveScript(startSec, endSec, fillGaps, healTrackingGaps)`; QML `improvePanel` on `GeneratorPage` after `qualityBox`. HelpChips: `generator.start-s` / `generator.end-s` / `gen-improve-fill` / `gen-improve-heal`.
+- **Tests:** `editor_controller_test` `improveScriptTrimsFillsAndHeals`; `generator_qml_test` `improvePanelShowsAndRuns`.
 
 ## Handover: device diagnostics history (10 Nov)
 
