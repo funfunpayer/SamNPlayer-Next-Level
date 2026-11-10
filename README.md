@@ -48,8 +48,9 @@ on the right (devices, audio, playback, view); both slide away for more room (to
 <kbd>Alt</kbd>+<kbd>B</kbd>). The timeline below shows the stroke curve, feel lanes, audio level,
 chapters and the heatmap. Turn on **Scene markers** to see chapter bands and a strip of video
 thumbnails under the lanes (click a thumb to seek). A fast script seen from far away becomes a
-calm **tempo** wave; zooming in shows the single strokes. Lane names on the left are the axis
-legend — click one (or use the arrow keys) to show that channel on the main curve.
+calm **tempo** wave; zooming in shows the single strokes. When a script has more than one channel,
+axis chips sit above the time ruler (and names stay on the left) — click one or use the arrow keys
+to show that channel on the main curve.
 
 <p align="center">
   <img src="docs/media/gui-player.png" alt="Player mode — video stage, transport, timeline, Inspector" width="900" />

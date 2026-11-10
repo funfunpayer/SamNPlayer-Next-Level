@@ -338,16 +338,21 @@ private:
             QCoreApplication::sendEvent(area, &leave);
             QTRY_VERIFY(!tip->isVisible());
         }
-        // 0.7 legend chips: a click on a lane's name shows it in the main curve;
+        // 0.7 legend chips: toolbar row above the ruler + left name column.
         // Up / Down move on (two lanes: stroke and twist, wrapping).
+        auto* legend = named(page, "axisLegend");
+        QVERIFY(legend && legend->isVisible());
+        auto* twistChip = named(page, "axisChip_twist");
+        QVERIFY(twistChip && twistChip->isVisible());
         auto* twistName = named(page, "laneName_twist");
         QVERIFY(twistName && twistName->isVisible());
         QTest::mouseClick(page->window(), Qt::LeftButton, {},
-                          twistName->mapToScene(QPointF(twistName->width() / 2, twistName->height() / 2)).toPoint());
+                          twistChip->mapToScene(QPointF(twistChip->width() / 2, twistChip->height() / 2)).toPoint());
         QTRY_COMPARE(ctrl->activeLane(), QStringLiteral("twist"));
         QCOMPARE(named(page, "mainCurve")->property("lane").toString(), QStringLiteral("twist"));
         QCOMPARE(named(page, "mainCurveLane")->property("text").toString(), QStringLiteral("Twist"));
         QVERIFY(twistName->property("active").toBool());
+        QVERIFY(twistChip->property("active").toBool());
         QTest::keyClick(page->window(), Qt::Key_Down);
         QTRY_COMPARE(ctrl->activeLane(), QStringLiteral("stroke"));
         QCOMPARE(named(page, "mainCurve")->property("lane").toString(), QStringLiteral("stroke"));

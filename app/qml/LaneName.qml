@@ -15,8 +15,8 @@ Item {
     signal picked()
     signal stepped(int delta)
     implicitWidth: chip ? dotGlow.width + nameText.implicitWidth + (selectable ? 20 : 14) : (parent ? parent.width : 108)
-    implicitHeight: chip ? 28 : undefined
     width: chip ? implicitWidth : (parent ? parent.width : 108)
+    height: chip ? 28 : implicitHeight
     activeFocusOnTab: selectable
     Accessible.role: selectable ? Accessible.Button : Accessible.StaticText
     Accessible.name: name
