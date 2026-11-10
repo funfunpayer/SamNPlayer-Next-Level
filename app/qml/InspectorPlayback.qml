@@ -525,6 +525,7 @@ Column {
         }
         InspectorSliderRow {
             label: qsTr("Minimum")
+            help: "playback.amplitude"
             tip: qsTr("Height of the curve while held, as a share of the script (0 % = off). Default 10 %.")
             from: 0; to: 1; value: ctrl.output.extendedOMin
             valueText: ctrl.output.extendedOMin === 0 ? qsTr("0 % (off)") : Math.round(ctrl.output.extendedOMin * 100) + " %"
