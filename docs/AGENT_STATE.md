@@ -13,6 +13,16 @@ PARITY_REMAINING item 21 (placements only). HelpChips next to the main Training 
 - **Tests:** `training_qml_test` `helpChipsResolveOnThePage`; `shell_qml_test` `libraryHelpChipsResolve` (open/Esc on Local Files). `helpKeysInTheQmlSourcesExist` covers the new keys.
 - **Left open:** handbook parts for audio vibration, BPM from audio, Sound Curve, Auto sync; more placements elsewhere.
 
+## Handover: README + light GUI polish (10 Nov)
+
+README Player / Generator / Devices / Status only — no version bump, no 100 % parity claim. HelpChips mentioned generically (Training/Library placements may still be open).
+
+- **README:** Player Suggest (polarity / O-zone / ring-down), Script check & analysis, axis chips, scene thumbs, ? chips; Generator Improve script on the review card; Settings Device Previous runs, System metrics path, Updates check+link. Status: Player/Training strong, Generator review improving, first release when core paths feel solid.
+- **Bugs:** Improve panel `lastStatus` and Playback Suggest `zoneNote`/`actionNote` lingered after a new script (Doctor already cleared its verdict). Cleared on `scriptChanged`.
+- **Polish:** Improve blurb says Start/End 0 = leave that end; Previous runs heading says newest first. `PositionGauge` knob `y` and Inspector channel fill follow reduced motion (`Theme.animFast` / duration 0). Training start-blocked flash does not run under reduced motion.
+- **Tests:** `generator_qml_test` `improvePanelShowsAndRuns` opens a second script and the status hides; `inspector_qml_test` `playbackSuggestCard` same for O-zone / ring-down notes.
+- **Left open:** Improve extras (audio tempo / rhythm / repair span), report engine buttons, feel_heatbands.
+
 ## Handover: generator.reportPath (10 Nov)
 
 PARITY_REMAINING item 3/6 (the path key only). Settings → System (health check tab) has a Generator metrics card: path field, Choose… (`FileDialog` SaveFile), Default (clears to `""`), status empty → "No metrics recorded yet (path empty)." / non-empty → the path. Empty means no recording; there is no report engine yet, so no Show summary / Show model / Learn from judgments. Left open: `playback.feel_heatbands`, the three report-engine buttons.

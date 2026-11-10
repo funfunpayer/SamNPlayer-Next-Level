@@ -30,11 +30,11 @@
 
 SamNPlayer Next is the successor of [SamNPlayer 0.7 / 0.8](https://github.com/funfunpayer/SamNPlayer),
 rebuilt from the ground up in **C++** with **Qt 6** and a **QML** interface in the animated Flow look.
-It keeps every function of 0.7 and 0.8 (the checklist is [`docs/PARITY.md`](docs/PARITY.md)) and is
-faster, smaller and open source.
+The 0.7 / 0.8 checklist is [`docs/PARITY.md`](docs/PARITY.md). It is faster, smaller and open source.
 
-> **Status:** in development. Every CI run builds a Windows test package (see [Download](#download)).
-> The first release follows when the Player, Generator and Training are complete.
+> **Status:** in development. Player and Training are strong; Generator review is improving.
+> Every CI run builds a Windows test package (see [Download](#download)).
+> The first release follows when the core paths feel solid.
 
 ## The modes
 
@@ -45,12 +45,18 @@ The device connection, the folder button and Settings sit on the right and are s
 
 Play a script with its video and your device. The Library is on the left and the Inspector
 on the right (devices, audio, playback, view); both slide away for more room (top-bar toggle or
-<kbd>Alt</kbd>+<kbd>B</kbd>). The timeline below shows the stroke curve, feel lanes, audio level,
-chapters and the heatmap. Turn on **Scene markers** to see chapter bands and a strip of video
-thumbnails under the lanes (click a thumb to seek). A fast script seen from far away becomes a
-calm **tempo** wave; zooming in shows the single strokes. When a script has more than one channel,
-axis chips sit above the time ruler (and names stay on the left) — click one or use the arrow keys
-to show that channel on the main curve.
+<kbd>Alt</kbd>+<kbd>B</kbd>). Small **?** chips next to several controls open a short help note.
+
+The timeline below shows the stroke curve, feel lanes, audio level, chapters and the heatmap.
+Turn on **Scene markers** to see chapter bands and a strip of video thumbnails under the lanes
+(click a thumb to seek). A fast script seen from far away becomes a calm **tempo** wave; zooming
+in shows the single strokes. When a script has more than one channel, axis chips sit above the
+time ruler (and names stay on the left) — click one or use the arrow keys to show that channel
+on the main curve.
+
+Playback → **Suggest** can check or invert direction, apply a suggested O-zone, or add a ring-down
+at the playhead. **Script check & analysis** shows a motion summary when the script has enough
+points, then a quality check.
 
 <p align="center">
   <img src="docs/media/gui-player.png" alt="Player mode — video stage, transport, timeline, Inspector" width="900" />
@@ -66,7 +72,8 @@ Generator with that video.
 Make a script from your own video in five steps: video → tip & contact → feel → create → review.
 Classical tracking does the work; nothing is written without you. The Generator is also the
 **Editor**: open any script, drag, add or delete points, undo / redo, and prepare it for a device.
-Several videos can wait in a queue.
+Several videos can wait in a queue. On the review card, **Improve script** can trim Start/End
+(0 = leave that end), fill long gaps and heal tracker-loss windows.
 
 <p align="center">
   <img src="docs/media/gui-generator.png" alt="Generator mode — steps, feel settings, Create, curves" width="900" />
@@ -100,7 +107,9 @@ always follows the training, not the film.
 | Intiface Central (Buttplug) | the devices Intiface supports |
 | Mock device | no hardware, for trying things out |
 
-Settings → Device has a function test, a raw value test and a diagnostics table.
+Settings → Device has a function test, a raw value test, a diagnostics table and **Previous runs**
+(newest first). Settings → System can store a Generator metrics path. Settings → General → Updates
+checks GitHub and can open the download page; the app does not install anything.
 
 ## Download
 

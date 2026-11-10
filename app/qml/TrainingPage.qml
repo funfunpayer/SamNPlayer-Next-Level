@@ -480,7 +480,7 @@ Item {
                         NumberAnimation { target: noteBox; property: "scale"; to: 1.0; duration: 160 }
                     }
                 }
-                Connections { target: ctl; function onStartBlocked() { flash.restart() } }
+                Connections { target: ctl; function onStartBlocked() { if (!Theme.reducedMotion) flash.restart() } }
             }
 
             // Session bar: time, transport, phase.

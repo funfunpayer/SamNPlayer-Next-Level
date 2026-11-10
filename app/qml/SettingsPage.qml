@@ -697,7 +697,7 @@ Item {
                                 objectName: "diagHistoryHeading"
                                 visible: devTab.diagHistory.length > 0
                                 textFormat: Text.PlainText
-                                text: qsTr("Previous runs")
+                                text: qsTr("Previous runs (newest first)")
                                 color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12; font.weight: Font.Medium
                             }
                             Repeater {

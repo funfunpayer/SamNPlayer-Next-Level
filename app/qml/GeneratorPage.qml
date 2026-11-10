@@ -2442,6 +2442,12 @@ Item {
                         property bool fillGaps: true
                         property bool healGaps: true
                         property string lastStatus: ""
+                        // Improve rewrites the file in place; it does not emit
+                        // scriptChanged. A different script must not keep the old line.
+                        Connections {
+                            target: edit
+                            function onScriptChanged() { improvePanel.lastStatus = "" }
+                        }
                         Text {
                             textFormat: Text.PlainText
                             Layout.fillWidth: true
@@ -2452,7 +2458,7 @@ Item {
                             textFormat: Text.PlainText
                             Layout.fillWidth: true
                             wrapMode: Text.WordWrap
-                            text: qsTr("Trim the ends, heal tracker-loss windows, and fill long gaps. Does not invent motion from audio.")
+                            text: qsTr("Trim Start/End in seconds (0 = leave that end), heal tracker-loss windows, and fill long gaps. Does not invent motion from audio.")
                             color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                         }
                         RowLayout {

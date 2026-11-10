@@ -751,6 +751,17 @@ private slots:
         QTRY_VERIFY(named(root.get(), "improveStatus")->isVisible());
         QVERIFY2(named(root.get(), "improveStatus")->property("text").toString().startsWith("Improved:"),
                  qPrintable(named(root.get(), "improveStatus")->property("text").toString()));
+        const QString other = scripts.filePath(QStringLiteral("other.funscript"));
+        {
+            QFile f(other);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(R"({"actions":[{"at":0,"pos":0},{"at":1000,"pos":100},{"at":2000,"pos":0}]})");
+        }
+        opened = false;
+        QVERIFY(QMetaObject::invokeMethod(edit, "open", Q_RETURN_ARG(bool, opened), Q_ARG(QString, other)));
+        QVERIFY(opened);
+        QTRY_VERIFY(!named(root.get(), "improveStatus")->isVisible());
+        QCOMPARE(named(root.get(), "improvePanel")->property("lastStatus").toString(), QString());
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
     }
 };

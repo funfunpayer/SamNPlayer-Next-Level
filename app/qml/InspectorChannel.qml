@@ -24,7 +24,7 @@ Item {
         Rectangle {
             id: fill
             width: parent.width * ch.value / 100; height: parent.height; radius: 3; color: ch.dot
-            Behavior on width { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
+            Behavior on width { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
             Rectangle {
                 anchors.centerIn: parent
                 width: parent.width + 2; height: parent.height + 4; radius: 4; z: -1
