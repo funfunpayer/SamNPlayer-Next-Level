@@ -26,9 +26,12 @@ Item {
     Keys.onDownPressed: root.stepped(1)
     Keys.onLeftPressed: root.stepped(-1)
     Keys.onRightPressed: root.stepped(1)
-    Keys.onHomePressed: root.stepped(-1000)
-    Keys.onEndPressed: root.stepped(1000)
     Keys.onSpacePressed: root.picked()
+    // Home/End have no Keys.on*Pressed handlers in Qt 6 — route via onPressed.
+    Keys.onPressed: (event) => {
+        if (event.key === Qt.Key_Home) { root.stepped(-1000); event.accepted = true }
+        else if (event.key === Qt.Key_End) { root.stepped(1000); event.accepted = true }
+    }
     Rectangle {
         anchors.fill: parent; anchors.margins: chip ? 0 : 1
         radius: chip ? 14 : 8
