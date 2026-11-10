@@ -1,6 +1,12 @@
-**Last update:** 10 Nov 2026, Cursor, branch `cursor/readme-player-gui-635a`: README Player (scenes/thumbs/legend/Alt+B); LaneName Left/Right/Home/End; PARITY axis-legend tick. Rebased onto main after script analysis (#229) and ring-down (#230). Quality first; CPU/RAM for speed+quality. #217 still owner-reviewed. Do not touch feel_heatbands / Speech-Hold / handbook / .sam.
+**Last update:** 10 Nov 2026, Cursor, branch `cursor/readme-player-gui-635a`: README Player (scenes/thumbs/legend/Alt+B); LaneName Left/Right/Home/End; axis-legend chip pick tests. Rebased onto main after script analysis (#229) and ring-down (#230). Quality first; CPU/RAM for speed+quality. #217 still owner-reviewed. Do not touch feel_heatbands / Speech-Hold / handbook / .sam.
 
-## Handover: script analysis (10 Nov)
+## Handover: axis legend chips (10 Nov, #228)
+
+- **GUI:** `PlayerTimeline` horizontal axis legend chips above the ruler; `LaneName` Left/Right/Home/End via `Keys.onPressed` (Qt 6 has no `onHomePressed`/`onEndPressed`). Chip `MouseArea` at `z:10`; Repeater captures `laneId`.
+- **Tests:** `player_page_qml_test` delivers press/release to the chip `MouseArea` (window `QTest` clicks miss stacked feel-stage areas).
+- **Docs:** README Player scenes/thumbs/legend/Alt+B; PARITY axis-legend tick.
+
+## Handover: script analysis (10 Nov, merged #229)
 
 - **Core:** `motion_classify.h` (0.7 `motionx.Classify`), `motion_chapters.h` (`Chapters`), `script_analysis.h` (`AnalyzeScript` / `summarizeStates`). An empty `ClassifyOptions` does not smooth; only `AnalyzeScriptActions` sets `SmoothRadius` 2. `ScriptChapters` classifies with smoothing off.
 - **Player:** `scriptAnalysisSummary` after a script with at least 4 points, on the Playback card "Script check & analysis" (title gains "· summary ready"). Stored `metadata.chapters` replace the automatic labels (empty name → "chapter", end at or before the start → start+1). Nothing is written back.
