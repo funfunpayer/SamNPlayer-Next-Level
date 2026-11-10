@@ -635,6 +635,48 @@ Item {
                                 }
                             }
                         }
+                        // AI detections (green, first slice): click sets a pending proposal; Apply commits.
+                        Repeater {
+                            model: drag.active ? [] : gen.aiDetections
+                            delegate: Item {
+                                id: aiHit
+                                required property int index
+                                required property var modelData
+                                x: frameView.imageRect.x + modelData.x * parent.scaleX
+                                y: frameView.imageRect.y + modelData.y * parent.scaleY
+                                width: modelData.w * parent.scaleX; height: modelData.h * parent.scaleY
+                                z: 2
+                                Rectangle {
+                                    anchors.fill: parent; color: Qt.rgba(126 / 255, 231 / 255, 135 / 255, 0.10)
+                                    border.color: Qt.rgba(126 / 255, 231 / 255, 135 / 255, 0.65); border.width: 1
+                                }
+                                Rectangle {
+                                    objectName: "aiDetection_" + aiHit.index
+                                    width: 20; height: 20; radius: 10
+                                    color: Qt.rgba(0, 0, 0, 0.6); border.color: "#7ee787"
+                                    Text {
+                                        anchors.centerIn: parent; textFormat: Text.PlainText
+                                        text: aiHit.index + 1; color: "white"; font.pixelSize: 11
+                                    }
+                                    MouseArea {
+                                        anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                                        onClicked: gen.pickAiDetection(aiHit.index)
+                                    }
+                                }
+                            }
+                        }
+                        Rectangle {
+                            objectName: "aiTipProposal"
+                            visible: !drag.active && gen.hasAiTipProposal
+                            readonly property var p: gen.aiTipProposal
+                            x: frameView.imageRect.x + (Number(p.x) || 0) * parent.scaleX
+                            y: frameView.imageRect.y + (Number(p.y) || 0) * parent.scaleY
+                            width: (Number(p.w) || 0) * parent.scaleX
+                            height: (Number(p.h) || 0) * parent.scaleY
+                            z: 3
+                            color: Qt.rgba(126 / 255, 231 / 255, 135 / 255, 0.14)
+                            border.color: "#7ee787"; border.width: 2
+                        }
                         // Find tip's other proposals: dashed, a numbered chip picks one.
                         Repeater {
                             model: drag.active ? [] : gen.tipCandidates
@@ -807,6 +849,37 @@ Item {
                             onClicked: gen.finding && !gen.autoFinding ? gen.cancelFind() : gen.findTip()
                         }
                         HelpChip { key: "gen-autoroi"; Layout.alignment: Qt.AlignVCenter }
+                        FlowButton {
+                            objectName: "suggestAiTip"
+                            text: gen.suggestingAiTip ? qsTr("Looking…") : qsTr("Suggest tip (AI)")
+                            enabled: !gen.running && gen.aiTipAvailable && !gen.suggestingAiTip
+                            onClicked: gen.suggestAiTip()
+                        }
+                        HelpChip { key: "gen-ai-tip"; Layout.alignment: Qt.AlignVCenter }
+                        FlowButton {
+                            objectName: "applyAiTip"
+                            visible: gen.hasAiTipProposal
+                            primary: true
+                            text: qsTr("Apply AI tip")
+                            enabled: !gen.running
+                            onClicked: gen.applyAiTip()
+                        }
+                        FlowButton {
+                            objectName: "dismissAiTip"
+                            visible: gen.hasAiTipProposal || gen.aiDetections.length > 0
+                            text: qsTr("Dismiss")
+                            enabled: !gen.running
+                            onClicked: gen.dismissAiTip()
+                        }
+                    }
+                    Text {
+                        objectName: "aiTipHint"
+                        visible: gen.hasVideo && gen.aiTipHint !== ""
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
+                        textFormat: Text.PlainText
+                        text: gen.aiTipHint
+                        color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
                     }
                 // The Player's transport (D-154), lower so the curves keep their room.
                 VideoTransport {

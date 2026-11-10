@@ -699,6 +699,63 @@ private slots:
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
     }
 
+    void suggestTipAiDisabledWithoutModelAndApplyCommits() {
+        g_messages.clear();
+        const QString video = dir_.filePath("ai_tip.mp4");
+        QVERIFY(samn::engine::testclips::WriteMoving(std::filesystem::path(video.toStdU16String()), 8, 80.0, 1.0));
+        QQmlEngine engine;
+        engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
+        engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+        engine.addImageProvider(QStringLiteral("frames"), new samn::ui::FrameProvider);
+        QQmlComponent comp(&engine);
+        comp.setData(R"(
+            import QtQuick
+            import SamN
+            Rectangle {
+                width: 1400; height: 820; color: "#021024"
+                property alias page: gp
+                GeneratorPage { id: gp; anchors.fill: parent; anchors.margins: 20 }
+            })",
+                     QUrl("qrc:/test/AiTip.qml"));
+        QVERIFY2(comp.status() == QQmlComponent::Ready, qPrintable(comp.errorString()));
+        QQuickWindow window;
+        window.resize(1400, 820);
+        std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
+        QVERIFY(root);
+        root->setParentItem(window.contentItem());
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto* page = root->property("page").value<QQuickItem*>();
+        auto* gen = page->property("controller").value<GeneratorController*>();
+        QVERIFY(page && gen);
+        gen->setAutoTip(false);
+        QVERIFY(gen->openVideo(video, false));
+        QTRY_VERIFY(named(root.get(), "suggestAiTip"));
+        QVERIFY(!named(root.get(), "suggestAiTip")->isEnabled());
+        QVERIFY(named(root.get(), "aiTipHint")->isVisible());
+        QVERIFY(!named(root.get(), "applyAiTip")->isVisible());
+        QVERIFY(!gen->hasBox());
+
+        gen->setFakeAiHitsForTest({QVariantMap{{"x", 40},
+                                               {"y", 50},
+                                               {"w", 48},
+                                               {"h", 36},
+                                               {"score", 0.88},
+                                               {"label", "penis"},
+                                               {"cls", 14}}});
+        QTRY_VERIFY(named(root.get(), "suggestAiTip")->isEnabled());
+        QMetaObject::invokeMethod(named(root.get(), "suggestAiTip"), "clicked");
+        QTRY_VERIFY(gen->hasAiTipProposal());
+        QVERIFY(!gen->hasBox());
+        QTRY_VERIFY(named(root.get(), "applyAiTip")->isVisible());
+        QTRY_VERIFY(named(root.get(), "aiTipProposal")->isVisible());
+        QTRY_VERIFY(named(root.get(), "aiDetection_0"));
+        QMetaObject::invokeMethod(named(root.get(), "applyAiTip"), "clicked");
+        QTRY_COMPARE(gen->box(), QRect(40, 50, 48, 36));
+        QTRY_VERIFY(!named(root.get(), "applyAiTip")->isVisible());
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
+    }
+
     // Review-card Improve panel: Start/End, Fill and Heal defaults, button
     // runs EditorController::improveScript on the open script.
     void improvePanelShowsAndRuns() {

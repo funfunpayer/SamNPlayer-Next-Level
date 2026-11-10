@@ -27,6 +27,8 @@ const texts = {
     "gen-ai-detections": "Lists all AI Train class boxes on this frame (nipples, breasts, glans, …) — not tip-only. Click a box to set Tip; Shift-click = optional contact. Needs Settings → AI model.",
     // src/generator.js:105 (Smarter tip find (optional))
     "gen-ai-roi": "Optional AI tip box suggestion — never writes the curve. Needs Settings → AI model.",
+    // SamN2 first slice: Suggest tip (AI) on the Generator preview
+    "gen-ai-tip": "Asks the local student (preferred) or NudeNet for boxes on this frame. A matching tip-class box stays a green proposal until Apply — AI never writes the curve. Disabled without models/student/student.onnx or models/nudenet.onnx.",
     // src/generator.js:426 (Discard)
     "gen-ai-script-discard": "Drops the current AI draft without writing. Everyday Create result stays.",
     // src/generator.js:422 (AI draft script)
