@@ -365,6 +365,7 @@ Column {
     }
     InspectorCard {
         title: qsTr("Full curve editing")
+        help: "pb-curve-edit-hint"
         InspectorNote { text: qsTr("Point drag, undo and scenes are in the Generator (the Editor). Cap / Softer / Stronger / Delete / Invert on a heatmap mark are under Curve edit above.") }
         FlowButton { objectName: "editScript"; text: qsTr("Edit this script"); icon: "edit"; enabled: ctrl.hasScript; onClicked: rootPanel.editRequested(false) }
     }
