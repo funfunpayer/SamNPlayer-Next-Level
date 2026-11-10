@@ -269,11 +269,18 @@ GlassCard {
                                            Qt.rgba(86 / 255, 140 / 255, 220 / 255, 0.38)]
             readonly property var solid: ["#2f80ed", "#f28c28", "#9b51e0", "#27aea0", "#568cdc"]
             readonly property real span: Math.max(1, ctrl.viewEndMs - ctrl.viewStartMs)
-            // Centre of slot i in [viewStartMs, viewEndMs], clamped to the video.
+            // Power-of-two grid (same idea as the Generator frame strip): zooming
+            // lands on the same FrameCache keys again instead of new seeks.
+            readonly property real thumbGrid: {
+                const step = Math.max(1, span / 24)
+                return Math.pow(2, Math.floor(Math.log2(step)))
+            }
+            // Centre of slot i in [viewStartMs, viewEndMs], snapped and clamped.
             function thumbMs(i) {
-                const raw = ctrl.viewStartMs + (i + 0.5) * (ctrl.viewEndMs - ctrl.viewStartMs) / 24
-                const hi = root.mediaDuration > 0 ? root.mediaDuration - 1 : raw
-                return Math.min(Math.max(0, raw), Math.max(0, hi))
+                const raw = ctrl.viewStartMs + (i + 0.5) * span / 24
+                const snapped = Math.round(raw / thumbGrid) * thumbGrid
+                const hi = root.mediaDuration > 0 ? root.mediaDuration - 1 : snapped
+                return Math.min(Math.max(0, snapped), Math.max(0, hi))
             }
             Row {
                 id: sceneThumbStrip

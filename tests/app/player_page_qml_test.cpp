@@ -15,6 +15,7 @@
 #include <QtTest>
 
 #include <algorithm>
+#include <cmath>
 
 #include "device_controller.h"
 #include "frame_provider.h"
@@ -651,13 +652,16 @@ private:
         QVERIFY(ctrl->lastError().contains(QStringLiteral("broken.mp4")));
     }
 
-    // Centre of slot i, matching PlayerTimeline.thumbMs (upper clamp only once
-    // the video's duration is known). The frame URL rounds it; the click seeks
-    // the centre itself.
+    // Centre of slot i, matching PlayerTimeline.thumbMs (power-of-two grid snap
+    // like the Generator strip, then clamp once the video duration is known).
     static double thumbCentre(double t0, double t1, double durationMs, int i) {
-        const double raw = t0 + (i + 0.5) * (t1 - t0) / 24.0;
-        const double hi = durationMs > 0 ? durationMs - 1.0 : raw;
-        return std::min(std::max(0.0, raw), std::max(0.0, hi));
+        const double span = std::max(1.0, t1 - t0);
+        const double step = std::max(1.0, span / 24.0);
+        const double grid = std::pow(2.0, std::floor(std::log2(step)));
+        const double raw = t0 + (i + 0.5) * span / 24.0;
+        const double snapped = std::round(raw / grid) * grid;
+        const double hi = durationMs > 0 ? durationMs - 1.0 : snapped;
+        return std::min(std::max(0.0, snapped), std::max(0.0, hi));
     }
     static qint64 thumbMs(double t0, double t1, double durationMs, int i) {
         return qRound64(thumbCentre(t0, t1, durationMs, i));
@@ -823,7 +827,7 @@ private:
                 why = QStringLiteral("strip hidden");
                 return false;
             }
-            if (std::abs(chapter->height() - 66.0) > 0.5) {
+            if (std::abs(chapter->height() - 78.0) > 0.5) {
                 why = QStringLiteral("chapter height %1").arg(chapter->height());
                 return false;
             }
@@ -873,15 +877,18 @@ private:
         QTRY_VERIFY_WITH_TIMEOUT(media->mediaStatus() != QMediaPlayer::LoadingMedia || media->duration() > 0, 10000);
         QVERIFY2(QTest::qWaitFor(sourcesMatch, 5000), qPrintable(why));
         QVERIFY(named(page, "sceneThumb_23")->x() > named(page, "sceneThumb_0")->x() + 20);
-        // The 24 centres are spread across the view, one slot apart.
+        // The 24 centres are spread across the view on the power-of-two grid
+        // (adjacent slots may share a key; opposite rounding can span 2 grids).
         {
-            const double step = (ctrl->viewEndMs() - ctrl->viewStartMs()) / 24.0;
+            const double span = ctrl->viewEndMs() - ctrl->viewStartMs();
+            const double step = span / 24.0;
             QVERIFY(step > 1.0);
+            const double grid = std::pow(2.0, std::floor(std::log2(std::max(1.0, step))));
             qint64 prev = thumbMs(ctrl->viewStartMs(), ctrl->viewEndMs(), double(media->duration()), 0);
             for (int i = 1; i < 24; ++i) {
                 const qint64 ms = thumbMs(ctrl->viewStartMs(), ctrl->viewEndMs(), double(media->duration()), i);
                 QVERIFY(ms >= prev);
-                QVERIFY(ms - prev <= qRound64(step) + 1);
+                QVERIFY(ms - prev <= qRound64(2.0 * grid) + 1);
                 prev = ms;
             }
             QVERIFY(prev > thumbMs(ctrl->viewStartMs(), ctrl->viewEndMs(), double(media->duration()), 0));
