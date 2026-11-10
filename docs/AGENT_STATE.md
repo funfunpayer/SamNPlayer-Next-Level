@@ -2,7 +2,7 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 9 Nov 2026, Claude, branch `claude/samn2-label-vfr`: fixes the variable-frame-rate regression that #198 (label tracking memory) introduced, long-GOP window, honest stats, more tests (handover below). Before: 8 Nov 2026, Claude, branch `claude/samn2-intensity-arc`: intro and climaxes from an intensity arc (D-165, core only; third review answered; handover below). Before it: the playhead extrapolation (#163, D-164), Cursor's Editor tools surface (#171), Player BPM from stroke (#170), Adapt for device (#169). Rebased onto main after #201 (2-D camera). Rebased onto main after #215 (intensity-arc). Rebased onto main after #213 (intensity-arc). Rebased onto main after #198 (intensity-arc). Rebased onto main after #214.
+**Last update:** 10 Nov 2026, Cursor, branch `cursor/player-helpchips-635a`: Player HelpChips on live controls (Loop, BPM grid / From audio, Contact vibration off, FPS-Snap). #216 (label VFR) merged by owner; #217 still owner-reviewed. Do not touch feel_heatbands / Speech-Hold / handbook / .sam.
 
 
 
