@@ -635,11 +635,18 @@ Column {
                   : qsTr("Available while playing. A press while it runs is ignored.")
         }
     }
-    // Script Doctor (0.7 pb-quality): signal quality from the script alone.
+    // Script check (0.7 pb-quality): the motion summary, then Script Doctor.
     InspectorCard {
         id: doctor
-        title: qsTr("Script Doctor")
+        title: ctrl.scriptAnalysisSummary !== ""
+               ? qsTr("Script check & analysis · summary ready")
+               : qsTr("Script check & analysis")
         property var result: null
+        InspectorNote {
+            objectName: "scriptAnalysisNote"
+            visible: ctrl.scriptAnalysisSummary !== ""
+            text: ctrl.scriptAnalysisSummary
+        }
         FlowButton {
             text: qsTr("Check script"); enabled: ctrl.hasScript
             onClicked: doctor.result = ctrl.scriptQuality()

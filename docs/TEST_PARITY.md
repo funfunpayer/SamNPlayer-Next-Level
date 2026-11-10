@@ -300,13 +300,14 @@ One row per old test function (grouped when a whole file shares the same answer)
 
 ### 2.8 `motionx`
 
-2 files, 10 tests: 4 ported, 0 covered, 0 todo-now, 6 todo-later, 0 n/a.
+2 files, 10 tests: 9 ported, 0 covered, 0 todo-now, 1 todo-later, 0 n/a.
 
 | Old file | Test function(s) | Status | Where / why |
 |---|---|---|---|
-| `chapters_test.go` | `TestChaptersMapsStates`, `TestChaptersNil` | todo-later | P4 (Analysis, Scene Map): `motionx` chapters-from-states is not ported. |
+| `chapters_test.go` | `TestChaptersMapsStates`, `TestChaptersNil` | ported | `tests/core/motion_chapters_test.cpp` (`MotionChaptersFromSegments`). |
 | `motionx_test.go` | `TestSimplifyKeepsEndpoints`, `TestSimplifyRespectsTolerance`, `TestSimplifyStraightLineCollapses`, `TestSimplifyDeepCurveDoesNotRecurse` | ported | `tests/core/simplify_test.cpp` (`samn::SimplifyIndices`, used by the post-processing RDP step). |
-| `motionx_test.go` | `TestDedup`, `TestClassifyStaticCurve`, `TestClassifyStartStop`, `TestClassifySegmentsAreContiguousAndLongEnough` | todo-later | P4 (Analysis, Scene Map): `Dedup`, `Classify` are not ported. |
+| `motionx_test.go` | `TestClassifyStaticCurve`, `TestClassifyStartStop`, `TestClassifySegmentsAreContiguousAndLongEnough` | ported | `tests/core/motion_classify_test.cpp` (`ClassifyMotion`). |
+| `motionx_test.go` | `TestDedup` | todo-later | P4 (Analysis, Scene Map): `Dedup` is not ported. |
 
 ### 2.9 `pluginhost`
 
@@ -357,12 +358,12 @@ One row per old test function (grouped when a whole file shares the same answer)
 
 ### 2.14 `cmd/gui-wails (Go)`
 
-68 files, 188 tests: 21 ported, 18 covered, 0 todo-now, 136 todo-later, 13 n/a.
+68 files, 188 tests: 24 ported, 18 covered, 0 todo-now, 133 todo-later, 13 n/a.
 
 | Old file | Test function(s) | Status | Where / why |
 |---|---|---|---|
 | `app_aiscript_test.go` | `TestExportAIScriptImitation`, `TestDraftAndKeepAIScript` | todo-later | P4 (AI draft script, opt-in D-058). |
-| `app_analysis_test.go` | `TestAnalyzeScriptFindsStaticStretches`, `TestAnalyzeScriptWithoutScript`, `TestAnalyzeScriptSteadyMotion` | todo-later | P4 (Analysis shortcuts): `AnalyzeScript` needs `motionx`, not ported. |
+| `app_analysis_test.go` | `TestAnalyzeScriptFindsStaticStretches`, `TestAnalyzeScriptWithoutScript`, `TestAnalyzeScriptSteadyMotion` | ported | `tests/core/script_analysis_test.cpp` (`AnalyzeScriptActions`). The Player line is `scriptAnalysisOnOpen`. |
 | `app_audio_level_test.go` | `TestAudioLevelEnvelopeSharesDecodeWithAudioVibration` | todo-later | P2/P3 (vibration from sound): the Audio Level lane decodes once (`audioLevelFromSound`), but the shared decode with the vibration output is not built. |
 | `app_audio_level_test.go` | `TestSetChannelLevelsStoresClampedCut` | covered | tests/app/playback_output_test.cpp `channelOffAndLevelScaleTheOutput`, `outputChoicesAreRemembered` (clamp: see `player/speed_test.go TestChannelLevelsDefaultFullAndClamp` in list A) |
 | `app_audio_level_test.go` | `TestSetPeakReduceStored` | todo-later | P2 (Reduce peaks): not ported. |

@@ -2,13 +2,13 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 10 Nov 2026, Cursor, branch `cursor/player-ringdown-ozone-635a`: Player Suggest card — polarity hint, apply suggested O-zone (`AutoOZoneMarkers`), ring-down at the playhead. Do not touch feel_heatbands / Speech-Hold / handbook / .sam.
+**Last update:** 10 Nov 2026, Cursor, branch `cursor/player-script-analysis-635a`: script analysis summary (motion states and chapters) on the Player's Script check card. Automatic chapters are display only. Do not touch feel_heatbands / Speech-Hold / handbook / .sam.
 
-## Handover: ring-down and suggested O-zone (10 Nov)
+## Handover: script analysis (10 Nov)
 
-- **Core:** `ringdown.h` ports 0.7 `RingDown` (cycles clamp to 1–2, 180 ms steps, the existing points stay, the last point is 0).
-- **Player:** `suggestPolarity` (hint only), `applySuggestedOZone` (marker range plus `AutoOZoneMarkers`, no invert), `applyRingDown` on the stroke axis through the curve-edit save. Inspector → Playback → Suggest.
-- **Tests:** `tests/core/ringdown_test.cpp`; `suggestPolarityReturnsReason`, `applyRingDownRejectsLowAndAppendsEndingAtZero`, `applySuggestedOZoneWritesMarkerAndOMarker`; QML `playbackSuggestCard`.
+- **Core:** `motion_classify.h` (0.7 `motionx.Classify`), `motion_chapters.h` (`Chapters`), `script_analysis.h` (`AnalyzeScript` / `summarizeStates`). An empty `ClassifyOptions` does not smooth; only `AnalyzeScriptActions` sets `SmoothRadius` 2. `ScriptChapters` classifies with smoothing off.
+- **Player:** `scriptAnalysisSummary` after a script with at least 4 points, on the Playback card "Script check & analysis" (title gains "· summary ready"). Stored `metadata.chapters` replace the automatic labels (empty name → "chapter", end at or before the start → start+1). Nothing is written back.
+- **Tests:** `tests/core/motion_classify_test.cpp`, `motion_chapters_test.cpp`, `script_analysis_test.cpp`, `tests/app/player_controller_test.cpp` `scriptAnalysisOnOpen`.
 
 
 

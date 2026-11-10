@@ -1195,6 +1195,80 @@ private slots:
         QVERIFY(r.value("warnings").canConvert<QStringList>());
     }
 
+    // 0.7 describeScript: the summary appears once a script has 4 points.
+    // Automatic chapters are display only. Stored metadata.chapters win,
+    // and opening the script does not write either kind back.
+    void scriptAnalysisOnOpen() {
+        QTemporaryDir d;
+        PlayerController none;
+        QVERIFY(none.scriptAnalysisSummary().isEmpty());
+        QCOMPARE(none.analyzeScript().value(QStringLiteral("error")).toString(),
+                 QStringLiteral("no script loaded (or too few points)"));
+        QVERIFY(none.scriptMotionChapters().isEmpty());
+
+        writeFile(d.filePath("short.funscript"), zigzag(3));
+        PlayerController few;
+        QVERIFY(few.openScript(d.filePath("short.funscript")));
+        QCOMPARE(few.pointCount(), 3);
+        QVERIFY(few.scriptAnalysisSummary().isEmpty());
+        QVERIFY(!few.analyzeScript().value(QStringLiteral("error")).toString().isEmpty());
+
+        const QString path = d.filePath("Q.funscript");
+        writeFile(path, zigzag());
+        QFile beforeFile(path);
+        QVERIFY(beforeFile.open(QIODevice::ReadOnly));
+        const QByteArray before = beforeFile.readAll();
+        beforeFile.close();
+        PlayerController c;
+        QVERIFY(c.openScript(path));
+        const QString summary = c.scriptAnalysisSummary();
+        QVERIFY(summary.contains(QStringLiteral("seconds")));
+        QVERIFY(summary.contains(QStringLiteral(" \u00b7 Chapters: ")));
+        QVERIFY(!c.scriptMotionChapters().isEmpty());
+        QCOMPARE(c.analyzeScript().value(QStringLiteral("error")).toString(), QString());
+        QVERIFY(c.analyzeScript().value(QStringLiteral("summary")).toString().contains(QStringLiteral("seconds")));
+        QFile afterFile(path);
+        QVERIFY(afterFile.open(QIODevice::ReadOnly));
+        QCOMPARE(afterFile.readAll(), before);
+
+        QByteArray js = zigzag();
+        js.chop(1);
+        js += ",\"metadata\":{\"chapters\":[{\"name\":\"Warmup\",\"startTime\":0,\"endTime\":4000},"
+              "{\"name\":\"\",\"startTime\":4000,\"endTime\":4000}]}}";
+        const QString marked = d.filePath("M.funscript");
+        writeFile(marked, js);
+        QFile markedFile(marked);
+        QVERIFY(markedFile.open(QIODevice::ReadOnly));
+        const QByteArray markedBefore = markedFile.readAll();
+        markedFile.close();
+        PlayerController m;
+        QVERIFY(m.openScript(marked));
+        const QString over = m.scriptAnalysisSummary();
+        const QString warmup = QStringLiteral("Warmup 0:00") + QChar(0x2013) + QStringLiteral("0:04");
+        const QString unnamed = QStringLiteral("chapter 0:04") + QChar(0x2013) + QStringLiteral("0:04");
+        QVERIFY(over.contains(warmup));
+        QVERIFY(over.contains(unnamed));
+        const auto chapters = m.scriptMotionChapters();
+        QCOMPARE(chapters.size(), 2);
+        QCOMPARE(chapters[0].toMap().value(QStringLiteral("kind")).toString(), QStringLiteral("Warmup"));
+        QCOMPARE(chapters[1].toMap().value(QStringLiteral("kind")).toString(), QStringLiteral("chapter"));
+        QCOMPARE(chapters[1].toMap().value(QStringLiteral("endMs")).toDouble(), 4001.0);
+        {
+            QFile markedAfter(marked);
+            QVERIFY(markedAfter.open(QIODevice::ReadOnly));
+            QCOMPARE(markedAfter.readAll(), markedBefore);
+        }  // close before rename — Windows cannot replace an open file
+
+        // Chapter edit refreshes the analysis line without a re-open (0.7 describeScript).
+        QSignalSpy doctorCleared(&m, &PlayerController::scriptChanged);
+        QSignalSpy analysisSpy(&m, &PlayerController::scriptAnalysisSummaryChanged);
+        QVERIFY(m.renameChapter(0, QStringLiteral("Intro")));
+        QVERIFY(analysisSpy.count() >= 1);
+        QVERIFY(m.scriptAnalysisSummary().contains(QStringLiteral("Intro 0:00")));
+        QVERIFY(!m.scriptAnalysisSummary().contains(warmup));
+        QCOMPARE(doctorCleared.count(), 0);  // Script Doctor result must stay
+    }
+
     void sleepTimer() {
         PlayerController c;
         QSignalSpy reached(&c, &PlayerController::sleepReached);
