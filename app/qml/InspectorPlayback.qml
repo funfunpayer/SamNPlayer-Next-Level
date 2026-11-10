@@ -243,6 +243,14 @@ Column {
         }
         property string zoneNote: ""
         property string actionNote: ""
+        // Doctor already drops its verdict on a new script; these notes must too.
+        Connections {
+            target: ctrl
+            function onScriptChanged() {
+                suggest.zoneNote = ""
+                suggest.actionNote = ""
+            }
+        }
         InspectorNote {
             objectName: "polarityReason"
             visible: suggest.polarityReason !== ""

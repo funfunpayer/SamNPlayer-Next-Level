@@ -463,6 +463,16 @@ private slots:
             QVERIFY(player->toolNote().contains("Ring-down"));
             QVERIFY(player->pointCount() > points);
             QCOMPARE(player->actions().back().pos, 0);
+
+            const QString other = files.filePath("other.funscript");
+            {
+                QFile f(other);
+                QVERIFY(f.open(QIODevice::WriteOnly));
+                f.write(R"({"actions":[{"at":0,"pos":10},{"at":500,"pos":90},{"at":1000,"pos":10},{"at":1500,"pos":90}]})");
+            }
+            QVERIFY(player->openPath(other));
+            QTRY_VERIFY(!zone->isVisible());
+            QTRY_VERIFY(!note->isVisible());
         }
         qInstallMessageHandler(g_previous);
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
