@@ -2,7 +2,16 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 10 Nov 2026, Cursor, branch `cursor/gen-report-path-635a`: Settings → System `generator.reportPath` (empty = no recording). Quality first. Do not touch feel_heatbands / Speech-Hold / handbook / `.sam` / intensity-arc.
+**Last update:** 10 Nov 2026, Cursor, branch `cursor/training-library-helpchips-635a`: Training + Library HelpChip placements (PARITY_REMAINING item 21 placements). Quality first. Do not touch feel_heatbands / Speech-Hold / handbook / `.sam` / intensity-arc.
+
+## Handover: Training + Library HelpChips (10 Nov)
+
+PARITY_REMAINING item 21 (placements only). HelpChips next to the main Training and Library controls; session-settings sliders already had `training.*` chips via `SettingRow`. Handbook parts still open.
+
+- **Training:** Mock `training.mock`; Intensity (named programs) `training.tier`; Session Mode `training.session-mode`; stage switch `training.stage`; Feedback `training.feedback`. Existing slider keys unchanged.
+- **Library:** Local Files `library.local-files`; Recent `library.recent`; Favorites `library.favorites`; Scripts title `library.scripts`; Analysis title `library.analysis`.
+- **Tests:** `training_qml_test` `helpChipsResolveOnThePage`; `shell_qml_test` `libraryHelpChipsResolve` (open/Esc on Local Files). `helpKeysInTheQmlSourcesExist` covers the new keys.
+- **Left open:** handbook parts for audio vibration, BPM from audio, Sound Curve, Auto sync; more placements elsewhere.
 
 ## Handover: generator.reportPath (10 Nov)
 
