@@ -1349,6 +1349,14 @@ private slots:
             s.window->setProperty("mode", 1);
             QTRY_COMPARE_WITH_TIMEOUT(s.mode(), 1, kWait);
             QTRY_VERIFY_WITH_TIMEOUT(byName("openHandbookCreate"), kWait);
+            // TEMP diagnostic (CI, Qt 6.7): where the button is when it is clicked.
+            {
+                auto* b = byName("openHandbookCreate");
+                qInfo() << "DIAG win" << s.window->width() << s.window->height() << "btn" << b->mapToScene(QPointF(0, 0)) << b->width();
+                for (QQuickItem* i : descendants(s.root()))
+                    if (i->objectName() == "stageSplit" || i->objectName() == "projectPanel" || i->objectName() == "createScroll")
+                        qInfo() << "DIAG" << i->objectName() << i->mapToScene(QPointF(0, 0)) << i->width() << i->height();
+            }
             click(byName("openHandbookCreate"));
             QTRY_VERIFY_WITH_TIMEOUT(handbook->isVisible(), kWait);
             click(byName("handbookClose"));

@@ -889,8 +889,10 @@ private slots:
             for (const char* name : {"editorCard", "generatorTransport", "tipRow", "editorToolbar", "alignBar", "rangeBar", "ruler"}) {
                 auto* item = named(root.get(), name);
                 QVERIFY2(item, name);
-                const qreal right = item->mapToItem(stage, QPointF(item->width(), 0)).x();
-                QVERIFY2(right <= stage->width() + 0.5, qPrintable(QString("%1 ends at %2 of %3").arg(name).arg(right).arg(stage->width())));
+                // The layout settles a moment after the video and the script open.
+                auto right = [&] { return item->mapToItem(stage, QPointF(item->width(), 0)).x(); };
+                QTRY_VERIFY2(right() <= stage->width() + 0.5,
+                             qPrintable(QString("%1 ends at %2 of %3").arg(name).arg(right()).arg(stage->width())));
             }
             // A toolbar wider than its place scrolls to its last control.
             auto* bar = named(root.get(), "rangeBar");
