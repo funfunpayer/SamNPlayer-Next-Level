@@ -42,7 +42,8 @@ set_tests_properties(shell_qml_test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offs
 # The Generator mode on generated test clips (tests/engine/synthetic_clips.h).
 add_executable(generator_controller_test generator_controller_test.cpp)
 target_link_libraries(generator_controller_test PRIVATE samn_app Qt6::Test)
-target_include_directories(generator_controller_test PRIVATE ${CMAKE_SOURCE_DIR}/tests/engine)
+target_include_directories(generator_controller_test PRIVATE ${CMAKE_SOURCE_DIR}/tests/engine ${CMAKE_SOURCE_DIR}/app/src)
+target_compile_definitions(generator_controller_test PRIVATE SAMN_VISION_TESTDATA="${CMAKE_SOURCE_DIR}/tests/vision/data")
 add_test(NAME generator_controller_test COMMAND generator_controller_test)
 set_tests_properties(generator_controller_test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 

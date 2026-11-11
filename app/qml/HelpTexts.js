@@ -27,6 +27,8 @@ const texts = {
     "gen-ai-detections": "Lists all AI Train class boxes on this frame (nipples, breasts, glans, …) — not tip-only. Click a box to set Tip; Shift-click = optional contact. Needs Settings → AI model.",
     // src/generator.js:105 (Smarter tip find (optional))
     "gen-ai-roi": "Optional AI tip box suggestion — never writes the curve. Needs Settings → AI model.",
+    // SamN2 first slice: Suggest tip (AI) on the Generator preview
+    "gen-ai-tip": "Asks the local student (preferred) or NudeNet for boxes on this frame. A matching tip-class box stays a green proposal until Apply — AI never writes the curve. Disabled without models/student/student.onnx or models/nudenet.onnx.",
     // src/generator.js:426 (Discard)
     "gen-ai-script-discard": "Drops the current AI draft without writing. Everyday Create result stays.",
     // src/generator.js:422 (AI draft script)
@@ -204,6 +206,16 @@ const texts = {
     "generator.time-s": "Seek past a black intro before marking the region.",
     // src/generator.js:178 (Tip (glans/penis))
     "generator.tip-glans-penis": "Optional tip label: Glans preferred, or whole Penis. Empty = any. Contact-vibe set only — not required for CSRT Create.",
+    // SamN2, Player → Library (Analysis)
+    "library.analysis": "Audio Analysis opens the waveform tab under the curve. BPM Detection opens Inspector → Audio (measure the beat / BPM grid). Display only — neither rewrites the stroke.",
+    // SamN2, Player → Library (Favorites)
+    "library.favorites": "Scripts you starred. Click the star on a Recent or list row to add or remove. Up to 50.",
+    // SamN2, Player → Library (Local Files)
+    "library.local-files": "Opens a video or script from disk in the Player. The file also lands in Recent.",
+    // SamN2, Player → Library (Recent)
+    "library.recent": "Newest scripts you opened (up to 8). Click to load. Star (★) keeps it in Favorites. Missing files stay listed, struck through.",
+    // SamN2, Player → Library (Scripts)
+    "library.scripts": "Imported = opened from disk. Generated = Create results. Edited = scripts you saved after a curve edit. Newest first.",
     // src/playback.js:422 (From audio)
     "pb-aa-detect": "Measure the beat of the video's sound (same as View → From audio). Display only.",
     // src/playback.js:424 (Write as vibration curve)
@@ -219,7 +231,7 @@ const texts = {
     // src/playback.js:394 (Bookmarks: named times in the script — see “?”.)
     "pb-bookmark-hint": "Named times saved in the script (OFS-style metadata.bookmarks / .samn). Add at the current playhead, seek, rename, or remove. Separate from O-markers and heatmap selection.",
     // src/playback.js:356 (From audio)
-    "pb-bpm-auto": "Measure the beat of the video's sound and fill BPM (first 10 min). Display only — never rewrites the stroke. Works also when the script has no audio check.",
+    "pb-bpm-auto": "Measure the beat of the video's sound and fill BPM (first 10 min; onsets when the pulse is clear, otherwise loudness). Display only — never rewrites the stroke. Works also when the script has no audio check.",
     // src/playback.js:347 (BPM grid)
     "pb-bpm-grid": "Draw beat lines on the Play curve from BPM (or the stroke's own tempo when BPM is blank). Display only — never snaps or rewrites the stroke.",
     // src/playback.js:412 (Add from selection)
@@ -381,12 +393,16 @@ const texts = {
     "topbar-donate": "SamNPlayer is free. A donation keeps the project alive and makes new features possible.",
     // src/training.js:311 (Cycles)
     "training.cycles": "Number of training cycles (1–20). Default 5. Training feel only — Create CSRT unchanged.",
+    // SamN2, Training → Feedback
+    "training.feedback": "Arousal 1–10 while a session runs. Stay at 5–7; 8: Interrupt; 9–10 interrupt the cycle and soften the next. Target is 7.",
     // src/training.js:321 (Hold (ms))
     "training.hold-ms": "Hold duration at peak (ms). Default 3000. Training feel only.",
     // src/training.js:331 (Peak intensity)
     "training.peak-intensity": "Peak level for each cycle (0–1). Default 0.8. Training feel only — Create CSRT unchanged.",
     "training.max-vibration": "Ceiling on vibration sent to the device (0–1). 1 = off (no cap). Soft safety for Training only — does not change Create.",
     "training.max-suction": "Ceiling on suction sent to the device (0–1). 1 = off (no cap). Soft safety for Training only — does not change Create.",
+    // SamN2, Training → Session Settings (Mock)
+    "training.mock": "On (default): Start uses a simulated device so you can try a session without hardware. Off: Training drives a device you already connected in Devices (or the top-bar Connect). Same idea as Play → Mock.",
     // src/training.js:336 (Plateau fraction)
     "training.plateau-fraction": "How high the plateau sits relative to peak (edging technique). Default 0.7. Training feel only.",
     // src/training.js:341 (Progression per cycle)
@@ -395,6 +411,12 @@ const texts = {
     "training.ramp-up-ms": "Ramp-up duration per cycle (ms). Default 8000. Training feel only.",
     // src/training.js:326 (Rest (ms))
     "training.rest-ms": "Rest between cycles (ms). Default 10000. Training feel only.",
+    // SamN2, Training → Session Mode
+    "training.session-mode": "Stop-Start returns fully to 0 between cycles. Plateau keeps a high floor (edging). Custom only — named programs bring their own shape.",
+    // SamN2, Training → stage switch
+    "training.stage": "Rings: live vibration/suction gauges. Figure: abstract Flow loop of the technique. Video: a film plays along; the device follows the training, not the film.",
+    // SamN2, Training → Intensity
+    "training.tier": "Gentle / Standard / Intense scales a named program (×0.8 / ×1 / ×1.2). Auto-adjust can nudge from recent sessions of this profile. Training feel only.",
 };
 
 function text(key) { return texts[key] || ""; }

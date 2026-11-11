@@ -40,6 +40,9 @@ GlassCard {
     function axisColor(axis) {
         return { surge: "#e5c07b", sway: "#98c379", twist: "#e06c9f", roll: "#61afef", pitch: "#d19a66" }[axis] || Theme.textDim
     }
+    // 0.7 axis legend toolbar above the ruler (hidden when only stroke exists).
+    readonly property bool showAxisLegend: ctrl.hasScript && ctrl.laneChoices.length > 1
+    readonly property int axisLegendBand: showAxisLegend ? 34 : 0  // 28 px chips + 6 px gap
 
     // Bottom tabs: Timeline · Chapters · Bookmarks · Audio Analysis.
     // Scenes stay in the Generator Editor (D-145); the Player tab was only a redirect.
@@ -61,7 +64,7 @@ GlassCard {
         id: laneNames
         visible: lanes.visible
         x: 16; y: 46; width: 108
-        Item { width: 1; height: ruler.height; visible: ruler.visible }
+        Item { width: 1; height: root.axisLegendBand + ruler.height; visible: lanes.visible }
         // 0.7 legend chips: a click picks the lane the main curve shows.
         LaneName {
             objectName: "laneName_stroke"
@@ -107,8 +110,34 @@ GlassCard {
         readonly property int extraLanes: (vibLane.visible ? 1 : 0) + (sucLane.visible ? 1 : 0) + ctrl.axisLanes.length
         readonly property int laneH: curve.visible ? 34
             : Math.max(34, Math.min(140, (height - fixedH - (audioLane.visible ? audioH : 0)) / Math.max(1, extraLanes)))
-        readonly property int fixedH: ruler.height + (heatBar.visible ? heatBar.height + 4 : 0) + markRow.height
+        readonly property int fixedH: root.axisLegendBand + ruler.height + (heatBar.visible ? heatBar.height + 4 : 0) + markRow.height
                                       + (chapterStrip.visible ? chapterStrip.height : 0)
+        // 0.7 stack: axis legend chips (role=toolbar) before the time ruler.
+        Row {
+            id: axisLegend
+            objectName: "axisLegend"
+            width: parent.width; spacing: 6
+            visible: root.showAxisLegend
+            Accessible.role: Accessible.ToolBar
+            Accessible.name: qsTr("Curve axis")
+            Repeater {
+                model: axisLegend.visible ? ctrl.laneChoices : []
+                delegate: LaneName {
+                    required property string modelData
+                    // Capture the lane id — modelData can be stale in signal handlers.
+                    readonly property string laneId: modelData
+                    objectName: "axisChip_" + laneId
+                    chip: true
+                    name: root.laneTitle(laneId)
+                    dot: root.laneColor(laneId)
+                    selectable: true
+                    active: ctrl.activeLane === laneId
+                    onPicked: ctrl.activeLane = laneId
+                    onStepped: (d) => ctrl.stepActiveLane(d)
+                }
+            }
+        }
+        Item { width: 1; height: axisLegend.visible ? 6 : 0 }
         RulerItem {
             id: ruler
             width: parent.width; height: 22

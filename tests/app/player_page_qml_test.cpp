@@ -4,6 +4,7 @@
 #include <QFile>
 #include <QGuiApplication>
 #include <QHoverEvent>
+#include <QMouseEvent>
 #include <QMediaPlayer>
 #include <QQmlComponent>
 #include <QQmlEngine>
@@ -338,16 +339,42 @@ private:
             QCoreApplication::sendEvent(area, &leave);
             QTRY_VERIFY(!tip->isVisible());
         }
-        // 0.7 legend chips: a click on a lane's name shows it in the main curve;
+        // 0.7 legend chips: toolbar row above the ruler + left name column.
         // Up / Down move on (two lanes: stroke and twist, wrapping).
+        auto* legend = named(page, "axisLegend");
+        QVERIFY(legend && legend->isVisible());
+        auto* twistChip = named(page, "axisChip_twist");
+        QVERIFY(twistChip && twistChip->isVisible());
         auto* twistName = named(page, "laneName_twist");
         QVERIFY(twistName && twistName->isVisible());
-        QTest::mouseClick(page->window(), Qt::LeftButton, {},
-                          twistName->mapToScene(QPointF(twistName->width() / 2, twistName->height() / 2)).toPoint());
+        QTRY_VERIFY(twistChip->width() > 10);
+        QTRY_VERIFY(twistChip->height() > 10);
+        {
+            QQuickItem* area = nullptr;
+            for (QQuickItem* child : twistChip->childItems()) {
+                if (QString::fromLatin1(child->metaObject()->className()).contains(QLatin1String("MouseArea")))
+                    area = child;
+            }
+            QVERIFY2(area, "no MouseArea on axis chip");
+            QVERIFY2(area->width() > 10 && area->height() > 10,
+                     qPrintable(QStringLiteral("MouseArea %1x%2 enabled=%3")
+                                    .arg(area->width())
+                                    .arg(area->height())
+                                    .arg(area->isEnabled())));
+            // Deliver press/release to the MouseArea itself (window click can miss stacked QML).
+            const QPointF local(area->width() / 2, area->height() / 2);
+            QMouseEvent press(QEvent::MouseButtonPress, local, area->mapToScene(local),
+                              Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+            QMouseEvent release(QEvent::MouseButtonRelease, local, area->mapToScene(local),
+                                Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+            QVERIFY(QCoreApplication::sendEvent(area, &press));
+            QVERIFY(QCoreApplication::sendEvent(area, &release));
+        }
         QTRY_COMPARE(ctrl->activeLane(), QStringLiteral("twist"));
         QCOMPARE(named(page, "mainCurve")->property("lane").toString(), QStringLiteral("twist"));
         QCOMPARE(named(page, "mainCurveLane")->property("text").toString(), QStringLiteral("Twist"));
         QVERIFY(twistName->property("active").toBool());
+        QVERIFY(twistChip->property("active").toBool());
         QTest::keyClick(page->window(), Qt::Key_Down);
         QTRY_COMPARE(ctrl->activeLane(), QStringLiteral("stroke"));
         QCOMPARE(named(page, "mainCurve")->property("lane").toString(), QStringLiteral("stroke"));

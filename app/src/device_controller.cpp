@@ -23,6 +23,7 @@
 #include "samn/device/diagnostics.h"
 #include "samn/device/driver.h"
 #include "device_worker.h"
+#include "qt_paths.h"
 #include "samn/settings.h"
 
 namespace samn::ui {
@@ -278,6 +279,42 @@ void DeviceController::runDiagnostics() {
 }
 
 void DeviceController::cancelDiagnostics() { diagnostics_cancel_ = true; }
+
+QString DeviceController::diagnosticsHistoryPath() const {
+    std::string stored;
+    try {
+        const auto v = samn::Settings().get(kPrefDiagnosticsHistoryPath, "");
+        if (v.is_string()) stored = v.get<std::string>();
+    } catch (const std::exception&) {
+    }
+    return FromFs(dev::ResolveDiagnosticsHistoryPath(stored));
+}
+
+void DeviceController::setDiagnosticsHistoryPath(const QString& path) {
+    try {
+        samn::Settings().set(kPrefDiagnosticsHistoryPath, U8(LocalPath(path)));
+    } catch (const std::exception&) {
+    }
+}
+
+QVariantList DeviceController::getDiagnosticsHistory() const {
+    QVariantList out;
+    try {
+        for (const auto& e : dev::LoadDiagnosticsHistory(FsPath(diagnosticsHistoryPath()))) {
+            QVariantMap m;
+            m["startedAt"] = FromU8(e.started_at);
+            m["name"] = FromU8(e.name);
+            m["kind"] = FromU8(e.kind);
+            m["commands"] = e.commands;
+            m["errors"] = e.errors;
+            m["interrupted"] = e.interrupted;
+            m["text"] = FromU8(dev::FormatDiagnosticsHistoryLine(e));
+            out << m;
+        }
+    } catch (const std::exception&) {
+    }
+    return out;
+}
 
 void DeviceController::setTickIntervalMs(int ms) {
     worker_->Post([w = worker_, ms] { w->SetTickInterval(ms); });

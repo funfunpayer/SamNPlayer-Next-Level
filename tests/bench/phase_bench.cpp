@@ -337,7 +337,7 @@ Clip Make(Kind kind, Lcg& r) {
 enum class Family {
     kMixed, kMotionPeak, kSoundPeak, kStairTop, kMixedNoisy, kPeakBesideBlack, kLoudOpening,  // one peak
     kIntroFlat, kFlatTail, kWalkSlow, kWalkMid, kWalkFast, kWalkNoisy, kBeats,  // no peak
-    kEmptyMiddle, kEmptyEdge, kCutsNoSound,
+    kEmptyMiddle, kEmptyEdge, kCutsNoSound, kNoisyBlack,
     kCount
 };
 const char* Name(Family f) {
@@ -359,6 +359,7 @@ const char* Name(Family f) {
         case Family::kEmptyMiddle: return "no peak: 50-80 % black or still and silent between";
         case Family::kEmptyEdge: return "no peak: 40-60 % black at the start or end";
         case Family::kCutsNoSound: return "no peak: scene cuts, no sound";
+        case Family::kNoisyBlack: return "no peak: 50-70 % black with codec noise, silent or music";
         case Family::kCount: break;
     }
     return "";
@@ -381,7 +382,8 @@ Clip MakeFamily(Family f, Xs& r) {
     Clip c;
     c.s.step_ms = 500;
     const bool noisy = f == Family::kMixedNoisy || f == Family::kWalkNoisy;
-    const bool empty_family = f == Family::kEmptyMiddle || f == Family::kEmptyEdge || f == Family::kPeakBesideBlack;
+    const bool empty_family = f == Family::kEmptyMiddle || f == Family::kEmptyEdge || f == Family::kPeakBesideBlack ||
+                              f == Family::kNoisyBlack;
     const double length = empty_family ? r.In(300, 900) : r.In(90, 900), base_m = r.In(.15, .25), base_l = r.In(.25, .4);
     const double jitter = noisy ? 1.0 : f == Family::kLoudOpening ? .7 : r.In(.1, .5);
     const bool has_intro = f == Family::kIntroFlat || f == Family::kCutsNoSound ||
@@ -414,6 +416,7 @@ Clip MakeFamily(Family f, Xs& r) {
     // Empty stretches: [blank_from, blank_to) is black (or still) and silent.
     double blank_from = -1, blank_to = -1;
     bool blank_black = true;
+    const bool music = f == Family::kNoisyBlack && r.U() < .5;
     if (f == Family::kEmptyMiddle) {
         const double share = r.In(.5, .8);
         blank_from = length * (1 - share) / 2;
@@ -423,6 +426,12 @@ Clip MakeFamily(Family f, Xs& r) {
         const double share = r.In(.4, .6);
         if (r.U() < .5) blank_to = length * share, blank_from = 0;
         else blank_from = length * (1 - share), blank_to = length;
+    } else if (f == Family::kNoisyBlack) {
+        // Black frames as a codec gives them: a little motion (0.002 +-50 %),
+        // silent or with music going on (0.25 +-20 %).
+        const double share = r.In(.5, .7);
+        blank_from = length * (1 - share) / 2;
+        blank_to = blank_from + length * share;
     } else if (f == Family::kPeakBesideBlack) {
         blank_from = length * r.In(.5, .6);
         blank_to = length;
@@ -475,8 +484,13 @@ Clip MakeFamily(Family f, Xs& r) {
         double loud = std::clamp(l * (1 + jitter * (r.U() - .5)), 0.0, 1.0);
         if (f == Family::kCutsNoSound && t >= intro && r.U() < .02) motion *= 3 + 17 * r.U();
         const bool blank = t >= blank_from && t < blank_to;
-        if (blank) motion = loud = 0;
-        c.s.luma.push_back(blank && blank_black ? 0.0 : 0.5);
+        if (blank && f == Family::kNoisyBlack) {
+            motion = .002 * (1 + (r.U() - .5));
+            loud = music ? .25 * (1 + .4 * (r.U() - .5)) : 0;
+        } else if (blank) {
+            motion = loud = 0;
+        }
+        c.s.luma.push_back(!blank || !blank_black ? 0.5 : f == Family::kNoisyBlack ? 0.02 : 0.0);
         c.s.motion.push_back(motion);
         c.s.loudness.push_back(loud);
     }

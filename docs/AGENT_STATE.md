@@ -2,15 +2,101 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 10 Nov 2026, Cursor, branch `cursor/player-script-analysis-635a`: script analysis summary (motion states and chapters) on the Player's Script check card. Automatic chapters are display only. Do not touch feel_heatbands / Speech-Hold / handbook / .sam.
+**Last update:** 10 Nov 2026, Cursor, branch `cursor/core-pov-635a`: camera POV core slice 1 (`pov.h` ClassifyPov). Quality first. Do not touch vision MeasurePovSignals / UI / `.scene.json` / scene_roles / ONNX / feel_heatbands.
 
-## Handover: script analysis (10 Nov)
+## Handover: camera POV core slice 1 (10 Nov)
+
+Core only. `ClassifyPov` reads a 3×3 occupancy grid per step and returns `unknown` | `first_person` | `third_person`. Fail closed: all-zero, NaN/Inf, large-and-split, a run shorter than `min_run_ms`. Fitted `scale_gate` / `split_gate` / `cy_gate` / `min_run_ms` on the synthetic grids in `tests/core/pov_test.cpp` (no real frames yet). No OpenCV in core.
+
+- **API:** `core/include/samn/pov.h` — `PovKind`, `PovKindName`, `PovSignals` (`step_ms`, `grid`), `PovSegment`, `PovOptions`, `ClassifyPov`. Caller's options are not modified.
+- **Tests:** `tests/core/pov_test.cpp` (synthetic grids only).
+- **Left open:** vision `MeasurePovSignals`, UI, `.scene.json` write, scene_roles, ONNX. Not in 0.7 (note in `PARITY_REMAINING.md`).
+
+## Handover: Training + Library HelpChips (10 Nov)
+
+PARITY_REMAINING item 21 (placements only). HelpChips next to the main Training and Library controls; session-settings sliders already had `training.*` chips via `SettingRow`. Handbook parts still open.
+
+- **Training:** Mock `training.mock`; Intensity (named programs) `training.tier`; Session Mode `training.session-mode`; stage switch `training.stage`; Feedback `training.feedback`. Existing slider keys unchanged.
+- **Library:** Local Files `library.local-files`; Recent `library.recent`; Favorites `library.favorites`; Scripts title `library.scripts`; Analysis title `library.analysis`.
+- **Tests:** `training_qml_test` `helpChipsResolveOnThePage`; `shell_qml_test` `libraryHelpChipsResolve` (open/Esc on Local Files). `helpKeysInTheQmlSourcesExist` covers the new keys.
+- **Left open:** handbook parts for audio vibration, BPM from audio, Sound Curve, Auto sync; more placements elsewhere.
+
+## Handover: README + light GUI polish (10 Nov)
+
+README Player / Generator / Devices / Status only — no version bump, no 100 % parity claim. HelpChips mentioned generically (Training/Library placements may still be open).
+
+- **README:** Player Suggest (polarity / O-zone / ring-down), Script check & analysis, axis chips, scene thumbs, ? chips; Generator Improve script on the review card; Settings Device Previous runs, System metrics path, Updates check+link. Status: Player/Training strong, Generator review improving, first release when core paths feel solid.
+- **Bugs:** Improve panel `lastStatus` and Playback Suggest `zoneNote`/`actionNote` lingered after a new script (Doctor already cleared its verdict). Cleared on `scriptChanged`.
+- **Polish:** Improve blurb says Start/End 0 = leave that end; Previous runs heading says newest first. `PositionGauge` knob `y` and Inspector channel fill follow reduced motion (`Theme.animFast` / duration 0). Training start-blocked flash does not run under reduced motion.
+- **Tests:** `generator_qml_test` `improvePanelShowsAndRuns` opens a second script and the status hides; `inspector_qml_test` `playbackSuggestCard` same for O-zone / ring-down notes.
+- **Left open:** Improve extras (audio tempo / rhythm / repair span), report engine buttons, feel_heatbands.
+
+**Last update:** 11 Nov 2026, Cursor, branch `cursor/gen-ai-tip-635a`: Suggest tip (AI) pending Apply. Rebased onto main after #236/#238. Do not touch feel_heatbands / Speech-Hold / handbook / `.sam`.
+
+## Handover: Generator Suggest tip (AI) (10 Nov)
+
+PARITY_REMAINING item 17 first slice. Reuses the hybrid re-acquire student/NudeNet path (`models/student/student.onnx` preferred, else `models/nudenet.onnx`). Generator → *Suggest tip (AI)* lists detections on the shown frame and, when a tip-class box matches (glans ↔ penis, no other-class fallback), sets a **pending** green proposal. **Apply AI tip** commits the box; AI never writes the curve (D-057). No model / no ONNX: button disabled, status explains, no crash. Fake detector in tests when CI has no weights.
+
+- **App:** `ai_tip.h` (`FindAiTipModel`, `ListAiHits`, `PickExpectedTip`); `GeneratorController::suggestAiTip` / `applyAiTip` / `dismissAiTip` / `aiTipAvailable`; QML `suggestAiTip` / `applyAiTip` / `aiTipProposal`. Hybrid `MakeHybridPropose` shares the same lookup.
+- **Tests:** `aiTipHelperPicksMatchingClassWithoutFallback`, `suggestAiTipStaysPendingUntilApply`, `dismissAndPickAiDetectionStillNeedApply`, `suggestAiTipOnTinyOnnxDoesNotWriteTheBox` (QSKIP without ONNX); `generator_qml_test` `suggestTipAiDisabledWithoutModelAndApplyCommits`.
+- **Left:** 0.7 AI-assist collapsible, Show all AI tags as Tip/Shift-contact, expected-class select, Suggest Tip+2nd, scene proposals.
+
+## Handover: Player BPM from onsets (10 Nov)
+
+Owner: wire D-168 `EstimateTempo` / `AssessTempo` into Player "From audio". Core already had onsets/tempo; the Player still called `EstimateBpmFromLoudness` only.
+
+- **Core:** `PickPlaybackAudioBpm` (`audio_tempo.h`). Onsets win when `AssessTempo.reliable` (thresholds unchanged: `kTempoMinConfidence` 0.30, `kTempoMinConfidenceStrict` 0.60 when the active sound is mostly noise or speech-like, mostly-silence at `active_share` < 0.25). Else `EstimateBpmFromLoudness`. Folded 20–240.
+- **Player:** `guessBpmFromAudio` decodes the first 10 min with `AudioLevelDecoder` `withOnsets` (same pass as loudness; `OnsetCurve` values drained into `TempoAccumulator`, no whole-file PCM). Status "N BPM from audio." when onsets win, "N BPM from audio (loudness)." on fallback.
+- **Tests:** `tests/core/audio_bpm_test.cpp` (high-confidence onsets win over a conflicting loudness beat; silence / weak pulse / speech → loudness; both fail → 0; music/silence/speech through `EstimateTempo` + `AssessTempo`). App: `guessBpmFromAudioMeasuresClickTrack`, `audioLevelOnsetsOptional`.
+- **Stay off:** feel_heatbands, Speech-Hold, handbook, `.sam`, POV, AI tip, Training audio paths.
+
+## Handover: generator.reportPath (10 Nov)
+
+PARITY_REMAINING item 3/6 (the path key only). Settings → System (health check tab) has a Generator metrics card: path field, Choose… (`FileDialog` SaveFile), Default (clears to `""`), status empty → "No metrics recorded yet (path empty)." / non-empty → the path. Empty means no recording; there is no report engine yet, so no Show summary / Show model / Learn from judgments. Left open: `playback.feel_heatbands`, the three report-engine buttons.
+
+- **App:** `SettingsController::reportPath` / `setReportPath` (`generator.reportPath`; `file:` URLs stored as a local path). QML `reportPathField` / `reportPathChoose` / `reportPathDefault` / `reportPathStatus`.
+- **Tests:** `settings_controller_test` `reportPathRoundTripsAndClearsToEmpty`; `shell_qml_test` System tab empty/set/clear status.
+
+## Handover: Generator Improve panel (10 Nov)
+
+PARITY_REMAINING item 10 (the panel pieces only). Review card on Generator Create: Start (s) / End (s) trim (0 = unbound), Fill gaps (default on), Heal tracking gaps (default on), button Improve script. `EditorController::improveScript` wraps `samn::ImproveScript` (trim → heal → fill); same save/reload as Optimize for. Status `Improved: N points (healed N · +N pts · trimmed) — open Play to edit dots/curve.` Left open: Align fill to audio tempo, audio check, Rhythm bridge, Repair this span.
+
+- **App:** `EditorController::improveScript(startSec, endSec, fillGaps, healTrackingGaps)`; QML `improvePanel` on `GeneratorPage` after `qualityBox`. HelpChips: `generator.start-s` / `generator.end-s` / `gen-improve-fill` / `gen-improve-heal`.
+- **Tests:** `editor_controller_test` `improveScriptTrimsFillsAndHeals`; `generator_qml_test` `improvePanelShowsAndRuns`.
+## Handover: device diagnostics history (10 Nov)
+
+PARITY_REMAINING item 3 (the history piece only). After each finished `RunDiagnostics` (including interrupted) the worker appends one JSONL line. Empty `device.diagnosticsHistoryPath` → `config_dir()/device_diagnostics_history.jsonl`. `DeviceController::getDiagnosticsHistory` returns newest-first; Settings → Device lists `date (Mock|device) — N commands, M errors[, interrupted]`. Name/kind are stamped from the session (the report JSON has none). No Choose… path field (override is the settings key, tested in C++). Left open from that slice: feel_heatbands (`generator.reportPath` is Settings → System).
+
+## Handover: device diagnostics history (10 Nov, merged #231)
+
+PARITY_REMAINING item 3 (the history piece only). After each finished `RunDiagnostics` (including interrupted) the worker appends one JSONL line. Empty `device.diagnosticsHistoryPath` → `config_dir()/device_diagnostics_history.jsonl`. `DeviceController::getDiagnosticsHistory` returns newest-first; Settings → Device lists `date (Mock|device) — N commands, M errors[, interrupted]`. Name/kind are stamped from the session (the report JSON has none). No Choose… path field (override is the settings key, tested in C++). Left open: `generator.reportPath`, feel_heatbands.
+
+- **Core:** `diagnostics.h` `DiagnosticsHistoryEntry`, `AppendDiagnosticsHistory` / `LoadDiagnosticsHistory`, `HistoryEntryFromReport`. Tests in `device_diagnostics_test.cpp`.
+- **App:** `DeviceWorker::RunDiagnostics` appends; `getDiagnosticsHistory` / `diagnosticsHistoryPath` / `setDiagnosticsHistoryPath`. QML under the Device diagnostics card (`diagHistoryLine`). Tests: `diagnosticsOnMock`, `diagnosticsCanBeCancelled`, `diagnosticsHistoryPathDefaultAndOverride`, `settingsDeviceTabTestsTheMockDevice`.
+
+## Handover: axis legend chips (10 Nov, #228)
+
+- **GUI:** `PlayerTimeline` horizontal axis legend chips above the ruler; `LaneName` Left/Right/Home/End via `Keys.onPressed` (Qt 6 has no `onHomePressed`/`onEndPressed`). Chip `MouseArea` at `z:10`; Repeater captures `laneId`.
+- **Tests:** `player_page_qml_test` delivers press/release to the chip `MouseArea` (window `QTest` clicks miss stacked feel-stage areas).
+- **Docs:** README Player scenes/thumbs/legend/Alt+B; PARITY axis-legend tick.
+
+## Handover: script analysis (10 Nov, merged #229)
 
 - **Core:** `motion_classify.h` (0.7 `motionx.Classify`), `motion_chapters.h` (`Chapters`), `script_analysis.h` (`AnalyzeScript` / `summarizeStates`). An empty `ClassifyOptions` does not smooth; only `AnalyzeScriptActions` sets `SmoothRadius` 2. `ScriptChapters` classifies with smoothing off.
 - **Player:** `scriptAnalysisSummary` after a script with at least 4 points, on the Playback card "Script check & analysis" (title gains "· summary ready"). Stored `metadata.chapters` replace the automatic labels (empty name → "chapter", end at or before the start → start+1). Nothing is written back.
 - **Tests:** `tests/core/motion_classify_test.cpp`, `motion_chapters_test.cpp`, `script_analysis_test.cpp`, `tests/app/player_controller_test.cpp` `scriptAnalysisOnOpen`.
 
+## Handover: `claude/samn2-label-dupms` (10 Nov, label tracking: equal timestamps; no silent skips)
 
+Follow-up to the review of #216 (merged). Rebased onto main after #231 (diagnostics history) and #228 (axis legend). Cursor handovers for those stay; this PR's handover is below.
+
+- **Bug:** frames that share a millisecond (equal timestamps) were found wrongly by the backward decode of `TrackBetweenKeys`: the seek can land on the second frame of a run. A landing rule that only applied when earlier frames of the run were already in `times` (`k > 0`) accepted that second frame when the wanted frame was the first of the group (`k == 0`). Happens on all-intra mjpeg and on a keyframe in the middle of a group (mpeg4 GOP 7). Window 1 silently tracked the wrong frames; a larger window stopped with "the video changed between two reads". Falling back to the first key then re-decoded the stretch from the start (~10× `frames_decoded`: 2205 vs 205 on mpeg4 GOP 7, window 1).
+- **Fix** (`engine/src/label_tracking.cpp`, decode lambda): `k` = frames before the chunk's first frame with the same millisecond; `in_run` = an equal-time neighbour either side, **including the first of the group**. For a run that has a previous distinct time in `times`, the first seek goes there (lands before the run). A landing on the time counts only after an earlier frame was grabbed; `last_try` does not waive that. Then `k` frames are stepped over. The first group of the stretch (no previous time in `times`; the forward seek may already have started inside it) decodes on a fresh reader sought like the forward run's — OpenCV can drop frames of the run a re-seek lands in (mjpeg). Only those few chunks, so decode does not restart from 0 for every chunk. A frame outside a run behaves as before. `FrameReader::Grab` keeps POS_MSEC of 0 on later frames (a real t=0 duplicate); substituting the nominal frame time made that frame unseekable.
+- **Tests** (ffmpeg makes the clips; the encoder and `setpts` refuse equal timestamps, so they are encoded without B-frames and `-bsf:v setts` rewrites the timestamps in a stream copy into Matroska): `...duplicate timestamps equals the reference` (mpeg4 pairs and triples, keys at 0 and 500 ms, windows 1/3/24) and `...keys inside runs of equal timestamps equals the reference` (mjpeg pairs and triples, mpeg4 GOP 7 pairs and triples, mpeg4 GOP 7 pairs starting at 1.3 s; stretch of 4 s; keys at the start, at a run start and between runs; windows 1, 3, 24 and the default adaptive one; boxes bit-exact against the old hold-everything copy; `frames_decoded` bounded, so no re-decode from the start per chunk). **Failed on the unfixed landing** (`k == 0` accepted without an earlier frame): mjpeg from 0, window 1, "the video changed between two reads"; mpeg4 GOP 7 window 1 decoded 2205 vs 205. Passes after the fix. **Only these clips are tested**: other codecs (x264, all-intra besides mjpeg), run lengths above 3 and real recordings are not.
+- **No silent skip:** the ffmpeg-based label tests call `FfmpegOrFail()`: no ffmpeg and env `CI` or `SAMN_NATIVE_REQUIRED` set fails the test. A failed **duplicate-timestamp** clip make fails (no skip). A failed **VFR / long-GOP** clip make skips that variant (some ffmpeg builds cannot make one recipe). On **Windows these tests do not run**: the runner has no ffmpeg program and sets `SAMN_NATIVE_REQUIRED`, so the skip is accepted, with a message on stderr and in the doctest log (ctest shows a passing test's output only with `-V`). Elsewhere a plain `SKIPPED` message. The Linux build job and the ASan/UBSan job install `ffmpeg` with apt; the TSan job does not (it runs only `generate*`).
+- **TSan:** the label tests are not in the TSan filter: they take minutes in Release and the CSRT tracker is far slower under TSan. ASan/UBSan runs the whole `engine_tests`.
+- **Docs:** "the output never depends on the window" in `docs/benchmarks/LABEL_MEMORY_2026-11-08.md` now says what is tested.
+- **Not verified:** Windows/MSVC, the sanitizer jobs, real clips with equal timestamps (only ffmpeg-made ones).
 
 ## Handover: `claude/samn2-label-vfr` (9 Nov, label tracking: VFR fix and long-GOP window)
 
@@ -25,9 +111,16 @@ Owner priority: CPU/RAM efficient AI. `TrackBetweenKeys` (`engine/src/label_trac
 - **Not verified:** Windows/MSVC, real clips (phones: B-frames, GOP 30 to 60; only synthetic VFR and GOP made by ffmpeg were tried), the Qt `label_controller` (not built here; its call site is unchanged).
 - **Ideas not done:** keep the forward run's last chunk instead of decoding it again; a `FrameReader` that reports the GOP.
 
+## Handover: `claude/samn2-device-service-fixes` (9 Nov, follow-up to #213)
+
+- **Fixed:** `class DeviceController : public samn::ui::DeviceService` (the unqualified base made qmltyperegistrar drop the prototype and `statusChanged` in the qmltypes on Qt 6.4); D-169 and `device_service.h` no longer claim "exactly what the consumers call" (battery, `generation`, `sessionActive` are for the UI and tests).
+- **Fake is as strict as the controller:** `FakeDeviceService` refuses connect / disconnect while a hold is active and connect while connected (records `refused ...`).
+- **New tests, each shown failing with its mutation:** Training releases its hold before it disconnects (`trainingConnectsAMockAndClosesItAgain`); a changed PlaybackOutput device hands the hold over (`swappingTheOutputsDeviceMovesTheHold`); a status change emits `lanesChanged` (`aStatusChangeUpdatesThePlayersLanes`); `theFakeRefusesWhatTheRealControllerRefuses`.
+- **Not modelled:** `emergencyStop` dropping queued levels (the fake has no queue).
+
 ## Handover: `claude/samn2-intensity-arc` (6-8 Nov, D-165 first slice: intro and climaxes)
 
-Owner: find the intro and the climaxes ("Höhepunkte") of a video from its sound and samples of its picture; cinema-grade, clean, lean, measured before and after, little CPU and memory. This slice is core only: no decoder change, no FFT, no Generator change. PR #168, reviewed and refuted three times; this state answers the third review (empty stretches, scene cuts without sound, the loud-opening guard, test bounds, the documented limits, `steps()` overflow).
+Owner: find the intro and the climaxes ("Höhepunkte") of a video from its sound and samples of its picture; cinema-grade, clean, lean, measured before and after, little CPU and memory. This slice is core only: no decoder change, no FFT, no Generator change. PR #168, reviewed and refuted three times, then verified with caveats and merged at the third review's state; the fourth review's fix follows in `claude/samn2-intensity-arc-fixes`. This state answers the third review (empty stretches, scene cuts without sound, the loud-opening guard, test bounds, the documented limits, `steps()` overflow) and the fourth (black stretches with codec noise: empty runs of 10 s or more reach the arc without motion or sound, `kEmptyRunMs`; a step that would overflow the clip's times is rejected).
 
 - **Core:** `intensity_arc.h` / `intensity_arc.cpp`, `ComputeArc(PhaseSignals, ArcOptions)` -> `IntensityArc` (`detail` 4 s and `arc` 20 s curves, `intro_end_ms`, `peaks` with `t_ms`, `start_ms`, `end_ms`, `prominence`, `confidence`; the primary first). Design in D-165. Each constant has its reason next to it, and the fitted ones say so.
 - **The design in one line each:**
@@ -43,7 +136,7 @@ Owner: find the intro and the climaxes ("Höhepunkte") of a video from its sound
 - **`SuggestPhases`:** keeps its empty-stretch rule and takes intro and climaxes from the arc. Every climax is the longest free stretch of its peak (never cut by black, never merged past `climax_max_ms`). The cool-down follows the last climax when it ends calmer than the action before it. `min_intro_ms` scales below two minutes. `PhaseSignals::tempo` and `PhaseRuleOptions::active_share` are removed (no caller set them).
 - **Measured** (`docs/benchmarks/INTENSITY_ARC_2026-11-06.md`):
   - 24 scenarios: climax hits 369 -> 560 of 600, false climaxes 54 -> 10, intro hits 567 -> 600.
-  - 17 random-arc families (five new: peak beside a black end, loud opening, empty middle, empty start or end, scene cuts without sound), train and held-out seeds: no family worse than the old rules under the acceptance written in the bench. That acceptance is: climax hits at least theirs; intro hits at most 2 % fewer; false climaxes per clip at most theirs + 0.02, or + 0.10 where theirs exceed 0.25 (fast random walks, where neither is reliable).
+  - 18 random-arc families (six new: black with codec noise, peak beside a black end, loud opening, empty middle, empty start or end, scene cuts without sound), train and held-out seeds: no family worse than the old rules under the acceptance written in the bench. That acceptance is: climax hits at least theirs; intro hits at most 2 % fewer; false climaxes per clip at most theirs + 0.02, or + 0.10 where theirs exceed 0.25 (fast random walks, where neither is reliable).
   - The held-out seeds were looked at more than once in the third review (the doc says when and why), so they are no longer untouched data.
   - With strict 5 s grading three family rows fail (shown in the doc).
   - The thresholds are fitted on synthetic data only; the doc has a sensitivity grid. `kFlankGain` and `kLastStepGain` are knife edges.
@@ -52,12 +145,12 @@ Owner: find the intro and the climaxes ("Höhepunkte") of a video from its sound
   - edge climax, plateau, short clips, close bursts, black cuts, merges;
   - calm intro + even action, sound-only climaxes, fade cool-down, staircase top step, boxed-in climax;
   - random walks against absolute bounds; confidence as properties (0.7x when sound and motion top out apart);
-  - long empty stretches (middle, tail, lead-in, black or still), a peak beside a black stretch, scene cuts without sound (also on the first and last steps), a loud opening under +-35 % jitter.
+  - long empty stretches (middle, tail, lead-in, black or still; black with codec noise, silent or with music), a peak beside a black stretch, scene cuts without sound (also on the first and last steps), a loud opening under +-35 % jitter.
 
   `phase_rules_test.cpp` unchanged. Bench: `tests/bench/phase_bench.cpp`, target `phase_bench`, not in ctest, exit 1 when the acceptance fails.
 - **Limits:**
   - Synthetic only; real clips are the gate.
-  - Worse than the old rules on the review's probes: staircases with jitter sd above about 0.2; random walks faster than the bench's (1.1-1.7 false climaxes per clip vs 0.8-0.9); quantised random walks (0.44 vs 0.27, made worse by the running median; three fixes tried and reverted); calm tails (0.010 vs 0); a lit, still, quiet but not silent lead-in over 60 % (0.53 vs 0).
+  - Worse than the old rules on the review's probes: staircases with jitter sd above about 0.2; random walks faster than the bench's (1.1-1.7 false climaxes per clip vs 0.8-0.9); quantised random walks (0.44 vs 0.27, made worse by the running median; three fixes tried and reverted; cannot occur in the app, whose motion quantum is about 1.7e-6 and whose loudness is a float RMS in dB); app-like loudness (`NormalizeLoudness`) adds spurious intros on ramps and staircases (intro hits 994 -> 891 and 809 -> 624, as at 6e4d314); calm tails (0.010 vs 0); a lit, still, quiet but not silent lead-in over 60 % (0.53 vs 0).
   - The bench's own walks: 0.17 false climaxes per clip at step 0.02 (old rules 0.32-0.34).
   - A sound-only climax needs about 2x the rest of the action.
   - Slow build-ups of 100-500 s: 15 of 25.

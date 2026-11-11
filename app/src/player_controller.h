@@ -458,9 +458,10 @@ public:
     // Fill BPM from the open stroke's peak spacing and turn the grid on.
     // Returns the BPM set, or 0 with lastError / toolNote when unclear.
     Q_INVOKABLE double guessBpmFromStroke();
-    // 0.7 EstimatePlaybackAudioBPM / "From audio": decode the linked video's
-    // loudness (first 10 min), set BPM + grid. Async; returns false when it
-    // cannot start (no video / already busy). Result lands in toolNote.
+    // 0.7 EstimatePlaybackAudioBPM / "From audio": decode the linked video
+    // (first 10 min), prefer EstimateTempo when AssessTempo trusts it, else
+    // loudness peaks. Set BPM + grid. Async; returns false when it cannot
+    // start (no video / already busy). Result lands in toolNote.
     Q_INVOKABLE bool guessBpmFromAudio();
     // 0.7 Sound Curve: decode loudness → propose VibrationCurveFromSound;
     // confirm writes the Vibration lane into the .samn (axes). Undo restores

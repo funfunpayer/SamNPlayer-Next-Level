@@ -563,6 +563,17 @@ void DeviceWorker::RunDiagnostics() {
     };
     const dev::DiagnosticsReport report =
         dev::RunDiagnostics(session_->device->GetDevice(), session_->connect_latency_ms, options);
+    try {
+        std::string stored;
+        const auto v = Settings().get(kPrefDiagnosticsHistoryPath, "");
+        if (v.is_string()) stored = v.get<std::string>();
+        const std::string name = SessionInfo(false).name;
+        const std::string kind = session_->kind.toStdString();
+        dev::AppendDiagnosticsHistory(dev::ResolveDiagnosticsHistoryPath(stored),
+                                      dev::HistoryEntryFromReport(report, name, kind));
+    } catch (const std::exception& e) {
+        EmitLog(dev::LogLevel::kWarn, std::string("device: diagnostics history not saved: ") + e.what());
+    }
     const QString json = Q(dev::ToJson(report));
     QMetaObject::invokeMethod(ctl, [ctl, json] { emit ctl->diagnosticsFinished(json); }, Qt::QueuedConnection);
     finish(false);

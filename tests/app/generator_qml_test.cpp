@@ -698,6 +698,129 @@ private slots:
         gen->setOptimizeTarget(QString());
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
     }
+
+    void suggestTipAiDisabledWithoutModelAndApplyCommits() {
+        g_messages.clear();
+        const QString video = dir_.filePath("ai_tip.mp4");
+        QVERIFY(samn::engine::testclips::WriteMoving(std::filesystem::path(video.toStdU16String()), 8, 80.0, 1.0));
+        QQmlEngine engine;
+        engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
+        engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+        engine.addImageProvider(QStringLiteral("frames"), new samn::ui::FrameProvider);
+        QQmlComponent comp(&engine);
+        comp.setData(R"(
+            import QtQuick
+            import SamN
+            Rectangle {
+                width: 1400; height: 820; color: "#021024"
+                property alias page: gp
+                GeneratorPage { id: gp; anchors.fill: parent; anchors.margins: 20 }
+            })",
+                     QUrl("qrc:/test/AiTip.qml"));
+        QVERIFY2(comp.status() == QQmlComponent::Ready, qPrintable(comp.errorString()));
+        QQuickWindow window;
+        window.resize(1400, 820);
+        std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
+        QVERIFY(root);
+        root->setParentItem(window.contentItem());
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto* page = root->property("page").value<QQuickItem*>();
+        auto* gen = page->property("controller").value<GeneratorController*>();
+        QVERIFY(page && gen);
+        gen->setAutoTip(false);
+        QVERIFY(gen->openVideo(video, false));
+        QTRY_VERIFY(named(root.get(), "suggestAiTip"));
+        QVERIFY(!named(root.get(), "suggestAiTip")->isEnabled());
+        QVERIFY(named(root.get(), "aiTipHint")->isVisible());
+        QVERIFY(!named(root.get(), "applyAiTip")->isVisible());
+        QVERIFY(!gen->hasBox());
+
+        gen->setFakeAiHitsForTest({QVariantMap{{"x", 40},
+                                               {"y", 50},
+                                               {"w", 48},
+                                               {"h", 36},
+                                               {"score", 0.88},
+                                               {"label", "penis"},
+                                               {"cls", 14}}});
+        QTRY_VERIFY(named(root.get(), "suggestAiTip")->isEnabled());
+        QMetaObject::invokeMethod(named(root.get(), "suggestAiTip"), "clicked");
+        QTRY_VERIFY(gen->hasAiTipProposal());
+        QVERIFY(!gen->hasBox());
+        QTRY_VERIFY(named(root.get(), "applyAiTip")->isVisible());
+        QTRY_VERIFY(named(root.get(), "aiTipProposal")->isVisible());
+        QTRY_VERIFY(named(root.get(), "aiDetection_0"));
+        QMetaObject::invokeMethod(named(root.get(), "applyAiTip"), "clicked");
+        QTRY_COMPARE(gen->box(), QRect(40, 50, 48, 36));
+        QTRY_VERIFY(!named(root.get(), "applyAiTip")->isVisible());
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
+    }
+
+    // Review-card Improve panel: Start/End, Fill and Heal defaults, button
+    // runs EditorController::improveScript on the open script.
+    void improvePanelShowsAndRuns() {
+        g_messages.clear();
+        QTemporaryDir scripts;
+        QVERIFY(scripts.isValid());
+        const QString script = scripts.filePath(QStringLiteral("clip.funscript"));
+        {
+            QFile f(script);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(R"({"actions":[{"at":0,"pos":10},{"at":2000,"pos":90}]})");
+        }
+        QQmlEngine engine;
+        engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
+        engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+        engine.addImageProvider(QStringLiteral("frames"), new samn::ui::FrameProvider);
+        QQmlComponent comp(&engine);
+        comp.setData(R"(
+            import QtQuick
+            import SamN
+            Rectangle {
+                width: 1400; height: 820; color: "#021024"
+                property alias page: gp
+                GeneratorPage { id: gp; anchors.fill: parent; anchors.margins: 20 }
+            })",
+                     QUrl("qrc:/test/ImprovePanel.qml"));
+        QVERIFY2(comp.status() == QQmlComponent::Ready, qPrintable(comp.errorString()));
+        QQuickWindow window;
+        window.resize(1400, 820);
+        std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
+        QVERIFY(root);
+        root->setParentItem(window.contentItem());
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto* page = root->property("page").value<QQuickItem*>();
+        auto* edit = page->property("editor").value<QObject*>();
+        QVERIFY(page && edit);
+        bool opened = false;
+        QVERIFY(QMetaObject::invokeMethod(edit, "open", Q_RETURN_ARG(bool, opened), Q_ARG(QString, script)));
+        QVERIFY(opened);
+        QTRY_VERIFY(named(root.get(), "improvePanel")->isVisible());
+        QVERIFY(named(root.get(), "improveStart"));
+        QVERIFY(named(root.get(), "improveEnd"));
+        QCOMPARE(named(root.get(), "improveFill")->property("checked").toBool(), true);
+        QCOMPARE(named(root.get(), "improveHeal")->property("checked").toBool(), true);
+        QVERIFY(named(root.get(), "improveButton")->isVisible());
+        QMetaObject::invokeMethod(named(root.get(), "improveButton"), "clicked");
+        const QString status = edit->property("status").toString();
+        QVERIFY2(status.startsWith("Improved:"), qPrintable(status));
+        QTRY_VERIFY(named(root.get(), "improveStatus")->isVisible());
+        QVERIFY2(named(root.get(), "improveStatus")->property("text").toString().startsWith("Improved:"),
+                 qPrintable(named(root.get(), "improveStatus")->property("text").toString()));
+        const QString other = scripts.filePath(QStringLiteral("other.funscript"));
+        {
+            QFile f(other);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(R"({"actions":[{"at":0,"pos":0},{"at":1000,"pos":100},{"at":2000,"pos":0}]})");
+        }
+        opened = false;
+        QVERIFY(QMetaObject::invokeMethod(edit, "open", Q_RETURN_ARG(bool, opened), Q_ARG(QString, other)));
+        QVERIFY(opened);
+        QTRY_VERIFY(!named(root.get(), "improveStatus")->isVisible());
+        QCOMPARE(named(root.get(), "improvePanel")->property("lastStatus").toString(), QString());
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
+    }
 };
 
 QTEST_MAIN(GeneratorQmlTest)

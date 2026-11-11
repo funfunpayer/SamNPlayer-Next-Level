@@ -38,7 +38,7 @@ Item {
             width: 14; height: 14; radius: 7; x: -3
             y: parent.height * (1 - root.frac) - 7
             color: "#dff8ff"; border.color: Theme.blue; border.width: 2
-            Behavior on y { NumberAnimation { duration: 80 } }
+            Behavior on y { NumberAnimation { duration: Theme.reducedMotion ? 0 : 80 } }
         }
     }
     Text {

@@ -8,17 +8,17 @@ Made on 8 Nov 2026 from the audit in [`PARITY.md`](PARITY.md) (113 open and 139 
 
 1. ~~**Player key tests**~~ — done (`headerKeysAndShortcuts`: Space, arrows, `+` `-`, L, T, O; header + keys hint).
 2. ~~**Undo / Redo on the Player's curve edit**~~ — done earlier (Ctrl+Z / Ctrl+Y + Undo/Redo under Curve edit).
-3. **Plain settings keys** (§2.3): `generator.reportPath`, `device.diagnosticsHistoryPath`, the `playback.feel_heatbands` pair; plus the diagnostics history list in Settings → Device (§8, §13 `GetDiagnosticsHistory`).
+3. **Plain settings keys** (§2.3): the `playback.feel_heatbands` pair. ~~`generator.reportPath`~~ — done (`SettingsController::reportPath`, Settings → System, empty = no recording, test `reportPathRoundTripsAndClearsToEmpty`). ~~`device.diagnosticsHistoryPath` and the diagnostics history list in Settings → Device (§8, §13 `GetDiagnosticsHistory`)~~ — done (`DeviceController::getDiagnosticsHistory`, JSONL, Settings → Device previous runs).
 4. ~~**Window and brand wording**~~ — replaced (D-150 / D-151): "SamNPlayer Next", 1440×900, two-colour wordmark + Next.
 5. ~~**Player polish**~~ — header "Player" / "No Emotion Script selected", lane hover tips, heatmap wheel zoom + `pb-marker-hint` chip, keys-hint chip (remaining: soft-curve edit-dots hint belongs to the Generator editor).
-6. **Settings → Hardware and metrics** (§2.2 last collapsible, §13 `GetHardwareInfo`): "Check hardware" is Settings → System (D-162 / D-167). Still missing: `generator.reportPath`, "Show summary", "Show model", "Learn from judgments".
+6. **Settings → Hardware and metrics** (§2.2 last collapsible, §13 `GetHardwareInfo`): "Check hardware" is Settings → System (D-162 / D-167). ~~`generator.reportPath`~~ — done (Settings → System path field, empty = no recording). Still missing: "Show summary", "Show model", "Learn from judgments".
 
 ### Medium (M)
 
 7. **Scene strip thumbnails in the Player** (§3 scene strip, §13 `GetVideoThumbnails`): 24 frames from `FrameCache` under the lanes; the Generator already shows them.
 8. ~~**Script analysis**~~ — done (`motion_classify.h`, `motion_chapters.h`, `script_analysis.h`; Inspector → Playback shows `scriptAnalysisSummary`. Automatic chapters are display only and are not written into the file).
 9. **Polarity suggestion, ring-down, apply O-zone** (§9 polarity item, §13 `SuggestPolarity`, `ApplyRingDown`, `ApplySuggestedOZone`): `polarity.h` and `ozone.h` exist; add the missing pieces and the buttons.
-10. **Improve panel** (§4 review panel, §9 Improve ops, §13 `ImproveGeneratedScript`): Start / End trim, align fill to audio tempo, audio check, rhythm bridge, repair span. Fill and heal already run through Optimize for.
+10. **Improve panel** (§4 review panel, §9 Improve ops, §13 `ImproveGeneratedScript`): ~~Start / End trim, Fill gaps, Heal tracking gaps~~ — done (`EditorController::improveScript`, Generator review card; tests `improveScriptTrimsFillsAndHeals`, `improvePanelShowsAndRuns`). Left: align fill to audio tempo, audio check, rhythm bridge, repair span.
 11. **Generator Advanced leftovers** (§4 Advanced groups): Auto-Retry, Per-scene ROI, the audio check switch, the MT-Debug trajectory switch and line overlay, the live probe.
 12. **Create queue from drops** (§1 drop routing, §4 queue and `drop:video`): several videos dropped build the queue; posters and durations in the list.
 13. **Feedback card and run metrics** (§4 feedback card, §9 metrics, §13 `SubmitFeedback`, `ReportSummary`, report methods): a local JSONL per run and the three-verdict card.
@@ -28,11 +28,11 @@ Made on 8 Nov 2026 from the audit in [`PARITY.md`](PARITY.md) (113 open and 139 
 
 ### Large blocks (L), in the order the Owner is likely to want them
 
-17. **AI tip detection in the Generator** (§4 AI assist, pending target, Suggest Tip+2nd; §13 `DetectExpectedTipROI`, `ListAIDetections`, `CheckAIRoiAvailable`; §2.2 AI region detection and class settings): a model path, strict class search, a proposal that needs Apply. `vision/` and the NudeNet teacher exist; the Generator does not call them yet. The trained student from AI Train should plug in here.
+17. **AI tip detection in the Generator** (§4 AI assist, pending target, Suggest Tip+2nd; §13 `DetectExpectedTipROI`, `ListAIDetections`, `CheckAIRoiAvailable`; §2.2 AI region detection and class settings): ~~first slice done (`cursor/gen-ai-tip-635a`): Suggest tip (AI) lists student/NudeNet boxes, pending green proposal, Apply required, disabled+status with no model.~~ Left: the 0.7 collapsible, Show all AI tags as Tip/Shift-contact, Smarter tip-find checkbox + expected-class select, Suggest Tip+2nd, scene-proposals panel, request-id DetectExpectedTipROI dump.
 18. **Scene Map and rhythm grid** (§7, §4 scene-map overlay and marks, §9 `.samn` `sceneMap`, §13 `ScanSceneMap` and the learning export methods): the Editor already has scene cards; the rhythm heatmap, marks and persistence are missing (needs the rhythm grid of P3.4).
 19. **AI Train and Benchmark, plugin mode** (§6, §13 benchmark and ROI methods): label editor, export, set-up and training run (`TrainController`) are in. Left: Compare page (`ScoreScriptPair` UI, `SuggestBenchmarkPairBesideVideo`), golden-clip runner page and history (the command line `samn_compare` and `samn_bench` exist), wheel zoom and pan in the label editor, counts per class and split, DirectML / Apple MPS, "Use in Compare".
 20. **Plugins** (§2.2 Plugins collapsible, §9 plugin host, §13 `PluginsDir` and three more): drop-folder packs with a manifest and "Install pack…". Today a plugin mode is a built-in page behind a switch (D-155); D-163 wants extensible drivers.
-21. **Help texts and handbook** (§12, §1 help chips, after 0.7.0 handbook line): the 189 texts exist in `HelpTexts.js`; Player Inspector also places Curve/Drive, contact curve, strength, Auto Extended-O, Softer/Stronger scale, secondary O-marker intensity, Extended-O Minimum, contact-marks toggle, speed-hl threshold, stroker Motion/Speed limit; Timeline places chapter/bookmark Add action chips; Settings Device places Raw value test and Device diagnostics chips (plus earlier Loop/BPM/Contact off/FPS-Snap and Generator/Settings chips). Still missing: more placements, Training and the Library; handbook parts for audio vibration, BPM from audio, Sound Curve, Auto sync.
+21. **Help texts and handbook** (§12, §1 help chips, after 0.7.0 handbook line): the 189 texts exist in `HelpTexts.js`; Player Inspector also places Curve/Drive, contact curve, strength, Auto Extended-O, Softer/Stronger scale, secondary O-marker intensity, Extended-O Minimum, contact-marks toggle, speed-hl threshold, stroker Motion/Speed limit; Timeline places chapter/bookmark Add action chips; Settings Device places Raw value test and Device diagnostics chips (plus earlier Loop/BPM/Contact off/FPS-Snap and Generator/Settings chips). Training placements done (Mock / Intensity / Session Mode / Stage / Feedback, plus the earlier session-settings sliders). Library placements done (Local Files / Recent / Favorites / Scripts / Analysis). Still missing: more placements elsewhere; handbook parts for audio vibration, BPM from audio, Sound Curve, Auto sync.
 22. **Opt-in AI helpers** (§4 power-user scene memory, AI draft, contact points; §13 `SuggestProfile`, `LabelScene`, `TrainMotionProfileModel`, `DraftAIScript`, `GenerateContactPointsForVideo`): lowest value; each needs an Owner go-ahead (D-057 keeps AI from writing the curve).
 
 ### Needs an Owner call first
@@ -55,6 +55,7 @@ From the after-0.7.0 section and `ROADMAP.md` (b). The ROADMAP rows were not re-
 8. **Next Level capabilities CAP-01 to CAP-12** and the golden benchmark gate (ROADMAP): the gate is partly there (`samn_bench` baseline of 6 Nov, `samn_compare`); Project Recovery, Smart Batch, Quality Compare and the rest are specified only. L.
 9. **Native Handy, follow an external player, session recap, Vorze CSV, VR** (ROADMAP "Later"): not started, no plan yet.
 10. **Windows code signing, Sentry for development builds** (ROADMAP): need the Owner (certificate, DSN).
+11. **Camera POV** (not in 0.7): core `ClassifyPov` (slice 1) is in. Not in this slice: vision `MeasurePovSignals`, UI, `.scene.json` write, scene_roles, ONNX.
 
 ## (c) Dropped or replaced on purpose
 

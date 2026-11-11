@@ -116,6 +116,43 @@ static QString writeToneWav(const QString& dir) {
     return path;
 }
 
+// 16-bit mono WAV: 8 s of 90 BPM clicks (a short 1 kHz burst every 667 ms).
+static QString writeClickWav(const QString& dir) {
+    const int rate = 11025;
+    const int n = 8 * rate;
+    QByteArray pcm;
+    pcm.resize(n * 2);
+    auto* s = reinterpret_cast<qint16*>(pcm.data());
+    for (int i = 0; i < n; ++i) s[i] = 0;
+    const int period = int(std::lround(rate * 60.0 / 90.0));
+    const int burst = rate / 200;  // 5 ms
+    for (int t0 = 0; t0 + burst < n; t0 += period) {
+        for (int i = 0; i < burst; ++i) {
+            s[t0 + i] = qint16(20000 * std::sin(2 * M_PI * 1000 * i / rate));
+        }
+    }
+    QByteArray h;
+    auto u32 = [&h](quint32 v) { h.append(reinterpret_cast<const char*>(&v), 4); };
+    auto u16 = [&h](quint16 v) { h.append(reinterpret_cast<const char*>(&v), 2); };
+    h.append("RIFF");
+    u32(36 + pcm.size());
+    h.append("WAVEfmt ");
+    u32(16);
+    u16(1);
+    u16(1);
+    u32(rate);
+    u32(rate * 2);
+    u16(2);
+    u16(16);
+    h.append("data");
+    u32(pcm.size());
+    const QString path = dir + "/clicks.wav";
+    QFile f(path);
+    f.open(QIODevice::WriteOnly);
+    f.write(h + pcm);
+    return path;
+}
+
 class PlayerControllerTest : public QObject {
     Q_OBJECT
     std::unique_ptr<QTemporaryDir> cfg_;
@@ -362,6 +399,28 @@ private slots:
         QVERIFY(c.openScript(path));
         QVERIFY(!c.guessBpmFromAudio());
         QVERIFY(c.toolNote().contains("video") || c.lastError().contains("video"));
+    }
+
+    // From audio on a 90 BPM click track: onsets when the pulse is clear.
+    void guessBpmFromAudioMeasuresClickTrack() {
+        QTemporaryDir d;
+        const QString path = d.filePath("bpm.funscript");
+        writeFile(path, zigzag(21, 100));
+        const QString wav = writeClickWav(d.path());
+        PlayerController c;
+        QVERIFY(c.openScript(path, wav));
+        QVERIFY(c.guessBpmFromAudio());
+        QTRY_VERIFY_WITH_TIMEOUT(c.bpm() > 0 || c.toolNote().contains(QStringLiteral("No clear"))
+                                     || c.toolNote().startsWith(QStringLiteral("No audio")),
+                                 20000);
+        if (c.bpm() <= 0) {
+            if (qEnvironmentVariableIsSet("CI")) QFAIL("No readable sound track in CI");
+            QSKIP("No readable sound track in this environment");
+        }
+        QVERIFY(c.bpm() >= 20 && c.bpm() <= 240);
+        QVERIFY(c.bpmGrid());
+        QVERIFY(c.toolNote().contains(QStringLiteral("BPM from audio")));
+        QVERIFY2(!c.toolNote().contains(QStringLiteral("loudness")), qPrintable(c.toolNote()));
     }
 
     // 0.7 Auto sync: needs script + video; Apply sets offset from suggestion.
@@ -2001,6 +2060,26 @@ private slots:
         QCOMPARE(fail.count(), 0);
         QCOMPARE(done.at(4).first().value<std::vector<double>>().size(), size_t(otherMs / step));
         QVERIFY(!dec.busy());
+    }
+
+    // Onset analysis is opt-in: same pass as loudness, empty unless requested.
+    void audioLevelOnsetsOptional() {
+        QTemporaryDir dir;
+        const QString wav = writeToneWav(dir.path());
+        AudioLevelDecoder dec;
+        QSignalSpy done(&dec, &AudioLevelDecoder::finished);
+        QSignalSpy fail(&dec, &AudioLevelDecoder::failed);
+        dec.start(wav);
+        QTRY_VERIFY_WITH_TIMEOUT(done.count() + fail.count() > 0, 15000);
+        QCOMPARE(fail.count(), 0);
+        QVERIFY(dec.onsetBlocks().empty());
+        QCOMPARE(dec.onsetTempo().bpm, 0.0);
+
+        dec.start(wav, samn::kAudioLevelStepMs, -1, true);
+        QTRY_VERIFY_WITH_TIMEOUT(done.count() + fail.count() >= 2, 15000);
+        QCOMPARE(fail.count(), 0);
+        QVERIFY(!dec.onsetBlocks().empty());
+        QVERIFY(dec.onsetTempo().bpm >= 0);
     }
 
     // Whole-video waveform beat grid: off at period 0, every 4th beat stronger

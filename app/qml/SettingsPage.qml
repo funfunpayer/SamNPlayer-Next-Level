@@ -32,6 +32,14 @@ Item {
         title: qsTr("Add a script folder")
         onAccepted: if (root.player) root.player.addScriptFolder(selectedFolder.toString())
     }
+    FileDialog {
+        id: reportPathDialog
+        title: qsTr("Choose a generator metrics file")
+        fileMode: FileDialog.SaveFile
+        nameFilters: [qsTr("Metrics (*.jsonl *.json)"), qsTr("All files (*)")]
+        defaultSuffix: "jsonl"
+        onAccepted: ctl.reportPath = selectedFile.toString()
+    }
 
     // Dim the app behind; a click outside the card closes.
     Rectangle {
@@ -417,12 +425,17 @@ Item {
                 readonly property bool canTest: connected && !dev.sessionActive
                 property var report: null
                 property string diagStatus: ""
+                property var diagHistory: []
                 // 0.7 levels: vibration 0-10, suction 0-5.
                 function level(pct, steps) { return Math.round(pct / 100 * steps) }
                 function showReport(json) {
                     try { report = JSON.parse(json) } catch (e) { report = null }
                     diagStatus = report ? qsTr("Done.") : ""
                 }
+                function refreshHistory() {
+                    diagHistory = root.device ? root.device.getDiagnosticsHistory() : []
+                }
+                onVisibleChanged: if (visible) refreshHistory()
                 Connections {
                     target: root.device
                     function onDiagnosticsEntry(json) {
@@ -434,7 +447,10 @@ Item {
                                 + (e.error ? " · " + qsTr("error: %1").arg(e.error) : "")
                         } catch (err) {}
                     }
-                    function onDiagnosticsFinished(json) { devTab.showReport(json) }
+                    function onDiagnosticsFinished(json) {
+                        devTab.showReport(json)
+                        devTab.refreshHistory()
+                    }
                 }
                 Timer {
                     id: pulseTimer
@@ -677,6 +693,25 @@ Item {
                                     color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
                                 }
                             }
+                            Text {
+                                objectName: "diagHistoryHeading"
+                                visible: devTab.diagHistory.length > 0
+                                textFormat: Text.PlainText
+                                text: qsTr("Previous runs (newest first)")
+                                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12; font.weight: Font.Medium
+                            }
+                            Repeater {
+                                objectName: "diagHistory"
+                                model: devTab.diagHistory
+                                delegate: Text {
+                                    objectName: "diagHistoryLine"
+                                    required property var modelData
+                                    Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                    textFormat: Text.PlainText
+                                    text: modelData && modelData.text ? modelData.text : ""
+                                    color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
+                                }
+                            }
                         }
                     }
                 }
@@ -713,6 +748,56 @@ Item {
                         text: qsTr("Copy report")
                         enabled: sysCtl.items.length > 0
                         onClicked: sysCtl.copyReport()
+                    }
+                }
+                GlassCard {
+                    objectName: "reportPathCard"
+                    Layout.fillWidth: true
+                    implicitHeight: reportCol.implicitHeight + 28
+                    ColumnLayout {
+                        id: reportCol
+                        anchors.fill: parent; anchors.margins: 14; spacing: 8
+                        Text {
+                            textFormat: Text.PlainText
+                            text: qsTr("Generator metrics")
+                            color: Theme.text; font.family: Theme.font; font.pixelSize: 15
+                        }
+                        Text {
+                            textFormat: Text.PlainText
+                            Layout.fillWidth: true; wrapMode: Text.WordWrap
+                            text: qsTr("Metrics file path — empty means no recording. There is no report engine yet; this only stores the path.")
+                            color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true; spacing: 8
+                            FlowTextField {
+                                id: reportPathField
+                                objectName: "reportPathField"
+                                Layout.fillWidth: true
+                                maxLength: 500
+                                placeholder: qsTr("empty = no recording")
+                                text: ctl.reportPath
+                                onAccepted: ctl.reportPath = text
+                                onTextChanged: if (text !== ctl.reportPath) ctl.reportPath = text
+                            }
+                            FlowButton {
+                                objectName: "reportPathChoose"
+                                text: qsTr("Choose…")
+                                onClicked: reportPathDialog.open()
+                            }
+                            FlowButton {
+                                objectName: "reportPathDefault"
+                                text: qsTr("Default")
+                                onClicked: ctl.reportPath = ""
+                            }
+                        }
+                        Text {
+                            objectName: "reportPathStatus"
+                            textFormat: Text.PlainText
+                            Layout.fillWidth: true; wrapMode: Text.WordWrap
+                            text: ctl.reportPath === "" ? qsTr("No metrics recorded yet (path empty).") : ctl.reportPath
+                            color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
+                        }
                     }
                 }
                 Flickable {

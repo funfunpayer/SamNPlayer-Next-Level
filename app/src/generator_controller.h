@@ -158,6 +158,14 @@ class GeneratorController : public QObject {
     // queue may end it.
     Q_PROPERTY(bool autoFinding READ autoFinding NOTIFY findingChanged)
     Q_PROPERTY(QVariantList tipCandidates READ tipCandidates NOTIFY tipCandidatesChanged)
+    // Suggest tip (AI): local student/NudeNet boxes on this frame. A matching
+    // tip-class box is a pending proposal until Apply (D-057). Never silent.
+    Q_PROPERTY(bool aiTipAvailable READ aiTipAvailable NOTIFY aiTipChanged)
+    Q_PROPERTY(QString aiTipHint READ aiTipHint NOTIFY aiTipChanged)
+    Q_PROPERTY(bool suggestingAiTip READ suggestingAiTip NOTIFY aiTipChanged)
+    Q_PROPERTY(QVariantList aiDetections READ aiDetections NOTIFY aiTipChanged)
+    Q_PROPERTY(QVariantMap aiTipProposal READ aiTipProposal NOTIFY aiTipChanged)
+    Q_PROPERTY(bool hasAiTipProposal READ hasAiTipProposal NOTIFY aiTipChanged)
     // The queue (0.7 "Create queue"): {path, name, status, message}; status is
     // queued | running | done | skipped | failed | canceled.
     Q_PROPERTY(QVariantList queue READ queue NOTIFY queueChanged)
@@ -290,6 +298,12 @@ public:
     bool finding() const { return finding_; }
     bool autoFinding() const;
     QVariantList tipCandidates() const { return tip_candidates_; }
+    bool aiTipAvailable() const;
+    QString aiTipHint() const { return ai_tip_hint_; }
+    bool suggestingAiTip() const { return suggesting_ai_tip_; }
+    QVariantList aiDetections() const { return ai_detections_; }
+    QVariantMap aiTipProposal() const { return ai_tip_proposal_; }
+    bool hasAiTipProposal() const { return !ai_tip_proposal_.isEmpty(); }
     QVariantList queue() const { return queue_; }
     bool queueRunning() const { return queue_running_; }
     QString queueSummary() const;
@@ -337,6 +351,18 @@ public:
     Q_INVOKABLE void cancelFind();
     // Takes candidate i as the tip box.
     Q_INVOKABLE void pickCandidate(int index);
+    // Lists AI boxes on the shown frame and, when a tip-class box is found,
+    // sets a pending proposal. Does not write the tip box. false when there
+    // is no video, a run is going, a suggest is already running, or no model.
+    Q_INVOKABLE bool suggestAiTip();
+    // Commits the pending AI proposal as the tip box (Apply).
+    Q_INVOKABLE bool applyAiTip();
+    Q_INVOKABLE void dismissAiTip();
+    // Chooses listed detection i as the pending proposal (still needs Apply).
+    Q_INVOKABLE void pickAiDetection(int index);
+    // Tests: pretend a model is present and return these hits on Suggest.
+    // Each map: {x, y, w, h, score, label, cls}. Empty list = model ready, no boxes.
+    void setFakeAiHitsForTest(const QVariantList& hits);
     // Adds videos (paths or file URLs; duplicates once) to the queue.
     Q_INVOKABLE int addToQueue(const QStringList& pathsOrUrls);
     Q_INVOKABLE void removeFromQueue(int index);
@@ -362,6 +388,7 @@ signals:
     void stepChanged();
     void findingChanged();
     void tipCandidatesChanged();
+    void aiTipChanged();
     void contactChanged();
     void queueChanged();
     void queueFinished(int done, int skipped, int failed);
@@ -446,6 +473,16 @@ private:
     QVariantList tip_candidates_;
     std::shared_ptr<std::atomic<bool>> find_cancel_;
     std::thread finder_;
+    bool suggesting_ai_tip_ = false;
+    bool fake_ai_ready_ = false;
+    QVariantList fake_ai_hits_;
+    QVariantList ai_detections_;
+    QVariantMap ai_tip_proposal_;
+    QString ai_tip_hint_;
+    quint64 ai_seq_ = 0;
+    std::thread ai_worker_;
+    void refreshAiTipHint();
+    void finishAiSuggest(const QVariantList& hits, const QString& forVideo, quint64 seq);
     QVariantList queue_;
     bool queue_running_ = false;
     std::shared_ptr<std::atomic<bool>> queue_cancel_;

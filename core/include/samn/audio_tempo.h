@@ -25,6 +25,7 @@
 // steady noise and speech-like sound make it unreliable).
 
 #include <cstddef>
+#include <cstdint>
 #include <vector>
 
 #include "samn/audio_onsets.h"
@@ -99,5 +100,22 @@ struct TempoReliability {
 };
 
 TempoReliability AssessTempo(const std::vector<AudioBlock>& blocks, const TempoEstimate& tempo);
+
+// Playback "BPM from audio": prefer EstimateTempo when AssessTempo trusts it,
+// otherwise the loudness-peak fallback (EstimateBpmFromLoudness). Thresholds
+// are AssessTempo's (kTempoMinConfidence 0.30, 0.60 when the active sound is
+// mostly noise or speech-like, and mostly-silence at active_share < 0.25).
+// bpm is folded into 20–240. source is kNone when both fail.
+enum class PlaybackBpmSource : std::uint8_t { kNone, kOnsets, kLoudness };
+
+struct PlaybackBpmGuess {
+    double bpm = 0;
+    PlaybackBpmSource source = PlaybackBpmSource::kNone;
+    double confidence = 0;  // EstimateTempo's when source is kOnsets
+    const char* reason = "";  // AssessTempo's reason when onsets are not used
+};
+
+PlaybackBpmGuess PickPlaybackAudioBpm(const TempoEstimate& tempo, const TempoReliability& reliability,
+                                      const std::vector<double>& loudness, int step_ms = 50);
 
 }  // namespace samn

@@ -17,17 +17,33 @@ GlassCard {
     Behavior on width { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
     clip: true
 
-    component Title: Text {
-        textFormat: Text.PlainText
-        color: Theme.textMuted
-        font.family: Theme.font; font.pixelSize: 11; font.letterSpacing: 1.6; font.capitalization: Font.AllUppercase
-        topPadding: 10; bottomPadding: 4
+    component Title: Item {
+        id: title
+        property alias text: label.text
+        property string help
+        width: parent ? parent.width : 200
+        implicitHeight: label.implicitHeight
+        height: implicitHeight
+        Text {
+            id: label
+            textFormat: Text.PlainText
+            color: Theme.textMuted
+            font.family: Theme.font; font.pixelSize: 11; font.letterSpacing: 1.6; font.capitalization: Font.AllUppercase
+            topPadding: 10; bottomPadding: 4
+        }
+        HelpChip {
+            key: title.help
+            visible: key !== "" && text !== ""
+            anchors.verticalCenter: label.verticalCenter
+            x: label.x + label.implicitWidth + 6
+        }
     }
     component Item_: Rectangle {
         id: it
         property alias text: label.text
         property string icon
         property string count
+        property string help
         property bool primary: false
         property bool expanded: false
         signal clicked()
@@ -42,15 +58,30 @@ GlassCard {
         Text {
             textFormat: Text.PlainText
             id: label
-            x: 34; anchors.verticalCenter: parent.verticalCenter; width: parent.width - 70; elide: Text.ElideRight
+            x: 34; anchors.verticalCenter: parent.verticalCenter; width: parent.width - (helpChip.visible ? 92 : 70); elide: Text.ElideRight
             color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 13
         }
         Text {
             textFormat: Text.PlainText
-            anchors.right: parent.right; anchors.rightMargin: 10; anchors.verticalCenter: parent.verticalCenter
+            anchors.right: helpChip.visible ? helpChip.left : parent.right
+            anchors.rightMargin: helpChip.visible ? 6 : 10
+            anchors.verticalCenter: parent.verticalCenter
             text: it.count; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
         }
-        MouseArea { id: area; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: it.clicked() }
+        HelpChip {
+            id: helpChip
+            z: 2
+            key: it.help
+            visible: key !== "" && text !== ""
+            anchors.right: parent.right; anchors.rightMargin: 8
+            anchors.verticalCenter: parent.verticalCenter
+        }
+        MouseArea {
+            id: area
+            anchors.fill: parent
+            anchors.rightMargin: helpChip.visible ? 30 : 0
+            hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: it.clicked()
+        }
     }
     component Files: Column {
         id: files
@@ -117,19 +148,19 @@ GlassCard {
             width: parent.width
             spacing: 2
             Title { text: qsTr("Library") }
-            Item_ { text: qsTr("Local Files"); icon: "folder"; primary: true; onClicked: root.openFile() }
-            Item_ { id: recentHead; text: qsTr("Recent"); icon: "recent"; expanded: true; onClicked: expanded = !expanded }
+            Item_ { text: qsTr("Local Files"); icon: "folder"; primary: true; help: "library.local-files"; onClicked: root.openFile() }
+            Item_ { id: recentHead; text: qsTr("Recent"); icon: "recent"; expanded: true; help: "library.recent"; onClicked: expanded = !expanded }
             Files { visible: recentHead.expanded; model: root.library.recent; emptyText: qsTr("No recent scripts") }
-            Item_ { id: favHead; text: qsTr("Favorites"); icon: "favorite"; expanded: true; count: root.library.favorites.length || ""; onClicked: expanded = !expanded }
+            Item_ { id: favHead; text: qsTr("Favorites"); icon: "favorite"; expanded: true; help: "library.favorites"; count: root.library.favorites.length || ""; onClicked: expanded = !expanded }
             Files { visible: favHead.expanded; model: root.library.favorites; emptyText: qsTr("Star a script to keep it here") }
-            Title { text: qsTr("Scripts") }
+            Title { text: qsTr("Scripts"); help: "library.scripts" }
             Item_ { id: impHead; text: qsTr("Imported"); icon: "download"; count: root.library.imported.length || ""; onClicked: expanded = !expanded }
             Files { visible: impHead.expanded; model: root.library.imported }
             Item_ { id: genHead; text: qsTr("Generated"); icon: "effects"; count: root.library.generated.length || ""; onClicked: expanded = !expanded }
             Files { visible: genHead.expanded; model: root.library.generated; emptyText: qsTr("The Generator's scripts land here") }
             Item_ { id: editHead; text: qsTr("Edited"); icon: "edit"; count: root.library.edited.length || ""; onClicked: expanded = !expanded }
             Files { visible: editHead.expanded; model: root.library.edited }
-            Title { text: qsTr("Analysis") }
+            Title { text: qsTr("Analysis"); help: "library.analysis" }
             Item_ { text: qsTr("Audio Analysis"); icon: "waveform"; onClicked: root.showAudioAnalysis() }
             Item_ { text: qsTr("BPM Detection"); icon: "chart"; onClicked: root.showBpm() }
             Title { text: qsTr("Quick Access") }
