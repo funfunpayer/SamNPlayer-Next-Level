@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls.Basic
 import SamN
 
 // The Generator's left column (D-154, 0.7 create_layout "Project nav", the
@@ -99,11 +100,15 @@ GlassCard {
     }
 
     Flickable {
+        objectName: "projectFlick"
         visible: !root.collapsed
         anchors.fill: parent; anchors.margins: 12; anchors.topMargin: 6
         contentHeight: col.height
         clip: true
         boundsBehavior: Flickable.StopAtBounds
+        ScrollBar.vertical: ScrollBar {
+            policy: parent.contentHeight > parent.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
+        }
         Column {
             id: col
             width: parent.width

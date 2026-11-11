@@ -91,9 +91,12 @@ Item {
                 ListView {
                     id: programList
                     Layout.fillWidth: true; Layout.fillHeight: true
+                    Layout.minimumHeight: 96
                     clip: true; spacing: 2
                     boundsBehavior: Flickable.StopAtBounds
-                    ScrollBar.vertical: ScrollBar { }
+                    ScrollBar.vertical: ScrollBar {
+                        policy: parent.contentHeight > parent.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
+                    }
                     model: [{ name: "", label: qsTr("Custom"), text: qsTr("Custom (Stop-Start / Plateau)"), level: 0, categoryLabel: "" }].concat(ctl.programs)
                     delegate: Rectangle {
                         required property var modelData
@@ -646,11 +649,14 @@ Item {
 
         // ------------------------------------------------------------ right
         Flickable {
+            objectName: "trainingSideFlick"
             Layout.preferredWidth: 380; Layout.fillHeight: true
             contentWidth: width; contentHeight: side.implicitHeight
             clip: true
             boundsBehavior: Flickable.StopAtBounds
-            ScrollBar.vertical: ScrollBar { }
+            ScrollBar.vertical: ScrollBar {
+                policy: parent.contentHeight > parent.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
+            }
             ColumnLayout {
                 id: side
                 width: parent.width - 10

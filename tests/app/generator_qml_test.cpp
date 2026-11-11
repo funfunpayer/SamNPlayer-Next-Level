@@ -818,6 +818,11 @@ private slots:
         QVERIFY(scenes);
         QTRY_VERIFY(scenes->isVisible());
         QTRY_VERIFY(scenes->height() > 80);
+        auto* sceneList = named(root.get(), "sceneList");
+        QVERIFY(sceneList);
+        QTRY_VERIFY2(sceneList->height() >= 96,
+                     qPrintable(QString("sceneList height=%1 (header must not starve the list)")
+                                    .arg(sceneList->height())));
         page->setProperty("sidePanel", 0);
         QTRY_VERIFY(flick->isVisible());
         QTRY_VERIFY(!scenes->isVisible());

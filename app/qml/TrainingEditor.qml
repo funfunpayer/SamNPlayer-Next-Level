@@ -95,12 +95,14 @@ Item {
                 Text { textFormat: Text.PlainText; text: qsTr("Description"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13; Layout.preferredWidth: 80 }
                 FlowTextField { Layout.fillWidth: true; maxLength: 200; text: root.draft.description; onTextChanged: if (text !== root.draft.description) root.edit(d => d.description = text) }
             }
-            Flickable {
+                Flickable {
                 Layout.fillWidth: true; Layout.fillHeight: true
                 contentWidth: width; contentHeight: phases.implicitHeight
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
-                ScrollBar.vertical: ScrollBar { }
+                ScrollBar.vertical: ScrollBar {
+                    policy: parent.contentHeight > parent.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
+                }
                 Column {
                     id: phases
                     width: parent.width - 12

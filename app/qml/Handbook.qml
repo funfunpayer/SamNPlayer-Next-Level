@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import SamN
 import "HandbookTexts.js" as HandbookCopy
@@ -113,6 +114,9 @@ Item {
                     Layout.preferredWidth: 220; Layout.fillHeight: true
                     clip: true; contentHeight: navCol.height
                     boundsBehavior: Flickable.StopAtBounds
+                    ScrollBar.vertical: ScrollBar {
+                        policy: parent.contentHeight > parent.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
+                    }
                     Column {
                         id: navCol
                         width: parent.width; spacing: 2
@@ -160,6 +164,9 @@ Item {
                     Layout.fillWidth: true; Layout.fillHeight: true
                     clip: true; contentHeight: bodyCol.height
                     boundsBehavior: Flickable.StopAtBounds
+                    ScrollBar.vertical: ScrollBar {
+                        policy: parent.contentHeight > parent.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
+                    }
                     onContentYChanged: root.syncActiveFromScroll()
                     Behavior on contentY {
                         enabled: !bodyFlick.moving && !bodyFlick.flicking

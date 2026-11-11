@@ -91,6 +91,10 @@ Item {
                 Layout.fillWidth: true; Layout.fillHeight: true
                 clip: true
                 contentHeight: general.implicitHeight
+                boundsBehavior: Flickable.StopAtBounds
+                ScrollBar.vertical: ScrollBar {
+                    policy: parent.contentHeight > parent.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
+                }
                 ColumnLayout {
                     id: general
                     width: parent.width; spacing: 14
@@ -419,6 +423,10 @@ Item {
                 Layout.fillWidth: true; Layout.fillHeight: true
                 clip: true
                 contentHeight: devCol2.implicitHeight
+                boundsBehavior: Flickable.StopAtBounds
+                ScrollBar.vertical: ScrollBar {
+                    policy: parent.contentHeight > parent.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
+                }
                 readonly property var dev: root.device
                 readonly property bool connected: dev !== null && dev.state === "connected"
                 // 0.7: the test controls work only when connected and no playback / training runs.
@@ -718,130 +726,135 @@ Item {
             }
 
             // ---- System (D-162: the health check) ----
-            ColumnLayout {
+            // One flick for summary + metrics path + health rows so a short
+            // window can scroll the path card away instead of clipping it
+            // above a leftover-height health list.
+            Flickable {
                 objectName: "systemTab"
                 visible: root.tab === 2
                 Layout.fillWidth: true; Layout.fillHeight: true
-                spacing: 10
-                RowLayout {
-                    Layout.fillWidth: true; spacing: 8
-                    Text {
-                        objectName: "systemSummary"
-                        textFormat: Text.PlainText
-                        Layout.fillWidth: true; elide: Text.ElideRight
-                        text: sysCtl.running ? qsTr("Checking …") : sysCtl.items.length === 0 ? qsTr("Not checked yet.") : sysCtl.summary
-                        color: Theme.text; font.family: Theme.font; font.pixelSize: 15
-                    }
-                    HelpChip {
-                        objectName: "systemHardwareHelp"
-                        // 0.7 "Check hardware" lives here (D-162 / D-167), not a separate Tools Home row.
-                        text: qsTr("This is the hardware and runtime check (GPUs, codecs, ffmpeg, Python, RAM). It replaces 0.7's Tools Home status and Settings → Check hardware.")
-                    }
-                    FlowButton {
-                        objectName: "systemCheckAgain"
-                        text: qsTr("Check again")
-                        enabled: !sysCtl.running
-                        onClicked: sysCtl.refresh()
-                    }
-                    FlowButton {
-                        objectName: "systemCopyReport"
-                        text: qsTr("Copy report")
-                        enabled: sysCtl.items.length > 0
-                        onClicked: sysCtl.copyReport()
-                    }
+                clip: true
+                contentWidth: width
+                contentHeight: sysCol.implicitHeight
+                boundsBehavior: Flickable.StopAtBounds
+                ScrollBar.vertical: ScrollBar {
+                    policy: parent.contentHeight > parent.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
                 }
-                GlassCard {
-                    objectName: "reportPathCard"
-                    Layout.fillWidth: true
-                    implicitHeight: reportCol.implicitHeight + 28
-                    ColumnLayout {
-                        id: reportCol
-                        anchors.fill: parent; anchors.margins: 14; spacing: 8
+                ColumnLayout {
+                    id: sysCol
+                    width: parent.width
+                    spacing: 10
+                    RowLayout {
+                        Layout.fillWidth: true; spacing: 8
                         Text {
+                            objectName: "systemSummary"
                             textFormat: Text.PlainText
-                            text: qsTr("Generator metrics")
+                            Layout.fillWidth: true; elide: Text.ElideRight
+                            text: sysCtl.running ? qsTr("Checking …") : sysCtl.items.length === 0 ? qsTr("Not checked yet.") : sysCtl.summary
                             color: Theme.text; font.family: Theme.font; font.pixelSize: 15
                         }
-                        Text {
-                            textFormat: Text.PlainText
-                            Layout.fillWidth: true; wrapMode: Text.WordWrap
-                            text: qsTr("Metrics file path — empty means no recording. There is no report engine yet; this only stores the path.")
-                            color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
+                        HelpChip {
+                            objectName: "systemHardwareHelp"
+                            // 0.7 "Check hardware" lives here (D-162 / D-167), not a separate Tools Home row.
+                            text: qsTr("This is the hardware and runtime check (GPUs, codecs, ffmpeg, Python, RAM). It replaces 0.7's Tools Home status and Settings → Check hardware.")
                         }
-                        RowLayout {
-                            Layout.fillWidth: true; spacing: 8
-                            FlowTextField {
-                                id: reportPathField
-                                objectName: "reportPathField"
-                                Layout.fillWidth: true
-                                maxLength: 500
-                                placeholder: qsTr("empty = no recording")
-                                text: ctl.reportPath
-                                onAccepted: ctl.reportPath = text
-                                onTextChanged: if (text !== ctl.reportPath) ctl.reportPath = text
-                            }
-                            FlowButton {
-                                objectName: "reportPathChoose"
-                                text: qsTr("Choose…")
-                                onClicked: reportPathDialog.open()
-                            }
-                            FlowButton {
-                                objectName: "reportPathDefault"
-                                text: qsTr("Default")
-                                onClicked: ctl.reportPath = ""
-                            }
+                        FlowButton {
+                            objectName: "systemCheckAgain"
+                            text: qsTr("Check again")
+                            enabled: !sysCtl.running
+                            onClicked: sysCtl.refresh()
                         }
-                        Text {
-                            objectName: "reportPathStatus"
-                            textFormat: Text.PlainText
-                            Layout.fillWidth: true; wrapMode: Text.WordWrap
-                            text: ctl.reportPath === "" ? qsTr("No metrics recorded yet (path empty).") : ctl.reportPath
-                            color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
+                        FlowButton {
+                            objectName: "systemCopyReport"
+                            text: qsTr("Copy report")
+                            enabled: sysCtl.items.length > 0
+                            onClicked: sysCtl.copyReport()
                         }
                     }
-                }
-                Flickable {
-                    Layout.fillWidth: true; Layout.fillHeight: true
-                    clip: true
-                    contentHeight: sysItems.implicitHeight
-                    ColumnLayout {
-                        id: sysItems
-                        width: parent.width; spacing: 8
-                        Repeater {
-                            model: sysCtl.items
-                            delegate: GlassCard {
-                                id: sysRow
-                                required property var modelData
-                                objectName: "systemItem_" + modelData.id
-                                Layout.fillWidth: true
-                                implicitHeight: rowCol.implicitHeight + 24
-                                readonly property color tone: modelData.state === "ok" ? Theme.good : modelData.state === "warn" ? Theme.orange : modelData.state === "off" ? Theme.textDim : Theme.danger
-                                RowLayout {
-                                    id: rowCol
-                                    anchors.fill: parent; anchors.margins: 12; spacing: 12
-                                    Rectangle {
-                                        objectName: "systemDot_" + sysRow.modelData.id
-                                        Layout.alignment: Qt.AlignTop; Layout.topMargin: 4
-                                        width: 10; height: 10; radius: 5; color: sysRow.tone
+                    GlassCard {
+                        objectName: "reportPathCard"
+                        Layout.fillWidth: true
+                        implicitHeight: reportCol.implicitHeight + 28
+                        ColumnLayout {
+                            id: reportCol
+                            anchors.fill: parent; anchors.margins: 14; spacing: 8
+                            Text {
+                                textFormat: Text.PlainText
+                                text: qsTr("Generator metrics")
+                                color: Theme.text; font.family: Theme.font; font.pixelSize: 15
+                            }
+                            Text {
+                                textFormat: Text.PlainText
+                                Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                text: qsTr("Metrics file path — empty means no recording. There is no report engine yet; this only stores the path.")
+                                color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                            RowLayout {
+                                Layout.fillWidth: true; spacing: 8
+                                FlowTextField {
+                                    id: reportPathField
+                                    objectName: "reportPathField"
+                                    Layout.fillWidth: true
+                                    maxLength: 500
+                                    placeholder: qsTr("empty = no recording")
+                                    text: ctl.reportPath
+                                    onAccepted: ctl.reportPath = text
+                                    onTextChanged: if (text !== ctl.reportPath) ctl.reportPath = text
+                                }
+                                FlowButton {
+                                    objectName: "reportPathChoose"
+                                    text: qsTr("Choose…")
+                                    onClicked: reportPathDialog.open()
+                                }
+                                FlowButton {
+                                    objectName: "reportPathDefault"
+                                    text: qsTr("Default")
+                                    onClicked: ctl.reportPath = ""
+                                }
+                            }
+                            Text {
+                                objectName: "reportPathStatus"
+                                textFormat: Text.PlainText
+                                Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                text: ctl.reportPath === "" ? qsTr("No metrics recorded yet (path empty).") : ctl.reportPath
+                                color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                        }
+                    }
+                    Repeater {
+                        model: sysCtl.items
+                        delegate: GlassCard {
+                            id: sysRow
+                            required property var modelData
+                            objectName: "systemItem_" + modelData.id
+                            Layout.fillWidth: true
+                            implicitHeight: rowCol.implicitHeight + 24
+                            readonly property color tone: modelData.state === "ok" ? Theme.good : modelData.state === "warn" ? Theme.orange : modelData.state === "off" ? Theme.textDim : Theme.danger
+                            RowLayout {
+                                id: rowCol
+                                anchors.fill: parent; anchors.margins: 12; spacing: 12
+                                Rectangle {
+                                    objectName: "systemDot_" + sysRow.modelData.id
+                                    Layout.alignment: Qt.AlignTop; Layout.topMargin: 4
+                                    width: 10; height: 10; radius: 5; color: sysRow.tone
+                                }
+                                ColumnLayout {
+                                    Layout.fillWidth: true; spacing: 3
+                                    Text {
+                                        textFormat: Text.PlainText
+                                        Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                        text: sysRow.modelData.title; color: Theme.text; font.family: Theme.font; font.pixelSize: 14
                                     }
-                                    ColumnLayout {
-                                        Layout.fillWidth: true; spacing: 3
-                                        Text {
-                                            textFormat: Text.PlainText
-                                            Layout.fillWidth: true; wrapMode: Text.WordWrap
-                                            text: sysRow.modelData.title; color: Theme.text; font.family: Theme.font; font.pixelSize: 14
-                                        }
-                                        Text {
-                                            textFormat: Text.PlainText
-                                            Layout.fillWidth: true; wrapMode: Text.WordWrap
-                                            text: sysRow.modelData.detail; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
-                                        }
-                                        Text {
-                                            visible: sysRow.modelData.fix !== ""
-                                            textFormat: Text.PlainText
-                                            Layout.fillWidth: true; wrapMode: Text.WordWrap
-                                            text: sysRow.modelData.fix; color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
-                                        }
+                                    Text {
+                                        textFormat: Text.PlainText
+                                        Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                        text: sysRow.modelData.detail; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                                    }
+                                    Text {
+                                        visible: sysRow.modelData.fix !== ""
+                                        textFormat: Text.PlainText
+                                        Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                        text: sysRow.modelData.fix; color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
                                     }
                                 }
                             }

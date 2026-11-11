@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Window
+import QtQuick.Controls.Basic
 import QtQuick.Dialogs
 import QtQuick.Layouts
 import QtMultimedia
@@ -656,10 +657,14 @@ Item {
                     radius: Theme.radius
                     color: Qt.rgba(4 / 255, 14 / 255, 28 / 255, 0.92); border.color: Theme.cardBorder
                     Flickable {
+                        objectName: "noScriptFlick"
                         anchors.fill: parent; anchors.margins: 20
                         clip: true
                         contentHeight: noScript.implicitHeight
                         boundsBehavior: Flickable.StopAtBounds
+                        ScrollBar.vertical: ScrollBar {
+                            policy: parent.contentHeight > parent.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
+                        }
                     Column {
                         id: noScript
                         width: parent.width

@@ -668,6 +668,55 @@ private slots:
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }
 
+    // System tab: summary + metrics path + health rows share one flick so a
+    // short window can scroll the path card away (it used to sit above a
+    // leftover-height health list and clip).
+    void settingsSystemTabScrollsAsAUnit() {
+        {
+            Shell s;
+            loadShell(s);
+            QVERIFY(s.window);
+            auto byName = [&](const char* name) -> QQuickItem* {
+                for (QQuickItem* i : descendants(s.root()))
+                    if (i->objectName() == QLatin1String(name)) return i;
+                return nullptr;
+            };
+            QQuickItem* page = s.one("SettingsPage");
+            QVERIFY(page);
+            page->setProperty("open", true);
+            page->setProperty("tab", 2);
+            QQuickItem* tab = byName("systemTab");
+            QTRY_VERIFY_WITH_TIMEOUT(tab && tab->isVisible(), kWait);
+            QVERIFY(tab->clip());
+            QVERIFY(byName("reportPathCard"));
+            s.window->resize(960, 640);
+            QTRY_VERIFY(tab->height() > 80);
+            QMetaObject::invokeMethod(page->property("system").value<QObject*>(), "refresh");
+            QTRY_VERIFY_WITH_TIMEOUT(byName("systemItem_settings"), kWait);
+            QTRY_VERIFY_WITH_TIMEOUT(
+                !qobject_cast<samn::ui::SystemCheckController*>(page->property("system").value<QObject*>())->running(), kWait);
+            QTRY_VERIFY_WITH_TIMEOUT(byName("systemItem_ram"), kWait);
+            QTRY_VERIFY2(tab->property("contentHeight").toDouble() > tab->height(),
+                         qPrintable(QString("contentHeight=%1 height=%2")
+                                        .arg(tab->property("contentHeight").toDouble())
+                                        .arg(tab->height())));
+            const qreal overflow = tab->property("contentHeight").toDouble() - tab->height();
+            tab->setProperty("contentY", overflow);
+            QTRY_COMPARE(tab->property("contentY").toDouble(), overflow);
+            auto* ram = byName("systemItem_ram");
+            QVERIFY(ram);
+            const QPointF ramInTab = ram->mapToItem(tab, QPointF(0, ram->height()));
+            QVERIFY2(ramInTab.y() <= tab->height() + 2,
+                     qPrintable(QString("systemItem_ram bottom in tab y=%1 tabH=%2").arg(ramInTab.y()).arg(tab->height())));
+            auto* pathCard = byName("reportPathCard");
+            QVERIFY(pathCard);
+            const QPointF pathInTab = pathCard->mapToItem(tab, QPointF(0, 0));
+            QVERIFY2(pathInTab.y() < 0,
+                     qPrintable(QString("reportPathCard should scroll away with the health rows y=%1").arg(pathInTab.y())));
+        }
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
+
     void settingsDeviceTabTestsTheMockDevice() {
         {
             Shell s;

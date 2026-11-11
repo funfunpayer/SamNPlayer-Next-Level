@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls.Basic
 import QtQuick.Dialogs
 import SamN
 
@@ -67,11 +68,15 @@ GlassCard {
     }
 
     Flickable {
+        objectName: "inspectorFlick"
         visible: !root.collapsed
         anchors.fill: parent; anchors.margins: 12; anchors.topMargin: 82
         contentHeight: pages.height
         clip: true
         boundsBehavior: Flickable.StopAtBounds
+        ScrollBar.vertical: ScrollBar {
+            policy: parent.contentHeight > parent.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
+        }
         Item {
             id: pages
             width: parent.width

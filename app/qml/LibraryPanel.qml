@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls.Basic
 import SamN
 
 // The Library column of the Player (0.7 v1): local files, recent, favorites,
@@ -138,11 +139,15 @@ GlassCard {
     }
 
     Flickable {
+        objectName: "libraryFlick"
         visible: !root.collapsed
         anchors.fill: parent; anchors.margins: 12; anchors.topMargin: 6
         contentHeight: col.height
         clip: true
         boundsBehavior: Flickable.StopAtBounds
+        ScrollBar.vertical: ScrollBar {
+            policy: parent.contentHeight > parent.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
+        }
         Column {
             id: col
             width: parent.width

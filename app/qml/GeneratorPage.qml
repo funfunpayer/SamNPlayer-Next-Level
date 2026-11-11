@@ -1407,7 +1407,11 @@ Item {
                         id: sceneList
                         objectName: "sceneList"
                         Layout.fillWidth: true; Layout.fillHeight: true
+                        Layout.minimumHeight: 96
                         clip: true; spacing: 8
+                        C.ScrollBar.vertical: C.ScrollBar {
+                            policy: parent.contentHeight > parent.height ? C.ScrollBar.AlwaysOn : C.ScrollBar.AsNeeded
+                        }
                         model: edit.scenes
                         delegate: Rectangle {
                             id: card
@@ -1509,6 +1513,9 @@ Item {
                 clip: true
                 contentHeight: createSideCol.implicitHeight
                 boundsBehavior: Flickable.StopAtBounds
+                C.ScrollBar.vertical: C.ScrollBar {
+                    policy: parent.contentHeight > parent.height ? C.ScrollBar.AlwaysOn : C.ScrollBar.AsNeeded
+                }
                 // A finished run brings its quality box into view.
                 Connections {
                     target: gen

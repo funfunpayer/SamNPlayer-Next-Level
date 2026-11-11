@@ -2,7 +2,16 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 11 Nov 2026, Cursor, branch `cursor/gen-side-scroll-635a`: Generator Create tab right column scrolls (Video+Feel+Create in `createSideFlick`) so Feel no longer clips Create. Do not touch feel_heatbands / POV / AI tip.
+**Last update:** 11 Nov 2026, Cursor, branch `cursor/gui-scroll-fix-635a`: broader GUI scroll/clip pass (Settings System tab as one flick, visible scrollbars on main Flickables, Scenes ListView min height). Keep `createSideFlick`. Do not touch feel_heatbands / POV / AI tip.
+
+## Handover: GUI scroll / clip pass (11 Nov)
+
+Owner: not only the Generator side panel — missing scroll and clipped content elsewhere. Keep `createSideFlick` (Video+Feel+Create). This pass:
+
+- **Settings System:** one outer `Flickable` (`systemTab`) wraps summary + `reportPathCard` + health rows. The leftover-height health-only flick is gone, so a short window scrolls the metrics card away with the list.
+- **Visible bars:** `ScrollBar.vertical` AlwaysOn when `contentHeight > height` (else AsNeeded) on Generator `createSideFlick`, Inspector, Library, Training side, Settings General/Device/System, plus Project / Handbook / no-script / AI Train / Training editor.
+- **Scenes:** `sceneList` keeps `fillHeight` with `Layout.minimumHeight: 96` so header buttons cannot starve the list on a short window.
+- **Tests:** `shell_qml_test` `settingsSystemTabScrollsAsAUnit`; `generator_qml_test` `createSideFlickScrollsWhenFeelIsTall` kept (and checks `sceneList` ≥ 96).
 
 ## Handover: Generator Create side scroll (11 Nov)
 
