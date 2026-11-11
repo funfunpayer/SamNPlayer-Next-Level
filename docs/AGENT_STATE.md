@@ -2,7 +2,20 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 10 Nov 2026, Cursor, branch `cursor/core-pov-635a`: camera POV core slice 1 (`pov.h` ClassifyPov). Quality first. Do not touch vision MeasurePovSignals / UI / `.scene.json` / scene_roles / ONNX / feel_heatbands.
+
+**Last update:** 11 Nov 2026, Claude, branch `claude/samn2-handover-docs`: handover of the review-fix PRs and the Generator layout (docs only). Quality first, then speed.
+
+## Handover: review fixes, Generator layout, working rules (11 Nov)
+
+**Merged since the last Claude handover** (each after an independent review and four green jobs unless noted): #216 label tracking VFR regression, #217 intensity arc black stretches with codec noise (follow-up of #168), #220 DeviceService review fixes, #221 equal-timestamp frames and ffmpeg tests that fail instead of skip on CI (the last commit of #221 was Cursor's and not independently reviewed), #240 frame reader: a time of 0 after the stream start is not a time (regression of #221, found on OpenCV 4.6), #239 Generator layout.
+
+**Generator layout (#239, D-171).** The Create side (Video, Feel, Create) is one scroll area; the Feel card shows style, device, scene, balance and vibration source, the rest is behind "More feel options" (opens by itself, toggle hidden, once areas or masks exist). Under 1180 px the project panel folds (auto-folded only; by hand always possible); toolbars wider than their place scroll (`ScrollRow.qml`); `VideoTransport.allowTight` (Generator only) drops the volume slider, then the two 10 s buttons. **Layout lesson (Windows CI):** a Text in a RowLayout without `Layout.fillWidth` keeps its full width as the row's minimum even with `Layout.minimumWidth: 0`; a layout smaller than its minimum arranges its children at the minimum, so they overflow. Font metrics decide how far (306 px Linux, 578 px Windows). Give shrinkable texts `fillWidth` and cap them at `implicitWidth`. `generator_qml_test` prints the layout hints of the column's children when a row sticks out.
+
+**Open Claude PRs.** #241 camera compensation review fixes of #201: the carry and the 3 px fallback could not be made safe (shake, parallax, stops: independent review, five author variants all failed on at least two scenes), so a gated frame adds nothing again; kept: plausibility bounds, c6 3 px share, held box not across cuts, 5 new bench scenes + `pos_err_p95_px`. On the bench it is identical to main; acceptance rule 2 is not met (guards only). Independent re-review pending.
+
+**Working rules agreed with the Owner.** claude/* PRs are merged by Claude after an independent review and four green jobs (Linux, Windows, ASan+UBSan, TSan). Feature PRs do not touch `docs/AGENT_STATE.md` (Cursor merges constantly and every touch conflicted); the handover follows in a docs PR. A test that fails once and passes on a rerun is a bug until its log is read: the CI per-function step now keeps the first run's log. CI note: the Linux runners had an apt/DNS outage of several hours on 11 Nov (install-qt-action: "Temporary failure resolving"): rerun failed jobs, do not change code.
+
+**Left (Claude side).** `.sam` read-only import (D-170 decided: read, never write), help chips and handbook parts, audio follow-up findings of #200 (audio_tempo.h limits comment, audio_onsets.cpp:255, improve.cpp:232 loop), engine PR-3 (loss flag, confirmed cuts, periodic bridge, sub-sample peaks), kernel next slice (extra-mode page model, Scene Map as a registered module), Speech-Hold / Feel strip, posters in the create queue.
 
 ## Handover: camera POV core slice 1 (10 Nov)
 
