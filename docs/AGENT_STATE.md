@@ -31,6 +31,16 @@ README Player / Generator / Devices / Status only — no version bump, no 100 % 
 - **Tests:** `generator_qml_test` `improvePanelShowsAndRuns` opens a second script and the status hides; `inspector_qml_test` `playbackSuggestCard` same for O-zone / ring-down notes.
 - **Left open:** Improve extras (audio tempo / rhythm / repair span), report engine buttons, feel_heatbands.
 
+**Last update:** 11 Nov 2026, Cursor, branch `cursor/gen-ai-tip-635a`: Suggest tip (AI) pending Apply. Rebased onto main after #236/#238. Do not touch feel_heatbands / Speech-Hold / handbook / `.sam`.
+
+## Handover: Generator Suggest tip (AI) (10 Nov)
+
+PARITY_REMAINING item 17 first slice. Reuses the hybrid re-acquire student/NudeNet path (`models/student/student.onnx` preferred, else `models/nudenet.onnx`). Generator → *Suggest tip (AI)* lists detections on the shown frame and, when a tip-class box matches (glans ↔ penis, no other-class fallback), sets a **pending** green proposal. **Apply AI tip** commits the box; AI never writes the curve (D-057). No model / no ONNX: button disabled, status explains, no crash. Fake detector in tests when CI has no weights.
+
+- **App:** `ai_tip.h` (`FindAiTipModel`, `ListAiHits`, `PickExpectedTip`); `GeneratorController::suggestAiTip` / `applyAiTip` / `dismissAiTip` / `aiTipAvailable`; QML `suggestAiTip` / `applyAiTip` / `aiTipProposal`. Hybrid `MakeHybridPropose` shares the same lookup.
+- **Tests:** `aiTipHelperPicksMatchingClassWithoutFallback`, `suggestAiTipStaysPendingUntilApply`, `dismissAndPickAiDetectionStillNeedApply`, `suggestAiTipOnTinyOnnxDoesNotWriteTheBox` (QSKIP without ONNX); `generator_qml_test` `suggestTipAiDisabledWithoutModelAndApplyCommits`.
+- **Left:** 0.7 AI-assist collapsible, Show all AI tags as Tip/Shift-contact, expected-class select, Suggest Tip+2nd, scene proposals.
+
 ## Handover: Player BPM from onsets (10 Nov)
 
 Owner: wire D-168 `EstimateTempo` / `AssessTempo` into Player "From audio". Core already had onsets/tempo; the Player still called `EstimateBpmFromLoudness` only.

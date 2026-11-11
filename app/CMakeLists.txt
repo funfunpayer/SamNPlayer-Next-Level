@@ -48,6 +48,7 @@ qt_add_qml_module(samn_app
     src/frame_cache.h src/frame_cache.cpp
     src/frame_provider.h src/frame_provider.cpp
     src/generator_controller.h src/generator_controller.cpp
+    src/ai_tip.h src/ai_tip.cpp
     src/editor_controller.h src/editor_controller.cpp
     src/app_log.h src/app_log.cpp
     src/settings_controller.h src/settings_controller.cpp
