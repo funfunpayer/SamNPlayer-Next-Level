@@ -10,7 +10,9 @@ Flickable {
     default property alias content: row.data
     property alias spacing: row.spacing
     readonly property bool overflows: row.implicitWidth > width + 0.5
-    implicitHeight: row.implicitHeight + (overflows ? 10 : 0)
+    // The bar overlays the row's lower edge: the row's height never depends on
+    // whether it overflows, so the video above does not jump.
+    implicitHeight: row.implicitHeight
     contentWidth: row.width; contentHeight: row.implicitHeight
     clip: true
     interactive: overflows

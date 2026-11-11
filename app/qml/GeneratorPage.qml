@@ -306,11 +306,17 @@ Item {
     Shortcut { sequences: [StandardKey.Redo, "Ctrl+Y"]; enabled: page.visible && edit.canRedo; onActivated: edit.redo() }
 
     // Narrow window: the project panel folds to its rail, so the stage keeps
-    // room. The owner can still unfold the panel.
+    // room; it unfolds again on a wide window, but only if the fold was ours.
+    // The owner can unfold or fold it by hand at any time. (The page is built
+    // by an asynchronous Loader: its width is 0 until the first layout, so the
+    // fold comes from the first width change, not from Component.onCompleted.)
     readonly property bool narrow: width > 0 && width < 1180
     readonly property int sideWidth: 352  // 340 for the cards, 12 for the scroll bar
-    onNarrowChanged: projectPanel.collapsed = narrow
-    Component.onCompleted: projectPanel.collapsed = narrow
+    property bool autoFolded: false
+    onNarrowChanged: {
+        if (narrow && !projectPanel.collapsed) { projectPanel.collapsed = true; autoFolded = true }
+        else if (!narrow && autoFolded) { projectPanel.collapsed = false; autoFolded = false }
+    }
 
     RowLayout {
         anchors.fill: parent
@@ -820,7 +826,7 @@ Item {
                         Text {
                             objectName: "boxLabel"
                             textFormat: Text.PlainText
-                            Layout.fillWidth: true; elide: Text.ElideRight
+                            Layout.fillWidth: true; Layout.minimumWidth: 60; Layout.preferredWidth: 220; elide: Text.ElideRight
                             // A picked mark: 0.7's "Selected: …" with its class and Delete
                             // selected, in this row so the frame keeps its size.
                             text: page.selectedMark !== -2 ? page.selectedMarkText() : gen.boxLabel
@@ -902,6 +908,7 @@ Item {
                     id: transport
                     objectName: "generatorTransport"
                     compact: true
+                    allowTight: true
                     Layout.fillWidth: true
                     Layout.preferredHeight: height
                     enabled: gen.hasVideo
@@ -2127,7 +2134,6 @@ Item {
             GlassCard {
                 visible: page.sidePanel === 0
                 Layout.fillWidth: true; implicitHeight: createCol.implicitHeight + 28
-                // Scrolls when the run's log, the quality box and the queue need more room.
                 Flickable {
                     id: createFlick
                     interactive: false  // the whole Create side scrolls (createScroll)

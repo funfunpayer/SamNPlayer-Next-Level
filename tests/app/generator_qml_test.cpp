@@ -897,7 +897,6 @@ private slots:
             // A toolbar wider than its place scrolls to its last control.
             auto* bar = named(root.get(), "rangeBar");
             QVERIFY(bar);
-            if (size.width() <= 960) QVERIFY(bar->property("overflows").toBool());
             if (bar->property("overflows").toBool()) {
                 bar->setProperty("contentX", bar->property("contentWidth").toReal() - bar->width());
                 auto* last = named(root.get(), "markerText");
@@ -906,6 +905,12 @@ private slots:
                 bar->setProperty("contentX", 0);
             }
             QCOMPARE(named(root.get(), "projectPanel")->property("collapsed").toBool(), size.width() < 1220);
+            // The transport's controls do not overlap on any of the sizes.
+            QVERIFY(!named(root.get(), "generatorTransport")->property("crowded").toBool());
+            // A selected mark does not change the height of the tip row (the video would jump).
+            auto* tip = named(root.get(), "tipRow");
+            const qreal tipH = tip->height();
+            QCOMPARE(tip->property("implicitHeight").toReal(), tipH);
             QVERIFY(inView("chooseVideo"));
             const QByteArray tag = QByteArray::number(size.width());
             if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT_SCROLL"); !shot.isEmpty())

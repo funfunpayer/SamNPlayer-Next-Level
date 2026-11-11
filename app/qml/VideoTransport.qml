@@ -112,7 +112,17 @@ Item {
         color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
     }
     // Too narrow for the volume slider beside the left and the centre controls.
-    readonly property bool tight: width > 0 && width < 36 + leftControls.width + transportRow.width + 24 + 156
+    // Opt-in (the Generator's narrow stage): the volume slider gives way and the
+    // buttons close up before they overlap. The Player keeps its full controls.
+    property bool allowTight: false
+    // The buttons' width at the normal spacing (12), not measured: the spacing
+    // itself follows `tight`, which would make this a binding loop.
+    readonly property real transportNominal: (compact ? 50 : 72) + (showNext ? 5 : 4) * (36 + 12)
+    readonly property bool tight: allowTight && width > 0 && width < 36 + leftControls.width + transportNominal + 24 + 156
+    // True when the left controls, the buttons and the mute button overlap.
+    readonly property bool crowded: width > 0 &&
+        (leftControls.x + leftControls.width > transportRow.x + 0.5 ||
+         transportRow.x + transportRow.width > rightControls.x + 0.5)
     Row {
         id: leftControls
         anchors.left: parent.left; anchors.leftMargin: 18
@@ -125,7 +135,7 @@ Item {
         readonly property real gapLeft: leftControls.x + leftControls.width
         x: gapLeft + Math.max(0, (rightControls.x - gapLeft - width) / 2)
         y: root.compact ? 28 : 54
-        spacing: 12
+        spacing: root.tight ? 6 : 12
         IconButton {
             objectName: "previousButton"
             width: 36; height: 36
