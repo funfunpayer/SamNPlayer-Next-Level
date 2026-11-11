@@ -68,6 +68,46 @@ TEST_CASE("frame reader: every frame in order with its video time") {
     fs::remove(clip);
 }
 
+// MPEG-4 in MP4, as the Generator's clips: some OpenCV builds report time 0
+// for the last frames the decoder hands out. Those must not jump back to 0.
+TEST_CASE("frame reader: times rise to the last frame of an MPEG-4 clip") {
+    const fs::path p = fs::temp_directory_path() / ("samn_mp4v_" + std::to_string(std::random_device{}()) + ".mp4");
+    constexpr int n = 200;
+    {
+        cv::VideoWriter w(p.u8string(), cv::VideoWriter::fourcc('m', 'p', '4', 'v'), kFps, cv::Size(kW, kH));
+        REQUIRE(w.isOpened());
+        for (int i = 0; i < n; ++i) {
+            cv::Mat f(kH, kW, CV_8UC3, cv::Scalar(40, 40, 40));
+            cv::rectangle(f, cv::Rect(i % (kW - 20), 10, 20, 40), cv::Scalar(230, 230, 230), cv::FILLED);
+            w.write(f);
+        }
+    }
+    std::string error;
+    auto r = FrameReader::Open(p, &error);
+    REQUIRE_MESSAGE(r, error);
+    const int64_t step_us = static_cast<int64_t>(std::llround(1e6 / kFps));
+    auto check_to_end = [&](int from) {
+        int64_t prev = -1, pts = 0;
+        int count = from;
+        while (r->Grab(&pts)) {
+            CAPTURE(count);
+            CHECK(pts > prev);
+            CHECK(std::llabs(pts - count * step_us) <= step_us / 2);
+            prev = pts;
+            ++count;
+        }
+        CHECK(count == n);
+    };
+    check_to_end(0);
+    // The same after a seek close to the end, and again from the start.
+    REQUIRE(r->SeekMs(static_cast<int64_t>((n - 5) * 1000 / kFps)));
+    check_to_end(n - 5);
+    REQUIRE(r->SeekMs(0));
+    check_to_end(0);
+    r.reset();
+    fs::remove(p);
+}
+
 TEST_CASE("frame reader: seek is frame-exact, forwards and back") {
     const fs::path clip = WritePatternClip();
     std::string error;

@@ -12,7 +12,15 @@ struct FrameReader::Impl {
     int64_t next_index = 0;
     int64_t grabbed_index = 0;  // the frame the last successful Grab advanced to
     int64_t grabbed_pts_us = 0;
+    // Frames grabbed in a row from the stream's first frame that all reported
+    // time 0; -1 once a later time was seen or the reader sought elsewhere.
+    int zero_run = 0;
 };
+
+namespace {
+// More frames than this at time 0 from the start: the decoder reports no times.
+constexpr int kMaxZeroRun = 8;
+}  // namespace
 
 FrameReader::~FrameReader() = default;
 
@@ -42,15 +50,25 @@ std::unique_ptr<FrameReader> FrameReader::Open(const std::filesystem::path& path
 bool FrameReader::Grab(int64_t* pts_us) {
     if (!impl_->cap.grab()) return false;
     const int64_t index = impl_->next_index++;
-    // The decoder's time of the frame just grabbed. Zero is a real time (some
-    // streams put two frames at t=0); treating it as "missing" and substituting
-    // the nominal frame time made that second frame unseekable. A negative
-    // POS_MSEC still means the decoder did not report a time: those frames get
-    // the nominal time of the frame number (constant frame rate).
+    // The decoder's time of the frame just grabbed. A time of 0 after the first
+    // frame is real only while every frame since the stream's start had it
+    // (some streams put two or three frames at t=0). Anywhere else 0 means the
+    // decoder did not say: some OpenCV builds report 0 for the frames a decoder
+    // hands out at the end of the stream, and a negative value is never a time.
+    // Those frames get the nominal time of the frame number (constant frame
+    // rate), as do all frames of a stream whose decoder reports no times at all
+    // (more than kMaxZeroRun frames at 0 from the start).
     const double ms = impl_->cap.get(cv::CAP_PROP_POS_MSEC);
     impl_->grabbed_index = index;
-    impl_->grabbed_pts_us = (ms >= 0) ? static_cast<int64_t>(std::llround(ms * 1000.0))
-                                       : static_cast<int64_t>(std::llround(index * 1e6 / fps_));
+    bool real = ms > 0;
+    if (ms == 0 && impl_->zero_run >= 0 && impl_->zero_run <= kMaxZeroRun && index == impl_->zero_run) {
+        real = true;
+        ++impl_->zero_run;
+    } else {
+        impl_->zero_run = -1;
+    }
+    impl_->grabbed_pts_us = real ? static_cast<int64_t>(std::llround(ms * 1000.0))
+                                 : static_cast<int64_t>(std::llround(index * 1e6 / fps_));
     if (pts_us) *pts_us = impl_->grabbed_pts_us;
     return true;
 }
@@ -75,6 +93,7 @@ bool FrameReader::SeekMs(int64_t ms) {
     if (frame_count_ > 0) target = std::min(target, frame_count_ - 1);
     if (!impl_->cap.set(cv::CAP_PROP_POS_FRAMES, static_cast<double>(target))) return false;
     impl_->next_index = target;
+    impl_->zero_run = target == 0 ? 0 : -1;
     return true;
 }
 
