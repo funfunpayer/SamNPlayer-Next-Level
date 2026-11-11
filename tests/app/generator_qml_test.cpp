@@ -923,8 +923,33 @@ private slots:
                                    .arg(p->width()).arg(p->implicitWidth()).arg(p->x());
                     return out;
                 };
+                // The layout hints (minimum / preferred width, fill) of the children of
+                // the first QQuickColumnLayout above the item: a child whose minimum is
+                // wider than the column makes the whole column overflow.
+                auto hints = [&] {
+                    QString out;
+                    QQuickItem* col = nullptr;
+                    for (QQuickItem* p = item; p && !col; p = p->parentItem())
+                        if (QByteArray(p->metaObject()->className()).contains("ColumnLayout")) col = p;
+                    if (!col) return out;
+                    std::function<void(QQuickItem*, int)> dump = [&](QQuickItem* c, int depth) {
+                        QObject* att = nullptr;
+                        for (QObject* o : c->children())
+                            if (QByteArray(o->metaObject()->className()) == "QQuickLayoutAttached") att = o;
+                        out += QString("\n%1  [%2 %3 vis=%4 w=%5 iw=%6 min=%7 pref=%8 fill=%9]")
+                                   .arg(QString(depth * 4, ' '), c->objectName(), QString::fromLatin1(c->metaObject()->className()))
+                                   .arg(c->isVisible()).arg(c->width()).arg(c->implicitWidth())
+                                   .arg(att ? att->property("minimumWidth").toString() : QStringLiteral("-"))
+                                   .arg(att ? att->property("preferredWidth").toString() : QStringLiteral("-"))
+                                   .arg(att ? att->property("fillWidth").toString() : QStringLiteral("-"));
+                        if (QByteArray(c->metaObject()->className()).contains("RowLayout") && depth == 0)
+                            for (QQuickItem* d : c->childItems()) dump(d, depth + 1);
+                    };
+                    for (QQuickItem* c : col->childItems()) dump(c, 0);
+                    return out;
+                };
                 QTRY_VERIFY2(right() <= stage->width() + 0.5,
-                             qPrintable(QString("%1 ends at %2 of %3:%4").arg(name).arg(right()).arg(stage->width()).arg(chain())));
+                             qPrintable(QString("%1 ends at %2 of %3:%4%5").arg(name).arg(right()).arg(stage->width()).arg(chain(), hints())));
             }
             // A toolbar wider than its place scrolls to its last control.
             auto* bar = named(root.get(), "rangeBar");

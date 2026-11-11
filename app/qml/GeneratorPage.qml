@@ -380,14 +380,15 @@ Item {
                         Text {
                             textFormat: Text.PlainText
                             text: gen.hasVideo ? gen.videoName : qsTr("Create Emotion Script")
-                            Layout.maximumWidth: 360; Layout.minimumWidth: 80; elide: Text.ElideMiddle
+                            Layout.fillWidth: true; Layout.maximumWidth: 360; Layout.minimumWidth: 80; elide: Text.ElideMiddle
                             color: Theme.text; font.family: Theme.font; font.pixelSize: 17; font.weight: Font.DemiBold
                         }
                         Text {
                             textFormat: Text.PlainText
                             visible: gen.hasVideo
                             text: gen.videoInfo; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
-                            Layout.minimumWidth: 0; elide: Text.ElideRight
+                            // fillWidth, or the layout keeps the text at its full width as its minimum
+                            Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight
                         }
                         FlowButton {
                             objectName: "openHandbookCreate"
