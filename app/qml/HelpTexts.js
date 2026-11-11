@@ -229,7 +229,7 @@ const texts = {
     // src/playback.js:394 (Bookmarks: named times in the script — see “?”.)
     "pb-bookmark-hint": "Named times saved in the script (OFS-style metadata.bookmarks / .samn). Add at the current playhead, seek, rename, or remove. Separate from O-markers and heatmap selection.",
     // src/playback.js:356 (From audio)
-    "pb-bpm-auto": "Measure the beat of the video's sound and fill BPM (first 10 min). Display only — never rewrites the stroke. Works also when the script has no audio check.",
+    "pb-bpm-auto": "Measure the beat of the video's sound and fill BPM (first 10 min; onsets when the pulse is clear, otherwise loudness). Display only — never rewrites the stroke. Works also when the script has no audio check.",
     // src/playback.js:347 (BPM grid)
     "pb-bpm-grid": "Draw beat lines on the Play curve from BPM (or the stroke's own tempo when BPM is blank). Display only — never snaps or rewrites the stroke.",
     // src/playback.js:412 (Add from selection)

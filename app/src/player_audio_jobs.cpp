@@ -18,6 +18,7 @@
 #include "qt_paths.h"
 #include "samn/audio_autosync.h"
 #include "samn/audio_envelope.h"
+#include "samn/audio_tempo.h"
 #include "samn/contact_marks.h"
 #include "samn/contact_preview.h"
 #include "samn/fileio.h"
@@ -72,16 +73,19 @@ bool PlayerController::guessBpmFromAudio() {
     if (!bpmAudio_) {
         bpmAudio_ = new AudioLevelDecoder(this);
         connect(bpmAudio_, &AudioLevelDecoder::finished, this, [this](const std::vector<double>& env) {
-            const double bpm = samn::EstimateBpmFromLoudness(env);
-            if (bpm <= 0) {
+            const auto rel = samn::AssessTempo(bpmAudio_->onsetBlocks(), bpmAudio_->onsetTempo());
+            const auto guess = samn::PickPlaybackAudioBpm(bpmAudio_->onsetTempo(), rel, env);
+            if (guess.bpm <= 0) {
                 toolNote_ = tr("No clear beat in the sound.");
                 emit toolNoteChanged();
                 setError(tr("No clear beat in the sound."));
                 return;
             }
-            setBpm(bpm);
+            setBpm(guess.bpm);
             setBpmGrid(true);
-            toolNote_ = tr("%1 BPM from audio.").arg(int(bpm));
+            toolNote_ = guess.source == samn::PlaybackBpmSource::kOnsets
+                            ? tr("%1 BPM from audio.").arg(int(guess.bpm))
+                            : tr("%1 BPM from audio (loudness).").arg(int(guess.bpm));
             emit toolNoteChanged();
             setError({});
         });
@@ -98,8 +102,8 @@ bool PlayerController::guessBpmFromAudio() {
     toolNote_ = tr("Measuring BPM from the sound…");
     emit toolNoteChanged();
     setError({});
-    // First 10 minutes — EstimateBpmFromLoudness ignores the rest.
-    bpmAudio_->start(videoPath_, samn::kAudioLevelStepMs, 600000);
+    // First 10 minutes — EstimateTempo / EstimateBpmFromLoudness ignore the rest.
+    bpmAudio_->start(videoPath_, samn::kAudioLevelStepMs, 600000, true);
     return true;
 }
 

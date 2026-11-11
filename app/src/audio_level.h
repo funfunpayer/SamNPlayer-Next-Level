@@ -11,6 +11,8 @@
 #include <vector>
 
 #include "samn/audio_envelope.h"
+#include "samn/audio_onsets.h"
+#include "samn/audio_tempo.h"
 
 namespace samn::ui {
 
@@ -28,9 +30,16 @@ public:
     // maxMs < 0 reads the whole file. maxMs >= 0 stops once the RMS windows
     // cover that many milliseconds (windows * stepMs >= maxMs) and finishes
     // the same way as end-of-file.
-    void start(const QString& path, int stepMs = samn::kAudioLevelStepMs, qint64 maxMs = -1);
+    // withOnsets streams an OnsetCurve + TempoAccumulator in the same pass
+    // (drained; no whole-file PCM). onsetTempo / onsetBlocks are filled when
+    // that decode (or its cache) had onsets; otherwise they stay empty and
+    // "BPM from audio" falls back to loudness.
+    void start(const QString& path, int stepMs = samn::kAudioLevelStepMs, qint64 maxMs = -1,
+               bool withOnsets = false);
     void cancel();
     bool busy() const { return decoder_ != nullptr; }
+    const samn::TempoEstimate& onsetTempo() const { return onsetTempo_; }
+    const std::vector<samn::AudioBlock>& onsetBlocks() const { return onsetBlocks_; }
 
 signals:
     void finished(const std::vector<double>& envelope);
@@ -46,16 +55,24 @@ private:
 
     std::unique_ptr<QAudioDecoder> decoder_;
     std::optional<samn::WindowRms> rms_;
+    std::optional<samn::OnsetCurve> onsets_;
+    std::optional<samn::TempoAccumulator> tempoAcc_;
     QString path_;
     int stepMs_ = samn::kAudioLevelStepMs;
     qint64 maxMs_ = -1;
+    bool withOnsets_ = false;
+    samn::TempoEstimate onsetTempo_;
+    std::vector<samn::AudioBlock> onsetBlocks_;
     // Cache: the last decoded file. cacheMaxMs_ < 0 is a full-file decode.
     QString cachePath_;
     qint64 cacheSize_ = -1;
     QDateTime cacheTime_;
     int cacheStep_ = 0;
     qint64 cacheMaxMs_ = -1;
+    bool cacheHasOnsets_ = false;
     std::vector<double> cache_;
+    samn::TempoEstimate cacheOnsetTempo_;
+    std::vector<samn::AudioBlock> cacheOnsetBlocks_;
 };
 
 // The Audio Level lane under the curve (0.7 drawAudioLane): the loudness of
