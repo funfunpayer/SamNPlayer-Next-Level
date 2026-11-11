@@ -348,6 +348,9 @@ private slots:
         QTest::mouseRelease(&window, Qt::LeftButton, {}, c2.toPoint());
         QTRY_COMPARE(gen->contactAreas().size(), 1);
         QVERIFY(!gen->markContact());
+        // Drawn areas keep the options open and take the toggle away (no dead button).
+        QTRY_VERIFY(named(root.get(), "feelMore")->isVisible());
+        QTRY_VERIFY(!named(root.get(), "feelMoreToggle")->isVisible());
         QCOMPARE(gen->box(), tip);
         const QVariantMap area = gen->contactAreas().first().toMap();
         QVERIFY(qAbs(area.value("x").toInt() - 20) <= 2);

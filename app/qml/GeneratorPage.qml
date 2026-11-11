@@ -380,7 +380,9 @@ Item {
                         Text {
                             textFormat: Text.PlainText
                             text: gen.hasVideo ? gen.videoName : qsTr("Create Emotion Script")
-                            Layout.fillWidth: true; Layout.maximumWidth: 360; Layout.minimumWidth: 80; elide: Text.ElideMiddle
+                            // fillWidth lets the row's minimum shrink; the cap at the text's own width keeps the
+                            // spare room with the spacer, not as a gap after a short title
+                            Layout.fillWidth: true; Layout.maximumWidth: Math.min(360, implicitWidth); Layout.minimumWidth: 80; elide: Text.ElideMiddle
                             color: Theme.text; font.family: Theme.font; font.pixelSize: 17; font.weight: Font.DemiBold
                         }
                         Text {
@@ -388,7 +390,7 @@ Item {
                             visible: gen.hasVideo
                             text: gen.videoInfo; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                             // fillWidth, or the layout keeps the text at its full width as its minimum
-                            Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight
+                            Layout.fillWidth: true; Layout.maximumWidth: implicitWidth; Layout.minimumWidth: 0; elide: Text.ElideRight
                         }
                         FlowButton {
                             objectName: "openHandbookCreate"

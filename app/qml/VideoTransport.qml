@@ -117,12 +117,13 @@ Item {
     property bool allowTight: false
     // The buttons' width at the normal spacing (12), not measured: the spacing
     // itself follows `tight`, which would make this a binding loop.
-    readonly property real transportNominal: (compact ? 50 : 72) + (showNext ? 5 : 4) * (36 + 12)
+    // (previous and stop are 36 wide, the two 10 s buttons keep IconButton's 44.)
+    readonly property real transportNominal: (compact ? 50 : 72) + 2 * 36 + 2 * 44 + (showNext ? 36 : 0) + (showNext ? 5 : 4) * 12
     readonly property bool tight: allowTight && width > 0 && width < 36 + leftControls.width + transportNominal + 24 + 156
     // Still too narrow after the slider has gone (Windows fonts make the left
-    // controls wider): the two 10 s buttons give way too (the keys still jump).
+    // controls wider): the two 10 s buttons give way too (the Generator's arrow keys still jump 5 s, 1 s with Shift).
     // Width of the buttons at the tight spacing (6), with a margin of 24.
-    readonly property real transportTightWidth: (compact ? 50 : 72) + (showNext ? 5 : 4) * (36 + 6)
+    readonly property real transportTightWidth: (compact ? 50 : 72) + 2 * 36 + 2 * 44 + (showNext ? 36 : 0) + (showNext ? 5 : 4) * 6
     readonly property bool veryTight: allowTight && width > 0 && width < 18 + leftControls.width + transportTightWidth + 12 + 36 + 18 + 24
     // True when the left controls, the buttons and the mute button overlap.
     readonly property bool crowded: width > 0 &&
