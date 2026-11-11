@@ -2,7 +2,14 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 10 Nov 2026, Cursor, branch `cursor/training-library-helpchips-635a`: Training + Library HelpChip placements (PARITY_REMAINING item 21 placements). Quality first. Do not touch feel_heatbands / Speech-Hold / handbook / `.sam` / intensity-arc.
+**Last update:** 11 Nov 2026, Cursor, branch `cursor/gen-side-scroll-635a`: Generator Create tab right column scrolls (Video+Feel+Create in `createSideFlick`) so Feel no longer clips Create. Do not touch feel_heatbands / POV / AI tip.
+
+## Handover: Generator Create side scroll (11 Nov)
+
+Owner screenshot: Feel / Tip & contact cut off at the bottom of the 340 px column, no scrollbar. Cause: Feel `implicitHeight` grew unbounded in a non-scrolling `ColumnLayout`; Create's inner `Flickable` never got leftover height. Fix: one outer `Flickable` (`createSideFlick`) wrapping Video + Feel + Create (Scenes tab unchanged: `scenesCard` still `fillHeight`). Create card uses implicit height; `createFlick` removed.
+
+- **App:** `GeneratorPage.qml` Create tab (`sidePanel === 0`).
+- **Tests:** `generator_qml_test` `createSideFlickScrollsWhenFeelIsTall` (short window, `contentHeight > height`, Create reachable after scroll, Scenes tab still fills).
 
 ## Handover: Training + Library HelpChips (10 Nov)
 

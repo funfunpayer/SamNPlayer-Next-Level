@@ -1497,9 +1497,39 @@ Item {
                 }
             }
 
+            // Create tab: Video + Feel + Create scroll as one column so a tall
+            // Feel card cannot clip Create off the 340 px panel (no inner
+            // leftover height for Create to fill).
+            Flickable {
+                id: createSideFlick
+                objectName: "createSideFlick"
+                visible: page.sidePanel === 0
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
+                contentHeight: createSideCol.implicitHeight
+                boundsBehavior: Flickable.StopAtBounds
+                // A finished run brings its quality box into view.
+                Connections {
+                    target: gen
+                    function onCreated() {
+                        Qt.callLater(() => {
+                            const y = qualityBox.mapToItem(createSideCol, 0, qualityBox.height).y
+                            const view = createSideFlick.contentY + createSideFlick.height
+                            if (y > view)
+                                createSideFlick.contentY = Math.min(
+                                    Math.max(0, createSideFlick.contentHeight - createSideFlick.height),
+                                    y - createSideFlick.height)
+                        })
+                    }
+                }
+                ColumnLayout {
+                    id: createSideCol
+                    width: parent.width
+                    spacing: 12
+
             // 1 Video
             GlassCard {
-                visible: page.sidePanel === 0
                 Layout.fillWidth: true; implicitHeight: videoCol.implicitHeight + 28
                 ColumnLayout {
                     id: videoCol
@@ -1536,7 +1566,6 @@ Item {
 
             // 3 Feel
             GlassCard {
-                visible: page.sidePanel === 0
                 Layout.fillWidth: true; implicitHeight: feelCol.implicitHeight + 28
                 opacity: gen.hasVideo ? 1 : 0.5
                 ColumnLayout {
@@ -2015,31 +2044,14 @@ Item {
                 }
             }
 
-            // 4 Create
+            // 4 Create — implicit height inside the outer flick (Create stays
+            // reachable by scroll; run log grows the card instead of filling).
             GlassCard {
-                visible: page.sidePanel === 0
-                Layout.fillWidth: true; Layout.fillHeight: true
-                // Scrolls when the run's log, the quality box and the queue need more room.
-                Flickable {
-                    id: createFlick
-                    anchors.fill: parent; anchors.margins: 14
-                    clip: true
-                    contentHeight: createCol.implicitHeight
-                    boundsBehavior: Flickable.StopAtBounds
-                    // A finished run brings its quality box into view.
-                    Connections {
-                        target: gen
-                        function onCreated() {
-                            Qt.callLater(() => {
-                                const bottom = qualityBox.y + qualityBox.height
-                                if (bottom > createFlick.contentY + createFlick.height)
-                                    createFlick.contentY = Math.min(createFlick.contentHeight - createFlick.height, bottom - createFlick.height)
-                            })
-                        }
-                    }
+                Layout.fillWidth: true
+                implicitHeight: createCol.implicitHeight + 28
                 ColumnLayout {
                     id: createCol
-                    width: createFlick.width; spacing: 8
+                    anchors.fill: parent; anchors.margins: 14; spacing: 8
                     Text {
                         textFormat: Text.PlainText
                         text: qsTr("4 · Create"); color: Theme.text; font.family: Theme.font; font.pixelSize: 15
@@ -2670,7 +2682,8 @@ Item {
                     }
                     ListView {
                         objectName: "runLog"
-                        Layout.fillWidth: true; Layout.fillHeight: true
+                        Layout.fillWidth: true
+                        implicitHeight: contentHeight
                         clip: true; spacing: 2
                         model: gen.log
                         delegate: Text {
@@ -2681,6 +2694,7 @@ Item {
                         }
                     }
                 }
+            }
                 }
             }
         }

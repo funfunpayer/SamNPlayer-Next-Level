@@ -764,6 +764,65 @@ private slots:
         QCOMPARE(named(root.get(), "improvePanel")->property("lastStatus").toString(), QString());
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
     }
+
+    // Create tab: Video + Feel + Create share one flick so a short column
+    // still reaches Create (Feel used to grow past the viewport with no bar).
+    void createSideFlickScrollsWhenFeelIsTall() {
+        g_messages.clear();
+        QQmlEngine engine;
+        engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
+        engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+        engine.addImageProvider(QStringLiteral("frames"), new samn::ui::FrameProvider);
+        QQmlComponent comp(&engine);
+        comp.setData(R"(
+            import QtQuick
+            import SamN
+            Rectangle {
+                width: 1400; height: 500; color: "#021024"
+                property alias page: gp
+                GeneratorPage { id: gp; anchors.fill: parent; anchors.margins: 20 }
+            })",
+                     QUrl("qrc:/test/CreateSideFlick.qml"));
+        QVERIFY2(comp.status() == QQmlComponent::Ready, qPrintable(comp.errorString()));
+        QQuickWindow window;
+        window.resize(1400, 500);
+        std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
+        QVERIFY(root);
+        root->setParentItem(window.contentItem());
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto* page = root->property("page").value<QQuickItem*>();
+        QVERIFY(page);
+        QCOMPARE(page->property("sidePanel").toInt(), 0);
+        auto* flick = named(root.get(), "createSideFlick");
+        QVERIFY(flick);
+        QVERIFY(flick->isVisible());
+        QVERIFY(flick->clip());
+        QVERIFY(named(root.get(), "createButton"));
+        QTRY_VERIFY(flick->height() > 80);
+        QTRY_VERIFY2(flick->property("contentHeight").toDouble() > flick->height(),
+                     qPrintable(QString("contentHeight=%1 height=%2")
+                                    .arg(flick->property("contentHeight").toDouble())
+                                    .arg(flick->height())));
+        const qreal overflow = flick->property("contentHeight").toDouble() - flick->height();
+        flick->setProperty("contentY", overflow);
+        QTRY_COMPARE(flick->property("contentY").toDouble(), overflow);
+        auto* create = named(root.get(), "createButton");
+        const QPointF inFlick = create->mapToItem(flick, QPointF(0, create->height()));
+        QVERIFY2(inFlick.y() <= flick->height() + 2,
+                 qPrintable(QString("createButton bottom in flick y=%1 flickH=%2").arg(inFlick.y()).arg(flick->height())));
+
+        page->setProperty("sidePanel", 1);
+        QTRY_VERIFY(!flick->isVisible());
+        auto* scenes = named(root.get(), "scenesCard");
+        QVERIFY(scenes);
+        QTRY_VERIFY(scenes->isVisible());
+        QTRY_VERIFY(scenes->height() > 80);
+        page->setProperty("sidePanel", 0);
+        QTRY_VERIFY(flick->isVisible());
+        QTRY_VERIFY(!scenes->isVisible());
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
+    }
 };
 
 QTEST_MAIN(GeneratorQmlTest)
