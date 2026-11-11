@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <fstream>
 #include <random>
+#include <vector>
 
 #include <opencv2/imgproc.hpp>
 #include <opencv2/videoio.hpp>
@@ -66,6 +67,104 @@ TEST_CASE("frame reader: every frame in order with its video time") {
     CHECK(n == kFrames);
     r.reset();
     fs::remove(clip);
+}
+
+// MPEG-4 in MP4, as the Generator's clips: some OpenCV builds report time 0
+// for the last frames the decoder hands out. Those must not jump back to 0.
+TEST_CASE("frame reader: times rise to the last frame of an MPEG-4 clip") {
+    const fs::path p = fs::temp_directory_path() / ("samn_mp4v_" + std::to_string(std::random_device{}()) + ".mp4");
+    constexpr int n = 200;
+    {
+        cv::VideoWriter w(p.u8string(), cv::VideoWriter::fourcc('m', 'p', '4', 'v'), kFps, cv::Size(kW, kH));
+        REQUIRE(w.isOpened());
+        for (int i = 0; i < n; ++i) {
+            cv::Mat f(kH, kW, CV_8UC3, cv::Scalar(40, 40, 40));
+            cv::rectangle(f, cv::Rect(i % (kW - 20), 10, 20, 40), cv::Scalar(230, 230, 230), cv::FILLED);
+            w.write(f);
+        }
+    }
+    std::string error;
+    auto r = FrameReader::Open(p, &error);
+    REQUIRE_MESSAGE(r, error);
+    const int64_t step_us = static_cast<int64_t>(std::llround(1e6 / kFps));
+    auto check_to_end = [&](int from) {
+        int64_t prev = -1, pts = 0;
+        int count = from;
+        while (r->Grab(&pts)) {
+            CAPTURE(count);
+            CHECK(pts > prev);
+            CHECK(std::llabs(pts - count * step_us) <= step_us / 2);
+            prev = pts;
+            ++count;
+        }
+        CHECK(count == n);
+    };
+    check_to_end(0);
+    // The same after a seek close to the end, and again from the start.
+    REQUIRE(r->SeekMs(static_cast<int64_t>((n - 5) * 1000 / kFps)));
+    check_to_end(n - 5);
+    REQUIRE(r->SeekMs(0));
+    check_to_end(0);
+    r.reset();
+    fs::remove(p);
+}
+
+// Frames at equal times (pairs, triples at t=0): the same frames get the same
+// times whether the stream is read from its start or a seek lands inside the
+// opening run, and times never go backwards. Needs ffmpeg to make the clip;
+// without it the case fails on CI and is skipped (loudly) elsewhere.
+TEST_CASE("frame reader: a seek into the opening frames at t=0 gives them the same times") {
+    if (std::system("ffmpeg -version > /dev/null 2>&1") != 0) {
+#ifdef _WIN32
+        MESSAGE("SKIPPED: no ffmpeg here");
+        return;
+#else
+        if (std::getenv("CI") || std::getenv("SAMN_NATIVE_REQUIRED")) FAIL("ffmpeg is missing but CI/SAMN_NATIVE_REQUIRED is set");
+        MESSAGE("SKIPPED: no ffmpeg here");
+        return;
+#endif
+    }
+    const fs::path base = fs::temp_directory_path() / ("samn_dup_base_" + std::to_string(std::random_device{}()) + ".mkv");
+    const fs::path plain = fs::temp_directory_path() / ("samn_dup_src_" + std::to_string(std::random_device{}()) + ".mp4");
+    {
+        cv::VideoWriter w(plain.u8string(), cv::VideoWriter::fourcc('m', 'p', '4', 'v'), kFps, cv::Size(kW, kH));
+        REQUIRE(w.isOpened());
+        for (int i = 0; i < 40; ++i) {
+            cv::Mat f(kH, kW, CV_8UC3, cv::Scalar(40, 40, 40));
+            cv::rectangle(f, cv::Rect(i * 3, 10, 20, 40), cv::Scalar(230, 230, 230), cv::FILLED);
+            w.write(f);
+        }
+    }
+    auto run = [&](const std::string& cmd) { return std::system((cmd + " > /dev/null 2>&1").c_str()) == 0; };
+    REQUIRE(run("ffmpeg -y -i \"" + plain.string() + "\" -c:v mpeg4 -bf 0 \"" + base.string() + "\""));
+    for (const char* ts : {"floor(N/2)*0.08", "floor(N/3)*0.12"}) {
+        const fs::path clip = fs::temp_directory_path() / ("samn_dup_" + std::to_string(std::random_device{}()) + ".mkv");
+        REQUIRE(run("ffmpeg -y -i \"" + base.string() + "\" -c copy -bsf:v \"setts=ts='" + std::string(ts) + "/TB'\" \"" + clip.string() + "\""));
+        std::string error;
+        auto r = FrameReader::Open(clip, &error);
+        REQUIRE_MESSAGE(r, error);
+        std::vector<int64_t> from_start;
+        for (int64_t pts = 0; r->Grab(&pts);) from_start.push_back(pts);
+        REQUIRE(from_start.size() >= 8);
+        for (size_t i = 1; i < from_start.size(); ++i) CHECK(from_start[i] >= from_start[i - 1]);
+        // A seek to each of the first frames: the first frame it returns has the
+        // time the sequential read gave that frame.
+        for (int64_t ms : {0, 10, 40, 80, 120, 200}) {
+            CAPTURE(ms);
+            REQUIRE(r->SeekMs(ms));
+            int64_t pts = 0;
+            REQUIRE(r->Grab(&pts));
+            VideoFrame f;
+            REQUIRE(r->Retrieve(f));
+            REQUIRE(f.index >= 0);
+            REQUIRE(static_cast<size_t>(f.index) < from_start.size());
+            CHECK(pts == from_start[static_cast<size_t>(f.index)]);
+        }
+        r.reset();
+        fs::remove(clip);
+    }
+    fs::remove(base);
+    fs::remove(plain);
 }
 
 TEST_CASE("frame reader: seek is frame-exact, forwards and back") {
