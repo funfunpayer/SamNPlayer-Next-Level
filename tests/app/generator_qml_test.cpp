@@ -324,8 +324,23 @@ private slots:
         QMetaObject::invokeMethod(named(root.get(), "markContact"), "clicked");
         QTRY_VERIFY(gen->markContact());
         const QRect tip = gen->box();
-        const QPointF c1 = frame->mapToScene(QPointF(ir.x() + 20 * s, ir.y() + 20 * s));
-        const QPointF c2 = frame->mapToScene(QPointF(ir.x() + 80 * s, ir.y() + 70 * s));
+        // The frame has moved and resized since it was measured above (cards open,
+        // rows change); measure it again, settled, right before the drag.
+        {
+            QRectF last;
+            int steady = 0;
+            QTRY_VERIFY([&] {
+                const QRectF now = frame->property("imageRect").toRectF();
+                steady = (now == last && !now.isEmpty()) ? steady + 1 : 0;
+                last = now;
+                QTest::qWait(40);
+                return steady >= 3;
+            }());
+            ir = last;
+        }
+        const double sc = ir.width() / 320.0;
+        const QPointF c1 = frame->mapToScene(QPointF(ir.x() + 20 * sc, ir.y() + 20 * sc));
+        const QPointF c2 = frame->mapToScene(QPointF(ir.x() + 80 * sc, ir.y() + 70 * sc));
         QTest::mousePress(&window, Qt::LeftButton, {}, c1.toPoint());
         QTest::mouseMove(&window, ((c1 + c2) / 2).toPoint());
         QTRY_VERIFY(named(root.get(), "contactDraft")->isVisible());
