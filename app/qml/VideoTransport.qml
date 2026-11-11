@@ -119,6 +119,11 @@ Item {
     // itself follows `tight`, which would make this a binding loop.
     readonly property real transportNominal: (compact ? 50 : 72) + (showNext ? 5 : 4) * (36 + 12)
     readonly property bool tight: allowTight && width > 0 && width < 36 + leftControls.width + transportNominal + 24 + 156
+    // Still too narrow after the slider has gone (Windows fonts make the left
+    // controls wider): the two 10 s buttons give way too (the keys still jump).
+    // Width of the buttons at the tight spacing (6), with a margin of 24.
+    readonly property real transportTightWidth: (compact ? 50 : 72) + (showNext ? 5 : 4) * (36 + 6)
+    readonly property bool veryTight: allowTight && width > 0 && width < 18 + leftControls.width + transportTightWidth + 12 + 36 + 18 + 24
     // True when the left controls, the buttons and the mute button overlap.
     readonly property bool crowded: width > 0 &&
         (leftControls.x + leftControls.width > transportRow.x + 0.5 ||
@@ -144,14 +149,14 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             onClicked: root.previousRequested()
         }
-        IconButton { objectName: "back10Button"; icon: "back10"; tip: qsTr("Back 10 s"); onClicked: root.seekByRequested(-10000); anchors.verticalCenter: parent.verticalCenter }
+        IconButton { objectName: "back10Button"; visible: !root.veryTight; icon: "back10"; tip: qsTr("Back 10 s"); onClicked: root.seekByRequested(-10000); anchors.verticalCenter: parent.verticalCenter }
         PlayButton {
             objectName: "transportPlay"
             width: root.compact ? 50 : 72; height: width
             playing: root.playing
             onClicked: root.togglePlayRequested()
         }
-        IconButton { objectName: "forward10Button"; icon: "forward10"; tip: qsTr("Forward 10 s"); onClicked: root.seekByRequested(10000); anchors.verticalCenter: parent.verticalCenter }
+        IconButton { objectName: "forward10Button"; visible: !root.veryTight; icon: "forward10"; tip: qsTr("Forward 10 s"); onClicked: root.seekByRequested(10000); anchors.verticalCenter: parent.verticalCenter }
         // Stop: the device stops and the playhead goes back to 0.
         IconButton {
             objectName: "stopButton"

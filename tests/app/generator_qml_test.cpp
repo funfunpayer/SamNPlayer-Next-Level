@@ -837,6 +837,59 @@ private slots:
         QCOMPARE(named(root.get(), "improvePanel")->property("lastStatus").toString(), QString());
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
     }
+    // The transport in a narrow card with wide left controls (what Windows fonts
+    // make of the time and speed): the slider, then the 10 s buttons, give way
+    // and nothing overlaps; wide, everything is there. Without allowTight (the
+    // Player) nothing is hidden.
+    void transportClosesUpBeforeItOverlaps() {
+        g_messages.clear();
+        QQmlEngine engine;
+        engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
+        engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+        QQmlComponent comp(&engine);
+        comp.setData(R"(
+            import QtQuick
+            import SamN
+            Item {
+                property alias tight: t
+                property alias loose: l
+                property real w: 900
+                width: w; height: 300
+                VideoTransport { id: t; objectName: "tightTransport"; compact: true; allowTight: true; width: parent.w; y: 0
+                    leftItems: [Item { width: 220; height: 24 }] }
+                VideoTransport { id: l; objectName: "looseTransport"; compact: true; width: parent.w; y: 120
+                    leftItems: [Item { width: 220; height: 24 }] }
+            })",
+                     QUrl("qrc:/test/Transport.qml"));
+        QVERIFY2(comp.status() == QQmlComponent::Ready, qPrintable(comp.errorString()));
+        QQuickWindow window;
+        std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
+        QVERIFY(root);
+        root->setParentItem(window.contentItem());
+        window.resize(900, 300);
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto* t = named(root.get(), "tightTransport");
+        auto* l = named(root.get(), "looseTransport");
+        // Wide: all there, not crowded.
+        QTRY_VERIFY(!t->property("crowded").toBool());
+        QVERIFY(!t->property("tight").toBool());
+        QVERIFY(!t->property("veryTight").toBool());
+        // Narrower: the slider goes first, then the 10 s buttons; never crowded.
+        for (int w : {700, 620, 560, 520, 480, 460, 440}) {
+            root->setProperty("w", w);
+            QTest::qWait(80);
+            QTRY_VERIFY2(!t->property("crowded").toBool(), qPrintable(QString("crowded at %1").arg(w)));
+        }
+        QVERIFY(t->property("veryTight").toBool());
+        QVERIFY(!named(t, "back10Button")->isVisible());
+        // The same width without allowTight (the Player) hides nothing.
+        QVERIFY(!l->property("tight").toBool());
+        QVERIFY(named(l, "back10Button")->isVisible());
+        QVERIFY(named(l, "volume")->isVisible());
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
+    }
+
     // The Create side (Video, Feel, Create) is one scroll area: on a short
     // window every control can be brought into view.
     void createSideScrollsOnAShortWindow() {
