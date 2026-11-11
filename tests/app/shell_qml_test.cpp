@@ -1349,13 +1349,16 @@ private slots:
             s.window->setProperty("mode", 1);
             QTRY_COMPARE_WITH_TIMEOUT(s.mode(), 1, kWait);
             QTRY_VERIFY_WITH_TIMEOUT(byName("openHandbookCreate"), kWait);
-            // TEMP diagnostic (CI, Qt 6.7): where the button is when it is clicked.
+            // The Generator page is built by an asynchronous Loader and lays out a
+            // moment after its header button exists; the stage clips its rows to
+            // its column, so a click before that lands on nothing.
             {
-                auto* b = byName("openHandbookCreate");
-                qInfo() << "DIAG win" << s.window->width() << s.window->height() << "btn" << b->mapToScene(QPointF(0, 0)) << b->width();
-                for (QQuickItem* i : descendants(s.root()))
-                    if (i->objectName() == "stageSplit" || i->objectName() == "projectPanel" || i->objectName() == "createScroll")
-                        qInfo() << "DIAG" << i->objectName() << i->mapToScene(QPointF(0, 0)) << i->width() << i->height();
+                QQuickItem* stage = nullptr;
+                QTRY_VERIFY_WITH_TIMEOUT((stage = [&] {
+                    for (QQuickItem* i : descendants(s.root()))
+                        if (i->objectName() == QLatin1String("stageSplit") && i->isVisible()) return i;
+                    return static_cast<QQuickItem*>(nullptr);
+                }()) && stage->width() > 300, kWait);
             }
             click(byName("openHandbookCreate"));
             QTRY_VERIFY_WITH_TIMEOUT(handbook->isVisible(), kWait);
