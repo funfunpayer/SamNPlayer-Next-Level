@@ -70,46 +70,20 @@ CameraMotion EstimateCameraMotion(const cv::Mat& prev_gray, const cv::Mat& gray,
                                   double ransac_px = CameraMotion::kRansacPx);
 
 // Both fits from the same matched features: fine at kRansacPx and, when
-// asked for or when the fine fit is not usable, coarse at 0.7's
-// kRansacPx07 (coarse.ok false when it was not fitted).
+// asked for, coarse at 0.7's kRansacPx07 (coarse.ok false when not fitted).
+// TrackBox steers by the fine fit; the coarse share is the self-check's
+// camera trust c6, which was calibrated on it.
 struct CameraFits {
     CameraMotion fine, coarse;
 };
 CameraFits EstimateCameraFits(const cv::Mat& prev_gray, const cv::Mat& gray, const std::vector<cv::Rect>& excludes,
                               bool want_coarse);
 
-// The camera's step at the tip, frame by frame (PR #201 review). A frame
-// whose fine fit is not usable must not add 0: that drops its whole step
-// for good and a real pan comes back as a drift. So:
-// 1. the fine fit when usable;
-// 2. else the coarse fit when it is plausible, its share is clearly high
-//    (kCoarseMinInliers) and its step agrees with the last measured one
-//    within kAgreePx, so a foreground that moves 1 to 3 px per frame
-//    against the background cannot take over through it;
-// 3. else the last measured step, for carry_frames frames (about 0.5 s),
-//    then halved every frame.
-class CameraSteps {
-public:
-    static constexpr double kCoarseMinInliers = 0.7;
-    static constexpr double kAgreePx = 1.0;
-    enum class Source { kFine, kCoarse, kCarried, kNone };
-
-    explicit CameraSteps(int carry_frames) : carry_frames_(carry_frames) {}
-    // One frame without a cut; p is the tip in the previous frame.
-    cv::Point2d Step(const CameraFits& fits, const cv::Point2d& p, Source* source = nullptr);
-    // A scene cut: the new scene's camera starts from rest.
-    void Reset();
-
-private:
-    int carry_frames_;
-    int carried_ = 0;
-    cv::Point2d last_{0, 0};
-};
-
 // Frames flagged kLostTracker repeat the tracker's last box: there the tip
 // did not move in the scene, whatever the camera did, so the compensated
-// position repeats the one before too.
-void HoldLostPositions(std::vector<double>& v, const std::vector<uint8_t>& lost);
+// position repeats the one before too. Not across a scene cut (cuts: the
+// first frame of each new scene), where the camera starts again.
+void HoldLostPositions(std::vector<double>& v, const std::vector<uint8_t>& lost, const std::vector<int>& cuts);
 
 // The y shift of EstimateCameraMotion with 0.7's 3 px RANSAC distance; 0
 // means "no estimate", not "no motion" (0.7 estimate_camera_motion; the tip

@@ -23,8 +23,8 @@ namespace samn::engine {
 // 5: a Tf/Tj distance stroke takes the smallest gap over partner and extras.
 // 6: hybrid_reacquire (AI proposal after CSRT+memory miss) in the cache key.
 // 7: 2-D camera compensation (xs compensated too, frame_xs, inlier gate).
-// 8: gated camera frames carry the last step, 3 px fallback, plausibility
-//    bounds, held boxes hold their compensated position; camera_frames_gated.
+// 8: plausibility bounds on the camera estimate, held boxes hold their
+//    compensated position, camera_frames_gated.
 constexpr int kTrackCacheVersion = 8;
 
 // Hex key from the video (size, modification time and the first and last

@@ -30,8 +30,8 @@ struct TrackOptions {
     double max_analysis_fps = 0;
     // Removes the camera's motion at the tip from xs and ys: shift, zoom and
     // rotation of the background estimate, per scene; a frame without a
-    // trusted estimate carries the last step (CameraSteps, camera_motion.cpp,
-    // docs/benchmarks/DETECTION_CAMERA2D_2026-11-08.md).
+    // trusted estimate adds nothing (camera_motion.cpp,
+    // docs/benchmarks/DETECTION_CAMERA2D_FIXES_2026-11-10.md).
     bool camera_compensation = true;
     bool scene_cuts = true;
     // Self-check: a cut must also be an outlier against the last 2 s of
@@ -91,7 +91,7 @@ struct TrackOptions {
 
 struct TrackStats {
     int lost_frames = 0;         // frames the tracker had no box
-    int camera_frames_lost = 0;  // frames whose camera step was not measured (carried from the last one, or none)
+    int camera_frames_lost = 0;  // frames without a trusted camera step (no estimate, or gated): they add nothing
     int camera_frames_gated = 0; // frames whose 1 px camera fit was not trusted (inliers under 0.5 or implausible)
     int total_frames = 0;
     int valid_frames = 0;        // frames with a real tracker box

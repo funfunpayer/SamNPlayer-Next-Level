@@ -95,8 +95,7 @@ CameraFits EstimateCameraFits(const cv::Mat& prev_gray, const cv::Mat& gray, con
     std::vector<cv::Point2f> good_prev, good_curr;
     if (!MatchedFeatures(prev_gray, gray, excludes, &good_prev, &good_curr)) return out;
     out.fine = Fit(good_prev, good_curr, CameraMotion::kRansacPx, prev_gray.size());
-    if (want_coarse || !out.fine.Usable())
-        out.coarse = Fit(good_prev, good_curr, CameraMotion::kRansacPx07, prev_gray.size());
+    if (want_coarse) out.coarse = Fit(good_prev, good_curr, CameraMotion::kRansacPx07, prev_gray.size());
     return out;
 }
 
@@ -107,39 +106,10 @@ double CameraMotionY(const cv::Mat& prev_gray, const cv::Mat& gray, const std::v
     return c.ok ? c.m(1, 2) : 0.0;
 }
 
-cv::Point2d CameraSteps::Step(const CameraFits& fits, const cv::Point2d& p, Source* source) {
-    auto say = [&](Source s) {
-        if (source) *source = s;
-    };
-    if (fits.fine.Usable()) {
-        last_ = fits.fine.Shift(p);
-        carried_ = 0;
-        say(Source::kFine);
-        return last_;
-    }
-    if (fits.coarse.ok && fits.coarse.Plausible() && fits.coarse.inliers >= kCoarseMinInliers) {
-        const cv::Point2d s = fits.coarse.Shift(p);
-        if (std::hypot(s.x - last_.x, s.y - last_.y) <= kAgreePx) {
-            last_ = s;
-            carried_ = 0;
-            say(Source::kCoarse);
-            return last_;
-        }
-    }
-    ++carried_;
-    const double keep = carried_ <= carry_frames_ ? 1.0 : std::pow(0.5, carried_ - carry_frames_);
-    say(last_.x == 0 && last_.y == 0 ? Source::kNone : Source::kCarried);
-    return last_ * keep;
-}
-
-void CameraSteps::Reset() {
-    carried_ = 0;
-    last_ = {0, 0};
-}
-
-void HoldLostPositions(std::vector<double>& v, const std::vector<uint8_t>& lost) {
+void HoldLostPositions(std::vector<double>& v, const std::vector<uint8_t>& lost, const std::vector<int>& cuts) {
     for (size_t i = 1; i < v.size() && i < lost.size(); ++i)
-        if (lost[i] == kLostTracker) v[i] = v[i - 1];
+        if (lost[i] == kLostTracker && std::find(cuts.begin(), cuts.end(), static_cast<int>(i)) == cuts.end())
+            v[i] = v[i - 1];
 }
 
 }  // namespace samn::engine

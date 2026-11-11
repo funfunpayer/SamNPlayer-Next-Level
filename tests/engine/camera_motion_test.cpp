@@ -361,9 +361,12 @@ TEST_CASE("camera: the track cache keeps the frame pixels of both axes") {
 
 // Noisy and small pictures (PR #201 review). At the 1 px RANSAC distance a
 // noisy background's inlier share falls under the gate in many frames
-// (here 47 of 300 at 192x144, 84 of 300 at 320x240); a gated frame that adds
-// nothing drops its whole camera step for good, and the pan comes back as a
-// drift. 0.7's 3 px fit tracked these at r 0.994 / 0.998.
+// (here 47 of 300 at 192x144, 84 of 300 at 320x240); a gated frame adds
+// nothing, so that frame's camera step is lost and a steady pan comes back
+// as part drift. Filling those frames (carry, 3 px fallback, interpolation)
+// fixed this scene but broke shake, parallax and abrupt stops (review of the
+// fixes; numbers in DETECTION_CAMERA2D_FIXES_2026-11-10.md), so the loss
+// stays: a known limit.
 namespace {
 
 tc::CameraScene NoisyPan(int w) {
@@ -391,7 +394,7 @@ double Median(std::vector<double> v) {
 
 }  // namespace
 
-TEST_CASE("camera: a noisy picture keeps its compensation (a gated frame does not drop the pan)") {
+TEST_CASE("camera: a noisy picture keeps most of its compensation (known limit: gated frames lose their step)") {
     TempDir dir;
     for (const int w : {320, 192}) {
         const fs::path clip = dir.path / ("noisy_" + std::to_string(w) + ".mp4");
@@ -401,14 +404,17 @@ TEST_CASE("camera: a noisy picture keeps its compensation (a gated frame does no
         INFO(w << " px: raw r " << R(raw, s) << ", compensated r " << R(comp, s) << ", frames without a step "
                 << comp.stats.camera_frames_lost << " of " << comp.stats.total_frames);
         CHECK(R(raw, s) < 0.9);
-        CHECK(R(comp, s) >= 0.99);
+        // 0.970 at 320 px, 0.990 at 192 px with gated frames adding nothing;
+        // 0.999 would need a gap fill that is safe on shake and stops.
+        CHECK(R(comp, s) >= 0.96);
+        CHECK(comp.stats.camera_frames_gated > 0);
     }
 }
 
 TEST_CASE("camera: the self-check's camera trust stays 0.7's 3 px inlier share") {
     TempDir dir;
     const fs::path clip = dir.path / "noisy_checks.mp4";
-    const tc::SceneInfo s = Scene(clip, NoisyPan(320));
+    Scene(clip, NoisyPan(320));
     TrackOptions o = Cam(TrackAxis::kX);
     o.record_checks = true;
     const TrackResult r = Track(clip, BoxX(320), o);
@@ -419,7 +425,8 @@ TEST_CASE("camera: the self-check's camera trust stays 0.7's 3 px inlier share")
     // c6 (self_check.h, c6_min 0.4) was calibrated on the 3 px share; the
     // 1 px share of this clip has a median near 0.52, the 3 px share near 0.82.
     CHECK_MESSAGE(Median(shares) >= 0.7, "median recorded share " << Median(shares));
-    CHECK(R(r, s) >= 0.99);  // recording does not change the track
+    // Recording does not change the track.
+    CHECK(r.positions == Track(clip, BoxX(320), Cam(TrackAxis::kX)).positions);
 }
 
 TEST_CASE("camera: an implausible or broken estimate is not used") {
@@ -478,53 +485,14 @@ TEST_CASE("camera: a shift of more than a quarter of the picture is no camera st
     CHECK_FALSE(c.Usable());
 }
 
-TEST_CASE("camera: steps without a trusted fit carry the last one, then fade; the 3 px fit must agree") {
-    const auto shift = [](double dx, double share) {
-        CameraMotion c;
-        c.ok = true;
-        c.inliers = share;
-        c.m(0, 2) = dx;
-        return c;
-    };
-    const cv::Point2d tip(160, 120);
-    CameraSteps steps(3);
-    CameraSteps::Source src = CameraSteps::Source::kNone;
-    CameraFits pan;
-    pan.fine = shift(2.0, 0.9);
-    CHECK(steps.Step(pan, tip, &src).x == doctest::Approx(2.0));
-    CHECK(src == CameraSteps::Source::kFine);
-
-    // Gated (share 0.3) and no coarse fit: the last step, three times.
-    CameraFits gated;
-    gated.fine = shift(-5.0, 0.3);
-    for (int i = 0; i < 3; ++i) {
-        CHECK(steps.Step(gated, tip, &src).x == doctest::Approx(2.0));
-        CHECK(src == CameraSteps::Source::kCarried);
-    }
-    // Then halved every frame.
-    CHECK(steps.Step(gated, tip).x == doctest::Approx(1.0));
-    CHECK(steps.Step(gated, tip).x == doctest::Approx(0.5));
-
-    // A clear 3 px fit that agrees with the last measured step (2.0) is taken ...
-    CameraFits coarse_ok = gated;
-    coarse_ok.coarse = shift(2.6, 0.8);
-    CHECK(steps.Step(coarse_ok, tip, &src).x == doctest::Approx(2.6));
-    CHECK(src == CameraSteps::Source::kCoarse);
-    // ... one that jumps away from it (a foreground taking over) is not,
-    CameraFits coarse_far = gated;
-    coarse_far.coarse = shift(4.5, 0.95);
-    CHECK(steps.Step(coarse_far, tip, &src).x == doctest::Approx(2.6));
-    CHECK(src == CameraSteps::Source::kCarried);
-    // ... nor one with a share under 0.7.
-    CameraFits coarse_weak = gated;
-    coarse_weak.coarse = shift(2.6, 0.6);
-    steps.Step(coarse_weak, tip, &src);
-    CHECK(src == CameraSteps::Source::kCarried);
-
-    // A cut: the new scene starts from rest, nothing to carry.
-    steps.Reset();
-    CHECK(steps.Step(gated, tip, &src).x == 0.0);
-    CHECK(src == CameraSteps::Source::kNone);
+TEST_CASE("camera: a held position does not reach across a scene cut") {
+    std::vector<double> v{1, 2, 3, 4, 5};
+    const std::vector<uint8_t> lost{0, 0, kLostTracker, kLostTracker, 0};
+    HoldLostPositions(v, lost, {2});  // frame 2 starts a new scene
+    CHECK(v == std::vector<double>{1, 2, 3, 3, 5});
+    std::vector<double> w{1, 2, 3, 4, 5};
+    HoldLostPositions(w, lost, {});
+    CHECK(w == std::vector<double>{1, 2, 2, 2, 5});
 }
 
 TEST_CASE("camera: the track reports frames whose fine fit was gated") {
@@ -533,7 +501,7 @@ TEST_CASE("camera: the track reports frames whose fine fit was gated") {
     Scene(clip, NoisyPan(320));
     const TrackResult noisy = Track(clip, BoxX(320), Cam(TrackAxis::kX));
     CHECK(noisy.stats.camera_frames_gated > 10);
-    CHECK(noisy.stats.camera_frames_lost < noisy.stats.camera_frames_gated);  // the 3 px fit or the carry filled them
+    CHECK(noisy.stats.camera_frames_lost >= noisy.stats.camera_frames_gated);  // a gated frame has no trusted step
 
     const fs::path clean = dir.path / "clean_gated.mp4";
     Scene(clean, PanX(45, 0.25, true));

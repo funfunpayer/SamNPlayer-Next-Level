@@ -19,8 +19,6 @@ namespace samn::engine {
 namespace {
 
 constexpr int kRememberEveryNFrames = 25;
-// How long a camera step is carried over frames without a trusted estimate.
-constexpr double kCameraCarrySeconds = 0.5;
 
 // Spread between the 2nd and 98th percentile.
 double RobustRange(std::vector<double> v) {
@@ -294,11 +292,6 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
     const bool rate_cap = opts.max_analysis_fps > 0;
     // 1 ms of slack: millisecond times of a 60 fps clip are 16/17 ms apart.
     const double min_step_ms = rate_cap ? 1000.0 / opts.max_analysis_fps - 1.0 : 0;
-    // A gated camera frame carries the last step for about 0.5 s of samples.
-    const double sample_fps = rate_cap && reader->fps() > 0 ? std::min(reader->fps(), opts.max_analysis_fps)
-                              : reader->fps() > 0           ? reader->fps()
-                                                            : 25.0;
-    CameraSteps camera_steps(std::max(1, static_cast<int>(std::lround(kCameraCarrySeconds * sample_fps))));
     Progress progress(opts.on_progress, total);
     progress.Report(0);
 
@@ -473,14 +466,17 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
                 // a zoom or a rotation by how far it sits from their centre
                 // (which the estimate itself places), so a tip off the zoom
                 // centre is not pulled along with the picture's corner (0.7
-                // used t(1,2), the motion of pixel (0, 0)).
-                CameraSteps::Source source = CameraSteps::Source::kNone;
-                shift = camera_steps.Step(fits, prev_tip, &source);
-                if (fits.fine.ok && !fits.fine.Usable()) ++res.stats.camera_frames_gated;
-                if (source == CameraSteps::Source::kCarried || source == CameraSteps::Source::kNone)
+                // used t(1,2), the motion of pixel (0, 0)). A frame without
+                // a trusted fit adds nothing: carrying the last step or
+                // taking the looser 3 px fit helped a steady noisy pan but
+                // made shake, parallax and abrupt stops drift (review of the
+                // fixes, docs/benchmarks/DETECTION_CAMERA2D_FIXES_2026-11-10.md).
+                if (fits.fine.Usable()) {
+                    shift = fits.fine.Shift(prev_tip);
+                } else {
                     ++res.stats.camera_frames_lost;
-            } else {
-                camera_steps.Reset();
+                    if (fits.fine.ok) ++res.stats.camera_frames_gated;
+                }
             }
             // A cut starts a new scene: its camera starts from 0.
             camera_dx.push_back(cut ? 0.0 : camera_dx.back() + shift.x);
@@ -510,8 +506,8 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
     if (opts.camera_compensation) {
         ApplyCameraCompensation(res.xs, camera_dx, res.scene_cuts);
         ApplyCameraCompensation(res.ys, camera_dy, res.scene_cuts);
-        HoldLostPositions(res.xs, res.lost);
-        HoldLostPositions(res.ys, res.lost);
+        HoldLostPositions(res.xs, res.lost, res.scene_cuts);
+        HoldLostPositions(res.ys, res.lost, res.scene_cuts);
     }
 
     res.stats.vertical_range = Ptp(res.ys);
