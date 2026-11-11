@@ -102,7 +102,17 @@ All 21 camera cases pass; the full engine suite is in the PR.
 
 ## Cost
 
-COST_PLACEHOLDER
+Interleaved ABBA `--timing-only` runs (main, this change, this change, main), 5 timed runs after 3 warm-ups per scene each, on all 28 scenes. Load averages (1 / 5 / 15 min) at the start and end of each run:
+
+| run | start | end | sum of ms/frame |
+|---|---|---|---:|
+| main 1 | 2.17 / 3.56 / 3.80 | 1.33 / 1.58 / 1.84 | 827.5 |
+| this 1 | 1.33 / 1.58 / 1.84 | 1.75 / 1.76 / 1.73 | 832.0 |
+| this 2 | 1.75 / 1.76 / 1.73 | 1.53 / 1.71 / 1.70 | 819.0 |
+| main 2 (after a restart of the machine) | 0.92 / 0.46 / 0.18 | 1.68 / 1.73 / 1.97 | 798.9 |
+
+- **Mean:** main 813.2, this change 825.5 ms/frame summed: **+1.5 %**, inside the 10 % rule. Per scene the mean of the two runs moves between -12 % (`pan_fg`) and +14 % (`drop30`). That is run-to-run spread on a shared machine. Per frame the code differs only by the plausibility check, a few multiplications; the 3 px fit runs only while the self-check records, and the bench does not record.
+- **RSS:** within 1.3 % on every scene.
 
 ## Remaining limits
 
