@@ -1,6 +1,6 @@
 # 2-D camera compensation: review fixes, 10 Nov 2026
 
-Follow-up to [`DETECTION_CAMERA2D_2026-11-08.md`](DETECTION_CAMERA2D_2026-11-08.md) (#201). It fixes the findings of the independent review of #201. "Before" is `main` with #201 (the 1 px fit, a gated frame adds nothing); "after" is this branch. Synthetic scenes only. Raw rows: [`DETECTION_CAMERA2D_FIXES_2026-11-10.csv`](DETECTION_CAMERA2D_FIXES_2026-11-10.csv) (after, all 23 scenes).
+Follow-up to [`DETECTION_CAMERA2D_2026-11-08.md`](DETECTION_CAMERA2D_2026-11-08.md) (#201). It fixes the findings of the independent review of #201. "Before" is `main` with #201 (the 1 px fit, a gated frame adds nothing); "after" is this branch. Synthetic scenes only. Quality is unchanged by the newer `main` merged into this branch (frame-reader time fix #240): `clean`, `hard_cut` and the two noisy scenes were re-run on the merged tree and match in every quality row. Raw rows: [`DETECTION_CAMERA2D_FIXES_2026-11-10.csv`](DETECTION_CAMERA2D_FIXES_2026-11-10.csv) (after, all 23 scenes).
 
 ## What changed
 
@@ -65,7 +65,14 @@ Acceptance rule: rule 1 (no r drops by more than max(0.01, spread)) holds on eve
 
 ## Cost
 
-TIMING_PLACEHOLDER
+Two `--timing-only` runs of each engine, interleaved (#201, this branch, #201, this branch), 5 timed runs after 3 warm-ups per scene. Load averages (1 / 5 / 15 min): run 1 #201 1.70 -> 3.44 (other work started during it, up to about 8), this branch -> 1.49; run 2 #201 0.81 -> 4.17, this branch -> 1.55.
+
+| run | sum of ms/frame over 23 scenes, #201 -> this branch | largest RSS change on a scene |
+|---|---|---:|
+| 1 | 867.7 -> 715.3 (-17.6 %) | 0.8 % |
+| 2 | 748.8 -> 690.6 (-7.8 %) | 1.3 % |
+
+Every scene was faster after in the mean of the two runs (-2 % to -25 %). That is the load, not the change: #201 ran first in each pair, while other work was busier. What the change adds is a second RANSAC on the same points, only on gated frames, or on every frame when the self-check records. So the honest reading is **no measurable cost increase** (rule 3 holds) and no speed-up claimed. RSS is within 1.3 % on every scene.
 
 ## Remaining limits
 
