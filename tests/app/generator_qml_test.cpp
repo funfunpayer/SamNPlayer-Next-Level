@@ -278,6 +278,16 @@ private slots:
         QTRY_VERIFY(named(root.get(), "vibSourceRow")->isVisible());
         QVERIFY(!named(root.get(), "neoFeel")->isVisible());
         QVERIFY(named(root.get(), "feelHint")->isVisible());
+        // The Feel card shows the everyday controls; the rest opens on demand.
+        QVERIFY(named(root.get(), "styleCombo")->isVisible());
+        QVERIFY(named(root.get(), "feelDeviceCombo")->isVisible());
+        QVERIFY(!named(root.get(), "feelMore")->isVisible());
+        QVERIFY(!named(root.get(), "contactMarks")->isVisible());
+        QVERIFY(named(root.get(), "feelMoreToggle")->property("text").toString().startsWith("More"));
+        QMetaObject::invokeMethod(named(root.get(), "feelMoreToggle"), "clicked");
+        QTRY_VERIFY(named(root.get(), "feelMore")->isVisible());
+        QVERIFY(named(root.get(), "toggle_autoTip")->isVisible());
+        QVERIFY(named(root.get(), "feelMoreToggle")->property("text").toString().startsWith("Fewer"));
         gen->setFeelDevice("stroker");
         QTRY_VERIFY(!named(root.get(), "contactMarks")->isVisible());
         gen->setShowAllFeel(true);
@@ -863,9 +873,16 @@ private slots:
             gen->openVideo(video);
             QTRY_VERIFY(gen->hasVideo());
             gen->setContactVibration(true);
+            QTest::qWait(300);
+            if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT_SCROLL"); !shot.isEmpty())
+                window.grabWindow().save(QString::fromLocal8Bit(shot + "_" + QByteArray::number(size.width()) + "_default.png"));
+            page->setProperty("feelMore", true);
             auto* scroll = named(root.get(), "createScroll");
             QVERIFY(scroll);
             QTRY_VERIFY(scroll->property("contentHeight").toReal() > 0);
+            // The opened feel options need a moment to lay out.
+            QTRY_VERIFY(named(root.get(), "feelMore")->isVisible());
+            QTest::qWait(300);
             const qreal view = scroll->height();
             const qreal content = scroll->property("contentHeight").toReal();
             QVERIFY2(view > 200, qPrintable(QString("view %1").arg(view)));
