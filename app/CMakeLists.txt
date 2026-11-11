@@ -63,6 +63,7 @@ qt_add_qml_module(samn_app
     qml/Main.qml
     qml/Splash.qml
     qml/GlassCard.qml
+    qml/ScrollRow.qml
     qml/TopBar.qml
     qml/PlayButton.qml
     qml/PlayerPage.qml

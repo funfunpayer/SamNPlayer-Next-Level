@@ -305,6 +305,13 @@ Item {
     Shortcut { sequences: [StandardKey.Undo]; enabled: page.visible && edit.canUndo; onActivated: edit.undo() }
     Shortcut { sequences: [StandardKey.Redo, "Ctrl+Y"]; enabled: page.visible && edit.canRedo; onActivated: edit.redo() }
 
+    // Narrow window: the project panel folds to its rail, so the stage keeps
+    // room. The owner can still unfold the panel.
+    readonly property bool narrow: width > 0 && width < 1180
+    readonly property int sideWidth: 352  // 340 for the cards, 12 for the scroll bar
+    onNarrowChanged: projectPanel.collapsed = narrow
+    Component.onCompleted: projectPanel.collapsed = narrow
+
     RowLayout {
         anchors.fill: parent
         spacing: 16
@@ -314,7 +321,8 @@ Item {
             id: projectPanel
             objectName: "projectPanel"
             Layout.fillHeight: true
-            Layout.preferredWidth: width
+            Layout.preferredWidth: shownWidth
+            Layout.minimumWidth: Layout.preferredWidth; Layout.maximumWidth: Layout.preferredWidth
             library: page.library
             generator: gen
             currentScript: edit.hasScript ? edit.path : ""
@@ -332,6 +340,10 @@ Item {
             id: stageSplit
             objectName: "stageSplit"
             Layout.fillWidth: true
+            // The stage takes what the two side panels leave and never paints
+            // over them: on a narrow window its rows are cut, not the panels.
+            Layout.minimumWidth: 0
+            clip: true
             Layout.fillHeight: true
             spacing: 0
             // editorH from the stage height; video takes the rest via fillHeight.
@@ -355,13 +367,14 @@ Item {
                         Text {
                             textFormat: Text.PlainText
                             text: gen.hasVideo ? gen.videoName : qsTr("Create Emotion Script")
-                            Layout.maximumWidth: 360; elide: Text.ElideMiddle
+                            Layout.maximumWidth: 360; Layout.minimumWidth: 80; elide: Text.ElideMiddle
                             color: Theme.text; font.family: Theme.font; font.pixelSize: 17; font.weight: Font.DemiBold
                         }
                         Text {
                             textFormat: Text.PlainText
                             visible: gen.hasVideo
                             text: gen.videoInfo; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                            Layout.minimumWidth: 0; elide: Text.ElideRight
                         }
                         FlowButton {
                             objectName: "openHandbookCreate"
@@ -374,6 +387,7 @@ Item {
                         // Step chips: done ✓, current highlighted.
                         Row {
                             objectName: "steps"
+                            visible: !page.narrow  // the step prompt below says the same
                             spacing: 6
                             Repeater {
                                 model: [qsTr("Video"), qsTr("Tip"), qsTr("Feel"), qsTr("Create"), qsTr("Review")]
@@ -798,7 +812,9 @@ Item {
                         text: page.coachText()
                         color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
                     }
-                    RowLayout {
+                    ScrollRow {
+                        objectName: "tipRow"
+                        Layout.fillWidth: true
                         visible: gen.hasVideo
                         spacing: 10
                         Text {
@@ -991,7 +1007,8 @@ Item {
                 Layout.maximumHeight: stageSplit.editorH
                 ColumnLayout {
                     anchors.fill: parent; anchors.margins: 12; spacing: 6
-                    RowLayout {
+                    ScrollRow {
+                        objectName: "editorToolbar"
                         Layout.fillWidth: true; spacing: 6
                         Text {
                             textFormat: Text.PlainText
@@ -1102,7 +1119,7 @@ Item {
                     }
                     // Align & lanes: Optimize / axes / sound / beat bar without opening Tools…
                     // (post-Create Adapt row still on the Create card for the handoff).
-                    RowLayout {
+                    ScrollRow {
                         id: alignBar
                         objectName: "alignBar"
                         Layout.fillWidth: true
@@ -1156,7 +1173,8 @@ Item {
                     }
                     // Range tools on the lane last touched (0.7 Play edit tools), as
                     // icons with tooltips; Soft edges and Cap sit beside them.
-                    RowLayout {
+                    ScrollRow {
+                        objectName: "rangeBar"
                         Layout.fillWidth: true; spacing: 4
                         visible: edit.hasScript
                         Repeater {
@@ -1407,7 +1425,7 @@ Item {
 
         // ---- right panel: video, feel, create | scenes ----
         ColumnLayout {
-            Layout.preferredWidth: 340; Layout.maximumWidth: 340
+            Layout.preferredWidth: page.sideWidth; Layout.minimumWidth: page.sideWidth; Layout.maximumWidth: page.sideWidth
             Layout.fillHeight: true
             spacing: 12
 
@@ -1569,6 +1587,23 @@ Item {
                     }
                 }
             }
+
+            // Create side: one scroll area for Video, Feel and Create, so every
+            // control stays reachable on a short window.
+            Flickable {
+                id: createScroll
+                objectName: "createScroll"
+                visible: page.sidePanel === 0
+                Layout.fillWidth: true; Layout.fillHeight: true
+                clip: true
+                contentWidth: width; contentHeight: createSide.implicitHeight
+                boundsBehavior: Flickable.StopAtBounds
+                flickableDirection: Flickable.VerticalFlick
+                C.ScrollBar.vertical: C.ScrollBar { objectName: "createScrollBar"; policy: createScroll.contentHeight > createScroll.height ? C.ScrollBar.AlwaysOn : C.ScrollBar.AlwaysOff }
+            ColumnLayout {
+                id: createSide
+                width: createScroll.width - 12  // room for the scroll bar
+                spacing: 12
 
             // 1 Video
             GlassCard {
@@ -2091,10 +2126,11 @@ Item {
             // 4 Create
             GlassCard {
                 visible: page.sidePanel === 0
-                Layout.fillWidth: true; Layout.fillHeight: true
+                Layout.fillWidth: true; implicitHeight: createCol.implicitHeight + 28
                 // Scrolls when the run's log, the quality box and the queue need more room.
                 Flickable {
                     id: createFlick
+                    interactive: false  // the whole Create side scrolls (createScroll)
                     anchors.fill: parent; anchors.margins: 14
                     clip: true
                     contentHeight: createCol.implicitHeight
@@ -2104,9 +2140,9 @@ Item {
                         target: gen
                         function onCreated() {
                             Qt.callLater(() => {
-                                const bottom = qualityBox.y + qualityBox.height
-                                if (bottom > createFlick.contentY + createFlick.height)
-                                    createFlick.contentY = Math.min(createFlick.contentHeight - createFlick.height, bottom - createFlick.height)
+                                const bottom = qualityBox.mapToItem(createSide, 0, qualityBox.height).y
+                                if (bottom > createScroll.contentY + createScroll.height)
+                                    createScroll.contentY = Math.max(0, Math.min(createScroll.contentHeight - createScroll.height, bottom - createScroll.height))
                             })
                         }
                     }
@@ -2756,6 +2792,8 @@ Item {
                 }
                 }
             }
+            }  // createSide
+            }  // createScroll
         }
     }
 }

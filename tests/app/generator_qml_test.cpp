@@ -821,6 +821,115 @@ private slots:
         QCOMPARE(named(root.get(), "improvePanel")->property("lastStatus").toString(), QString());
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
     }
+    // The Create side (Video, Feel, Create) is one scroll area: on a short
+    // window every control can be brought into view.
+    void createSideScrollsOnAShortWindow() {
+        g_messages.clear();
+        const QString video = dir_.filePath("scroll.mp4");
+        QVERIFY(samn::engine::testclips::WriteMoving(std::filesystem::path(video.toStdU16String()), 4, 80.0, 1.0));
+        const QString script = dir_.filePath("scroll.funscript");
+        {
+            QFile f(script);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(R"({"actions":[{"at":0,"pos":10},{"at":2000,"pos":90},{"at":4000,"pos":20}]})");
+        }
+        for (const QSize size : {QSize(960, 600), QSize(1180, 700), QSize(1400, 820)}) {
+            QQmlEngine engine;
+            engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
+            engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+            engine.addImageProvider(QStringLiteral("frames"), new samn::ui::FrameProvider);
+            QQmlComponent comp(&engine);
+            comp.setData(R"(
+                import QtQuick
+                import SamN
+                Rectangle {
+                    color: "#021024"
+                    property alias page: gp
+                    GeneratorPage { id: gp; anchors.fill: parent; anchors.margins: 20 }
+                })",
+                         QUrl("qrc:/test/CreateScroll.qml"));
+            QVERIFY2(comp.status() == QQmlComponent::Ready, qPrintable(comp.errorString()));
+            QQuickWindow window;
+            window.resize(size);
+            std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
+            QVERIFY(root);
+            root->setParentItem(window.contentItem());
+            root->setSize(size);
+            window.show();
+            QVERIFY(QTest::qWaitForWindowExposed(&window));
+            auto* page = root->property("page").value<QQuickItem*>();
+            auto* gen = page->property("controller").value<GeneratorController*>();
+            QVERIFY(gen);
+            gen->openVideo(video);
+            QTRY_VERIFY(gen->hasVideo());
+            gen->setContactVibration(true);
+            auto* scroll = named(root.get(), "createScroll");
+            QVERIFY(scroll);
+            QTRY_VERIFY(scroll->property("contentHeight").toReal() > 0);
+            const qreal view = scroll->height();
+            const qreal content = scroll->property("contentHeight").toReal();
+            QVERIFY2(view > 200, qPrintable(QString("view %1").arg(view)));
+            // Whether an item lies fully inside the scroll area's viewport.
+            auto inView = [&](const char* name) {
+                auto* item = named(root.get(), name);
+                if (!item || !item->isVisible()) return false;
+                const qreal top = item->mapToItem(scroll, QPointF(0, 0)).y();
+                return top >= -0.5 && top + item->height() <= scroll->height() + 0.5;
+            };
+            auto* edit = page->property("editor").value<QObject*>();
+            bool opened = false;
+            QVERIFY(QMetaObject::invokeMethod(edit, "open", Q_RETURN_ARG(bool, opened), Q_ARG(QString, script)));
+            QVERIFY(opened);
+            QTRY_VERIFY(named(root.get(), "alignBar")->isVisible());
+            // The stage never paints over the side panels: its cards and their
+            // rows stay inside the stage column, on the narrowest window too.
+            auto* stage = named(root.get(), "stageSplit");
+            QTRY_VERIFY(stage->width() > 300);
+            QTRY_COMPARE(named(root.get(), "projectPanel")->width(), size.width() < 1220 ? 44.0 : 248.0);
+            for (const char* name : {"editorCard", "generatorTransport", "tipRow", "editorToolbar", "alignBar", "rangeBar", "ruler"}) {
+                auto* item = named(root.get(), name);
+                QVERIFY2(item, name);
+                const qreal right = item->mapToItem(stage, QPointF(item->width(), 0)).x();
+                QVERIFY2(right <= stage->width() + 0.5, qPrintable(QString("%1 ends at %2 of %3").arg(name).arg(right).arg(stage->width())));
+            }
+            // A toolbar wider than its place scrolls to its last control.
+            auto* bar = named(root.get(), "rangeBar");
+            QVERIFY(bar);
+            if (size.width() <= 960) QVERIFY(bar->property("overflows").toBool());
+            if (bar->property("overflows").toBool()) {
+                bar->setProperty("contentX", bar->property("contentWidth").toReal() - bar->width());
+                auto* last = named(root.get(), "markerText");
+                QVERIFY(last);
+                QTRY_VERIFY(last->mapToItem(bar, QPointF(last->width(), 0)).x() <= bar->width() + 0.5);
+                bar->setProperty("contentX", 0);
+            }
+            QCOMPARE(named(root.get(), "projectPanel")->property("collapsed").toBool(), size.width() < 1220);
+            QVERIFY(inView("chooseVideo"));
+            const QByteArray tag = QByteArray::number(size.width());
+            if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT_SCROLL"); !shot.isEmpty())
+                window.grabWindow().save(QString::fromLocal8Bit(shot + "_" + tag + "_top.png"));
+            if (size.height() <= 600) {
+                // Short window: more content than room, the bar is on.
+                QVERIFY2(content > view, qPrintable(QString("content %1 view %2").arg(content).arg(view)));
+                QVERIFY(!inView("createButton"));
+            }
+            scroll->setProperty("contentY", qMax<qreal>(0, content - view));
+            QTRY_VERIFY(inView("createButton"));
+            if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT_SCROLL"); !shot.isEmpty())
+                window.grabWindow().save(QString::fromLocal8Bit(shot + "_" + tag + "_bottom.png"));
+            // Every control of the side can be reached: walk the content in steps.
+            for (const char* name : {"styleCombo", "feelDeviceCombo", "toggle_contactVibration", "tipClassCombo",
+                                     "contactClassCombo", "contactCurveCombo", "createButton"}) {
+                auto* item = named(root.get(), name);
+                QVERIFY2(item, name);
+                if (!item->isVisible()) continue;
+                const qreal y = item->mapToItem(scroll->property("contentItem").value<QQuickItem*>(), QPointF(0, 0)).y();
+                scroll->setProperty("contentY", qBound<qreal>(0, y - 20, qMax<qreal>(0, content - view)));
+                QTRY_VERIFY2(inView(name), name);
+            }
+        }
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
+    }
 };
 
 QTEST_MAIN(GeneratorQmlTest)

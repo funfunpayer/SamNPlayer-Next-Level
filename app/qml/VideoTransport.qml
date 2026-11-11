@@ -111,6 +111,8 @@ Item {
         text: root.info
         color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
     }
+    // Too narrow for the volume slider beside the left and the centre controls.
+    readonly property bool tight: width > 0 && width < 36 + leftControls.width + transportRow.width + 24 + 156
     Row {
         id: leftControls
         anchors.left: parent.left; anchors.leftMargin: 18
@@ -170,6 +172,8 @@ Item {
         FlowSlider {
             id: volumeSlider; objectName: "volume"
             from: 0; to: 1; width: 110; anchors.verticalCenter: parent.verticalCenter
+            // A narrow card keeps the buttons apart and leaves Mute for the sound.
+            visible: !root.tight
             onMoved: (v) => root.volumeMoved(v)
         }
     }
