@@ -305,6 +305,26 @@ Item {
     Shortcut { sequences: [StandardKey.Undo]; enabled: page.visible && edit.canUndo; onActivated: edit.undo() }
     Shortcut { sequences: [StandardKey.Redo, "Ctrl+Y"]; enabled: page.visible && edit.canRedo; onActivated: edit.redo() }
 
+    // Narrow window: the project panel folds to its rail, so the stage keeps
+    // room; it unfolds again on a wide window, but only if the fold was ours.
+    // The owner can unfold or fold it by hand at any time. (The page is built
+    // by an asynchronous Loader: its width is 0 until the first layout, so the
+    // fold comes from the first width change, not from Component.onCompleted.)
+    readonly property bool narrow: width > 0 && width < 1180
+    readonly property int sideWidth: 352  // 340 for the cards, 12 for the scroll bar
+    property bool autoFolded: false
+    // "More feel options" of the Feel card: closed by default.
+    property bool feelMore: false
+    // Drawn areas or masks keep the options open: they are in use, and the
+    // toggle is hidden then (it would have nothing to fold). Contact vibration
+    // itself is on by default, so it does not count.
+    readonly property bool feelMoreForced: gen.contactAreas.length > 0 || gen.maskRois.length > 0
+    readonly property bool feelMoreShown: feelMore || feelMoreForced
+    onNarrowChanged: {
+        if (narrow && !projectPanel.collapsed) { projectPanel.collapsed = true; autoFolded = true }
+        else if (!narrow && autoFolded) { projectPanel.collapsed = false; autoFolded = false }
+    }
+
     RowLayout {
         anchors.fill: parent
         spacing: 16
@@ -314,7 +334,8 @@ Item {
             id: projectPanel
             objectName: "projectPanel"
             Layout.fillHeight: true
-            Layout.preferredWidth: width
+            Layout.preferredWidth: shownWidth
+            Layout.minimumWidth: Layout.preferredWidth; Layout.maximumWidth: Layout.preferredWidth
             library: page.library
             generator: gen
             currentScript: edit.hasScript ? edit.path : ""
@@ -332,6 +353,10 @@ Item {
             id: stageSplit
             objectName: "stageSplit"
             Layout.fillWidth: true
+            // The stage takes what the two side panels leave and never paints
+            // over them: on a narrow window its rows are cut, not the panels.
+            Layout.minimumWidth: 0
+            clip: true
             Layout.fillHeight: true
             spacing: 0
             // editorH from the stage height; video takes the rest via fillHeight.
@@ -355,13 +380,17 @@ Item {
                         Text {
                             textFormat: Text.PlainText
                             text: gen.hasVideo ? gen.videoName : qsTr("Create Emotion Script")
-                            Layout.maximumWidth: 360; elide: Text.ElideMiddle
+                            // fillWidth lets the row's minimum shrink; the cap at the text's own width keeps the
+                            // spare room with the spacer, not as a gap after a short title
+                            Layout.fillWidth: true; Layout.maximumWidth: Math.min(360, implicitWidth); Layout.minimumWidth: 80; elide: Text.ElideMiddle
                             color: Theme.text; font.family: Theme.font; font.pixelSize: 17; font.weight: Font.DemiBold
                         }
                         Text {
                             textFormat: Text.PlainText
                             visible: gen.hasVideo
                             text: gen.videoInfo; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                            // fillWidth, or the layout keeps the text at its full width as its minimum
+                            Layout.fillWidth: true; Layout.maximumWidth: implicitWidth; Layout.minimumWidth: 0; elide: Text.ElideRight
                         }
                         FlowButton {
                             objectName: "openHandbookCreate"
@@ -374,6 +403,7 @@ Item {
                         // Step chips: done ✓, current highlighted.
                         Row {
                             objectName: "steps"
+                            visible: !page.narrow  // the step prompt below says the same
                             spacing: 6
                             Repeater {
                                 model: [qsTr("Video"), qsTr("Tip"), qsTr("Feel"), qsTr("Create"), qsTr("Review")]
@@ -798,13 +828,15 @@ Item {
                         text: page.coachText()
                         color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
                     }
-                    RowLayout {
+                    ScrollRow {
+                        objectName: "tipRow"
+                        Layout.fillWidth: true
                         visible: gen.hasVideo
                         spacing: 10
                         Text {
                             objectName: "boxLabel"
                             textFormat: Text.PlainText
-                            Layout.fillWidth: true; elide: Text.ElideRight
+                            Layout.fillWidth: true; Layout.minimumWidth: 60; Layout.preferredWidth: 220; elide: Text.ElideRight
                             // A picked mark: 0.7's "Selected: …" with its class and Delete
                             // selected, in this row so the frame keeps its size.
                             text: page.selectedMark !== -2 ? page.selectedMarkText() : gen.boxLabel
@@ -886,6 +918,7 @@ Item {
                     id: transport
                     objectName: "generatorTransport"
                     compact: true
+                    allowTight: true
                     Layout.fillWidth: true
                     Layout.preferredHeight: height
                     enabled: gen.hasVideo
@@ -991,7 +1024,8 @@ Item {
                 Layout.maximumHeight: stageSplit.editorH
                 ColumnLayout {
                     anchors.fill: parent; anchors.margins: 12; spacing: 6
-                    RowLayout {
+                    ScrollRow {
+                        objectName: "editorToolbar"
                         Layout.fillWidth: true; spacing: 6
                         Text {
                             textFormat: Text.PlainText
@@ -1102,7 +1136,7 @@ Item {
                     }
                     // Align & lanes: Optimize / axes / sound / beat bar without opening Tools…
                     // (post-Create Adapt row still on the Create card for the handoff).
-                    RowLayout {
+                    ScrollRow {
                         id: alignBar
                         objectName: "alignBar"
                         Layout.fillWidth: true
@@ -1156,7 +1190,8 @@ Item {
                     }
                     // Range tools on the lane last touched (0.7 Play edit tools), as
                     // icons with tooltips; Soft edges and Cap sit beside them.
-                    RowLayout {
+                    ScrollRow {
+                        objectName: "rangeBar"
                         Layout.fillWidth: true; spacing: 4
                         visible: edit.hasScript
                         Repeater {
@@ -1407,7 +1442,7 @@ Item {
 
         // ---- right panel: video, feel, create | scenes ----
         ColumnLayout {
-            Layout.preferredWidth: 340; Layout.maximumWidth: 340
+            Layout.preferredWidth: page.sideWidth; Layout.minimumWidth: page.sideWidth; Layout.maximumWidth: page.sideWidth
             Layout.fillHeight: true
             spacing: 12
 
@@ -1569,6 +1604,23 @@ Item {
                     }
                 }
             }
+
+            // Create side: one scroll area for Video, Feel and Create, so every
+            // control stays reachable on a short window.
+            Flickable {
+                id: createScroll
+                objectName: "createScroll"
+                visible: page.sidePanel === 0
+                Layout.fillWidth: true; Layout.fillHeight: true
+                clip: true
+                contentWidth: width; contentHeight: createSide.implicitHeight
+                boundsBehavior: Flickable.StopAtBounds
+                flickableDirection: Flickable.VerticalFlick
+                C.ScrollBar.vertical: C.ScrollBar { objectName: "createScrollBar"; policy: createScroll.contentHeight > createScroll.height ? C.ScrollBar.AlwaysOn : C.ScrollBar.AlwaysOff }
+            ColumnLayout {
+                id: createSide
+                width: createScroll.width - 12  // room for the scroll bar
+                spacing: 12
 
             // 1 Video
             GlassCard {
@@ -1756,333 +1808,349 @@ Item {
                             onActivated: gen.vibSource = currentValue
                         }
                     }
-                    // Invert / camera / scene-cuts live under Create → Advanced (G4a).
-                    Repeater {
-                        model: [{ text: qsTr("Find the tip by itself"), key: "autoTip", help: "gen-auto-tip" },
-                                { text: qsTr("Suggest O-zone automatically"), key: "autoOZone", help: "gen-auto-ozone" },
-                                { text: qsTr("Bridge short tracking gaps"), key: "gapHandling", help: "gen-gaps" },
-                                { text: qsTr("Ignore single-frame jumps"), key: "outlierRejection", help: "gen-outliers" },
-                                { text: qsTr("Reuse the tracking"), key: "trackCache", help: "gen-track-cache" }]
-                        delegate: RowLayout {
-                            required property var modelData
-                            Layout.fillWidth: true
-                            Text {
-                                textFormat: Text.PlainText
-                                Layout.fillWidth: true
-                                text: modelData.text; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
-                            }
-                            HelpChip { key: modelData.help; Layout.alignment: Qt.AlignVCenter }
-                            FlowToggle {
-                                objectName: "toggle_" + modelData.key
-                                enabled: !gen.running
-                                checked: gen[modelData.key]
-                                onToggled: (c) => gen[modelData.key] = c
-                            }
-                        }
-                    }
-                    // Contact vibration (0.7 Step 2 "Tip & contact"): the
-                    // classes and areas show only while it is on.
-                    RowLayout {
-                        // A stroker cannot vibrate (0.7 gen_feel.js).
-                        visible: gen.feelKind !== "stroker" || gen.showAllFeel
+                    // Everyday feel is the four controls above; the rest (what the tracking
+                    // does, contact vibration with its areas) opens on demand, and by itself
+                    // once the script has areas or masks drawn.
+                    FlowButton {
+                        objectName: "feelMoreToggle"
+                        visible: !page.feelMoreForced
                         Layout.fillWidth: true
-                        Text {
-                            textFormat: Text.PlainText
-                            Layout.fillWidth: true
-                            text: qsTr("Contact vibration"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
-                        }
-                        HelpChip { key: "gen-contact-vibration"; Layout.alignment: Qt.AlignVCenter }
-                        FlowToggle {
-                            objectName: "toggle_contactVibration"
-                            enabled: !gen.running
-                            checked: gen.contactVibration
-                            onToggled: (c) => gen.contactVibration = c
-                        }
+                        icon: "chevronDown"
+                        text: page.feelMoreShown ? qsTr("Fewer feel options") : qsTr("More feel options")
+                        onClicked: page.feelMore = !page.feelMoreShown
                     }
                     ColumnLayout {
-                        objectName: "contactMarks"
-                        visible: gen.contactVibration && (gen.feelKind !== "stroker" || gen.showAllFeel)
-                        Layout.fillWidth: true; spacing: 6
-                        RowLayout {
-                            Layout.fillWidth: true; spacing: 8
-                            Text {
-                                textFormat: Text.PlainText
-                                text: qsTr("Tip"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
-                            }
-                            FlowCombo {
-                                objectName: "tipClassCombo"
+                        objectName: "feelMore"
+                        visible: page.feelMoreShown
+                        Layout.fillWidth: true; spacing: 8
+                        // Invert / camera / scene-cuts live under Create → Advanced (G4a).
+                        Repeater {
+                            model: [{ text: qsTr("Find the tip by itself"), key: "autoTip", help: "gen-auto-tip" },
+                                    { text: qsTr("Suggest O-zone automatically"), key: "autoOZone", help: "gen-auto-ozone" },
+                                    { text: qsTr("Bridge short tracking gaps"), key: "gapHandling", help: "gen-gaps" },
+                                    { text: qsTr("Ignore single-frame jumps"), key: "outlierRejection", help: "gen-outliers" },
+                                    { text: qsTr("Reuse the tracking"), key: "trackCache", help: "gen-track-cache" }]
+                            delegate: RowLayout {
+                                required property var modelData
                                 Layout.fillWidth: true
-                                enabled: !gen.running
-                                textRole: "label"; valueRole: "value"
-                                model: gen.tipClasses.map((c) => ({ label: page.className(c), value: c }))
-                                currentIndex: Math.max(0, indexOfValue(gen.tipClass))
-                                onActivated: gen.tipClass = currentValue
-                            }
-                            Text {
-                                textFormat: Text.PlainText
-                                text: qsTr("Contact"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
-                            }
-                            FlowCombo {
-                                objectName: "contactClassCombo"
-                                Layout.fillWidth: true
-                                enabled: !gen.running
-                                textRole: "label"; valueRole: "value"
-                                model: gen.contactClasses.map((c) => ({ label: page.className(c), value: c }))
-                                currentIndex: Math.max(0, indexOfValue(gen.contactClass))
-                                onActivated: gen.contactClass = currentValue
+                                Text {
+                                    textFormat: Text.PlainText
+                                    Layout.fillWidth: true
+                                    text: modelData.text; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                                }
+                                HelpChip { key: modelData.help; Layout.alignment: Qt.AlignVCenter }
+                                FlowToggle {
+                                    objectName: "toggle_" + modelData.key
+                                    enabled: !gen.running
+                                    checked: gen[modelData.key]
+                                    onToggled: (c) => gen[modelData.key] = c
+                                }
                             }
                         }
-                        // 0.7 Step 3: how deep the stroke must go and how the vibration rises.
+                        // Contact vibration (0.7 Step 2 "Tip & contact"): the
+                        // classes and areas show only while it is on.
                         RowLayout {
-                            Layout.fillWidth: true; spacing: 8
-                            Text {
-                                textFormat: Text.PlainText
-                                text: qsTr("Sensitivity"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
-                            }
-                            HelpChip { key: "generator.sensitivity"; Layout.alignment: Qt.AlignVCenter }
-                            FlowSlider {
-                                objectName: "contactSpan"
-                                Layout.fillWidth: true
-                                enabled: !gen.running
-                                from: 0.40; to: 0.95; value: gen.contactSpan
-                                onMoved: (v) => gen.contactSpan = v
-                            }
-                            Text {
-                                objectName: "contactSpanLabel"
-                                textFormat: Text.PlainText
-                                // 0.7: the contact starts at this share of the stroke depth, so a high
-                                // value means deep strokes only (<= 50 "earlier", >= 85 "deep only").
-                                text: gen.contactSpan <= 0.5 ? qsTr("earlier") : gen.contactSpan >= 0.85 ? qsTr("deep only") : gen.contactSpan.toFixed(2)
-                                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
-                            }
-                        }
-                        RowLayout {
-                            Layout.fillWidth: true; spacing: 8
-                            Text {
-                                textFormat: Text.PlainText
-                                text: qsTr("Curve"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
-                            }
-                            HelpChip { key: "generator.curve"; Layout.alignment: Qt.AlignVCenter }
-                            FlowCombo {
-                                objectName: "contactCurveCombo"
-                                Layout.fillWidth: true
-                                enabled: !gen.running
-                                textRole: "label"; valueRole: "value"
-                                model: [{ label: qsTr("Linear"), value: "linear" },
-                                        { label: qsTr("Soft onset (contact-like)"), value: "soft" },
-                                        { label: qsTr("Stronger peak"), value: "peak" },
-                                        { label: qsTr("Impulse (peaks only, experiment)"), value: "impulse" }]
-                                currentIndex: Math.max(0, ["linear", "soft", "peak", "impulse"].indexOf(gen.contactCurve))
-                                onActivated: gen.contactCurve = currentValue
-                            }
-                        }
-                        // 0.7 Feel probe: synthetic bounce through Sensitivity / Curve.
-                        ColumnLayout {
-                            id: feelProbeBox
-                            objectName: "contactFeelProbe"
+                            // A stroker cannot vibrate (0.7 gen_feel.js).
+                            visible: gen.feelKind !== "stroker" || gen.showAllFeel
                             Layout.fillWidth: true
-                            spacing: 4
-                            readonly property var probe: gen.contactFeelProbe
+                            Text {
+                                textFormat: Text.PlainText
+                                Layout.fillWidth: true
+                                text: qsTr("Contact vibration"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                            }
+                            HelpChip { key: "gen-contact-vibration"; Layout.alignment: Qt.AlignVCenter }
+                            FlowToggle {
+                                objectName: "toggle_contactVibration"
+                                enabled: !gen.running
+                                checked: gen.contactVibration
+                                onToggled: (c) => gen.contactVibration = c
+                            }
+                        }
+                        ColumnLayout {
+                            objectName: "contactMarks"
+                            visible: gen.contactVibration && (gen.feelKind !== "stroker" || gen.showAllFeel)
+                            Layout.fillWidth: true; spacing: 6
                             RowLayout {
-                                Layout.fillWidth: true
-                                spacing: 8
+                                Layout.fillWidth: true; spacing: 8
                                 Text {
                                     textFormat: Text.PlainText
-                                    text: qsTr("Feel probe")
-                                    color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                                    text: qsTr("Tip"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                                 }
-                                HelpChip { key: "gen-feel-probe"; Layout.alignment: Qt.AlignVCenter }
-                                Item { Layout.fillWidth: true }
-                                Text {
-                                    objectName: "feelProbeActive"
-                                    textFormat: Text.PlainText
-                                    text: qsTr("%1% active").arg(Math.round(feelProbeBox.probe.activePct || 0))
-                                    color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 12
+                                FlowCombo {
+                                    objectName: "tipClassCombo"
+                                    Layout.fillWidth: true
+                                    enabled: !gen.running
+                                    textRole: "label"; valueRole: "value"
+                                    model: gen.tipClasses.map((c) => ({ label: page.className(c), value: c }))
+                                    currentIndex: Math.max(0, indexOfValue(gen.tipClass))
+                                    onActivated: gen.tipClass = currentValue
                                 }
                                 Text {
-                                    objectName: "feelProbePeak"
                                     textFormat: Text.PlainText
-                                    text: qsTr("peak %1").arg(Math.round(feelProbeBox.probe.peak || 0))
+                                    text: qsTr("Contact"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                                }
+                                FlowCombo {
+                                    objectName: "contactClassCombo"
+                                    Layout.fillWidth: true
+                                    enabled: !gen.running
+                                    textRole: "label"; valueRole: "value"
+                                    model: gen.contactClasses.map((c) => ({ label: page.className(c), value: c }))
+                                    currentIndex: Math.max(0, indexOfValue(gen.contactClass))
+                                    onActivated: gen.contactClass = currentValue
+                                }
+                            }
+                            // 0.7 Step 3: how deep the stroke must go and how the vibration rises.
+                            RowLayout {
+                                Layout.fillWidth: true; spacing: 8
+                                Text {
+                                    textFormat: Text.PlainText
+                                    text: qsTr("Sensitivity"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                                }
+                                HelpChip { key: "generator.sensitivity"; Layout.alignment: Qt.AlignVCenter }
+                                FlowSlider {
+                                    objectName: "contactSpan"
+                                    Layout.fillWidth: true
+                                    enabled: !gen.running
+                                    from: 0.40; to: 0.95; value: gen.contactSpan
+                                    onMoved: (v) => gen.contactSpan = v
+                                }
+                                Text {
+                                    objectName: "contactSpanLabel"
+                                    textFormat: Text.PlainText
+                                    // 0.7: the contact starts at this share of the stroke depth, so a high
+                                    // value means deep strokes only (<= 50 "earlier", >= 85 "deep only").
+                                    text: gen.contactSpan <= 0.5 ? qsTr("earlier") : gen.contactSpan >= 0.85 ? qsTr("deep only") : gen.contactSpan.toFixed(2)
                                     color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                                 }
                             }
-                            Canvas {
-                                id: feelProbeCanvas
-                                objectName: "feelProbeCanvas"
+                            RowLayout {
+                                Layout.fillWidth: true; spacing: 8
+                                Text {
+                                    textFormat: Text.PlainText
+                                    text: qsTr("Curve"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                                }
+                                HelpChip { key: "generator.curve"; Layout.alignment: Qt.AlignVCenter }
+                                FlowCombo {
+                                    objectName: "contactCurveCombo"
+                                    Layout.fillWidth: true
+                                    enabled: !gen.running
+                                    textRole: "label"; valueRole: "value"
+                                    model: [{ label: qsTr("Linear"), value: "linear" },
+                                            { label: qsTr("Soft onset (contact-like)"), value: "soft" },
+                                            { label: qsTr("Stronger peak"), value: "peak" },
+                                            { label: qsTr("Impulse (peaks only, experiment)"), value: "impulse" }]
+                                    currentIndex: Math.max(0, ["linear", "soft", "peak", "impulse"].indexOf(gen.contactCurve))
+                                    onActivated: gen.contactCurve = currentValue
+                                }
+                            }
+                            // 0.7 Feel probe: synthetic bounce through Sensitivity / Curve.
+                            ColumnLayout {
+                                id: feelProbeBox
+                                objectName: "contactFeelProbe"
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: 72
-                                property var probe: feelProbeBox.probe
-                                onProbeChanged: requestPaint()
-                                onWidthChanged: requestPaint()
-                                onHeightChanged: requestPaint()
-                                onPaint: {
-                                    const ctx = getContext("2d")
-                                    ctx.reset()
-                                    const w = width, h = height
-                                    ctx.fillStyle = Qt.rgba(1, 1, 1, 0.04)
-                                    ctx.fillRect(0, 0, w, h)
-                                    const stroke = probe.stroke || []
-                                    const vib = probe.vib || []
-                                    const peaks = probe.peaks || []
-                                    function poly(pts, color, width) {
-                                        if (pts.length < 2) return
-                                        ctx.beginPath()
-                                        ctx.strokeStyle = color
-                                        ctx.lineWidth = width
-                                        ctx.lineJoin = "round"
-                                        for (let i = 0; i < pts.length; ++i) {
-                                            const x = pts[i].x * w
-                                            const y = (1 - pts[i].y) * h
-                                            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
+                                spacing: 4
+                                readonly property var probe: gen.contactFeelProbe
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 8
+                                    Text {
+                                        textFormat: Text.PlainText
+                                        text: qsTr("Feel probe")
+                                        color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                                    }
+                                    HelpChip { key: "gen-feel-probe"; Layout.alignment: Qt.AlignVCenter }
+                                    Item { Layout.fillWidth: true }
+                                    Text {
+                                        objectName: "feelProbeActive"
+                                        textFormat: Text.PlainText
+                                        text: qsTr("%1% active").arg(Math.round(feelProbeBox.probe.activePct || 0))
+                                        color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 12
+                                    }
+                                    Text {
+                                        objectName: "feelProbePeak"
+                                        textFormat: Text.PlainText
+                                        text: qsTr("peak %1").arg(Math.round(feelProbeBox.probe.peak || 0))
+                                        color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                                    }
+                                }
+                                Canvas {
+                                    id: feelProbeCanvas
+                                    objectName: "feelProbeCanvas"
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 72
+                                    property var probe: feelProbeBox.probe
+                                    onProbeChanged: requestPaint()
+                                    onWidthChanged: requestPaint()
+                                    onHeightChanged: requestPaint()
+                                    onPaint: {
+                                        const ctx = getContext("2d")
+                                        ctx.reset()
+                                        const w = width, h = height
+                                        ctx.fillStyle = Qt.rgba(1, 1, 1, 0.04)
+                                        ctx.fillRect(0, 0, w, h)
+                                        const stroke = probe.stroke || []
+                                        const vib = probe.vib || []
+                                        const peaks = probe.peaks || []
+                                        function poly(pts, color, width) {
+                                            if (pts.length < 2) return
+                                            ctx.beginPath()
+                                            ctx.strokeStyle = color
+                                            ctx.lineWidth = width
+                                            ctx.lineJoin = "round"
+                                            for (let i = 0; i < pts.length; ++i) {
+                                                const x = pts[i].x * w
+                                                const y = (1 - pts[i].y) * h
+                                                if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
+                                            }
+                                            ctx.stroke()
                                         }
-                                        ctx.stroke()
+                                        poly(stroke, Theme.orange, 1.5)
+                                        poly(vib, Theme.cyan, 1.75)
+                                        ctx.fillStyle = Theme.cyan
+                                        for (let i = 0; i < peaks.length; ++i) {
+                                            const x = peaks[i].x * w
+                                            const y = (1 - peaks[i].y) * h
+                                            ctx.beginPath()
+                                            ctx.arc(x, y, 2.5, 0, Math.PI * 2)
+                                            ctx.fill()
+                                        }
                                     }
-                                    poly(stroke, Theme.orange, 1.5)
-                                    poly(vib, Theme.cyan, 1.75)
-                                    ctx.fillStyle = Theme.cyan
-                                    for (let i = 0; i < peaks.length; ++i) {
-                                        const x = peaks[i].x * w
-                                        const y = (1 - peaks[i].y) * h
-                                        ctx.beginPath()
-                                        ctx.arc(x, y, 2.5, 0, Math.PI * 2)
-                                        ctx.fill()
-                                    }
+                                }
+                                Text {
+                                    objectName: "feelProbeHint"
+                                    Layout.fillWidth: true
+                                    textFormat: Text.PlainText
+                                    wrapMode: Text.WordWrap
+                                    text: feelProbeBox.probe.hint || ""
+                                    color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11
+                                }
+                            }
+                            RowLayout {
+                                Layout.fillWidth: true; spacing: 8
+                                FlowButton {
+                                    objectName: "markContact"
+                                    text: gen.markContact ? qsTr("Drag the area on the frame…") : qsTr("Mark contact area")
+                                    enabled: gen.hasVideo && !gen.running
+                                    onClicked: gen.markContact = !gen.markContact
+                                }
+                                HelpChip { key: "gen-roi2-toggle"; Layout.alignment: Qt.AlignVCenter }
+                                FlowButton {
+                                    objectName: "clearContact"
+                                    visible: gen.contactAreas.length > 0
+                                    enabled: !gen.running
+                                    text: qsTr("Clear areas")
+                                    onClicked: gen.clearContactAreas()
+                                }
+                            }
+                            // G2b / 0.7: Partner fixed (pixels) — gold box stays put.
+                            RowLayout {
+                                Layout.fillWidth: true; spacing: 8
+                                Text {
+                                    textFormat: Text.PlainText
+                                    Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                    text: qsTr("Partner fixed (pixels)")
+                                    color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                                }
+                                HelpChip { key: "gen-roi2-fixed"; Layout.alignment: Qt.AlignVCenter }
+                                FlowToggle {
+                                    objectName: "partnerFixed"
+                                    checked: gen.partnerFixed
+                                    onToggled: (c) => gen.partnerFixed = c
+                                }
+                            }
+                            // 0.7 "+ Another contact area" (magenta) with its type.
+                            RowLayout {
+                                Layout.fillWidth: true; spacing: 8
+                                FlowButton {
+                                    objectName: "addExtra"
+                                    text: gen.markExtra ? qsTr("Drag the area on the frame…") : qsTr("+ Another contact area")
+                                    enabled: gen.hasVideo && !gen.running
+                                    onClicked: gen.markExtra = !gen.markExtra
+                                }
+                                HelpChip { key: "gen-target-add"; Layout.alignment: Qt.AlignVCenter }
+                            }
+                            RowLayout {
+                                Layout.fillWidth: true; spacing: 8
+                                Text {
+                                    textFormat: Text.PlainText
+                                    text: qsTr("Extra type"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                                }
+                                FlowCombo {
+                                    objectName: "extraClassCombo"
+                                    Layout.fillWidth: true
+                                    enabled: !gen.running
+                                    textRole: "label"; valueRole: "value"
+                                    model: [{ label: qsTr("(any)"), value: "" }].concat(gen.contactClasses.map((c) => ({ label: page.className(c), value: c })))
+                                    currentIndex: Math.max(0, indexOfValue(gen.extraClass))
+                                    onActivated: gen.extraClass = currentValue
+                                }
+                            }
+                            RowLayout {
+                                Layout.fillWidth: true; spacing: 8
+                                visible: gen.contactAreas.length > 0
+                                Text {
+                                    textFormat: Text.PlainText
+                                    Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                    text: qsTr("Stay fixed (extras)")
+                                    color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                                }
+                                HelpChip { key: "gen-extra-contact-sticky"; Layout.alignment: Qt.AlignVCenter }
+                                FlowToggle {
+                                    objectName: "extrasStayFixed"
+                                    checked: gen.extrasStayFixed
+                                    onToggled: (c) => gen.extrasStayFixed = c
+                                }
+                            }
+                            // 0.7 "+ Ignore region" (black soft mask / camera exclude).
+                            RowLayout {
+                                Layout.fillWidth: true; spacing: 8
+                                FlowButton {
+                                    objectName: "addIgnore"
+                                    text: gen.markIgnore ? qsTr("Drag the region on the frame…") : qsTr("+ Ignore region")
+                                    enabled: gen.hasVideo && !gen.running
+                                    onClicked: gen.markIgnore = !gen.markIgnore
+                                }
+                                HelpChip { key: "gen-mask-add"; Layout.alignment: Qt.AlignVCenter }
+                            }
+                            RowLayout {
+                                Layout.fillWidth: true; spacing: 8
+                                visible: gen.contactAreas.length > 1 || gen.maskRois.length > 0
+                                FlowButton {
+                                    objectName: "clearExtras"
+                                    enabled: !gen.running
+                                    text: qsTr("Clear extras")
+                                    onClicked: gen.clearExtras()
+                                }
+                                HelpChip { key: "gen-extras-clear"; Layout.alignment: Qt.AlignVCenter }
+                                Text {
+                                    textFormat: Text.PlainText
+                                    Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                    text: gen.maskRois.length > 0 && gen.contactAreas.length <= 1
+                                          ? qsTr("%1 soft mask(s) exclude wrong latch from camera motion.").arg(gen.maskRois.length)
+                                          : gen.extrasStayFixed
+                                          ? qsTr("Extras stay where they are drawn; only the tip is tracked today.")
+                                          : qsTr("Extras marked to follow the partner path (tracking engine next).")
+                                    color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
                                 }
                             }
                             Text {
-                                objectName: "feelProbeHint"
-                                Layout.fillWidth: true
-                                textFormat: Text.PlainText
-                                wrapMode: Text.WordWrap
-                                text: feelProbeBox.probe.hint || ""
-                                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11
-                            }
-                        }
-                        RowLayout {
-                            Layout.fillWidth: true; spacing: 8
-                            FlowButton {
-                                objectName: "markContact"
-                                text: gen.markContact ? qsTr("Drag the area on the frame…") : qsTr("Mark contact area")
-                                enabled: gen.hasVideo && !gen.running
-                                onClicked: gen.markContact = !gen.markContact
-                            }
-                            HelpChip { key: "gen-roi2-toggle"; Layout.alignment: Qt.AlignVCenter }
-                            FlowButton {
-                                objectName: "clearContact"
-                                visible: gen.contactAreas.length > 0
-                                enabled: !gen.running
-                                text: qsTr("Clear areas")
-                                onClicked: gen.clearContactAreas()
-                            }
-                        }
-                        // G2b / 0.7: Partner fixed (pixels) — gold box stays put.
-                        RowLayout {
-                            Layout.fillWidth: true; spacing: 8
-                            Text {
                                 textFormat: Text.PlainText
                                 Layout.fillWidth: true; wrapMode: Text.WordWrap
-                                text: qsTr("Partner fixed (pixels)")
-                                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
-                            }
-                            HelpChip { key: "gen-roi2-fixed"; Layout.alignment: Qt.AlignVCenter }
-                            FlowToggle {
-                                objectName: "partnerFixed"
-                                checked: gen.partnerFixed
-                                onToggled: (c) => gen.partnerFixed = c
-                            }
-                        }
-                        // 0.7 "+ Another contact area" (magenta) with its type.
-                        RowLayout {
-                            Layout.fillWidth: true; spacing: 8
-                            FlowButton {
-                                objectName: "addExtra"
-                                text: gen.markExtra ? qsTr("Drag the area on the frame…") : qsTr("+ Another contact area")
-                                enabled: gen.hasVideo && !gen.running
-                                onClicked: gen.markExtra = !gen.markExtra
-                            }
-                            HelpChip { key: "gen-target-add"; Layout.alignment: Qt.AlignVCenter }
-                        }
-                        RowLayout {
-                            Layout.fillWidth: true; spacing: 8
-                            Text {
-                                textFormat: Text.PlainText
-                                text: qsTr("Extra type"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
-                            }
-                            FlowCombo {
-                                objectName: "extraClassCombo"
-                                Layout.fillWidth: true
-                                enabled: !gen.running
-                                textRole: "label"; valueRole: "value"
-                                model: [{ label: qsTr("(any)"), value: "" }].concat(gen.contactClasses.map((c) => ({ label: page.className(c), value: c })))
-                                currentIndex: Math.max(0, indexOfValue(gen.extraClass))
-                                onActivated: gen.extraClass = currentValue
-                            }
-                        }
-                        RowLayout {
-                            Layout.fillWidth: true; spacing: 8
-                            visible: gen.contactAreas.length > 0
-                            Text {
-                                textFormat: Text.PlainText
-                                Layout.fillWidth: true; wrapMode: Text.WordWrap
-                                text: qsTr("Stay fixed (extras)")
-                                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
-                            }
-                            HelpChip { key: "gen-extra-contact-sticky"; Layout.alignment: Qt.AlignVCenter }
-                            FlowToggle {
-                                objectName: "extrasStayFixed"
-                                checked: gen.extrasStayFixed
-                                onToggled: (c) => gen.extrasStayFixed = c
-                            }
-                        }
-                        // 0.7 "+ Ignore region" (black soft mask / camera exclude).
-                        RowLayout {
-                            Layout.fillWidth: true; spacing: 8
-                            FlowButton {
-                                objectName: "addIgnore"
-                                text: gen.markIgnore ? qsTr("Drag the region on the frame…") : qsTr("+ Ignore region")
-                                enabled: gen.hasVideo && !gen.running
-                                onClicked: gen.markIgnore = !gen.markIgnore
-                            }
-                            HelpChip { key: "gen-mask-add"; Layout.alignment: Qt.AlignVCenter }
-                        }
-                        RowLayout {
-                            Layout.fillWidth: true; spacing: 8
-                            visible: gen.contactAreas.length > 1 || gen.maskRois.length > 0
-                            FlowButton {
-                                objectName: "clearExtras"
-                                enabled: !gen.running
-                                text: qsTr("Clear extras")
-                                onClicked: gen.clearExtras()
-                            }
-                            HelpChip { key: "gen-extras-clear"; Layout.alignment: Qt.AlignVCenter }
-                            Text {
-                                textFormat: Text.PlainText
-                                Layout.fillWidth: true; wrapMode: Text.WordWrap
-                                text: gen.maskRois.length > 0 && gen.contactAreas.length <= 1
-                                      ? qsTr("%1 soft mask(s) exclude wrong latch from camera motion.").arg(gen.maskRois.length)
-                                      : gen.extrasStayFixed
-                                      ? qsTr("Extras stay where they are drawn; only the tip is tracked today.")
-                                      : qsTr("Extras marked to follow the partner path (tracking engine next).")
+                                text: {
+                                    const extras = Math.max(0, gen.contactAreas.length - 1)
+                                    const masks = gen.maskRois.length
+                                    if (gen.contactAreas.length === 0 && masks === 0)
+                                        return qsTr("Optional: mark where the tip makes contact; without areas the vibration follows the stroke's depth.")
+                                    if (gen.contactAreas.length === 1 && masks === 0)
+                                        return qsTr("1 contact area: the toy vibrates when the tip reaches it.")
+                                    if (gen.contactAreas.length > 1 && masks === 0)
+                                        return qsTr("%1 contact areas: the toy vibrates when the tip reaches one.").arg(gen.contactAreas.length)
+                                    if (gen.contactAreas.length === 0)
+                                        return qsTr("%1 soft mask(s) (dashed) — camera exclude only.").arg(masks)
+                                    return qsTr("%1 contact · %2 extra · %3 soft mask(s).").arg(gen.contactAreas.length > 0 ? 1 : 0).arg(extras).arg(masks)
+                                }
                                 color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
                             }
-                        }
-                        Text {
-                            textFormat: Text.PlainText
-                            Layout.fillWidth: true; wrapMode: Text.WordWrap
-                            text: {
-                                const extras = Math.max(0, gen.contactAreas.length - 1)
-                                const masks = gen.maskRois.length
-                                if (gen.contactAreas.length === 0 && masks === 0)
-                                    return qsTr("Optional: mark where the tip makes contact; without areas the vibration follows the stroke's depth.")
-                                if (gen.contactAreas.length === 1 && masks === 0)
-                                    return qsTr("1 contact area: the toy vibrates when the tip reaches it.")
-                                if (gen.contactAreas.length > 1 && masks === 0)
-                                    return qsTr("%1 contact areas: the toy vibrates when the tip reaches one.").arg(gen.contactAreas.length)
-                                if (gen.contactAreas.length === 0)
-                                    return qsTr("%1 soft mask(s) (dashed) — camera exclude only.").arg(masks)
-                                return qsTr("%1 contact · %2 extra · %3 soft mask(s).").arg(gen.contactAreas.length > 0 ? 1 : 0).arg(extras).arg(masks)
-                            }
-                            color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
                         }
                     }
                 }
@@ -2091,10 +2159,10 @@ Item {
             // 4 Create
             GlassCard {
                 visible: page.sidePanel === 0
-                Layout.fillWidth: true; Layout.fillHeight: true
-                // Scrolls when the run's log, the quality box and the queue need more room.
+                Layout.fillWidth: true; implicitHeight: createCol.implicitHeight + 28
                 Flickable {
                     id: createFlick
+                    interactive: false  // the whole Create side scrolls (createScroll)
                     anchors.fill: parent; anchors.margins: 14
                     clip: true
                     contentHeight: createCol.implicitHeight
@@ -2104,9 +2172,9 @@ Item {
                         target: gen
                         function onCreated() {
                             Qt.callLater(() => {
-                                const bottom = qualityBox.y + qualityBox.height
-                                if (bottom > createFlick.contentY + createFlick.height)
-                                    createFlick.contentY = Math.min(createFlick.contentHeight - createFlick.height, bottom - createFlick.height)
+                                const bottom = qualityBox.mapToItem(createSide, 0, qualityBox.height).y
+                                if (bottom > createScroll.contentY + createScroll.height)
+                                    createScroll.contentY = Math.max(0, Math.min(createScroll.contentHeight - createScroll.height, bottom - createScroll.height))
                             })
                         }
                     }
@@ -2756,6 +2824,8 @@ Item {
                 }
                 }
             }
+            }  // createSide
+            }  // createScroll
         }
     }
 }

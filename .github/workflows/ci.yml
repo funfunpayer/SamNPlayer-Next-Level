@@ -162,10 +162,11 @@ jobs:
             exe=$(find build -name "${t}_test" -o -name "${t}_test.exe" | head -1)
             [ -n "$exe" ] || continue
             for f in $("$exe" -functions | sed 's/()//'); do
-              "$exe" "$f" -silent > /dev/null 2>&1; rc=$?
+              # The first run writes the log: a function that fails once and
+              # passes on a second run (a timing problem) shows its failure here.
+              "$exe" "$f" -v1 -o "fail-$t-$f.txt,txt" > /dev/null 2>&1; rc=$?
               echo "$t::$f exit $rc"
               if [ $rc -ne 0 ]; then
-                "$exe" "$f" -v1 -o "fail-$t-$f.txt,txt" > /dev/null 2>&1
                 tail -60 "fail-$t-$f.txt"
               fi
             done

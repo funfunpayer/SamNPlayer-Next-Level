@@ -111,6 +111,24 @@ Item {
         text: root.info
         color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
     }
+    // Too narrow for the volume slider beside the left and the centre controls.
+    // Opt-in (the Generator's narrow stage): the volume slider gives way and the
+    // buttons close up before they overlap. The Player keeps its full controls.
+    property bool allowTight: false
+    // The buttons' width at the normal spacing (12), not measured: the spacing
+    // itself follows `tight`, which would make this a binding loop.
+    // (previous and stop are 36 wide, the two 10 s buttons keep IconButton's 44.)
+    readonly property real transportNominal: (compact ? 50 : 72) + 2 * 36 + 2 * 44 + (showNext ? 36 : 0) + (showNext ? 5 : 4) * 12
+    readonly property bool tight: allowTight && width > 0 && width < 36 + leftControls.width + transportNominal + 24 + 156
+    // Still too narrow after the slider has gone (Windows fonts make the left
+    // controls wider): the two 10 s buttons give way too (the Generator's arrow keys still jump 5 s, 1 s with Shift).
+    // Width of the buttons at the tight spacing (6), with a margin of 24.
+    readonly property real transportTightWidth: (compact ? 50 : 72) + 2 * 36 + 2 * 44 + (showNext ? 36 : 0) + (showNext ? 5 : 4) * 6
+    readonly property bool veryTight: allowTight && width > 0 && width < 18 + leftControls.width + transportTightWidth + 12 + 36 + 18 + 24
+    // True when the left controls, the buttons and the mute button overlap.
+    readonly property bool crowded: width > 0 &&
+        (leftControls.x + leftControls.width > transportRow.x + 0.5 ||
+         transportRow.x + transportRow.width > rightControls.x + 0.5)
     Row {
         id: leftControls
         anchors.left: parent.left; anchors.leftMargin: 18
@@ -123,7 +141,7 @@ Item {
         readonly property real gapLeft: leftControls.x + leftControls.width
         x: gapLeft + Math.max(0, (rightControls.x - gapLeft - width) / 2)
         y: root.compact ? 28 : 54
-        spacing: 12
+        spacing: root.tight ? 6 : 12
         IconButton {
             objectName: "previousButton"
             width: 36; height: 36
@@ -132,14 +150,14 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             onClicked: root.previousRequested()
         }
-        IconButton { objectName: "back10Button"; icon: "back10"; tip: qsTr("Back 10 s"); onClicked: root.seekByRequested(-10000); anchors.verticalCenter: parent.verticalCenter }
+        IconButton { objectName: "back10Button"; visible: !root.veryTight; icon: "back10"; tip: qsTr("Back 10 s"); onClicked: root.seekByRequested(-10000); anchors.verticalCenter: parent.verticalCenter }
         PlayButton {
             objectName: "transportPlay"
             width: root.compact ? 50 : 72; height: width
             playing: root.playing
             onClicked: root.togglePlayRequested()
         }
-        IconButton { objectName: "forward10Button"; icon: "forward10"; tip: qsTr("Forward 10 s"); onClicked: root.seekByRequested(10000); anchors.verticalCenter: parent.verticalCenter }
+        IconButton { objectName: "forward10Button"; visible: !root.veryTight; icon: "forward10"; tip: qsTr("Forward 10 s"); onClicked: root.seekByRequested(10000); anchors.verticalCenter: parent.verticalCenter }
         // Stop: the device stops and the playhead goes back to 0.
         IconButton {
             objectName: "stopButton"
@@ -170,6 +188,8 @@ Item {
         FlowSlider {
             id: volumeSlider; objectName: "volume"
             from: 0; to: 1; width: 110; anchors.verticalCenter: parent.verticalCenter
+            // A narrow card keeps the buttons apart and leaves Mute for the sound.
+            visible: !root.tight
             onMoved: (v) => root.volumeMoved(v)
         }
     }

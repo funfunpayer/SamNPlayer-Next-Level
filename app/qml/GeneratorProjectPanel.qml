@@ -16,8 +16,12 @@ GlassCard {
     signal openVideo(string path)
     signal openScript(string path)
     signal handbookRequested()
-    width: collapsed ? 44 : 248
-    Behavior on width { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
+    // The page's layout takes its width from shownWidth (animated), so the
+    // layout and the fold never disagree about the panel's size.
+    property real shownWidth: collapsed ? 44 : 248
+    Behavior on shownWidth { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
+    implicitWidth: shownWidth
+    width: shownWidth
     clip: true
 
     component Title: Text {
