@@ -914,8 +914,17 @@ private slots:
                 QVERIFY2(item, name);
                 // The layout settles a moment after the video and the script open.
                 auto right = [&] { return item->mapToItem(stage, QPointF(item->width(), 0)).x(); };
+                // On a failure the message names the chain of parents and their widths,
+                // and the widest children of the first parent that is too wide.
+                auto chain = [&] {
+                    QString out;
+                    for (QQuickItem* p = item; p && p != stage->parentItem(); p = p->parentItem())
+                        out += QString(" <%1 %2 w=%3 iw=%4 x=%5>").arg(p->objectName(), QString::fromLatin1(p->metaObject()->className()))
+                                   .arg(p->width()).arg(p->implicitWidth()).arg(p->x());
+                    return out;
+                };
                 QTRY_VERIFY2(right() <= stage->width() + 0.5,
-                             qPrintable(QString("%1 ends at %2 of %3").arg(name).arg(right()).arg(stage->width())));
+                             qPrintable(QString("%1 ends at %2 of %3:%4").arg(name).arg(right()).arg(stage->width()).arg(chain())));
             }
             // A toolbar wider than its place scrolls to its last control.
             auto* bar = named(root.get(), "rangeBar");
