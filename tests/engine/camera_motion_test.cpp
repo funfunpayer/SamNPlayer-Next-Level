@@ -539,3 +539,66 @@ TEST_CASE("camera: the track reports frames whose fine fit was gated") {
     Scene(clean, PanX(45, 0.25, true));
     CHECK(Track(clean, kBoxX, Cam(TrackAxis::kX)).stats.camera_frames_gated == 0);
 }
+
+// Second review of the gap handling: a frame without a trusted fit must not
+// invent a step. Carrying the last step (or a looser 3 px fit) helps a
+// steady noisy pan but turns shake, parallax and an abrupt stop into
+// drift. These scenes pin that the compensation does no worse there than a
+// gated frame adding nothing.
+namespace {
+
+tc::CameraScene Degraded(tc::CameraScene c) {
+    c.texture_density = 0.6;
+    c.blur_px = 5;
+    c.noise_sigma = 25;
+    c.jpeg_quality = 20;
+    return c;
+}
+
+// p95 of |track motion since frame 0 - true motion of the disc in the scene|.
+double PosErrP95(const TrackResult& r, const tc::SceneInfo& s) {
+    std::vector<double> e;
+    for (size_t i = 0; i < r.positions.size(); ++i) {
+        const double truth = -s.signal(double(r.times_ms[i]) / 1000.0) + s.signal(double(r.times_ms[0]) / 1000.0);
+        e.push_back(std::abs((r.positions[i] - r.positions[0]) - truth));
+    }
+    std::sort(e.begin(), e.end());
+    return e.empty() ? 0.0 : e[static_cast<size_t>(0.95 * double(e.size() - 1))];
+}
+
+}  // namespace
+
+TEST_CASE("camera: shake under gating gains no invented steps; an abrupt stop stays bounded") {
+    TempDir dir;
+    {
+        tc::CameraScene c = PanX(0, 0, true);
+        c.camera.pan_x = tc::Shake(6, 7);
+        c.camera.pan_y = tc::Shake(4, 8);
+        const fs::path clip = dir.path / "shake_noisy.mp4";
+        const tc::SceneInfo s = Scene(clip, Degraded(c));
+        const TrackResult r = Track(clip, kBoxX, Cam(TrackAxis::kX));
+        INFO("shake: r " << R(r, s) << ", position error p95 " << PosErrP95(r, s) << " px, gated "
+                         << r.stats.camera_frames_gated << " of " << r.stats.total_frames);
+        CHECK(r.stats.camera_frames_gated > 10);
+        // A gated frame adding nothing: r 0.984, p95 15.8 px. Carrying the
+        // last step gave 0.948 and 42.2 px: shake does not persist.
+        CHECK(R(r, s) >= 0.975);
+        CHECK(PosErrP95(r, s) <= 25);
+    }
+    {
+        tc::CameraScene c = PanX(0, 0, true);
+        const auto go = tc::StopGo(40, 1.5, 1.5);
+        c.camera.pan_x = [go](double t) { return go(t) - 60; };
+        const fs::path clip = dir.path / "stop_noisy.mp4";
+        const tc::SceneInfo s = Scene(clip, Degraded(c));
+        const TrackResult r = Track(clip, kBoxX, Cam(TrackAxis::kX));
+        INFO("stop: r " << R(r, s) << ", position error p95 " << PosErrP95(r, s) << " px, gated "
+                        << r.stats.camera_frames_gated << " of " << r.stats.total_frames);
+        CHECK(r.stats.camera_frames_gated > 10);
+        // r 0.925, p95 35.9 px. On this clip carrying was better (0.999,
+        // 1.9 px); on the bench's 12 s stop_noisy it was far worse (track r
+        // 0.768 -> 0.561). Losing a gated step is bounded; inventing one is not.
+        CHECK(R(r, s) >= 0.90);
+        CHECK(PosErrP95(r, s) <= 45);
+    }
+}

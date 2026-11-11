@@ -80,8 +80,10 @@ Metrics (CSV: one row per scene x metric):
   cuts_found, false_cuts   the engine's own scene cuts; false = not within 2 frames of a true cut
   lost_share         share of frames the tracker flags lost
   camera_gated_share share of frames whose 1 px camera fit was not trusted (inliers < 0.5 or implausible)
-  camera_unmeasured_share  share of frames without a measured camera step (the last step carried)
+  camera_unmeasured_share  share of frames without a trusted camera step (gated or no estimate: they add nothing)
   loss_precision, loss_recall   lost flags against the true occlusion mask (occlusion scenes)
+  pos_err_p95_px     p95 over frames of |track motion since the first frame - true motion of the disc in the
+                     scene| on the chosen axis, px (camera removed by the truth; needs the extra track run)
   jumps_over_60px    frame-to-frame box moves above 60 px (the lighting-cut scene has one true)
   ms_per_frame, ms_spread   Generate wall time per frame: median and max - min of the runs
   rss_mb             peak resident memory of the scene's own process (Linux; 0 elsewhere)
@@ -183,6 +185,62 @@ std::vector<SceneDef> Scenes() {
              c.stroke_x = true;
              c.camera.pan_x = tc::Sine(40, 0.3);
              c.foreground = true;
+             return tc::WriteCameraScene(p, kSec, c);
+         }});
+    // Camera motion the gate must not turn into a drift (second review of
+    // the camera fixes): shake that does not persist, parallax (a near layer
+    // moving 1.6x the far one), and a camera that stops abruptly. Seeds and
+    // sizes picked once, not tuned.
+    add({"shake", "hand shake +-6 / +-4 px at 4-9 Hz, X stroke", false, kBoxX, TrackAxis::kX, false,
+         [](const fs::path& p) {
+             tc::CameraScene c;
+             c.stroke_x = true;
+             c.camera.pan_x = tc::Shake(6, 7);
+             c.camera.pan_y = tc::Shake(4, 8);
+             return tc::WriteCameraScene(p, kSec, c);
+         }});
+    add({"shake_noisy", "shake on a sparse texture with blur 5, noise sigma 25, JPEG 20", false, kBoxX, TrackAxis::kX,
+         false, [](const fs::path& p) {
+             tc::CameraScene c;
+             c.stroke_x = true;
+             c.camera.pan_x = tc::Shake(6, 7);
+             c.camera.pan_y = tc::Shake(4, 8);
+             c.texture_density = 0.6;
+             c.blur_px = 5;
+             c.noise_sigma = 25;
+             c.jpeg_quality = 20;
+             return tc::WriteCameraScene(p, kSec, c);
+         }});
+    add({"parallax", "pan x +-45 px at 0.25 Hz, a near layer moving 1.6x, X stroke", false, kBoxX, TrackAxis::kX, false,
+         [](const fs::path& p) {
+             tc::CameraScene c;
+             c.stroke_x = true;
+             c.camera.pan_x = tc::Sine(45, 0.25);
+             c.near_factor = 1.6;
+             return tc::WriteCameraScene(p, kSec, c);
+         }});
+    add({"parallax_noisy", "parallax with blur 3, noise sigma 20, JPEG 20, sparser texture", false, kBoxX, TrackAxis::kX,
+         false, [](const fs::path& p) {
+             tc::CameraScene c;
+             c.stroke_x = true;
+             c.camera.pan_x = tc::Sine(45, 0.25);
+             c.near_factor = 1.6;
+             c.texture_density = 0.8;
+             c.blur_px = 3;
+             c.noise_sigma = 20;
+             c.jpeg_quality = 20;
+             return tc::WriteCameraScene(p, kSec, c);
+         }});
+    add({"stop_noisy", "pan x at 40 px/s for 1.5 s, stop 1.5 s, repeated; blur 5, noise 25, JPEG 20", false, kBoxX,
+         TrackAxis::kX, false, [](const fs::path& p) {
+             tc::CameraScene c;
+             c.stroke_x = true;
+             const auto go = tc::StopGo(40, 1.5, 1.5);
+             c.camera.pan_x = [go](double t) { return go(t) - 120; };
+             c.texture_density = 0.6;
+             c.blur_px = 5;
+             c.noise_sigma = 25;
+             c.jpeg_quality = 20;
              return tc::WriteCameraScene(p, kSec, c);
          }});
     add({"pan_lowres_fg", "192x144 pan under the moving disc, sparse texture, blur 5, noise sigma 4, JPEG 30", false,
@@ -545,8 +603,8 @@ Rows MeasureScene(const SceneDef& d, const Options& opt, std::string* error) {
             flagged += lost, masked += hidden, both += lost && hidden;
         }
         rows.push_back({"lost_share", n ? double(flagged) / n : kNaN});
-        // Camera: frames whose 1 px fit was not trusted, and frames left
-        // without a measured step (the last one carried).
+        // Camera: frames whose 1 px fit was not trusted, and all frames without
+        // a trusted step (also those without any estimate).
         const double frames = std::max(1, tr->stats.total_frames);
         rows.push_back({"camera_gated_share", tr->stats.camera_frames_gated / frames});
         rows.push_back({"camera_unmeasured_share", tr->stats.camera_frames_lost / frames});
@@ -573,6 +631,14 @@ Rows MeasureScene(const SceneDef& d, const Options& opt, std::string* error) {
             rows.push_back({"track_r_median", Median(tr_r)});
             rows.push_back({"track_r_min", *std::min_element(tr_r.begin(), tr_r.end())});
         }
+        // Position error: the track's motion since its first frame against
+        // the true motion of the disc in the scene (the camera removed), p95.
+        std::vector<double> pos_err;
+        for (size_t i = 0; i < tr->times_ms.size() && i < tr->positions.size(); ++i) {
+            const double truth = -info.signal(tr->times_ms[i] / 1000.0) + info.signal(tr->times_ms[0] / 1000.0);
+            pos_err.push_back(std::abs((tr->positions[i] - tr->positions[0]) - truth));
+        }
+        if (!pos_err.empty() && !tr->distance_stroke) rows.push_back({"pos_err_p95_px", Percentile(pos_err, 95)});
         int jumps = 0;
         for (size_t i = 1; i < tr->xs.size() && i < tr->ys.size(); ++i)
             if (std::hypot(tr->xs[i] - tr->xs[i - 1], tr->ys[i] - tr->ys[i - 1]) > kJumpPx) ++jumps;
@@ -604,7 +670,7 @@ int Digits(const std::string& metric) {
                                                  {"extrema_err", 0}, {"cuts_found", 0},    {"false_cuts", 0},
                                                  {"jumps_over_60px", 0}, {"peak_err_ms_median", 1},
                                                  {"peak_err_ms_p95", 1}, {"ms_per_frame", 2}, {"ms_spread", 2},
-                                                 {"rss_mb", 1}};
+                                                 {"rss_mb", 1}, {"pos_err_p95_px", 2}};
     const auto it = d.find(metric);
     return it == d.end() ? 4 : it->second;
 }
@@ -620,7 +686,7 @@ std::string Markdown(const std::vector<std::string>& order, const std::map<std::
                         {"peak_err_ms_median", "peak med ms", 1}, {"peak_err_ms_p95", "peak p95 ms", 1},
                         {"extrema_err", "ext err", 0}, {"amp_ratio", "amp", 2},       {"false_cuts", "false cuts", 0},
                         {"lost_share", "lost", 2},     {"camera_gated_share", "cam gated", 2},     {"loss_precision", "loss P", 2}, {"loss_recall", "loss R", 2},
-                        {"jumps_over_60px", "jumps", 0}, {"ms_per_frame", "ms/frame", 2}, {"rss_mb", "RSS MB", 0}};
+                        {"pos_err_p95_px", "pos p95", 1}, {"jumps_over_60px", "jumps", 0}, {"ms_per_frame", "ms/frame", 2}, {"rss_mb", "RSS MB", 0}};
     std::ostringstream o;
     o << "| scene |";
     for (const Col& c : cols) o << " " << c.head << " |";

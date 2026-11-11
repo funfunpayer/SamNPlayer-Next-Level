@@ -118,6 +118,29 @@ inline std::function<double(double)> Sine(double amp, double hz) {
     return [amp, hz](double t) { return amp * std::sin(2 * kPi * hz * t); };
 }
 
+// Hand shake: three sines between 4 and 9 Hz whose phases come from seed,
+// summing to at most amp px, on top of base (a pan, or nothing).
+inline std::function<double(double)> Shake(double amp, unsigned seed,
+                                           std::function<double(double)> base = [](double) { return 0.0; }) {
+    std::mt19937 rng(seed);
+    std::uniform_real_distribution<double> phase(0, 2 * kPi);
+    const double p1 = phase(rng), p2 = phase(rng), p3 = phase(rng);
+    return [=](double t) {
+        return base(t) + amp * (0.5 * std::sin(2 * kPi * 4.3 * t + p1) + 0.3 * std::sin(2 * kPi * 6.1 * t + p2) +
+                                0.2 * std::sin(2 * kPi * 8.7 * t + p3));
+    };
+}
+
+// A camera that moves at speed px/s for move_s, stands for stop_s, and so on
+// (always the same direction): it starts and stops abruptly.
+inline std::function<double(double)> StopGo(double speed, double move_s, double stop_s) {
+    return [=](double t) {
+        const double period = move_s + stop_s;
+        const double cycles = std::floor(t / period), in = t - cycles * period;
+        return speed * (cycles * move_s + std::min(in, move_s));
+    };
+}
+
 struct CameraScene {
     double amp = 80, hz = 1.0;  // the tip disc's stroke in the world
     bool stroke_x = false;      // stroke along x (else y)
@@ -144,6 +167,10 @@ struct CameraScene {
     int jpeg_quality = 0;
     // The tip disc is not drawn in [hide_from_s, hide_to_s) (occlusion).
     double hide_from_s = -1, hide_to_s = -1;
+    // Parallax (0 = off): a second, nearer layer of sparse boxes in front of
+    // the world, behind the tip, that the camera's pan moves near_factor
+    // times as far. The tip belongs to the far world.
+    double near_factor = 0;
 };
 
 // The tip disc sits at the frame centre at t = 0 (and after a cut). Truth:
@@ -162,6 +189,10 @@ inline SceneInfo WriteCameraScene(const std::filesystem::path& p, int seconds, c
     cv::Mat world2 = Texture(ww, wh, 99, boxes);
     world2.convertTo(world2, -1, 0.4, 12);
     const cv::Mat fg_texture = Texture(c.w, c.h, 31, int(400 * k * k));
+    const cv::Mat near_layer = Texture(ww, wh, 53, boxes / 2);
+    cv::Mat near_mask;
+    cv::inRange(near_layer, cv::Scalar(40, 40, 40), cv::Scalar(40, 40, 40), near_mask);
+    cv::bitwise_not(near_mask, near_mask);
     cv::RNG rng(77), noise_rng(1234);
     s.frames = int(kFps * seconds);
     for (int i = 0; i < s.frames; ++i) {
@@ -181,6 +212,22 @@ inline SceneInfo WriteCameraScene(const std::filesystem::path& p, int seconds, c
         const cv::Mat m = (cv::Mat_<double>(2, 3) << z, 0, c.w / 2.0 - z * cx, 0, z, c.h / 2.0 - z * cy);
         cv::Mat f;
         cv::warpAffine(world, f, m, {c.w, c.h}, cv::INTER_LINEAR, cv::BORDER_REPLICATE);
+        const auto tip_on_top = [&] {
+            const double tx = ax + (c.stroke_x ? d : 0), ty = ay + (c.stroke_x ? 0 : d);
+            if (!hidden)
+                DiscR(f, int(std::lround(z * (tx - cx) + c.w / 2.0)), int(std::lround(z * (ty - cy) + c.h / 2.0)),
+                      int(std::lround(c.disc_r * z)));
+        };
+        if (c.near_factor != 0) {
+            const double nx = ww / 2.0 + c.near_factor * c.camera.pan_x(t);
+            const double ny = wh / 2.0 + c.near_factor * c.camera.pan_y(t);
+            const cv::Mat mn = (cv::Mat_<double>(2, 3) << z, 0, c.w / 2.0 - z * nx, 0, z, c.h / 2.0 - z * ny);
+            cv::Mat layer, mask;
+            cv::warpAffine(near_layer, layer, mn, {c.w, c.h}, cv::INTER_LINEAR, cv::BORDER_REPLICATE);
+            cv::warpAffine(near_mask, mask, mn, {c.w, c.h}, cv::INTER_NEAREST, cv::BORDER_CONSTANT);
+            layer.copyTo(f, mask);
+            tip_on_top();
+        }
         if (c.foreground) {
             const int fy = int(std::lround(50 * k * std::sin(2 * kPi * 0.35 * t)));
             cv::Mat mask = cv::Mat::zeros(c.h, c.w, CV_8U), moved;
@@ -189,11 +236,7 @@ inline SceneInfo WriteCameraScene(const std::filesystem::path& p, int seconds, c
             const cv::Mat shift = (cv::Mat_<double>(2, 3) << 1, 0, 0, 0, 1, fy);
             cv::warpAffine(fg_texture, moved, shift, {c.w, c.h}, cv::INTER_NEAREST, cv::BORDER_WRAP);
             moved.copyTo(f, mask);
-            // The tip stays in front: this is about the camera estimate, not occlusion.
-            const double tx = ax + (c.stroke_x ? d : 0), ty = ay + (c.stroke_x ? 0 : d);
-            if (!hidden)
-                DiscR(f, int(std::lround(z * (tx - cx) + c.w / 2.0)), int(std::lround(z * (ty - cy) + c.h / 2.0)),
-                      int(std::lround(c.disc_r * z)));
+            tip_on_top();  // the tip stays in front: this is about the camera estimate, not occlusion
         }
         if (c.blur_px > 1) cv::blur(f, f, {c.blur_px, c.blur_px});
         if (c.noise_sigma > 0) {
