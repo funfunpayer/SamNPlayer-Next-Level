@@ -315,7 +315,11 @@ Item {
     property bool autoFolded: false
     // "More feel options" of the Feel card: closed by default.
     property bool feelMore: false
-    readonly property bool feelMoreShown: feelMore || gen.contactAreas.length > 0 || gen.maskRois.length > 0
+    // Drawn areas or masks keep the options open: they are in use, and the
+    // toggle is hidden then (it would have nothing to fold). Contact vibration
+    // itself is on by default, so it does not count.
+    readonly property bool feelMoreForced: gen.contactAreas.length > 0 || gen.maskRois.length > 0
+    readonly property bool feelMoreShown: feelMore || feelMoreForced
     onNarrowChanged: {
         if (narrow && !projectPanel.collapsed) { projectPanel.collapsed = true; autoFolded = true }
         else if (!narrow && autoFolded) { projectPanel.collapsed = false; autoFolded = false }
@@ -1806,6 +1810,7 @@ Item {
                     // once the script has areas or masks drawn.
                     FlowButton {
                         objectName: "feelMoreToggle"
+                        visible: !page.feelMoreForced
                         Layout.fillWidth: true
                         icon: "chevronDown"
                         text: page.feelMoreShown ? qsTr("Fewer feel options") : qsTr("More feel options")

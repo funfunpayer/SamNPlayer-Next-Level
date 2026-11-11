@@ -288,6 +288,12 @@ private slots:
         QTRY_VERIFY(named(root.get(), "feelMore")->isVisible());
         QVERIFY(named(root.get(), "toggle_autoTip")->isVisible());
         QVERIFY(named(root.get(), "feelMoreToggle")->property("text").toString().startsWith("Fewer"));
+        // Fold again, then drawn areas open the options and take the toggle away (no dead button).
+        QMetaObject::invokeMethod(named(root.get(), "feelMoreToggle"), "clicked");
+        QTRY_VERIFY(!named(root.get(), "feelMore")->isVisible());
+        QVERIFY(named(root.get(), "feelMoreToggle")->property("text").toString().startsWith("More"));
+        QMetaObject::invokeMethod(named(root.get(), "feelMoreToggle"), "clicked");
+        QTRY_VERIFY(named(root.get(), "feelMore")->isVisible());
         gen->setFeelDevice("stroker");
         QTRY_VERIFY(!named(root.get(), "contactMarks")->isVisible());
         gen->setShowAllFeel(true);
@@ -946,7 +952,7 @@ private slots:
                                      "contactClassCombo", "contactCurveCombo", "createButton"}) {
                 auto* item = named(root.get(), name);
                 QVERIFY2(item, name);
-                if (!item->isVisible()) continue;
+                QVERIFY2(item->isVisible(), name);
                 const qreal y = item->mapToItem(scroll->property("contentItem").value<QQuickItem*>(), QPointF(0, 0)).y();
                 scroll->setProperty("contentY", qBound<qreal>(0, y - 20, qMax<qreal>(0, content - view)));
                 QTRY_VERIFY2(inView(name), name);
