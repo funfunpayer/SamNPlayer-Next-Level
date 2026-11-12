@@ -12,8 +12,10 @@
 // 16ths) that means octaves only, never 2/5, 4/5 or 1/3 of the tempo. A
 // second, polymetric layer is different: at 2/3, 3/4 or 3/2 of the tempo
 // (or two tempi summed) its common period with the beat, or the layer
-// itself, can win, giving 1/3, 3/2 and similar ratios (measured in
-// docs/benchmarks/AUDIO_ONSETS_2026-11-08.md). Among the multiples, octave folding (twice the
+// itself, can win, giving 1/3, 3/2 and similar ratios; tom layers at 4/3
+// and 5/4 of the tempo are worse still (bench: 36.8 % and 57.9 % right;
+// the review measured 26-37 % and 21-26 % with its own generator). See
+// docs/benchmarks/AUDIO_ONSETS_2026-11-08.md. Among the multiples, octave folding (twice the
 // period counts for a tempo, a pulse at half or a third of it against) and
 // a log-Gaussian prior around the base tempo (72 BPM, samn/base_rhythm.h)
 // choose: by design a fast song (above about 130 BPM) comes out at half its

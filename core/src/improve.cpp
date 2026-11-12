@@ -206,8 +206,7 @@ std::vector<Action> FillGapsRhythmic(std::vector<Action> a, int64_t max_gap_ms, 
             const Action prev = out.back();
             const Action& next = a[i];
             const int64_t dt = next.at - prev.at;
-            // FillGaps' own rule for which gaps are filled at all.
-            if (dt <= max_gap_ms || dt <= line_step) {
+            if (dt <= max_gap_ms) {
                 PushOrReplace(out, next);
                 continue;
             }
@@ -230,6 +229,12 @@ std::vector<Action> FillGapsRhythmic(std::vector<Action> a, int64_t max_gap_ms, 
                 if (h >= kMinHalfPeriodMs && h <= kMaxHalfPeriodMs) half = h;
             }
             if (!holding && !(near.halves.size() >= 3) && global_amp < kRhythmicFillMinAmplitude) holding = true;
+            // FillGaps' rule for its straight line: a gap no longer than the
+            // step is left as it is. Strokes do not depend on the line step.
+            if (holding && dt <= line_step) {
+                PushOrReplace(out, next);
+                continue;
+            }
             ++gaps;
             if (holding) {
                 // The same points as FillGaps: k = 1 .. dt / step - 1.

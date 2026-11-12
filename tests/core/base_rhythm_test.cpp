@@ -212,6 +212,34 @@ TEST_CASE("rhythmic fill: where the script holds, the output is exactly FillGaps
     }
 }
 
+TEST_CASE("rhythmic fill: a long line step does not stop the strokes") {
+    // Review of the follow-up: FillGaps' "gap longer than the step" rule is
+    // for the straight line only. A 700 ms gap in a script stroking every
+    // 250 ms is stroked even when the line step (714 ms from a 0.7 Hz audio
+    // tempo, or 1000 ms) is longer than the gap.
+    std::vector<samn::Action> a;
+    int k = 0;
+    for (int64_t t = 0; t <= 5000; t += 250, ++k) a.push_back({t, k % 2 ? 80 : 20});
+    for (int64_t t = 5700; t <= 11000; t += 250, ++k) a.push_back({t, k % 2 ? 80 : 20});
+    struct Case {
+        int64_t step;
+        double hz;
+    };
+    for (const Case c : {Case{0, 0.7}, Case{1000, 0}}) {
+        CAPTURE(c.step);
+        CAPTURE(c.hz);
+        int gaps = 0, pts = 0;
+        const auto out = samn::FillGapsRhythmic(a, 450, c.step, c.hz, samn::BaseRhythm{}, &gaps, &pts);
+        CHECK(gaps == 1);
+        CHECK(pts == 2);
+        const auto in = Inside(out, 5000, 5700);
+        REQUIRE(in.size() == 2);
+        CHECK(in[0].at == 5250);
+        CHECK(in[1].at == 5500);
+        CHECK(in[0].pos > in[1].pos);  // a stroke: up from the low anchor, then back
+    }
+}
+
 TEST_CASE("rhythmic fill: holds where the script holds, heart rhythm without strokes") {
     // A script holding at 30 around the gap: a straight line as in FillGaps.
     std::vector<samn::Action> hold;

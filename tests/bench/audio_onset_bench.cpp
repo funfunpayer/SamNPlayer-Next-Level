@@ -404,6 +404,8 @@ void PolymetricFamilies() {
         {"tom layer at 3/4 of the tempo", [](synth::Spec& s) { s.layer_ratio = 3.0 / 4; }},
         {"tom layer at 1/3 of the tempo", [](synth::Spec& s) { s.layer_ratio = 1.0 / 3; }},
         {"tom layer at 3/2 of the tempo", [](synth::Spec& s) { s.layer_ratio = 3.0 / 2; }},
+        {"tom layer at 4/3 of the tempo", [](synth::Spec& s) { s.layer_ratio = 4.0 / 3; }},
+        {"tom layer at 5/4 of the tempo", [](synth::Spec& s) { s.layer_ratio = 5.0 / 4; }},
         {"two tempi summed (x4/3, second at 0.8)", [](synth::Spec& s) { s.layer_ratio = 4.0 / 3; s.layer_level = 0.8; }},
     };
     FamilyTable("Polymetric layers (limits)", fams, sizeof fams / sizeof fams[0]);

@@ -140,8 +140,10 @@ Octave-corrected tempo within 4 % (strict for after in brackets); onset F at 50 
 | tom layer at 3/4 of the tempo | 26.3 | 68.4 | 89.5 (52.6) | 0.913 -> 0.912 | 0.336 -> 0.802 | 169: other, 176: other |
 | tom layer at 1/3 of the tempo | 84.2 | 84.2 | 100.0 (68.4) | 0.854 -> 0.847 | 0.476 -> 0.886 | - |
 | tom layer at 3/2 of the tempo | 0.0 | 73.7 | 73.7 (0.0) | 0.869 -> 0.875 | 0.334 -> 0.588 | 50: 3/2, 57: 3/2, 64: 3/2, 71: 3/2, 78: 3/2 |
+| tom layer at 4/3 of the tempo | 15.8 | 0.0 | 36.8 (36.8) | 0.877 -> 0.900 | 0.336 -> 0.651 | 57: 4/3, 78: 2/3, 85: 2/3, 120: 2/3, 127: 1/3, 134: 1/3, 141: 1/3, 148: 1/3, 155: 1/3, 162: 1/3, 169: 1/3, 176: 1/3 |
+| tom layer at 5/4 of the tempo | 10.5 | 10.5 | 57.9 (10.5) | 0.882 -> 0.919 | 0.300 -> 0.530 | 50: 5/4, 57: 5/4, 64: 5/4, 71: 5/4, 78: 5/4, 162: other, 169: other, 176: other |
 | two tempi summed (x4/3, second at 0.8) | 5.3 | 0.0 | 21.1 (21.1) | 0.896 -> 0.904 | 0.343 -> 0.551 | 50: 4/3, 57: 4/3, 64: 4/3, 78: 2/3, 85: 2/3, 92: 2/3, 120: 1/3, 127: 1/3, 134: 1/3, 141: 1/3, 148: 1/3, 155: 1/3, 162: 1/3, 169: 1/3, 176: 1/3 |
-| **all 95 clips** | 34.7 | 55.8 | 73.7 | 0.884 -> 0.883 | 0.378 -> 0.737 | |
+| **all 133 clips** | 28.6 | 41.4 | 66.2 | 0.883 -> 0.891 | 0.361 -> 0.695 | |
 
 ### Gate limits (19 tempi 50-176 BPM, drum kick + pad, 30 s)
 
@@ -165,10 +167,10 @@ Whole clips: 56->70: 70.0, 64->80: 80.0, 72->90: 90.0, 80->100: 100.0, 96->120: 
 
 | step | ms per second of sound |
 |---|---:|
-| before: 50 ms RMS + loudness + EstimateBpmFromLoudness | 0.0407 |
-| OnsetCurve (FFT, band flux, gate) | 0.5595 |
-| EstimateTempo | 0.0078 |
-| TrackBeats | 0.0040 |
+| before: 50 ms RMS + loudness + EstimateBpmFromLoudness | 0.0379 |
+| OnsetCurve (FFT, band flux, gate) | 0.3770 |
+| EstimateTempo | 0.0080 |
+| TrackBeats | 0.0042 |
 
 Peak heap of the after analysis on 10 min, outputs kept: 591.6 KiB (onset curve 25840 values, 960 beats).
 
@@ -176,7 +178,7 @@ Peak heap of the after analysis on 10 min, outputs kept: 591.6 KiB (onset curve 
 
 | frames | peak heap of the analysis | bound | tempo | wall time | ms per second of sound |
 |---:|---:|---:|---:|---:|---:|
-| 1550391 | 23.5 KiB | 32 KiB | 75.0 BPM | 16.9 s | 0.4698 |
+| 1550391 | 23.5 KiB | 32 KiB | 75.0 BPM | 13.5 s | 0.3748 |
 
 ### Gap fill: linear (default) vs heart rhythm (generator.rhythmic_fill)
 
@@ -192,7 +194,7 @@ gap r0 = Pearson at lag 0 and gap MAE = mean |position error| in the holes on a 
 
 Rhythmic at least as good as linear on the existing metrics (Doctor, gap r) where the script strokes or holds: NO
 
-Peak RSS of the whole bench process: 33620 KiB
+Peak RSS of the whole bench process: 33628 KiB
 
 ### Harder rhythms, first version of this PR (0f370d8) (30 s clips, 19 tempi 50-176 BPM, 5 ms jitter)
 
@@ -237,10 +239,13 @@ New family table "Polymetric layers": a tom layer at 0.7 of the kick's level on 
 | tom at 3/4 | 26.3 % | 68.4 % | 89.5 % | 169, 176 BPM |
 | tom at 1/3 | 84.2 % | 84.2 % | 100 % | - |
 | tom at 3/2 | 0 % | 73.7 % | 73.7 % | locks to the 1.5x layer at 50-78 BPM |
+| tom at 4/3 | 15.8 % | 0 % | 36.8 % | 1/3 at 127-176 BPM, 2/3, 4/3 |
+| tom at 5/4 | 10.5 % | 10.5 % | 57.9 % | locks to the 5/4 layer at 50-78 BPM; 162-176 BPM |
 | two tempi summed (x4/3, second at 0.8) | 5.3 % | 0 % | 21.1 % | the other tempo, 2/3 or 1/3 |
 
 - **The reviewer's generator gave** 2/3: 64 %, 3/4: 91 %, 1/3: 95 %, 3/2: 91 %, two tempi x1.33: 73 %, also all at or
-  above the trivial ACF. With his generator, 3/2 is the one family where the merged code is worse than the first version
+  above the trivial ACF. The second review measured tom layers at 4/3 (26-37 %) and 5/4 (21-26 %) with its own generator,
+  worse than the families above; this bench now has both (36.8 % and 57.9 %). With his generator, 3/2 is the one family where the merged code is worse than the first version
   (0f370d8): it locks to the 1.5x layer at 51 and 63 BPM.
 - **Two tempi at nearly the same level** are ambiguous by construction. "The tempo" is defined here as the louder one.
 - **A tried fix, not adopted:** the pulse must divide the best comb's period by a power of two. It lowered every table:
@@ -250,11 +255,13 @@ New family table "Polymetric layers": a tom layer at 0.7 of the kick's level on 
 
 **Onset minimum gap.** The review's nit fix rounded the 70 ms minimum gap up to whole frames: 4 frames, that is 93 ms at
 11025 Hz. That dropped the second of two hits 75 ms apart. Two onsets are now compared as times: never closer than 70 ms
-minus half a frame (58 ms at 11025 Hz, 62 ms at 4 kHz, 59 ms at 96 kHz). New test: clicks 75 ms apart at 11025 Hz are
+minus half a frame (58 ms at 11025 Hz, 62 ms at 4 kHz, 59 ms at 96 kHz). At 43.07 values per second (11025, 22050 and
+44100 Hz) the peak test (a maximum over +-2 values) already keeps peaks 3 values (69.7 ms) apart, so the default 70 ms is
+inert there and 58 ms is a bound that is never reached. It matters at other rates and for a longer `wait_ms`. New test: clicks 75 ms apart at 11025 Hz are
 both found, and the 4-96 kHz test now checks that bound.
 
 Onset F after the change:
-- basic table 0.933 (unchanged; none of its hits are closer than 70 ms);
+- basic table 0.933 overall; one family moved: noise 0.15, 0.885 -> 0.884 (a noise peak 3 values after a hit is now kept; the 4-value gap had dropped it);
 - harder families 0.972 -> 0.973 (16th hats 0.954 -> 0.962, syncopation 0.985 -> 0.992);
 - the bass kick + sub family stays 0.902. The reviewer's 0.84 -> 0.74 drop does not reproduce with my generator.
 
@@ -263,8 +270,18 @@ Tempo and beats are unchanged.
 **Holding fill = FillGaps.** With `generator.rhythmic_fill` on, the straight-line branch for a holding script stepped
 `t < next` instead of FillGaps' `k < dt / step`. When the step did not divide the gap (37 ms, or half the period of a
 1.2 Hz audio tempo), that added one point within one step of the anchor. Gaps longer than the threshold but too short for
-a stroke (at most 428 ms) were left unfilled. Both now give exactly FillGaps' points, tested over 7 steps and gaps. The fill
-bench is unchanged (its holes are longer); the default is still off.
+a stroke (at most 428 ms) were left unfilled. Both now give exactly FillGaps' points, tested over 7 steps and gaps.
+
+FillGaps' rule "the gap must be longer than the step" now applies only to that straight line. The first version of this
+follow-up applied it to stroking scripts too: a 700 ms gap in a script stroking every 250 ms got no strokes when the line
+step was 714 ms (a 0.7 Hz audio tempo) or 1000 ms. That case is now a test.
+
+A scratch fuzz of 200 000 scripts gave:
+- holding scripts: 0 differences from FillGaps;
+- stroking scripts with every filled gap longer than a stroke: 0 differences from main;
+- the same fuzz against the earlier head c17942a: 8535 differences.
+
+The fill bench is unchanged (its holes are longer), and the default is still off.
 
 ## Before wiring into the app
 

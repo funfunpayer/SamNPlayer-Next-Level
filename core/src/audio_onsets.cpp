@@ -254,7 +254,11 @@ std::vector<double> PickOnsets(const std::vector<float>& curve, double fps, cons
     const auto range_half = std::size_t(std::max(1L, std::lround(2.0 * fps)));
     // Compared as times, within half a frame: two onsets are never closer
     // than wait_ms minus half a frame (rounding up to whole frames made the
-    // gap 93 ms at 11025 Hz and dropped hits 75 ms apart).
+    // gap 93 ms at 11025 Hz and dropped hits 75 ms apart). At 43.07 values
+    // per second (11025, 22050, 44100 Hz) the +-2 value peak test below
+    // already keeps peaks 3 values (69.7 ms) apart, so the default 70 ms is
+    // inert there and "70 ms minus half a frame" (58 ms) is a bound, not
+    // reached; it matters at other rates and for a longer wait_ms.
     const double wait_frames = std::max(1.0, opts.wait_ms * fps / 1000.0 - 0.5);
     // Prefix sums for the local mean (one double per value).
     std::vector<double> prefix(n + 1, 0.0);
