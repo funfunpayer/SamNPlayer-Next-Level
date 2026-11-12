@@ -458,18 +458,25 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
                 excludes.push_back(last);
                 if (want_partner) excludes.push_back(partner_last);
                 for (const ExtraState& e : extras) excludes.push_back(e.last);
-                const CameraMotion cam = EstimateCameraMotion(prev_gray, gray, excludes);
-                inliers = cam.inliers;
-                // The full estimate where the tip was: a pan moves it by the
-                // shift, a zoom or a rotation by how far it sits from their
-                // centre (which the estimate itself places), so a tip off
-                // the zoom centre is not pulled along with the picture's
-                // corner (0.7 used t(1,2), the motion of pixel (0, 0)). An
-                // untrusted estimate adds nothing.
-                if (cam.Usable())
-                    shift = cam.Shift(prev_tip);
-                else
+                // The 3 px fit too when the self-check records: its share is
+                // the camera trust c6 was calibrated on (0.7's estimate).
+                const CameraFits fits = EstimateCameraFits(prev_gray, gray, excludes, recorder.has_value());
+                inliers = recorder ? fits.coarse.inliers : fits.fine.inliers;
+                // The motion where the tip was: a pan moves it by the shift,
+                // a zoom or a rotation by how far it sits from their centre
+                // (which the estimate itself places), so a tip off the zoom
+                // centre is not pulled along with the picture's corner (0.7
+                // used t(1,2), the motion of pixel (0, 0)). A frame without
+                // a trusted fit adds nothing: carrying the last step or
+                // taking the looser 3 px fit helped a steady noisy pan but
+                // made shake, parallax and abrupt stops drift (review of the
+                // fixes, docs/benchmarks/DETECTION_CAMERA2D_FIXES_2026-11-10.md).
+                if (fits.fine.Usable()) {
+                    shift = fits.fine.Shift(prev_tip);
+                } else {
                     ++res.stats.camera_frames_lost;
+                    if (fits.fine.ok) ++res.stats.camera_frames_gated;
+                }
             }
             // A cut starts a new scene: its camera starts from 0.
             camera_dx.push_back(cut ? 0.0 : camera_dx.back() + shift.x);
@@ -499,6 +506,8 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
     if (opts.camera_compensation) {
         ApplyCameraCompensation(res.xs, camera_dx, res.scene_cuts);
         ApplyCameraCompensation(res.ys, camera_dy, res.scene_cuts);
+        HoldLostPositions(res.xs, res.lost, res.scene_cuts);
+        HoldLostPositions(res.ys, res.lost, res.scene_cuts);
     }
 
     res.stats.vertical_range = Ptp(res.ys);

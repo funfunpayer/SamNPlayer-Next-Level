@@ -48,11 +48,18 @@ struct CameraMotion {
     // r 0.91 at 3 px, 0.998 at 1 px). Features tracked by LK are sub-pixel.
     static constexpr double kRansacPx = 1.0;
     static constexpr double kRansacPx07 = 3.0;
+    // No camera of a stroke video zooms by more than 20 %, turns by more
+    // than 0.2 rad or moves its centre by more than a quarter of the
+    // picture between two frames: such a fit is a mismatch.
+    static constexpr double kMaxZoomStep = 0.2, kMaxTurnStep = 0.2, kMaxShiftShare = 0.25;
     bool ok = false;      // an estimate exists (enough features, RANSAC converged)
     double inliers = 0;   // RANSAC inlier share of the matched features; 0 without an estimate
     cv::Matx23d m{1, 0, 0, 0, 1, 0};  // a pixel (x, y) of the previous frame -> m * (x, y, 1) in this one
+    cv::Size frame;       // the picture's size; empty = the shift bound is not checked
 
-    bool Usable() const { return ok && inliers >= kMinInliers; }
+    // Finite and within the bounds above.
+    bool Plausible() const;
+    bool Usable() const { return ok && inliers >= kMinInliers && Plausible(); }
     double Scale() const;
     double Angle() const;  // radians
     // Where the camera moves a scene point that sat at p in the previous
@@ -61,6 +68,22 @@ struct CameraMotion {
 };
 CameraMotion EstimateCameraMotion(const cv::Mat& prev_gray, const cv::Mat& gray, const std::vector<cv::Rect>& excludes,
                                   double ransac_px = CameraMotion::kRansacPx);
+
+// Both fits from the same matched features: fine at kRansacPx and, when
+// asked for, coarse at 0.7's kRansacPx07 (coarse.ok false when not fitted).
+// TrackBox steers by the fine fit; the coarse share is the self-check's
+// camera trust c6, which was calibrated on it.
+struct CameraFits {
+    CameraMotion fine, coarse;
+};
+CameraFits EstimateCameraFits(const cv::Mat& prev_gray, const cv::Mat& gray, const std::vector<cv::Rect>& excludes,
+                              bool want_coarse);
+
+// Frames flagged kLostTracker repeat the tracker's last box: there the tip
+// did not move in the scene, whatever the camera did, so the compensated
+// position repeats the one before too. Not across a scene cut (cuts: the
+// first frame of each new scene), where the camera starts again.
+void HoldLostPositions(std::vector<double>& v, const std::vector<uint8_t>& lost, const std::vector<int>& cuts);
 
 // The y shift of EstimateCameraMotion with 0.7's 3 px RANSAC distance; 0
 // means "no estimate", not "no motion" (0.7 estimate_camera_motion; the tip
