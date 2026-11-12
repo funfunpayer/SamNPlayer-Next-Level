@@ -385,7 +385,7 @@ Item {
                                 enabled: !trainCtl.training
                                 onClicked: trainCtl.setUpEnvironment()
                             }
-                            HelpChip { key: "st-ai-setup-train"; Layout.alignment: Qt.AlignVCenter }
+                            HelpChip { key: "st-ai-setup-train"; visible: !trainCtl.settingUp; Layout.alignment: Qt.AlignVCenter }
                             FlowButton {
                                 objectName: "trainSetUpStop"
                                 visible: trainCtl.settingUp

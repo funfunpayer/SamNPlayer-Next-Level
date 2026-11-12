@@ -330,8 +330,8 @@ private slots:
                  "pb-scene-feel"});
             add("the control is a pill on the preview (GeneratorPage.qml), a chip there would cover the video",
                 {"gen-pos-overlay-toggle"});
-            add("same action as a placed chip: From audio carries pb-bpm-auto, the Sound Curve card carries pb-aa-write",
-                {"pb-aa-detect", "pb-vib-source-apply"});
+            add("same action as a placed chip: Inspector From audio carries pb-bpm-auto",
+                {"pb-aa-detect"});
             add("crowded row: with the chip the fill combos shrink to about 80 px at the 352 px side width, so the chip stays out",
                 {"generator.tip-glans-penis", "generator.contact-mouth-nipple", "gen-show-all-feel", "gen-device-target"});
             add("AI Train Benchmark is not built (D-155 step 6, AiTrainPage.qml placeholders)",
@@ -341,7 +341,7 @@ private slots:
                  "rt-only-new", "rt-open-settings"});
             add("a similar control exists in the label editor but the 0.7 text describes other behaviour (free tag boxes, N-th frame, YOLO bootstrap): kept verbatim, not placed",
                 {"rt-add-tag", "rt-bootstrap" /* Add to training set */, "rt-delete-mark" /* Remove this key */,
-                 "rt-mark-next" /* + adds an object */, "rt-pick-image" /* Open a clip or image */,
+                 "rt-mark-next" /* the + button (LabelEditor.qml) adds another object of a label: close, but the text speaks of free tag boxes */, "rt-pick-image" /* Open a clip or image */,
                  "roi_training.sampling-every-n-th-frame" /* Sample every N ms */});
             add("the control exists (AiTrainPage.qml) but the 0.7 text is wrong for it: Epochs slider stops at 200 not 500; Stop on Train stops RF-DETR not YOLO; Set up installs RF-DETR not ultralytics; Fetch ffmpeg gets imageio-ffmpeg from PyPI, not a static build",
                 {"roi_training.epochs", "rt-cancel-train", "rt-cancel-run", "rt-install-deps", "st-install-ffmpeg"});
@@ -356,7 +356,8 @@ private slots:
         static const QStringList staleWording = {
             "gen-vib-follow" /* says "use Mix"; the slider is labelled Vibration / Suction */,
             "gen-vib-source" /* says "Contact:"; the option is "Motion only" */,
-            "roi_training.device" /* terse: "auto = best available backend" */};
+            "roi_training.device" /* terse: "auto = best available backend" */,
+            "st-ai-server-check" /* says "(or the default)"; an empty URL gives an error (label_controller.cpp) */};
         for (const QString& k : staleWording) QVERIFY2(placed.contains(k), qPrintable(k + " is on no chip"));
         QStringList unlisted, stale;
         for (const QString& k : keys)
@@ -369,8 +370,8 @@ private slots:
         QVERIFY2(unlisted.isEmpty(), qPrintable("help texts with no chip and no reason: " + unlisted.join(", ")));
         QVERIFY2(stale.isEmpty(), qPrintable("stale entries: " + stale.join(", ")));
         // The count may only go down: lower this when a key gets its chip.
-        QVERIFY2(reasons.size() <= 81, qPrintable(QString("%1 unplaced keys").arg(reasons.size())));
-        QVERIFY2(placed.size() >= 131, qPrintable(QString("only %1 keys placed").arg(placed.size())));
+        QVERIFY2(reasons.size() <= 80, qPrintable(QString("%1 unplaced keys").arg(reasons.size())));
+        QVERIFY2(placed.size() >= 132, qPrintable(QString("only %1 keys placed").arg(placed.size())));
     }
 
     // A "?" opens its text below it; Esc closes it.

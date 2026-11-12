@@ -1179,6 +1179,7 @@ Item {
                             HoverHandler { id: keepHover }
                             ToolTipText { shown: keepHover.hovered; text: qsTr("Keep contact vibration when writing from sound") }
                         }
+                        HelpChip { key: "pb-vib-source-apply"; visible: gen.hasVideo; Layout.alignment: Qt.AlignVCenter }
                         FlowButton {
                             objectName: "tool_beatbar"
                             visible: gen.hasVideo
