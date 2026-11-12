@@ -164,6 +164,7 @@ struct CameraScene {
     // blur of blur_px, Gaussian noise of noise_sigma, a JPEG round trip.
     int blur_px = 0;
     double noise_sigma = 0;
+    unsigned noise_seed = 1234;  // the noise draw
     int jpeg_quality = 0;
     // The tip disc is not drawn in [hide_from_s, hide_to_s) (occlusion).
     double hide_from_s = -1, hide_to_s = -1;
@@ -193,7 +194,7 @@ inline SceneInfo WriteCameraScene(const std::filesystem::path& p, int seconds, c
     cv::Mat near_mask;
     cv::inRange(near_layer, cv::Scalar(40, 40, 40), cv::Scalar(40, 40, 40), near_mask);
     cv::bitwise_not(near_mask, near_mask);
-    cv::RNG rng(77), noise_rng(1234);
+    cv::RNG rng(77), noise_rng(c.noise_seed);
     s.frames = int(kFps * seconds);
     for (int i = 0; i < s.frames; ++i) {
         const double t = i / kFps;
