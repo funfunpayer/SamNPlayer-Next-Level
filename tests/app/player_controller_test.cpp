@@ -1634,6 +1634,83 @@ private slots:
         QVERIFY(m->effectPresets().isEmpty());
     }
 
+    // D-170: a 0.7 .sam beside the script is imported read only into the
+    // vibration lane; SamNPlayer 2 never writes one.
+    void samSidecarFillsTheVibrationLane() {
+        QTemporaryDir d;
+        const QString path = d.filePath("clip.funscript");
+        writeFile(path, zigzag());
+        const QString sam = d.filePath("clip.sam");
+        const QByteArray body =
+            R"({"version":"0.1","frames":[{"time":0,"motion":{"position":0,"intensity":0.6}},)"
+            R"({"time":10000,"motion":{"position":0,"intensity":0.6}}],"metadata":{"creator":"0.7"},"future":1})";
+        int mappedVib = 0;
+        {
+            PlayerController plain;
+            QVERIFY(plain.openPath(path));
+            plain.setVideoPositionMs(500);
+            mappedVib = plain.vibrationNow();  // what SamNPlayer 2 maps without a sidecar
+            QVERIFY(mappedVib != 60);
+            QVERIFY(!plain.lastError().contains(".sam"));
+        }
+        writeFile(sam, body);
+        const QDateTime stamp = QFileInfo(sam).lastModified();
+        PlayerController c;
+        QVERIFY(c.openPath(path));
+        QVERIFY(c.lastError().contains("clip.sam"));
+        QVERIFY(c.lastError().contains("read only"));
+        c.setVideoPositionMs(500);
+        QCOMPARE(c.vibrationNow(), 60);  // the sidecar's 0.6, not the mapped value
+        QVERIFY(c.showVibrationLane());
+        // Read only: the file is byte for byte what it was, and no other .sam appeared.
+        QFile f(sam);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        QCOMPARE(f.readAll(), body);
+        f.close();
+        QCOMPARE(QFileInfo(sam).lastModified(), stamp);
+        QCOMPARE(QDir(d.path()).entryList({"*.sam"}).size(), 1);
+    }
+
+    void samSidecarNeverOverridesOwnVibrationAndBadFilesAreNamed() {
+        QTemporaryDir d;
+        // A tj script maps its own contact vibration: the sidecar is left alone.
+        const QString tj = d.filePath("tj.funscript");
+        writeFile(tj, tjFunscript());
+        writeFile(d.filePath("tj.sam"),
+                  R"({"version":"0.1","frames":[{"time":0,"motion":{"intensity":1}},{"time":9000,"motion":{"intensity":1}}]})");
+        PlayerController own;
+        QVERIFY(own.openPath(tj));
+        own.setVideoPositionMs(600);
+        const int mapped = own.vibrationNow();
+        QVERIFY(mapped > 30 && mapped < 100);
+        QVERIFY(!own.lastError().contains("Imported"));
+
+        // A hostile sidecar: the script still opens, the note names the problem.
+        const QString bad = d.filePath("bad.funscript");
+        writeFile(bad, zigzag());
+        writeFile(d.filePath("bad.sam"), QByteArray("\xEF\xBB\xBF{\"version\":\"0.1\",\"frames\":[{\"time\":NaN}]"));
+        const QString noSam = d.filePath("nosam.funscript");
+        writeFile(noSam, zigzag());
+        PlayerController plainBad;
+        QVERIFY(plainBad.openPath(noSam));
+        plainBad.setVideoPositionMs(500);
+        const int plainVib = plainBad.vibrationNow();
+        PlayerController b;
+        QVERIFY(b.openPath(bad));
+        QVERIFY(b.hasScript());
+        QVERIFY(b.lastError().startsWith("Ignored bad.sam"));
+        b.setVideoPositionMs(500);
+        QCOMPARE(b.vibrationNow(), plainVib);  // the mapping is untouched
+
+        // Position only (no intensity): not imported, said so.
+        const QString thin = d.filePath("thin.funscript");
+        writeFile(thin, zigzag());
+        writeFile(d.filePath("thin.sam"), R"({"version":"0.1","frames":[{"time":0,"motion":{"position":50}}]})");
+        PlayerController t;
+        QVERIFY(t.openPath(thin));
+        QVERIFY(t.lastError().contains("no contact intensity"));
+    }
+
     // 0.7 contact controls: strength 0-2 (0 mutes), off, sensitivity and
     // curve; the knobs act in recipe mode with contact vibration on.
     void contactControlsFollowTheScript() {

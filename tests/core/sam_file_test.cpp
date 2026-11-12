@@ -2,6 +2,7 @@
 #include <doctest/doctest.h>
 
 #include <cmath>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -227,4 +228,56 @@ TEST_CASE("sam: LoadSam reads a file and reports a missing one") {
     CHECK_FALSE(missing.file);
     CHECK_FALSE(missing.error.empty());
     fs::remove_all(dir);
+}
+
+// Fuzz-style: seeded byte flips, cuts and splices of a valid file. Whatever the
+// input, the parser returns (no crash, no hang) and a result is well formed.
+TEST_CASE("sam: mutated and random input never crashes and stays well formed") {
+    const std::string seed = R"({"version":"0.1","frames":[{"time":0,"motion":{"position":10,"intensity":0.25}},
+        {"time":500,"motion":{"position":90,"intensity":0.8,"confidence":1}}],
+        "metadata":{"creator":"c","tracking_gaps":[{"start_ms":1,"end_ms":2}],"device_recipe":{"sync":"x"}}})";
+    uint64_t state = 0x9E3779B97F4A7C15ull;
+    const auto next = [&state]() {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        return state;
+    };
+    const auto check = [](const std::string& in) {
+        const auto r = ParseSam(in);
+        if (r.file) {
+            CHECK_FALSE(r.file->frames.empty());
+            CHECK_FALSE(r.file->version.empty());
+            int64_t prev = -1;
+            for (const auto& f : r.file->frames) {
+                CHECK(f.time_ms >= 0);
+                CHECK(f.time_ms >= prev);
+                CHECK(f.intensity >= 0.0);
+                CHECK(f.intensity <= 1.0);
+                CHECK(std::isfinite(f.intensity));
+                prev = f.time_ms;
+            }
+        } else {
+            CHECK_FALSE(r.error.empty());
+        }
+    };
+    for (int i = 0; i < 4000; ++i) {
+        std::string m = seed;
+        const int edits = 1 + static_cast<int>(next() % 4);
+        for (int e = 0; e < edits && !m.empty(); ++e) {
+            const size_t at = static_cast<size_t>(next() % m.size());
+            switch (next() % 4) {
+                case 0: m[at] = static_cast<char>(next() & 0xFF); break;
+                case 1: m.erase(at, 1 + static_cast<size_t>(next() % 8)); break;
+                case 2: m.insert(at, 1, "{}[]\",:-.e0123456789nul"[next() % 24]); break;
+                default: m.resize(at); break;
+            }
+        }
+        check(m);
+    }
+    for (int i = 0; i < 500; ++i) {
+        std::string junk(static_cast<size_t>(next() % 300), '\0');
+        for (auto& c : junk) c = static_cast<char>(next() & 0xFF);
+        check(junk);
+    }
 }
