@@ -1349,6 +1349,17 @@ private slots:
             s.window->setProperty("mode", 1);
             QTRY_COMPARE_WITH_TIMEOUT(s.mode(), 1, kWait);
             QTRY_VERIFY_WITH_TIMEOUT(byName("openHandbookCreate"), kWait);
+            // The Generator page is built by an asynchronous Loader and lays out a
+            // moment after its header button exists; the stage clips its rows to
+            // its column, so a click before that lands on nothing.
+            {
+                QQuickItem* stage = nullptr;
+                QTRY_VERIFY_WITH_TIMEOUT((stage = [&] {
+                    for (QQuickItem* i : descendants(s.root()))
+                        if (i->objectName() == QLatin1String("stageSplit") && i->isVisible()) return i;
+                    return static_cast<QQuickItem*>(nullptr);
+                }()) && stage->width() > 300, kWait);
+            }
             click(byName("openHandbookCreate"));
             QTRY_VERIFY_WITH_TIMEOUT(handbook->isVisible(), kWait);
             click(byName("handbookClose"));
