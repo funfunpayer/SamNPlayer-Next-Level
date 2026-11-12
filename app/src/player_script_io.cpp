@@ -3,8 +3,11 @@
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QImage>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
@@ -27,8 +30,10 @@
 #include "samn/marks.h"
 #include "samn/playback.h"
 #include "samn/playback_mapping.h"
+#include "samn/polarity.h"
 #include "samn/project.h"
 #include "samn/range_edit.h"
+#include "samn/ringdown.h"
 #include "samn/samn_file.h"
 #include "samn/script_finder.h"
 #include "samn/script_quality.h"
@@ -209,6 +214,9 @@ QString PlayerController::optimizeFor(const QString& target) {
     samn::ImproveOptions o;
     o.fill_gaps = true;
     o.heal_tracking_gaps = true;
+    // Off by default: straight-line fill (D-168).
+    o.rhythmic_fill = samn::RhythmicFillFromSettings(settings());
+    o.base_rhythm = samn::BaseRhythmFromSettings(settings());
     try {
         o.tracking_gaps = samn::LoadFunscript(funscript).metadata.tracking_gaps;
     } catch (const std::exception&) {
@@ -592,6 +600,113 @@ bool PlayerController::invertAll() {
         false);
 }
 
+QVariantMap PlayerController::suggestPolarity() {
+    // stroke_ is the curve Play shows (an OFS inverted flag is already baked
+    // in when that setting is on).
+    if (scriptPath_.isEmpty() || stroke_.empty())
+        return {{"suggestInvert", false}, {"reason", QString()}, {"error", tr("no script loaded")}};
+    const samn::PolarityHint hint = samn::SuggestPolarity(stroke_);
+    return {{"suggestInvert", hint.suggest_invert},
+            {"reason", QString::fromStdString(hint.reason)},
+            {"error", QString()}};
+}
+
+QVariantMap PlayerController::applyPolaritySuggestion() {
+    const QVariantMap hint = suggestPolarity();
+    if (!hint.value(QStringLiteral("error")).toString().isEmpty())
+        return {{"applied", false},
+                {"suggestInvert", false},
+                {"reason", QString()},
+                {"error", hint.value(QStringLiteral("error"))}};
+    const QString reason = hint.value(QStringLiteral("reason")).toString();
+    const bool suggest = hint.value(QStringLiteral("suggestInvert")).toBool();
+    if (!suggest) {
+        setError({});
+        return {{"applied", false}, {"suggestInvert", false}, {"reason", reason}, {"error", QString()}};
+    }
+    // Store 100−pos of the played curve (0.7 InvertLoadedScript). Not invertAll:
+    // that would leave an inverted flag in place and flip twice on reload.
+    if (!applySelectionEdit(
+            tr("Invert polarity"),
+            [](std::vector<samn::Action> a) {
+                for (auto& x : a) x.pos = 100 - x.pos;
+                return a;
+            },
+            false, true)) {
+        return {{"applied", false},
+                {"suggestInvert", true},
+                {"reason", reason},
+                {"error", lastError_}};
+    }
+    // Clear OFS inverted so Play does not flip the baked curve again.
+    namespace fs = std::filesystem;
+    const std::string openedU8 = U8(scriptPath_);
+    const bool wasSamn = samn::IsSamnPath(openedU8);
+    const fs::path funscript =
+        fs::u8path(wasSamn ? samn::CompanionFunscriptPath(openedU8) : openedU8);
+    if (fs::exists(funscript)) {
+        try {
+            QFile f(FromU8(funscript.u8string()));
+            if (f.open(QIODevice::ReadOnly)) {
+                const QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
+                f.close();
+                if (doc.isObject()) {
+                    QJsonObject o = doc.object();
+                    if (o.contains(QStringLiteral("inverted"))) {
+                        o.remove(QStringLiteral("inverted"));
+                        if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate) ||
+                            f.write(QJsonDocument(o).toJson(QJsonDocument::Indented)) < 0) {
+                            setFailure(tr("Could not clear the inverted flag."));
+                            return {{"applied", true},
+                                    {"suggestInvert", true},
+                                    {"reason", reason},
+                                    {"error", lastError_}};
+                        }
+                        f.close();
+                        // Reload so stroke_ matches the cleared flag.
+                        if (!reloadKeepingCurveHistory(scriptPath_)) {
+                            return {{"applied", true},
+                                    {"suggestInvert", true},
+                                    {"reason", reason},
+                                    {"error", lastError_}};
+                        }
+                    }
+                }
+            }
+        } catch (...) {
+        }
+    }
+    toolNote_ = tr("Polarity inverted · %1").arg(reason);
+    emit toolNoteChanged();
+    return {{"applied", true}, {"suggestInvert", true}, {"reason", reason}, {"error", QString()}};
+}
+
+bool PlayerController::applyRingDown(int cycles) {
+    if (scriptPath_.isEmpty() || stroke_.empty()) {
+        setError(tr("no script loaded"));
+        return false;
+    }
+    int64_t atMs = playheadMs_;
+    if (atMs < 0) atMs = 0;
+    int lastPos = 0;
+    for (const auto& act : stroke_) {
+        if (act.at > atMs) break;
+        lastPos = act.pos;
+    }
+    if (lastPos < 10) {
+        setError(tr("position too low for ring-down (%1)").arg(lastPos));
+        return false;
+    }
+    if (cycles < 1) cycles = 1;
+    if (cycles > 2) cycles = 2;
+    return applySelectionEdit(
+        tr("Ring-down"),
+        [atMs, lastPos, cycles](const std::vector<samn::Action>& actions) {
+            return samn::RingDown(actions, atMs, lastPos, cycles);
+        },
+        false, true);
+}
+
 QString PlayerController::undoText() const {
     return canUndo() ? tr("Undo: %1").arg(QString::fromStdString(editSession_.UndoLabel())) : tr("Nothing to undo");
 }
@@ -696,7 +811,7 @@ bool PlayerController::redo() {
 
 bool PlayerController::applySelectionEdit(const QString& label,
                                          const std::function<std::vector<samn::Action>(const std::vector<samn::Action>&)>& op,
-                                         bool needMarker) {
+                                         bool needMarker, bool forceStroke) {
     if (scriptPath_.isEmpty() || stroke_.size() < 2) {
         setError(tr("Open a script first."));
         return false;
@@ -705,7 +820,9 @@ bool PlayerController::applySelectionEdit(const QString& label,
         setError(tr("Mark a range on the heatmap first."));
         return false;
     }
-    const auto lane = ParseEditLane(activeLane_, vibrationFromScript_, suctionFromScript_);
+    std::optional<EditLane> lane;
+    if (forceStroke) lane = EditLane::Stroke;
+    else lane = ParseEditLane(activeLane_, vibrationFromScript_, suctionFromScript_);
     if (!lane) {
         setError(tr("Pick the Stroke lane, or Adapt for Sam Neo 2 so vibration/suction are in the script."));
         return false;

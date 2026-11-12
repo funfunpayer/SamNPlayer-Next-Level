@@ -33,11 +33,13 @@ qt_add_qml_module(samn_app
     src/player_controller.h src/player_controller.cpp
     src/player_internal.h
     src/player_script_io.cpp
+    src/player_analysis.cpp
     src/player_audio_jobs.cpp
     src/player_marks.cpp
     src/script_clock.h src/script_clock.cpp
     src/library_controller.h src/library_controller.cpp
     src/icon_provider.h src/icon_provider.cpp
+    src/device_service.h
     src/device_controller.h src/device_controller.cpp
     src/device_worker.h src/device_worker.cpp
     src/training_controller.h src/training_controller.cpp
@@ -46,6 +48,7 @@ qt_add_qml_module(samn_app
     src/frame_cache.h src/frame_cache.cpp
     src/frame_provider.h src/frame_provider.cpp
     src/generator_controller.h src/generator_controller.cpp
+    src/ai_tip.h src/ai_tip.cpp
     src/editor_controller.h src/editor_controller.cpp
     src/app_log.h src/app_log.cpp
     src/settings_controller.h src/settings_controller.cpp
@@ -60,6 +63,7 @@ qt_add_qml_module(samn_app
     qml/Main.qml
     qml/Splash.qml
     qml/GlassCard.qml
+    qml/ScrollRow.qml
     qml/TopBar.qml
     qml/PlayButton.qml
     qml/PlayerPage.qml

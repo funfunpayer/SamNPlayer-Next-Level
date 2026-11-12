@@ -28,6 +28,9 @@ struct TrackOptions {
     // Analysis rate cap: a frame closer than 1 / max_analysis_fps to the last
     // tracked frame is skipped and gives no sample. 0 = every frame (0.7).
     double max_analysis_fps = 0;
+    // Removes the camera's motion at the tip from xs and ys: shift, zoom and
+    // rotation of the background estimate, per scene, frames with a low
+    // inlier share left out (camera_motion.cpp, docs/benchmarks/DETECTION_CAMERA2D_2026-11-08.md).
     bool camera_compensation = true;
     bool scene_cuts = true;
     // Self-check: a cut must also be an outlier against the last 2 s of
@@ -87,7 +90,7 @@ struct TrackOptions {
 
 struct TrackStats {
     int lost_frames = 0;         // frames the tracker had no box
-    int camera_frames_lost = 0;  // frames without a camera estimate
+    int camera_frames_lost = 0;  // frames without a trusted camera estimate (none, or inliers under 0.5)
     int total_frames = 0;
     int valid_frames = 0;        // frames with a real tracker box
     double vertical_range = 0;
@@ -104,8 +107,12 @@ struct TrackResult {
     // the position repeats the last one), kLostUnlike = a box that no longer
     // resembles the first crop (LESSONS GD-11, spec T6).
     std::vector<uint8_t> lost;
-    std::vector<double> xs, ys;     // box centre per frame (y camera-compensated)
-    std::vector<double> frame_ys;   // box centre y in frame pixels, before compensation (tip path)
+    // Box centre per frame; with camera_compensation both axes are
+    // compensated (the tip's motion in the scene, in the pixels of the
+    // scene's first frame), otherwise frame pixels.
+    std::vector<double> xs, ys;
+    // Box centre in frame pixels, before compensation (tip path).
+    std::vector<double> frame_xs, frame_ys;
     // Partner centres in frame pixels (same length as tip when partner_box set).
     std::vector<double> partner_xs, partner_ys;
     // Extra centres in frame pixels (one series per TrackOptions::extra_boxes;

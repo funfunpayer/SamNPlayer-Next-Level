@@ -24,12 +24,26 @@ Item {
     signal fullStageToggled()
 
     Text {
+        id: titleLabel
+        objectName: "playerHeaderTitle"
         textFormat: Text.PlainText
         anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
+        text: qsTr("Player")
+        color: Theme.text; font.family: Theme.font; font.pixelSize: 15; font.bold: true
+    }
+    Text {
+        id: scriptLabel
+        objectName: "playerHeaderScriptLabel"
+        textFormat: Text.PlainText
+        anchors.left: titleLabel.right; anchors.leftMargin: 12
+        anchors.verticalCenter: parent.verticalCenter
         anchors.right: variantBox.visible ? variantBox.left : videoBar.visible ? videoBar.left : openBtn.left
         anchors.rightMargin: 12
+        // 0.7: "No Emotion Script selected" when nothing / only a video is open.
         text: ctrl.hasScript ? ctrl.scriptName + (ctrl.videoName !== "" ? "  ·  " + ctrl.videoName : "")
-                             : ctrl.videoName !== "" ? ctrl.videoName : qsTr("Open a video or a script")
+                             : ctrl.videoName !== ""
+                               ? qsTr("No Emotion Script selected") + "  ·  " + ctrl.videoName
+                               : qsTr("No Emotion Script selected")
         color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 14
         elide: Text.ElideMiddle
     }

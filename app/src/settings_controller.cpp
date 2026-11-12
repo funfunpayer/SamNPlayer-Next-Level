@@ -9,10 +9,13 @@
 #include <QUrl>
 
 #include "app_log.h"
+#include "qt_paths.h"
 
 namespace samn::ui {
 
 namespace {
+
+constexpr const char* kPrefReportPath = "generator.reportPath";
 
 QString ReadResource(const QString& path) {
     QFile f(path);
@@ -36,6 +39,8 @@ SettingsController::SettingsController(QObject* parent) : QObject(parent) {
         if (test.is_boolean()) connect_test_ = test.get<bool>();
         const auto honor = settings_->get("playback.honor_inverted");
         if (honor.is_boolean()) honor_inverted_ = honor.get<bool>();
+        const auto report = settings_->get(kPrefReportPath);
+        if (report.is_string()) report_path_ = FromU8(report.get<std::string>());
     } catch (const std::exception&) {
         // Unreadable settings: the defaults stay.
     }
@@ -84,6 +89,14 @@ void SettingsController::setHonorInverted(bool on) {
     if (on == honor_inverted_) return;
     honor_inverted_ = on;
     save("playback.honor_inverted", on);
+    emit settingsChanged();
+}
+
+void SettingsController::setReportPath(const QString& path) {
+    const QString local = LocalPath(path);
+    if (local == report_path_) return;
+    report_path_ = local;
+    save(kPrefReportPath, U8(local));
     emit settingsChanged();
 }
 

@@ -3,6 +3,7 @@
 #include <QGuiApplication>
 #include <QSignalSpy>
 #include <QTemporaryDir>
+#include <QUrl>
 #include <QtTest>
 #include <fstream>
 
@@ -32,6 +33,7 @@ private slots:
             QCOMPARE(s.logLevel(), QStringLiteral("info"));
             QVERIFY(!s.connectTest());  // 0.7 device.connect_test [false]
             QVERIFY(s.honorInverted());  // 0.7 playback.honor_inverted [true]
+            QCOMPARE(s.reportPath(), QString());  // 0.7 generator.reportPath [""]
             QCOMPARE(s.logLevels(), QStringList({"debug", "info", "warn", "error"}));
             QCOMPARE(s.configFolder(), config_.path());
             QSignalSpy changed(&s, &SettingsController::settingsChanged);
@@ -100,6 +102,35 @@ private slots:
         SettingsController s;
         QVERIFY(s.licenceText().contains("GNU GENERAL PUBLIC LICENSE"));
         QVERIFY(!s.thirdPartyText().isEmpty());
+    }
+
+    void reportPathRoundTripsAndClearsToEmpty() {
+        const QString custom = config_.filePath(QStringLiteral("metrics.jsonl"));
+        {
+            SettingsController s;
+            QCOMPARE(s.reportPath(), QString());
+            QSignalSpy changed(&s, &SettingsController::settingsChanged);
+            s.setReportPath(custom);
+            QCOMPARE(s.reportPath(), custom);
+            QCOMPARE(changed.count(), 1);
+            s.setReportPath(custom);  // unchanged: no extra save
+            QCOMPARE(changed.count(), 1);
+        }
+        QCOMPARE(QString::fromStdString(samn::Settings().get("generator.reportPath").get<std::string>()), custom);
+        {
+            SettingsController again;
+            QCOMPARE(again.reportPath(), custom);
+            QSignalSpy changed(&again, &SettingsController::settingsChanged);
+            again.setReportPath(QUrl::fromLocalFile(custom).toString());  // file: URL → local
+            QCOMPARE(again.reportPath(), custom);
+            QCOMPARE(changed.count(), 0);
+            again.setReportPath(QString());  // Default: empty = no recording
+            QCOMPARE(again.reportPath(), QString());
+            QCOMPARE(changed.count(), 1);
+        }
+        QCOMPARE(samn::Settings().get("generator.reportPath").get<std::string>(), std::string());
+        SettingsController emptyAgain;
+        QCOMPARE(emptyAgain.reportPath(), QString());
     }
 };
 

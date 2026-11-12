@@ -633,6 +633,54 @@ QString EditorController::optimizeFor(const QString& target) {
     return msg;
 }
 
+QString EditorController::improveScript(double startSec, double endSec, bool fillGaps, bool healTrackingGaps) {
+    if (!hasScript() || drag_index_ >= 0 || busy_) return {};
+    const std::vector<samn::Action>& stroke = session_.Axis("stroke");
+    if (stroke.size() < 2) {
+        setStatus(tr("The stroke needs at least 2 points."));
+        return {};
+    }
+    samn::ImproveOptions o;
+    o.start_ms = startSec > 0 ? int64_t(std::llround(startSec * 1000.0)) : 0;
+    o.end_ms = endSec > 0 ? int64_t(std::llround(endSec * 1000.0)) : 0;
+    o.fill_gaps = fillGaps;
+    o.heal_tracking_gaps = healTrackingGaps;
+    if (healTrackingGaps) {
+        try {
+            o.tracking_gaps = samn::LoadFunscript(FsPath(path_)).metadata.tracking_gaps;
+        } catch (const std::exception&) {
+            // No metadata to read: trim/fill only.
+        }
+    }
+    const QString label = tr("Improve script");
+    try {
+        const samn::ImproveResult res = samn::ImproveScript(stroke, o);
+        QStringList bits;
+        if (res.windows_healed > 0) bits << tr("healed %1").arg(res.windows_healed);
+        if (res.points_added > 0) bits << tr("+%1 pts").arg(res.points_added);
+        if (res.trimmed) bits << tr("trimmed");
+        QString msg = tr("Improved: %1 points").arg(res.after_count);
+        if (!bits.isEmpty()) msg += QStringLiteral(" (%1)").arg(bits.join(QStringLiteral(" · ")));
+        msg += tr(" — open Play to edit dots/curve.");
+        const bool strokeChanged = res.trimmed || res.points_added > 0 || res.windows_healed > 0 ||
+                                   res.after_count != res.before_count;
+        session_.Begin(label.toStdString());
+        if (strokeChanged) session_.Replace("stroke", res.actions, {});
+        if (!session_.Commit()) {
+            setStatus(msg);
+            return msg;
+        }
+        if (res.clear_tracking_gaps) clear_tracking_gaps_ = true;
+        pushCurves();
+        if (stepDone()) setStatus(msg);
+        return msg;
+    } catch (const std::exception& e) {
+        session_.Rollback();
+        setStatus(tr("%1: %2").arg(label, QString::fromUtf8(e.what())));
+        return {};
+    }
+}
+
 bool EditorController::vibrationFromSound(bool withContact) {
     if (!hasScript() || drag_index_ >= 0 || busy_) return false;
     if (video_path_.isEmpty()) {

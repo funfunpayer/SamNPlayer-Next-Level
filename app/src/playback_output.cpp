@@ -4,7 +4,7 @@
 #include <cmath>
 #include <exception>
 
-#include "device_controller.h"
+#include "device_service.h"
 #include "samn/curve_geometry.h"
 #include "samn/settings.h"
 
@@ -128,7 +128,7 @@ PlaybackOutput::~PlaybackOutput() {
     }
 }
 
-void PlaybackOutput::setDevice(DeviceController* device) {
+void PlaybackOutput::setDevice(DeviceService* device) {
     if (device_ == device) return;
     if (playing_ && device_) device_->setSessionActiveFor(this, false);
     device_ = device;

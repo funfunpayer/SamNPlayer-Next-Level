@@ -40,6 +40,9 @@ GlassCard {
     function axisColor(axis) {
         return { surge: "#e5c07b", sway: "#98c379", twist: "#e06c9f", roll: "#61afef", pitch: "#d19a66" }[axis] || Theme.textDim
     }
+    // 0.7 axis legend toolbar above the ruler (hidden when only stroke exists).
+    readonly property bool showAxisLegend: ctrl.hasScript && ctrl.laneChoices.length > 1
+    readonly property int axisLegendBand: showAxisLegend ? 34 : 0  // 28 px chips + 6 px gap
 
     // Bottom tabs: Timeline · Chapters · Bookmarks · Audio Analysis.
     // Scenes stay in the Generator Editor (D-145); the Player tab was only a redirect.
@@ -61,7 +64,7 @@ GlassCard {
         id: laneNames
         visible: lanes.visible
         x: 16; y: 46; width: 108
-        Item { width: 1; height: ruler.height; visible: ruler.visible }
+        Item { width: 1; height: root.axisLegendBand + ruler.height; visible: lanes.visible }
         // 0.7 legend chips: a click picks the lane the main curve shows.
         LaneName {
             objectName: "laneName_stroke"
@@ -107,8 +110,34 @@ GlassCard {
         readonly property int extraLanes: (vibLane.visible ? 1 : 0) + (sucLane.visible ? 1 : 0) + ctrl.axisLanes.length
         readonly property int laneH: curve.visible ? 34
             : Math.max(34, Math.min(140, (height - fixedH - (audioLane.visible ? audioH : 0)) / Math.max(1, extraLanes)))
-        readonly property int fixedH: ruler.height + (heatBar.visible ? heatBar.height + 4 : 0) + markRow.height
+        readonly property int fixedH: root.axisLegendBand + ruler.height + (heatBar.visible ? heatBar.height + 4 : 0) + markRow.height
                                       + (chapterStrip.visible ? chapterStrip.height : 0)
+        // 0.7 stack: axis legend chips (role=toolbar) before the time ruler.
+        Row {
+            id: axisLegend
+            objectName: "axisLegend"
+            width: parent.width; spacing: 6
+            visible: root.showAxisLegend
+            Accessible.role: Accessible.ToolBar
+            Accessible.name: qsTr("Curve axis")
+            Repeater {
+                model: axisLegend.visible ? ctrl.laneChoices : []
+                delegate: LaneName {
+                    required property string modelData
+                    // Capture the lane id — modelData can be stale in signal handlers.
+                    readonly property string laneId: modelData
+                    objectName: "axisChip_" + laneId
+                    chip: true
+                    name: root.laneTitle(laneId)
+                    dot: root.laneColor(laneId)
+                    selectable: true
+                    active: ctrl.activeLane === laneId
+                    onPicked: ctrl.activeLane = laneId
+                    onStepped: (d) => ctrl.stepActiveLane(d)
+                }
+            }
+        }
+        Item { width: 1; height: axisLegend.visible ? 6 : 0 }
         RulerItem {
             id: ruler
             width: parent.width; height: 22
@@ -257,7 +286,9 @@ GlassCard {
             objectName: "chapterStrip"
             width: parent.width
             readonly property int bandH: 30
-            readonly property int thumbH: 36
+            // 0.7 strip thumbs were 72 px high; keep the row a bit shorter than
+            // the decode height so PreserveAspectCrop still looks sharp.
+            readonly property int thumbH: 48
             height: sceneThumbStrip.visible ? bandH + thumbH : bandH
             // 0.7 pb.scenes: off by default in the Player.
             visible: ctrl.hasScript && ctrl.showScenes
@@ -267,11 +298,18 @@ GlassCard {
                                            Qt.rgba(86 / 255, 140 / 255, 220 / 255, 0.38)]
             readonly property var solid: ["#2f80ed", "#f28c28", "#9b51e0", "#27aea0", "#568cdc"]
             readonly property real span: Math.max(1, ctrl.viewEndMs - ctrl.viewStartMs)
-            // Centre of slot i in [viewStartMs, viewEndMs], clamped to the video.
+            // Power-of-two grid (same idea as the Generator frame strip): zooming
+            // lands on the same FrameCache keys again instead of new seeks.
+            readonly property real thumbGrid: {
+                const step = Math.max(1, span / 24)
+                return Math.pow(2, Math.floor(Math.log2(step)))
+            }
+            // Centre of slot i in [viewStartMs, viewEndMs], snapped and clamped.
             function thumbMs(i) {
-                const raw = ctrl.viewStartMs + (i + 0.5) * (ctrl.viewEndMs - ctrl.viewStartMs) / 24
-                const hi = root.mediaDuration > 0 ? root.mediaDuration - 1 : raw
-                return Math.min(Math.max(0, raw), Math.max(0, hi))
+                const raw = ctrl.viewStartMs + (i + 0.5) * span / 24
+                const snapped = Math.round(raw / thumbGrid) * thumbGrid
+                const hi = root.mediaDuration > 0 ? root.mediaDuration - 1 : snapped
+                return Math.min(Math.max(0, snapped), Math.max(0, hi))
             }
             Row {
                 id: sceneThumbStrip
@@ -295,8 +333,8 @@ GlassCard {
                         height: sceneThumbStrip.height
                         asynchronous: true
                         fillMode: Image.PreserveAspectCrop
-                        sourceSize.height: 40
-                        source: "image://frames/" + Math.round(ms) + "/40/" + encodeURIComponent(ctrl.videoPath)
+                        sourceSize.height: 72
+                        source: "image://frames/" + Math.round(ms) + "/72/" + encodeURIComponent(ctrl.videoPath)
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
@@ -456,6 +494,8 @@ GlassCard {
                 text: qsTr("Add from selection"); enabled: ctrl.hasMarker
                 onClicked: if (ctrl.addChapterFromSelection(chapterName.text)) chapterName.text = ""
             }
+            HelpChip { key: "pb-chapter-add"; anchors.verticalCenter: parent.verticalCenter }
+            HelpChip { key: "pb-chapter-hint"; anchors.verticalCenter: parent.verticalCenter }
             Text {
                 textFormat: Text.PlainText
                 anchors.verticalCenter: parent.verticalCenter
@@ -486,6 +526,8 @@ GlassCard {
                 text: qsTr("Add at playhead"); enabled: ctrl.hasScript
                 onClicked: if (ctrl.addBookmark(bookmarkName.text, root.playheadPosition)) bookmarkName.text = ""
             }
+            HelpChip { key: "pb-bookmark-add"; anchors.verticalCenter: parent.verticalCenter }
+            HelpChip { key: "pb-bookmark-hint"; anchors.verticalCenter: parent.verticalCenter }
         }
         MarkList {
             anchors.top: bookmarkAdd.bottom; anchors.topMargin: 10

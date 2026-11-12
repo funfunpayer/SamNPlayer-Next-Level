@@ -2,7 +2,213 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 8 Nov 2026, Claude, branch `claude/samn2-kernel-modes`: `ModeRegistry` (D-166); the tab row, the Ctrl+N keys and the page stack read it (handover below). No visible change. Earlier: 8 Nov 2026, Claude, branch `claude/samn2-json-fallback`: nlohmann_json comes from the system package first, then the git-clone fallback main already had (handover below). No code behaviour changed. Cursor, same day: probe-on-link warning box (#191). Earlier: 7 Nov 2026, Claude, branch `claude/samn2-vision-bench`: `samn_bench`, the detection benchmark, and its baseline (handover below). No engine behaviour changed. Before: the video playhead extrapolation (D-164, `claude/samn2-playhead`, #163) and the `DeviceWorker` move (#166) are merged. Also on main: 8 Nov 2026, Claude, branch `claude/samn2-parity-refresh`: `docs/PARITY.md` audited against `main` (#193) and recounted, new `docs/PARITY_REMAINING.md` (handover below). Documentation only, no code changed. Before that: 8 Nov 2026, Claude, branch `claude/samn2-json-fallback`: nlohmann_json comes from the system package first, then the git-clone fallback main already had (handover below). No code behaviour changed. Cursor, same day: probe-on-link warning box (#191). Earlier: 7 Nov 2026, Claude, branch `claude/samn2-vision-bench`: `samn_bench`, the detection benchmark, and its baseline (handover below). No engine behaviour changed. Before: the video playhead extrapolation (D-164, `claude/samn2-playhead`, #163) and the `DeviceWorker` move (#166) are merged.
+
+**Last update:** 11 Nov 2026, Claude, branch `claude/samn2-handover-docs`: handover of the review-fix PRs and the Generator layout (docs only). Quality first, then speed.
+
+## Handover: review fixes, Generator layout, working rules (11 Nov)
+
+**Merged since the last Claude handover** (each after an independent review and four green jobs unless noted): #216 label tracking VFR regression, #217 intensity arc black stretches with codec noise (follow-up of #168), #220 DeviceService review fixes, #221 equal-timestamp frames and ffmpeg tests that fail instead of skip on CI (the last commit of #221 was Cursor's and not independently reviewed), #240 frame reader: a time of 0 after the stream start is not a time (regression of #221, found on OpenCV 4.6), #239 Generator layout.
+
+**Generator layout (#239, D-171).** The Create side (Video, Feel, Create) is one scroll area; the Feel card shows style, device, scene, balance and vibration source, the rest is behind "More feel options" (opens by itself, toggle hidden, once areas or masks exist). Under 1180 px the project panel folds (auto-folded only; by hand always possible); toolbars wider than their place scroll (`ScrollRow.qml`); `VideoTransport.allowTight` (Generator only) drops the volume slider, then the two 10 s buttons. **Layout lesson (Windows CI):** a Text in a RowLayout without `Layout.fillWidth` keeps its full width as the row's minimum even with `Layout.minimumWidth: 0`; a layout smaller than its minimum arranges its children at the minimum, so they overflow. Font metrics decide how far (306 px Linux, 578 px Windows). Give shrinkable texts `fillWidth` and cap them at `implicitWidth`. `generator_qml_test` prints the layout hints of the column's children when a row sticks out.
+
+**Open Claude PRs.** #241 camera compensation review fixes of #201: the carry and the 3 px fallback could not be made safe (shake, parallax, stops: independent review, five author variants all failed on at least two scenes), so a gated frame adds nothing again; kept: plausibility bounds, c6 3 px share, held box not across cuts, 5 new bench scenes + `pos_err_p95_px`. On the bench it is identical to main; acceptance rule 2 is not met (guards only). Independent re-review pending.
+
+**Working rules agreed with the Owner.** claude/* PRs are merged by Claude after an independent review and four green jobs (Linux, Windows, ASan+UBSan, TSan). Feature PRs do not touch `docs/AGENT_STATE.md` (Cursor merges constantly and every touch conflicted); the handover follows in a docs PR. A test that fails once and passes on a rerun is a bug until its log is read: the CI per-function step now keeps the first run's log. CI note: the Linux runners had an apt/DNS outage of several hours on 11 Nov (install-qt-action: "Temporary failure resolving"): rerun failed jobs, do not change code.
+
+**Left (Claude side).** `.sam` read-only import (D-170 decided: read, never write), help chips and handbook parts, audio follow-up findings of #200 (audio_tempo.h limits comment, audio_onsets.cpp:255, improve.cpp:232 loop), engine PR-3 (loss flag, confirmed cuts, periodic bridge, sub-sample peaks), kernel next slice (extra-mode page model, Scene Map as a registered module), Speech-Hold / Feel strip, posters in the create queue.
+
+## Handover: camera POV core slice 1 (10 Nov)
+
+Core only. `ClassifyPov` reads a 3×3 occupancy grid per step and returns `unknown` | `first_person` | `third_person`. Fail closed: all-zero, NaN/Inf, large-and-split, a run shorter than `min_run_ms`. Fitted `scale_gate` / `split_gate` / `cy_gate` / `min_run_ms` on the synthetic grids in `tests/core/pov_test.cpp` (no real frames yet). No OpenCV in core.
+
+- **API:** `core/include/samn/pov.h` — `PovKind`, `PovKindName`, `PovSignals` (`step_ms`, `grid`), `PovSegment`, `PovOptions`, `ClassifyPov`. Caller's options are not modified.
+- **Tests:** `tests/core/pov_test.cpp` (synthetic grids only).
+- **Left open:** vision `MeasurePovSignals`, UI, `.scene.json` write, scene_roles, ONNX. Not in 0.7 (note in `PARITY_REMAINING.md`).
+
+## Handover: Training + Library HelpChips (10 Nov)
+
+PARITY_REMAINING item 21 (placements only). HelpChips next to the main Training and Library controls; session-settings sliders already had `training.*` chips via `SettingRow`. Handbook parts still open.
+
+- **Training:** Mock `training.mock`; Intensity (named programs) `training.tier`; Session Mode `training.session-mode`; stage switch `training.stage`; Feedback `training.feedback`. Existing slider keys unchanged.
+- **Library:** Local Files `library.local-files`; Recent `library.recent`; Favorites `library.favorites`; Scripts title `library.scripts`; Analysis title `library.analysis`.
+- **Tests:** `training_qml_test` `helpChipsResolveOnThePage`; `shell_qml_test` `libraryHelpChipsResolve` (open/Esc on Local Files). `helpKeysInTheQmlSourcesExist` covers the new keys.
+- **Left open:** handbook parts for audio vibration, BPM from audio, Sound Curve, Auto sync; more placements elsewhere.
+
+## Handover: README + light GUI polish (10 Nov)
+
+README Player / Generator / Devices / Status only — no version bump, no 100 % parity claim. HelpChips mentioned generically (Training/Library placements may still be open).
+
+- **README:** Player Suggest (polarity / O-zone / ring-down), Script check & analysis, axis chips, scene thumbs, ? chips; Generator Improve script on the review card; Settings Device Previous runs, System metrics path, Updates check+link. Status: Player/Training strong, Generator review improving, first release when core paths feel solid.
+- **Bugs:** Improve panel `lastStatus` and Playback Suggest `zoneNote`/`actionNote` lingered after a new script (Doctor already cleared its verdict). Cleared on `scriptChanged`.
+- **Polish:** Improve blurb says Start/End 0 = leave that end; Previous runs heading says newest first. `PositionGauge` knob `y` and Inspector channel fill follow reduced motion (`Theme.animFast` / duration 0). Training start-blocked flash does not run under reduced motion.
+- **Tests:** `generator_qml_test` `improvePanelShowsAndRuns` opens a second script and the status hides; `inspector_qml_test` `playbackSuggestCard` same for O-zone / ring-down notes.
+- **Left open:** Improve extras (audio tempo / rhythm / repair span), report engine buttons, feel_heatbands.
+
+**Last update:** 11 Nov 2026, Cursor, branch `cursor/gen-ai-tip-635a`: Suggest tip (AI) pending Apply. Rebased onto main after #236/#238. Do not touch feel_heatbands / Speech-Hold / handbook / `.sam`.
+
+## Handover: Generator Suggest tip (AI) (10 Nov)
+
+PARITY_REMAINING item 17 first slice. Reuses the hybrid re-acquire student/NudeNet path (`models/student/student.onnx` preferred, else `models/nudenet.onnx`). Generator → *Suggest tip (AI)* lists detections on the shown frame and, when a tip-class box matches (glans ↔ penis, no other-class fallback), sets a **pending** green proposal. **Apply AI tip** commits the box; AI never writes the curve (D-057). No model / no ONNX: button disabled, status explains, no crash. Fake detector in tests when CI has no weights.
+
+- **App:** `ai_tip.h` (`FindAiTipModel`, `ListAiHits`, `PickExpectedTip`); `GeneratorController::suggestAiTip` / `applyAiTip` / `dismissAiTip` / `aiTipAvailable`; QML `suggestAiTip` / `applyAiTip` / `aiTipProposal`. Hybrid `MakeHybridPropose` shares the same lookup.
+- **Tests:** `aiTipHelperPicksMatchingClassWithoutFallback`, `suggestAiTipStaysPendingUntilApply`, `dismissAndPickAiDetectionStillNeedApply`, `suggestAiTipOnTinyOnnxDoesNotWriteTheBox` (QSKIP without ONNX); `generator_qml_test` `suggestTipAiDisabledWithoutModelAndApplyCommits`.
+- **Left:** 0.7 AI-assist collapsible, Show all AI tags as Tip/Shift-contact, expected-class select, Suggest Tip+2nd, scene proposals.
+
+## Handover: Player BPM from onsets (10 Nov)
+
+Owner: wire D-168 `EstimateTempo` / `AssessTempo` into Player "From audio". Core already had onsets/tempo; the Player still called `EstimateBpmFromLoudness` only.
+
+- **Core:** `PickPlaybackAudioBpm` (`audio_tempo.h`). Onsets win when `AssessTempo.reliable` (thresholds unchanged: `kTempoMinConfidence` 0.30, `kTempoMinConfidenceStrict` 0.60 when the active sound is mostly noise or speech-like, mostly-silence at `active_share` < 0.25). Else `EstimateBpmFromLoudness`. Folded 20–240.
+- **Player:** `guessBpmFromAudio` decodes the first 10 min with `AudioLevelDecoder` `withOnsets` (same pass as loudness; `OnsetCurve` values drained into `TempoAccumulator`, no whole-file PCM). Status "N BPM from audio." when onsets win, "N BPM from audio (loudness)." on fallback.
+- **Tests:** `tests/core/audio_bpm_test.cpp` (high-confidence onsets win over a conflicting loudness beat; silence / weak pulse / speech → loudness; both fail → 0; music/silence/speech through `EstimateTempo` + `AssessTempo`). App: `guessBpmFromAudioMeasuresClickTrack`, `audioLevelOnsetsOptional`.
+- **Stay off:** feel_heatbands, Speech-Hold, handbook, `.sam`, POV, AI tip, Training audio paths.
+
+## Handover: generator.reportPath (10 Nov)
+
+PARITY_REMAINING item 3/6 (the path key only). Settings → System (health check tab) has a Generator metrics card: path field, Choose… (`FileDialog` SaveFile), Default (clears to `""`), status empty → "No metrics recorded yet (path empty)." / non-empty → the path. Empty means no recording; there is no report engine yet, so no Show summary / Show model / Learn from judgments. Left open: `playback.feel_heatbands`, the three report-engine buttons.
+
+- **App:** `SettingsController::reportPath` / `setReportPath` (`generator.reportPath`; `file:` URLs stored as a local path). QML `reportPathField` / `reportPathChoose` / `reportPathDefault` / `reportPathStatus`.
+- **Tests:** `settings_controller_test` `reportPathRoundTripsAndClearsToEmpty`; `shell_qml_test` System tab empty/set/clear status.
+
+## Handover: Generator Improve panel (10 Nov)
+
+PARITY_REMAINING item 10 (the panel pieces only). Review card on Generator Create: Start (s) / End (s) trim (0 = unbound), Fill gaps (default on), Heal tracking gaps (default on), button Improve script. `EditorController::improveScript` wraps `samn::ImproveScript` (trim → heal → fill); same save/reload as Optimize for. Status `Improved: N points (healed N · +N pts · trimmed) — open Play to edit dots/curve.` Left open: Align fill to audio tempo, audio check, Rhythm bridge, Repair this span.
+
+- **App:** `EditorController::improveScript(startSec, endSec, fillGaps, healTrackingGaps)`; QML `improvePanel` on `GeneratorPage` after `qualityBox`. HelpChips: `generator.start-s` / `generator.end-s` / `gen-improve-fill` / `gen-improve-heal`.
+- **Tests:** `editor_controller_test` `improveScriptTrimsFillsAndHeals`; `generator_qml_test` `improvePanelShowsAndRuns`.
+## Handover: device diagnostics history (10 Nov)
+
+PARITY_REMAINING item 3 (the history piece only). After each finished `RunDiagnostics` (including interrupted) the worker appends one JSONL line. Empty `device.diagnosticsHistoryPath` → `config_dir()/device_diagnostics_history.jsonl`. `DeviceController::getDiagnosticsHistory` returns newest-first; Settings → Device lists `date (Mock|device) — N commands, M errors[, interrupted]`. Name/kind are stamped from the session (the report JSON has none). No Choose… path field (override is the settings key, tested in C++). Left open from that slice: feel_heatbands (`generator.reportPath` is Settings → System).
+
+## Handover: device diagnostics history (10 Nov, merged #231)
+
+PARITY_REMAINING item 3 (the history piece only). After each finished `RunDiagnostics` (including interrupted) the worker appends one JSONL line. Empty `device.diagnosticsHistoryPath` → `config_dir()/device_diagnostics_history.jsonl`. `DeviceController::getDiagnosticsHistory` returns newest-first; Settings → Device lists `date (Mock|device) — N commands, M errors[, interrupted]`. Name/kind are stamped from the session (the report JSON has none). No Choose… path field (override is the settings key, tested in C++). Left open: `generator.reportPath`, feel_heatbands.
+
+- **Core:** `diagnostics.h` `DiagnosticsHistoryEntry`, `AppendDiagnosticsHistory` / `LoadDiagnosticsHistory`, `HistoryEntryFromReport`. Tests in `device_diagnostics_test.cpp`.
+- **App:** `DeviceWorker::RunDiagnostics` appends; `getDiagnosticsHistory` / `diagnosticsHistoryPath` / `setDiagnosticsHistoryPath`. QML under the Device diagnostics card (`diagHistoryLine`). Tests: `diagnosticsOnMock`, `diagnosticsCanBeCancelled`, `diagnosticsHistoryPathDefaultAndOverride`, `settingsDeviceTabTestsTheMockDevice`.
+
+## Handover: axis legend chips (10 Nov, #228)
+
+- **GUI:** `PlayerTimeline` horizontal axis legend chips above the ruler; `LaneName` Left/Right/Home/End via `Keys.onPressed` (Qt 6 has no `onHomePressed`/`onEndPressed`). Chip `MouseArea` at `z:10`; Repeater captures `laneId`.
+- **Tests:** `player_page_qml_test` delivers press/release to the chip `MouseArea` (window `QTest` clicks miss stacked feel-stage areas).
+- **Docs:** README Player scenes/thumbs/legend/Alt+B; PARITY axis-legend tick.
+
+## Handover: script analysis (10 Nov, merged #229)
+
+- **Core:** `motion_classify.h` (0.7 `motionx.Classify`), `motion_chapters.h` (`Chapters`), `script_analysis.h` (`AnalyzeScript` / `summarizeStates`). An empty `ClassifyOptions` does not smooth; only `AnalyzeScriptActions` sets `SmoothRadius` 2. `ScriptChapters` classifies with smoothing off.
+- **Player:** `scriptAnalysisSummary` after a script with at least 4 points, on the Playback card "Script check & analysis" (title gains "· summary ready"). Stored `metadata.chapters` replace the automatic labels (empty name → "chapter", end at or before the start → start+1). Nothing is written back.
+- **Tests:** `tests/core/motion_classify_test.cpp`, `motion_chapters_test.cpp`, `script_analysis_test.cpp`, `tests/app/player_controller_test.cpp` `scriptAnalysisOnOpen`.
+
+## Handover: `claude/samn2-label-dupms` (10 Nov, label tracking: equal timestamps; no silent skips)
+
+Follow-up to the review of #216 (merged). Rebased onto main after #231 (diagnostics history) and #228 (axis legend). Cursor handovers for those stay; this PR's handover is below.
+
+- **Bug:** frames that share a millisecond (equal timestamps) were found wrongly by the backward decode of `TrackBetweenKeys`: the seek can land on the second frame of a run. A landing rule that only applied when earlier frames of the run were already in `times` (`k > 0`) accepted that second frame when the wanted frame was the first of the group (`k == 0`). Happens on all-intra mjpeg and on a keyframe in the middle of a group (mpeg4 GOP 7). Window 1 silently tracked the wrong frames; a larger window stopped with "the video changed between two reads". Falling back to the first key then re-decoded the stretch from the start (~10× `frames_decoded`: 2205 vs 205 on mpeg4 GOP 7, window 1).
+- **Fix** (`engine/src/label_tracking.cpp`, decode lambda): `k` = frames before the chunk's first frame with the same millisecond; `in_run` = an equal-time neighbour either side, **including the first of the group**. For a run that has a previous distinct time in `times`, the first seek goes there (lands before the run). A landing on the time counts only after an earlier frame was grabbed; `last_try` does not waive that. Then `k` frames are stepped over. The first group of the stretch (no previous time in `times`; the forward seek may already have started inside it) decodes on a fresh reader sought like the forward run's — OpenCV can drop frames of the run a re-seek lands in (mjpeg). Only those few chunks, so decode does not restart from 0 for every chunk. A frame outside a run behaves as before. `FrameReader::Grab` keeps POS_MSEC of 0 on later frames (a real t=0 duplicate); substituting the nominal frame time made that frame unseekable.
+- **Tests** (ffmpeg makes the clips; the encoder and `setpts` refuse equal timestamps, so they are encoded without B-frames and `-bsf:v setts` rewrites the timestamps in a stream copy into Matroska): `...duplicate timestamps equals the reference` (mpeg4 pairs and triples, keys at 0 and 500 ms, windows 1/3/24) and `...keys inside runs of equal timestamps equals the reference` (mjpeg pairs and triples, mpeg4 GOP 7 pairs and triples, mpeg4 GOP 7 pairs starting at 1.3 s; stretch of 4 s; keys at the start, at a run start and between runs; windows 1, 3, 24 and the default adaptive one; boxes bit-exact against the old hold-everything copy; `frames_decoded` bounded, so no re-decode from the start per chunk). **Failed on the unfixed landing** (`k == 0` accepted without an earlier frame): mjpeg from 0, window 1, "the video changed between two reads"; mpeg4 GOP 7 window 1 decoded 2205 vs 205. Passes after the fix. **Only these clips are tested**: other codecs (x264, all-intra besides mjpeg), run lengths above 3 and real recordings are not.
+- **No silent skip:** the ffmpeg-based label tests call `FfmpegOrFail()`: no ffmpeg and env `CI` or `SAMN_NATIVE_REQUIRED` set fails the test. A failed **duplicate-timestamp** clip make fails (no skip). A failed **VFR / long-GOP** clip make skips that variant (some ffmpeg builds cannot make one recipe). On **Windows these tests do not run**: the runner has no ffmpeg program and sets `SAMN_NATIVE_REQUIRED`, so the skip is accepted, with a message on stderr and in the doctest log (ctest shows a passing test's output only with `-V`). Elsewhere a plain `SKIPPED` message. The Linux build job and the ASan/UBSan job install `ffmpeg` with apt; the TSan job does not (it runs only `generate*`).
+- **TSan:** the label tests are not in the TSan filter: they take minutes in Release and the CSRT tracker is far slower under TSan. ASan/UBSan runs the whole `engine_tests`.
+- **Docs:** "the output never depends on the window" in `docs/benchmarks/LABEL_MEMORY_2026-11-08.md` now says what is tested.
+- **Not verified:** Windows/MSVC, the sanitizer jobs, real clips with equal timestamps (only ffmpeg-made ones).
+
+## Handover: `claude/samn2-label-vfr` (9 Nov, label tracking: VFR fix and long-GOP window)
+
+Follow-up to #198 (label tracking memory), which was merged before its review finished. **#198 broke variable-frame-rate clips** (phone footage): the backward decode seeked by the nominal rate and required the exact frame time, so it failed with "the video changed between two reads" where the old code worked. This PR fixes that and the rest of the review. Below: the whole current design.
+
+Owner priority: CPU/RAM efficient AI. `TrackBetweenKeys` (`engine/src/label_tracking.cpp`) kept every small frame of the stretch in a `std::vector<cv::Mat>` (about 0.7 MB per frame at 640 px wide, up to `max_frames` = 1500, so about 1 GB) because the backward run needs the frames in reverse.
+
+- **Change:** the forward run streams (read, track, drop; frames nothing will track are only grabbed). The backward run decodes the stretch in chunks (24 frames, growing to at most 96 when seeks are measured to be costly, i.e. a long GOP) and decodes the next chunk on another thread into a second reused buffer; at most two windows are alive. The wanted frame is found by its time (seek, grab until the time, retry further back if the seek landed after it), so variable-frame-rate clips work. A lost track stops the backward run. New `FrameReader::Grab` / `Retrieve` (Read is both). `BetweenKeysOptions` got `window_frames`, `max_window_frames`, `stats`; `samn_engine` links Threads.
+- **Result (synthetic, `docs/benchmarks/LABEL_MEMORY_2026-11-08.md`):** GOP 12 720p: RSS 758 to 137 MB (5.5x), CPU -2 %. Long GOP (H.264, GOP 250): RSS 769 to 243 MB (720p, 3.2x, CPU +5 %) and 802 to 281 MB (1080p, 2.9x, CPU +18 %). The acceptance of 5x and +10 % holds for the short GOP only; the long GOP is the second decode plus the seeks. Boxes bit-identical in every case.
+- **Tools/tests:** `samn_label_mem` (`--make`, `--track`; by hand, `EXCLUDE_FROM_ALL`); engine tests against a copy of the old algorithm: bounded window, cut clip, cancel after k polls, box-vs-stretch check order, VFR and long-GOP clips (these use the ffmpeg program and say SKIPPED where it is missing; CI has it).
+- **VFR:** fixed and tested: the engine test makes VFR clips with ffmpeg; on main's code (#198) it fails with "the video changed between two reads", with this change boxes equal the old algorithm's.
+- **Not verified:** Windows/MSVC, real clips (phones: B-frames, GOP 30 to 60; only synthetic VFR and GOP made by ffmpeg were tried), the Qt `label_controller` (not built here; its call site is unchanged).
+- **Ideas not done:** keep the forward run's last chunk instead of decoding it again; a `FrameReader` that reports the GOP.
+
+## Handover: `claude/samn2-device-service-fixes` (9 Nov, follow-up to #213)
+
+- **Fixed:** `class DeviceController : public samn::ui::DeviceService` (the unqualified base made qmltyperegistrar drop the prototype and `statusChanged` in the qmltypes on Qt 6.4); D-169 and `device_service.h` no longer claim "exactly what the consumers call" (battery, `generation`, `sessionActive` are for the UI and tests).
+- **Fake is as strict as the controller:** `FakeDeviceService` refuses connect / disconnect while a hold is active and connect while connected (records `refused ...`).
+- **New tests, each shown failing with its mutation:** Training releases its hold before it disconnects (`trainingConnectsAMockAndClosesItAgain`); a changed PlaybackOutput device hands the hold over (`swappingTheOutputsDeviceMovesTheHold`); a status change emits `lanesChanged` (`aStatusChangeUpdatesThePlayersLanes`); `theFakeRefusesWhatTheRealControllerRefuses`.
+- **Not modelled:** `emergencyStop` dropping queued levels (the fake has no queue).
+
+## Handover: `claude/samn2-intensity-arc` (6-8 Nov, D-165 first slice: intro and climaxes)
+
+Owner: find the intro and the climaxes ("Höhepunkte") of a video from its sound and samples of its picture; cinema-grade, clean, lean, measured before and after, little CPU and memory. This slice is core only: no decoder change, no FFT, no Generator change. PR #168, reviewed and refuted three times, then verified with caveats and merged at the third review's state; the fourth review's fix follows in `claude/samn2-intensity-arc-fixes`. This state answers the third review (empty stretches, scene cuts without sound, the loud-opening guard, test bounds, the documented limits, `steps()` overflow) and the fourth (black stretches with codec noise: empty runs of 10 s or more reach the arc without motion or sound, `kEmptyRunMs`; a step that would overflow the clip's times is rejected).
+
+- **Core:** `intensity_arc.h` / `intensity_arc.cpp`, `ComputeArc(PhaseSignals, ArcOptions)` -> `IntensityArc` (`detail` 4 s and `arc` 20 s curves, `intro_end_ms`, `peaks` with `t_ms`, `start_ms`, `end_ms`, `prominence`, `confidence`; the primary first). Design in D-165. Each constant has its reason next to it, and the fitted ones say so.
+- **The design in one line each:**
+  - A climax is a rise **within the action** after the intro, never against the intro.
+  - It is measured **per input against that input's own level**, so a climax in the sound alone counts; but the arc blends 0.6 / 0.4, so it needs a much larger rise than one in the picture.
+  - Scene cuts and flashes are taken out of the motion by a running median over 5 steps (also at the clip's ends).
+  - Empty steps (black, or still and silent) count in none of the levels, flanks or noise; `SuggestPhases` gives the arc only the span from the first to the last picture.
+  - It stands over the rest of the action (`climax_gain`) and over the action beside it: 1.6x, `climax_gain` behind a sudden edge, 1.15x for a sudden last step held to the clip's end.
+  - It takes less than half the action.
+  - Second and third climaxes only in a clip that is calm outside its climaxes.
+  - An intro must be calm (motion or sound at most half its level in the action).
+  - A clip that opens at its top gets no climax suggestion there (conservative); without a clear rise from its left flank, the arc must fall halfway towards the action beside it, clear of the noise, before the clip's start.
+- **`SuggestPhases`:** keeps its empty-stretch rule and takes intro and climaxes from the arc. Every climax is the longest free stretch of its peak (never cut by black, never merged past `climax_max_ms`). The cool-down follows the last climax when it ends calmer than the action before it. `min_intro_ms` scales below two minutes. `PhaseSignals::tempo` and `PhaseRuleOptions::active_share` are removed (no caller set them).
+- **Measured** (`docs/benchmarks/INTENSITY_ARC_2026-11-06.md`):
+  - 24 scenarios: climax hits 369 -> 560 of 600, false climaxes 54 -> 10, intro hits 567 -> 600.
+  - 18 random-arc families (six new: black with codec noise, peak beside a black end, loud opening, empty middle, empty start or end, scene cuts without sound), train and held-out seeds: no family worse than the old rules under the acceptance written in the bench. That acceptance is: climax hits at least theirs; intro hits at most 2 % fewer; false climaxes per clip at most theirs + 0.02, or + 0.10 where theirs exceed 0.25 (fast random walks, where neither is reliable).
+  - The held-out seeds were looked at more than once in the third review (the doc says when and why), so they are no longer untouched data.
+  - With strict 5 s grading three family rows fail (shown in the doc).
+  - The thresholds are fitted on synthetic data only; the doc has a sensitivity grid. `kFlankGain` and `kLastStepGain` are knife edges.
+  - CPU about 4x the old rules (110 us vs 28 us per call at -O2; 4.1-4.4 ms vs 0.9-1.3 ms on a 2 h clip, on a loaded machine).
+- **Tests:** `tests/core/intensity_arc_test.cpp`. The cases that failed before each fix are listed in the PR history:
+  - edge climax, plateau, short clips, close bursts, black cuts, merges;
+  - calm intro + even action, sound-only climaxes, fade cool-down, staircase top step, boxed-in climax;
+  - random walks against absolute bounds; confidence as properties (0.7x when sound and motion top out apart);
+  - long empty stretches (middle, tail, lead-in, black or still; black with codec noise, silent or with music), a peak beside a black stretch, scene cuts without sound (also on the first and last steps), a loud opening under +-35 % jitter.
+
+  `phase_rules_test.cpp` unchanged. Bench: `tests/bench/phase_bench.cpp`, target `phase_bench`, not in ctest, exit 1 when the acceptance fails.
+- **Limits:**
+  - Synthetic only; real clips are the gate.
+  - Worse than the old rules on the review's probes: staircases with jitter sd above about 0.2; random walks faster than the bench's (1.1-1.7 false climaxes per clip vs 0.8-0.9); quantised random walks (0.44 vs 0.27, made worse by the running median; three fixes tried and reverted; cannot occur in the app, whose motion quantum is about 1.7e-6 and whose loudness is a float RMS in dB); app-like loudness (`NormalizeLoudness`) adds spurious intros on ramps and staircases (intro hits 994 -> 891 and 809 -> 624, as at 6e4d314); calm tails (0.010 vs 0); a lit, still, quiet but not silent lead-in over 60 % (0.53 vs 0).
+  - The bench's own walks: 0.17 false climaxes per clip at step 0.02 (old rules 0.32-0.34).
+  - A sound-only climax needs about 2x the rest of the action.
+  - Slow build-ups of 100-500 s: 15 of 25.
+  - Bursts 20 s apart fuse into one climax.
+  - A last staircase step under 1.15x is no climax.
+- **Left alone on purpose:** `LabelController::finishSuggest` divides the 500 ms loudness by the loudest step after `NormalizeLoudness` already scaled it. Not behaviour-neutral for the arc (rescaling the loudness changes the 0.6 / 0.4 blend; on cases A-E the peak times moved by up to 69 ms and the confidence by up to 0.07), so it stays until a slice measures it.
+- **D-number:** D-165, because the open playhead PR #163 takes D-164. If #163 lands with another number, or another PR takes D-165 first, renumber this one.
+- **Not verified:** real clips (synthetic only), Windows / MSVC, the Training stage with several confirmed climaxes on a real film.
+- **Next slices (roadmap, one per PR):**
+  1. one shared 11 kHz mono streaming decode plus an `AudioAnalyzer` (spectral-flux onsets);
+  2. tempo from the onset curve (autocorrelation, a log-Gaussian prior at 72 BPM, octave folding, a confidence);
+  3. the heart-rhythm default tempo, `base_rhythm.h` (`generator.base_bpm` 72, `generator.base_bpm_variation` 3 %, range 60-90), blended with the measured tempo; rhythmic fill stays opt-in until it beats linear fill on synthetic gaps;
+  4. beat tracking (Ellis dynamic programming) as the AU-04 fallback for rounds without a visible beat bar;
+  5. a speech / music / silence gate.
+- **Cleanup list (found by the read-only analysis, not done here):** `AutoFillGapThreshold` always gives 800 (min of at least 2000 and `kDefaultFillGapMs` 800: a dead rule); `ImproveOptions::audio_hz` has no caller; three percentile helpers in core (`audio_envelope.cpp`, `script_quality.cpp`, and the one that moved from `phase_rules.cpp` to `intensity_arc.cpp`); three owners of an `AudioLevelDecoder` (label controller, editor controller, each `AudioLevelItem`), each decoding the same file again.
+
+## Handover: `claude/samn2-kernel-device-service` (9 Nov, kernel / modules, slice 2: DeviceService)
+
+- **Done:** `app/src/device_service.h` (pure virtual `DeviceService`, QObject, owns `statusChanged`). `DeviceController` derives from it (methods `override`; behaviour unchanged). `PlayerController`, `TrainingController`, `PlaybackOutput` hold `QPointer<DeviceService>`; `PlaybackOutput::setDevice` takes a `DeviceService*`; Player and Training have `setDeviceService` for C++ and keep `setDevice(DeviceController*)` and the `Q_PROPERTY(DeviceController* device)` for QML (their `device()` getter is `nullptr` when the service is no controller).
+- **Tests:** `tests/app/fake_device_service.h` (the fake) and `tests/app/device_service_test.cpp` (new): levels in order, the hold follows playing, emergency stop, stroker positions, a device deleted mid-play, a lost connection, Training with an existing connection, with a mock it connects and closes again, device lost / swapped, Training emergency stop. The existing `playback_output_test` and `training_controller_test` are unchanged and keep the real controller on purpose: they assert the mock device's log lines and the real worker's behaviour.
+- **Next slice:** modes registry loaders on a `QAbstractListModel` (loaders of other extra modes are recreated when one is added); then Scene Map as a registered module.
+
+## Handover: `claude/samn2-camera-2d` (8 Nov, detection plan PR-2: 2-D camera compensation)
+
+Numbers: `docs/benchmarks/DETECTION_CAMERA2D_2026-11-08.md` (+ `_before.csv` / `_after.csv`, all 19 scenes, the old engine run on this branch first).
+
+- **Engine:** `EstimateCameraMotion` (`camera_motion.cpp`, `track_parts.h`) returns the full similarity and the inlier share; `TrackBox` takes its motion at the tip's previous centre (`m * p - p`), accumulates x and y per scene (reset at cuts, Savitzky-Golay 9/2 as before) and subtracts both; `frame_xs` (new) / `frame_ys` keep frame pixels for the tip path (`BuildTrajectory` uses them). Gate: inlier share under 0.5 adds nothing (`camera_frames_lost` counts those frames too). RANSAC distance 1 px instead of 3 (a moving foreground otherwise joins the background's fit and keeps the share high); `CameraMotionY` (tip finder) keeps 3 px. Axis choice on the compensated x and y. No reset at a re-anchor without a cut (same scene, same camera). No rescaling under zoom (the stroke keeps the frame's scale). Track cache version 7. Defaults unchanged (`camera_compensation` on where it was).
+- **Measured:** track r `pan_x` 0.797 -> 0.999, `zoom` 0.948 -> 0.996, new `pan_x_fast` 0.663 -> 0.999 (script r 0.936 -> 0.988), new `pan_zoom` 0.800 -> 0.984; median r 0.9775 -> 0.9865. **Rule 1 fails on one row:** `light_cut_jump` track r 0.705 -> 0.689; the old value was lifted by the disc's own stroke leaking into the 3 px camera estimate (correction correlated 0.71 with it, now -0.04); the new track equals compensation off (0.689 vs 0.687); script r 0.661 -> 0.666. No-camera scenes: identical to 4 decimals except `distract_*`, `noise_jpeg` r min and `occl_4s` track r (at most 0.0005; a still camera's estimate is not exactly the identity). Cost: no measurable change (fair paired runs -0.5 % and -3.6 % ms/frame; RSS within 0.6 %).
+- **Tests:** `tests/engine/camera_motion_test.cpp` (13 cases; 8 of 12 failed on the old behaviour). `WriteCameraScene` in `synthetic_scenes.h` (sub-pixel camera over a large world, cut, noise background, moving foreground); `samn_bench` scenes `pan_x_fast`, `pan_zoom`.
+- **Found, not fixed:** the fixed scene-cut test fires from about 3 px per frame of camera speed on this texture (+-60 px at 0.5 Hz: 89 cuts in 150 frames), which resets the compensation and skips the tracker: PR-3. A foreground with more features than the background wins the estimate with a high share; no gate sees it.
+- **Not verified:** real clips (Owner gate through `samn_compare`; the Owner clip uses X, and both axes are now compensated, so its axis choice may change), Windows / MSVC build, the self-check's c6 thresholds with the 1 px inlier share (engine tests pass).
+- **PR-2 done. Next:** PR-3 forward-backward LK loss flag + confirmed scene cuts (drop30: 4 false cuts at 30 % dropped frames; fast pans; `light_cut_jump` stays lost for the whole second half, r 0.66), then PR-4 periodic bridge (occlusion 2 s / 4 s r 0.77 / 0.72), PR-5 sub-sample peaks, PR-6 640 px downscale.
+
+## Handover: `claude/samn2-audio-onsets` (9 Nov, audio onsets, tempo, beats, heart rhythm; D-168; revised after review)
+
+Owner: "Herzrhythmus als Standard" (a heartbeat-like default tempo for the fill), better audio analysis for the Generator, measure before and after, lean code.
+
+- **Core, Qt-free, streaming:** `audio_onsets.h` (`OnsetCurve`: 512/256 frames at 11025 Hz, log flux over 24 log bands, fixed state under 16 KiB, digital silence skips the FFT; per-second gate blocks: silence / steady noise / speech-like / music from level, spectral flatness and quiet-frame share; `PickOnsets`, minimum gap rounded up), `audio_tempo.h` (`TempoAccumulator` / `EstimateTempo`: streaming autocorrelation, pulse = shortest period a comb over its multiples explains, tempo = duple (or handicapped triple) multiple of it, octave folding, log-Gaussian prior on 72 BPM, confidence; `Estimate` is const and thread-safe; `TrackBeats`: Ellis DP; `AssessTempo`: silence absolute at -80 dBFS or 35 dB under the clip's loud blocks).
+- **Review fix (9 Nov):** off-beat hats made the first version lock to 2/5 of the tempo from ~106 BPM, 16th hats to 4/5 or 1/3 (not octaves). With the pulse comb: 228 harder synthetic clips (off-beat hats 0.1-0.6, bass-heavy, swing, 8th/16th hats, syncopation) 73.7 % -> 100 % octave-corrected (trivial autocorrelation 91.2 %, old Player estimate 40.4 %); basic 98 clips 98.0 -> 100 %, beat F 0.833 -> 0.837. Regression tests fail on the first version. The reviewer's bass-heavy 1/3 errors did not reproduce with my generator (tested anyway). Quiet masters (-40/-50 dB) now trusted (78.9/0 % -> 100 %).
+- **Heart rhythm:** `base_rhythm.h`: `generator.base_bpm` (72, clamp 40-140), `generator.base_bpm_variation` (percent, 3, clamp 0-10), seeded grid with slow drift, knots every **40 beats**, so adjacent beat intervals differ by under 1 % over the whole clamped range (bound 3v / (40 (1-v)^2), 0.93 % at 10 %; tested at 40/72/140 BPM x 10 % over 60 seeds; with the earlier 10 s knots it reached 4.5 %). It is the prior centre of `EstimateTempo` (fast songs come out at half tempo, by design) and the last tempo source of the rhythmic fill. Other "base tempo" places (the Player's BPM grid, the signal chain's 3 s detrend default) were left alone: changing them would change default behaviour.
+- **Rhythmic fill (off):** `generator.rhythmic_fill` (default false) makes `ImproveScript` use `FillGapsRhythmic(actions, max_gap, step_ms, audio_hz, base)`: strokes at the script's own tempo within 8 s of the hole, else the audio tempo, else the heart rhythm; a holding script gets the straight line at `step_ms` exactly as `FillGaps`. Read by `PlayerController::optimizeFor` only (checked with `g++ -fsyntax-only`, the app was not built). Fill bench: ties on the Script Doctor score, gap r 0.278 -> 0.889 where strokes go on, 0.488 -> 0.425 where the script holds: acceptance not met, so it stays off.
+- **Measured** in `docs/benchmarks/AUDIO_ONSETS_2026-11-08.md` (synthetic only; tables before / first version / after). 10 h streamed: 23.5 KiB peak heap (ctest `audio_onset_memory`, bound 32 KiB). About 0.4-0.7 ms CPU per second of sound. Limits stated there: whole-clip tempo across a tempo change is the dominant tempo (1 of 8 clips gives a quarter; use windows), music with speech over it is trusted with my generator but not with the reviewer's.
+- **Tests:** `tests/core/audio_onsets_test.cpp`, `base_rhythm_test.cpp` (empty / short / silent input, NaN and infinity, chunk-size invariance, determinism, 10 h fixed state, ratio-error regressions, minimum onset gap at 4-96 kHz, settings clamps, drift bound at the extremes, huge times, fill phase / hold / step). `core_tests` 520/520, ctest 3/3; the new tests and a 3000-case fuzz of the new code clean under ASan + UBSan.
+- **Next slices:** (1) check `EstimateTempo` / `AssessTempo` on real music and speech before wiring (the thresholds and the pulse comb are tuned on synthetic sound only); (2) decode once into `OnsetCurve` in the app next to `AudioLevelDecoder` and let "BPM from audio" use `EstimateTempo` + `AssessTempo`; (3) per-hole decision for the rhythmic fill from the sound in the hole or the picture, then re-run the fill bench and decide the default; (4) `EditorController::optimizeFor` reads the fill settings; (5) a Settings UI for base BPM and variation; (6) MSVC build.
+- **Stay off:** `core/src/intensity_arc.cpp`, `phase_rules.cpp` (#168).
 
 ## Handover: `claude/samn2-kernel-modes` (8 Nov, kernel / modules, slice 1: ModeRegistry)
 
@@ -242,7 +448,7 @@ Owner: the Generator's video detection must become cinema-grade accurate and lea
 - **Metrics:** 10 s windowed r (median, min, spread over runs) on the script and on the raw track (`track_r_*`), peak timing error (median, p95), extrema-count error, amplitude ratio, scene cuts found and false, lost share and loss precision / recall against the occlusion mask, jumps over 60 px, ms/frame (median of 5 after 3 warm-ups), RSS. Cuts, lost flags and jumps come from one extra untimed `TrackBox` run with the options `Generate` uses (`Generate` itself exposes none of them).
 - **Acceptance rule** (also in `--help` and the baseline doc): no scene's r drops by more than max(0.01, its 5-run spread); median r rises or median peak error falls by 2 ms or more; ms/frame up by at most 10 %, RSS by at most 10 %; before a default changes, the Owner gate through `samn_compare` on his private clips (numbers only).
 - **Baseline:** `docs/benchmarks/DETECTION_BASELINE_2026-11-06.md` + `.csv`; load averages and three timing repeats in it. Full run about 33 min. Findings: **pan X raw track r 0.797** (pan Y and clean 0.999): the 0.81 reproduces on the track, but the script r is 0.989 because the default detrend removes this slow pan; occlusion 2 s / 4 s r 0.77 / 0.72 with the lost flag exact; 30 % dropped frames give 4 false cuts; the lighting cut with a jump leaves the tracker lost for the whole second half (r 0.66); fast_small has half its frames flagged lost. ms/frame is about 22 to 37 here (unoptimised build) with up to 25 % spread between runs: time on a quiet machine, median of 3 or more.
-- **Next slices (each judged by this bench):** PR-2 full 2-D camera compensation (`camera_motion.cpp` returns only `t(1,2)`, `track_box.cpp` about line 456 shifts only ys; measured: pan clip Y stroke 0.888 -> 1.000 with compensation, X stroke 0.812 -> 0.812; the Owner's clip uses X; judge on `pan_x` track r); PR-3 forward-backward LK loss flag + confirmed scene cuts (drop30, light_cut_jump); PR-4 phase-locked periodic bridge (occlusion scenes); PR-5 sub-sample peaks (peak error vs the 40 ms frame); PR-6 FR-8 640 px downscale 90 -> 35 ms/frame. CPU / RAM: chunked label-tracking decode, `grab()` for skipped frames.
+- **Next slices (each judged by this bench):** PR-2 full 2-D camera compensation (done: `claude/samn2-camera-2d`) (`camera_motion.cpp` returns only `t(1,2)`, `track_box.cpp` about line 456 shifts only ys; measured: pan clip Y stroke 0.888 -> 1.000 with compensation, X stroke 0.812 -> 0.812; the Owner's clip uses X; judge on `pan_x` track r); PR-3 forward-backward LK loss flag + confirmed scene cuts (drop30, light_cut_jump); PR-4 phase-locked periodic bridge (occlusion scenes); PR-5 sub-sample peaks (peak error vs the 40 ms frame); PR-6 FR-8 640 px downscale 90 -> 35 ms/frame. CPU / RAM: chunked label-tracking decode, `grab()` for skipped frames.
 - **Not done:** an automatic baseline-vs-candidate comparison of two CSVs (the rule is applied by hand); Windows (RSS 0 there, not built); real clips (Owner gate).
 
 
@@ -757,7 +963,9 @@ Data and file fixes from a read-only bug hunt. Each fix has a test that failed b
 
 ## Next (in order; the work list is `LESSONS.md` § Gaps, `TEST_PARITY.md` and `P3_GENERATOR.md`)
 
-**Kernel (D-163), one theme per PR, after the driver registry:** a ModeRegistry with a `Repeater` in `Main.qml`; a narrow `DeviceService` interface instead of `DeviceController*` in Player, Training and `PlaybackOutput`; ~~`DeviceWorker` into its own file~~ (done, `claude/samn2-device-worker`); registries for detectors and teachers.
+**Audio and phases (D-165), one slice per PR:** shared 11 kHz mono decode + `AudioAnalyzer` (spectral-flux onsets) → tempo from the onsets (autocorrelation, prior at 72 BPM, octave folding, confidence) → heart-rhythm default `base_rhythm.h` (72 BPM, 3 %) → Ellis beat tracking as the AU-04 fallback → speech / music / silence gate; cleanup list in the `claude/samn2-intensity-arc` handover.
+
+**Kernel (D-163), one theme per PR, after the driver registry:** a ModeRegistry with a `Repeater` in `Main.qml`; a narrow `DeviceService` interface instead of `DeviceController*` in Player, Training and `PlaybackOutput`; `DeviceWorker` into its own file; registries for detectors and teachers.
 
 0. **Generator:** G2 stack ✅ (#114–#116); Tf/Tj distance stroke ✅ (#119); G3 feel ✅; Player partner overlay ✅ (#141); extras multi (`track_multi`) ✅ (#145); G3 feel probe ✅ (#146); G4a Advanced shell ✅ (#147); G4b Expert knobs ✅ (#151, live postprocess probe still open); MT-Debug trajectory overlay ✅ (this PR); next G8 `.sam` / live probe / Quality Doctor.
 1. **Look polish:** ✅ (#122, Claude takeover of Cursor #117; reduced-motion gates and a window-wide loop test added).

@@ -756,17 +756,28 @@ Item {
                     visible: ctrl.videoName !== "" || page.scriptOnly
                 }
                 // 0.7 keys hint on the stage (playback.js chrome).
-                Text {
-                    id: keysHint
-                    objectName: "keysHint"
-                    textFormat: Text.PlainText
+                Row {
+                    id: keysHintRow
+                    objectName: "keysHintRow"
                     anchors.horizontalCenter: parent.horizontalCenter
                     anchors.bottom: parent.bottom
                     anchors.bottomMargin: 14
+                    spacing: 8
                     visible: !page.empty && !page.fullStage
-                    opacity: 0.55
-                    text: qsTr("Space play/pause · ←/→ seek · ,/. fine · +/- offset · E Extended-O · T theatre · Esc leave fullscreen")
-                    color: "white"; font.family: Theme.fontSoft; font.pixelSize: 11
+                    Text {
+                        id: keysHint
+                        objectName: "keysHint"
+                        textFormat: Text.PlainText
+                        anchors.verticalCenter: parent.verticalCenter
+                        opacity: 0.55
+                        text: qsTr("Space play/pause · ←/→ seek · ,/. fine · +/- offset · L loop · E Extended-O · O O-marker · T theatre · Esc leave fullscreen")
+                        color: "white"; font.family: Theme.fontSoft; font.pixelSize: 11
+                    }
+                    HelpChip {
+                        objectName: "keysHintHelp"
+                        key: "pb-offset-hint"
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
                 }
             }
             VideoTransport {
@@ -806,10 +817,27 @@ Item {
                         readonly property var minutes: [0, 15, 30, 45, 60, 90]
                         currentIndex: Math.max(0, minutes.indexOf(ctrl.sleepMinutes))
                         onActivated: (i) => ctrl.sleepMinutes = minutes[i]
+                        HoverHandler { id: sleepHover }
+                        ToolTipText {
+                            shown: sleepHover.hovered
+                            text: qsTr("Pause playback after this many minutes (Sleep off = never).")
+                        }
                     },
-                    FlowButton {
-                        text: qsTr("Loop"); checked: ctrl.loopEnabled
-                        onClicked: ctrl.loopEnabled = !ctrl.loopEnabled
+                    Row {
+                        spacing: 4
+                        FlowButton {
+                            text: qsTr("Loop"); checked: ctrl.loopEnabled
+                            onClicked: ctrl.loopEnabled = !ctrl.loopEnabled
+                            HoverHandler { id: loopHover }
+                            ToolTipText {
+                                shown: loopHover.hovered
+                                text: qsTr("Repeat the marked heatmap range (L).")
+                            }
+                        }
+                        HelpChip {
+                            key: "pb-loop"
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
                     },
                     FlowCombo {
                         width: 78
@@ -817,6 +845,11 @@ Item {
                         readonly property var rates: [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
                         currentIndex: rates.indexOf(page.speed)
                         onActivated: (i) => page.speed = rates[i]
+                        HoverHandler { id: speedHover }
+                        ToolTipText {
+                            shown: speedHover.hovered
+                            text: qsTr("Playback speed for video and device together.")
+                        }
                     },
                     // 0.7 Extended-O trigger (key E): shown while Extended-O is on,
                     // usable while playing and not already running.

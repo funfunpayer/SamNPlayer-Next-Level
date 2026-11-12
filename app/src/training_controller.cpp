@@ -321,7 +321,7 @@ void TrainingController::chooseVideo(const QString& pathOrUrl) {
 
 // ---------------------------------------------------------------- device
 
-void TrainingController::setDevice(DeviceController* d) {
+void TrainingController::setDeviceService(DeviceService* d) {
     if (d == device_) return;
     // A session belongs to the device it started on: it ends there (that
     // device stops, gets its hold and a connection Training made back)
@@ -335,7 +335,7 @@ void TrainingController::setDevice(DeviceController* d) {
     if (device_) disconnect(device_, nullptr, this, nullptr);
     device_ = d;
     if (device_) {
-        connect(device_, &DeviceController::statusChanged, this, [this] {
+        connect(device_, &DeviceService::statusChanged, this, [this] {
             updateDeviceFollow();
             onDeviceStatus();
         });

@@ -18,11 +18,13 @@ Column {
                 text: qsTr("Audio level lane"); checked: ctrl.audioLane
                 onClicked: ctrl.audioLane = !ctrl.audioLane
             }
+            HelpChip { key: "pb-audio-lane-row"; anchors.verticalCenter: parent.verticalCenter }
             FlowButton {
                 objectName: "showScenes"
                 text: qsTr("Scene markers"); checked: ctrl.showScenes
                 onClicked: ctrl.showScenes = !ctrl.showScenes
             }
+            HelpChip { key: "pb-scenes-row"; anchors.verticalCenter: parent.verticalCenter }
         }
         Row {
             spacing: 8
@@ -30,13 +32,18 @@ Column {
                 text: qsTr("0–100 on video"); checked: ctrl.posOverlay
                 onClicked: ctrl.posOverlay = !ctrl.posOverlay
             }
+            HelpChip { key: "pb-pos-overlay-row"; anchors.verticalCenter: parent.verticalCenter }
         }
         // 0.7 "Show contact areas" with its hint, when the script stores marks.
-        FlowButton {
-            objectName: "showContactMarks"
+        Row {
+            spacing: 8
             visible: ctrl.contactMarks.hint !== undefined
-            text: qsTr("Show contact areas"); checked: ctrl.showContactMarks
-            onClicked: ctrl.showContactMarks = !ctrl.showContactMarks
+            FlowButton {
+                objectName: "showContactMarks"
+                text: qsTr("Show contact areas"); checked: ctrl.showContactMarks
+                onClicked: ctrl.showContactMarks = !ctrl.showContactMarks
+            }
+            HelpChip { key: "pb-contact-marks-toggle"; anchors.verticalCenter: parent.verticalCenter }
         }
         Text {
             objectName: "contactMarksHint"
@@ -46,11 +53,15 @@ Column {
             text: ctrl.contactMarks.hint !== undefined ? ctrl.contactMarks.hint : ""
             color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 11
         }
-        FlowButton {
-            objectName: "videoPlayAutostart"
-            text: qsTr("Video play starts device")
-            checked: ctrl.videoPlayAutostart
-            onClicked: ctrl.videoPlayAutostart = !ctrl.videoPlayAutostart
+        Row {
+            spacing: 8
+            FlowButton {
+                objectName: "videoPlayAutostart"
+                text: qsTr("Video play starts device")
+                checked: ctrl.videoPlayAutostart
+                onClicked: ctrl.videoPlayAutostart = !ctrl.videoPlayAutostart
+            }
+            HelpChip { key: "pb-video-play-autostart"; anchors.verticalCenter: parent.verticalCenter }
         }
         InspectorNote { text: qsTr("When off, the film can play without moving the toy. Script Play (no video) still starts the device.") }
         Row {
@@ -108,6 +119,7 @@ Column {
                 HoverHandler { id: hlHover }
                 ToolTipText { shown: hlHover.hovered; text: qsTr("Paint red “too fast” bands on the curve (OFS community intensity). Display only — separate from Speed-cap edit.") }
             }
+            HelpChip { key: "pb-speed-hl"; anchors.verticalCenter: parent.verticalCenter }
             FlowSlider {
                 anchors.verticalCenter: parent.verticalCenter; width: 76
                 enabled: ctrl.speedHighlights
@@ -117,8 +129,21 @@ Column {
                 ToolTipText { shown: hlThHover.hovered; text: qsTr("Intensity threshold for Speed highlights on the curve (500×|Δpos|/|Δt|). Lower = more red bands.") }
             }
             Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; text: Math.round(ctrl.speedHighlightThresh); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
+            HelpChip { key: "playback.hl"; anchors.verticalCenter: parent.verticalCenter }
         }
-        InspectorNote { text: qsTr("Heatmap: click = seek, drag = mark. Wheel on the heatmap zooms. Curve edit below uses the marked range.") }
+        Row {
+            spacing: 8
+            width: parent.width
+            visible: ctrl.hasScript
+            Text {
+                textFormat: Text.PlainText
+                width: parent.width - 26
+                wrapMode: Text.WordWrap
+                text: qsTr("Heatmap: click = seek, drag = mark. Wheel on the heatmap zooms. Curve edit below uses the marked range.")
+                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+            }
+            HelpChip { objectName: "heatmapHintHelp"; key: "pb-marker-hint"; anchors.top: parent.top }
+        }
     }
     // Curve edit on the heatmap selection (0.7 Cap · Scale · Delete · Invert).
     MessageDialog {
@@ -170,10 +195,14 @@ Column {
             enabled: ctrl.hasScript && ctrl.hasMarker
             onClicked: ctrl.capSelection()
         }
-        FlowButton {
-            objectName: "curveSoftEdges"
-            text: qsTr("Soft edges"); checked: ctrl.scaleSoftEdges
-            onClicked: ctrl.scaleSoftEdges = !ctrl.scaleSoftEdges
+        Row {
+            spacing: 8
+            FlowButton {
+                objectName: "curveSoftEdges"
+                text: qsTr("Soft edges"); checked: ctrl.scaleSoftEdges
+                onClicked: ctrl.scaleSoftEdges = !ctrl.scaleSoftEdges
+            }
+            HelpChip { key: "pb-scale-soft-edges"; anchors.verticalCenter: parent.verticalCenter }
         }
         Row {
             spacing: 8
@@ -189,6 +218,7 @@ Column {
                 enabled: ctrl.hasScript && ctrl.hasMarker
                 onClicked: ctrl.scaleSelection(1.25)
             }
+            HelpChip { key: "playback.scale"; anchors.verticalCenter: parent.verticalCenter }
             FlowButton {
                 objectName: "curveDelete"
                 text: qsTr("Delete range")
@@ -242,7 +272,7 @@ Column {
             FlowSlider {
                 objectName: "fpsSnap"
                 anchors.verticalCenter: parent.verticalCenter
-                width: curveEdit.width - 24 - 78 - 48
+                width: curveEdit.width - 24 - 78 - 48 - 26
                 from: 0; to: 60; value: ctrl.fpsSnap
                 onMoved: (v) => ctrl.fpsSnap = Math.round(v)
             }
@@ -252,6 +282,7 @@ Column {
                 text: ctrl.fpsSnap > 0 ? qsTr("%1").arg(Math.round(ctrl.fpsSnap)) : qsTr("off")
                 color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
             }
+            HelpChip { key: "playback.fps-snap"; anchors.verticalCenter: parent.verticalCenter }
         }
         InspectorNote { text: qsTr("Seeks snap to frame boundaries when FPS-Snap is on (0 = off).") }
         InspectorNote { visible: !ctrl.hasMarker; text: qsTr("Mark a range for Cap / Scale / Delete. Invert all works without one.") }
@@ -315,6 +346,7 @@ Column {
                 onMoved: (v) => ctrl.oMarkerIntensity = Math.round(v * 20) / 20
             }
             Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; text: Math.round(ctrl.oMarkerIntensity * 100) + "%"; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
+            HelpChip { key: "playback.intensity"; anchors.verticalCenter: parent.verticalCenter }
         }
         FlowButton {
             text: qsTr("Apply as O-marker"); enabled: ctrl.hasMarker
@@ -333,6 +365,7 @@ Column {
     }
     InspectorCard {
         title: qsTr("Full curve editing")
+        help: "pb-curve-edit-hint"
         InspectorNote { text: qsTr("Point drag, undo and scenes are in the Generator (the Editor). Cap / Softer / Stronger / Delete / Invert on a heatmap mark are under Curve edit above.") }
         FlowButton { objectName: "editScript"; text: qsTr("Edit this script"); icon: "edit"; enabled: ctrl.hasScript; onClicked: rootPanel.editRequested(false) }
     }

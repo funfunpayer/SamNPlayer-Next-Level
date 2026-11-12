@@ -140,6 +140,141 @@ std::vector<Action> FillGaps(std::vector<Action> a, int64_t max_gap_ms, int64_t 
     return a;
 }
 
+namespace {
+
+constexpr int64_t kStrokeContextMs = 8000;
+constexpr double kMinHalfPeriodMs = 30000.0 / kBaseBpmMax;  // 214 ms
+constexpr double kMaxHalfPeriodMs = 30000.0 / kBaseBpmMin;  // 750 ms
+
+struct StrokeStats {
+    std::vector<double> halves;  // ms between turning points
+    std::vector<double> amps;    // position change between them
+};
+
+// Turning points of a[from, to] (inclusive), added to stats.
+void AddTurns(const std::vector<Action>& a, size_t from, size_t to, StrokeStats& st) {
+    if (to <= from) return;
+    std::vector<size_t> turns{from};
+    int dir = 0;
+    for (size_t i = from + 1; i <= to; ++i) {
+        const int d = (a[i].pos > a[i - 1].pos) - (a[i].pos < a[i - 1].pos);
+        if (d == 0) continue;
+        if (dir != 0 && d != dir) turns.push_back(i - 1);
+        dir = d;
+    }
+    turns.push_back(to);
+    for (size_t k = 1; k < turns.size(); ++k) {
+        const Action& p = a[turns[k - 1]];
+        const Action& n = a[turns[k]];
+        if (n.at <= p.at) continue;
+        st.halves.push_back(double(n.at - p.at));
+        st.amps.push_back(std::abs(double(n.pos - p.pos)));
+    }
+}
+
+// Direction of the last movement up to a[i]: +1 up, -1 down, 0 none.
+int LastDirection(const std::vector<Action>& a, size_t i) {
+    for (size_t k = i; k > 0; --k) {
+        if (a[k].pos != a[k - 1].pos) return a[k].pos > a[k - 1].pos ? 1 : -1;
+    }
+    return 0;
+}
+
+}  // namespace
+
+std::vector<Action> FillGapsRhythmic(std::vector<Action> a, int64_t max_gap_ms, int64_t step_ms, double audio_hz,
+                                     const BaseRhythm& base, int* gaps_filled, int* points_added) {
+    int gaps = 0, added = 0;
+    if (a.size() >= 2) {
+        SortByTime(a);
+        if (max_gap_ms <= 0) max_gap_ms = AutoFillGapThreshold(a);
+        const int64_t line_step = std::max<int64_t>(20, StepOrDefault(step_ms, audio_hz));
+        // The whole script's stroke amplitude, for gaps without strokes near them.
+        StrokeStats all;
+        AddTurns(a, 0, a.size() - 1, all);
+        const double global_amp = all.amps.empty() ? 0 : Median(all.amps);
+        double audio_bpm = 0;
+        if (audio_hz > 0 && std::isfinite(audio_hz)) {
+            audio_bpm = audio_hz * 60;
+            while (audio_bpm > kBaseBpmMax) audio_bpm /= 2;
+            while (audio_bpm < kBaseBpmMin) audio_bpm *= 2;
+        }
+        std::vector<Action> out;
+        out.reserve(a.size() * 2);
+        out.push_back(a.front());
+        for (size_t i = 1; i < a.size(); ++i) {
+            const Action prev = out.back();
+            const Action& next = a[i];
+            const int64_t dt = next.at - prev.at;
+            if (dt <= max_gap_ms || dt <= 2 * int64_t(kMinHalfPeriodMs)) {
+                PushOrReplace(out, next);
+                continue;
+            }
+            // Strokes near the gap, each side on its own (never across it).
+            StrokeStats near;
+            size_t lo = i - 1;
+            while (lo > 0 && a[lo - 1].at >= prev.at - kStrokeContextMs) --lo;
+            AddTurns(a, lo, i - 1, near);
+            size_t hi = i;
+            while (hi + 1 < a.size() && a[hi + 1].at <= next.at + kStrokeContextMs) ++hi;
+            AddTurns(a, i, hi, near);
+            double half = 0, amp = global_amp;
+            bool holding = false;
+            if (near.halves.size() >= 3) {
+                const double h = Median(near.halves);
+                amp = Median(near.amps);
+                holding = amp < kRhythmicFillMinAmplitude;
+                if (h >= kMinHalfPeriodMs && h <= kMaxHalfPeriodMs) half = h;
+            }
+            if (!holding && !(near.halves.size() >= 3) && global_amp < kRhythmicFillMinAmplitude) holding = true;
+            ++gaps;
+            if (holding) {
+                for (int64_t t = prev.at + line_step; t < next.at; t += line_step) {
+                    const double f = double(t - prev.at) / double(dt);
+                    out.push_back({t, ClampPos(std::lround(prev.pos + f * (next.pos - prev.pos)))});
+                    ++added;
+                }
+                PushOrReplace(out, next);
+                continue;
+            }
+            amp = std::clamp(amp, double(kRhythmicFillMinAmplitude), 80.0);
+            // Turning times: uniform at the script's or the audio's tempo,
+            // else the heart rhythm's beats and their midpoints.
+            std::vector<double> turns;
+            if (half <= 0 && audio_bpm > 0) half = 30000.0 / audio_bpm;
+            if (half > 0) {
+                for (double t = double(prev.at) + half; t <= double(next.at) - 0.5 * half; t += half) turns.push_back(t);
+            } else {
+                const auto beats = BaseBeatGrid(base, double(prev.at), double(next.at) + 2 * 60000.0 / kBaseBpmMin);
+                for (size_t k = 1; k < beats.size(); ++k) {
+                    const double mid = 0.5 * (beats[k - 1] + beats[k]);
+                    const double h = 0.5 * (beats[k] - beats[k - 1]);
+                    if (mid > double(next.at) - 0.5 * h) break;
+                    turns.push_back(mid);
+                    if (beats[k] > double(next.at) - 0.5 * h) break;
+                    turns.push_back(beats[k]);
+                }
+            }
+            int dir = LastDirection(a, i - 1);
+            if (dir == 0) dir = prev.pos >= 50 ? 1 : -1;
+            for (size_t k = 0; k < turns.size(); ++k) {
+                const auto t = int64_t(std::llround(turns[k]));
+                if (t <= out.back().at || t >= next.at) continue;
+                const double f = double(t - prev.at) / double(dt);
+                double pos = prev.pos + f * (next.pos - prev.pos);
+                if (k % 2 == 0) pos -= dir * amp;  // away from the last movement, then back
+                out.push_back({t, ClampPos(std::lround(pos))});
+                ++added;
+            }
+            PushOrReplace(out, next);
+        }
+        a = std::move(out);
+    }
+    if (gaps_filled) *gaps_filled = gaps;
+    if (points_added) *points_added = added;
+    return a;
+}
+
 std::vector<Action> HealTrackingGaps(std::vector<Action> actions, const std::vector<TrackingGap>& gaps, int64_t step_ms,
                                      double audio_hz, int* windows_healed, int* points_added) {
     if (windows_healed) *windows_healed = 0;
@@ -230,8 +365,12 @@ ImproveResult ImproveScript(const std::vector<Action>& actions, const ImproveOpt
         int64_t max_gap = opts.max_gap_ms > 0 ? opts.max_gap_ms : AutoFillGapThreshold(cur);
         // The spacing before filling: after filling, the median collapses.
         const double med = MedianSpacingMs(cur);
+        const auto fill = [&opts](std::vector<Action> in, int64_t gap, int* g, int* p) {
+            return opts.rhythmic_fill ? FillGapsRhythmic(std::move(in), gap, opts.step_ms, opts.audio_hz, opts.base_rhythm, g, p)
+                                      : FillGaps(std::move(in), gap, opts.step_ms, opts.audio_hz, g, p);
+        };
         int gaps = 0, pts = 0;
-        cur = FillGaps(std::move(cur), max_gap, opts.step_ms, opts.audio_hz, &gaps, &pts);
+        cur = fill(std::move(cur), max_gap, &gaps, &pts);
         if (opts.max_gap_ms <= 0) {
             // Auto: a second pass for medium holes, never below ~4× the natural
             // stroke spacing (slow strokes must not become 100 ms ramps).
@@ -239,7 +378,7 @@ ImproveResult ImproveScript(const std::vector<Action>& actions, const ImproveOpt
             if (med > 0) tight = std::max<int64_t>(tight, std::llround(med * 4));
             if (tight > 0 && tight < max_gap) {
                 int g2 = 0, p2 = 0;
-                cur = FillGaps(std::move(cur), tight, opts.step_ms, opts.audio_hz, &g2, &p2);
+                cur = fill(std::move(cur), tight, &g2, &p2);
                 gaps += g2;
                 pts += p2;
                 max_gap = tight;

@@ -6,7 +6,6 @@
 #include <QCoreApplication>
 #include <QFile>
 #include <QFileInfo>
-#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QPointer>
@@ -31,6 +30,7 @@
 #include "samn/settings.h"
 #include "samn/vision/frame_reader.h"
 #include "samn/vision/onnx_detector.h"
+#include "ai_tip.h"
 
 namespace samn::ui {
 
@@ -45,51 +45,44 @@ QString Clock(double ms) {
 constexpr double kGapBridgeMs = 500;
 constexpr double kOutlierMadFactor = 5;
 
+QVariantMap HitMap(const AiTipHit& h) {
+    return QVariantMap{{"x", h.x}, {"y", h.y},     {"w", h.w},     {"h", h.h},
+                       {"score", h.score}, {"label", QString::fromStdString(h.label)}, {"cls", h.cls}};
+}
+
+AiTipHit HitFromMap(const QVariantMap& m) {
+    AiTipHit h;
+    h.x = m.value("x").toInt();
+    h.y = m.value("y").toInt();
+    h.w = m.value("w").toInt();
+    h.h = m.value("h").toInt();
+    h.score = m.value("score").toFloat();
+    h.cls = m.value("cls").toInt();
+    h.label = m.value("label").toString().toStdString();
+    return h;
+}
+
+std::vector<AiTipHit> HitsFromList(const QVariantList& list) {
+    std::vector<AiTipHit> hits;
+    hits.reserve(size_t(list.size()));
+    for (const QVariant& v : list) hits.push_back(HitFromMap(v.toMap()));
+    return hits;
+}
+
 // Hybrid tip proposal: student.onnx preferred, else NudeNet if present.
 // Returns empty when ONNX is unavailable or no matching tip-class box.
 std::function<std::optional<cv::Rect>(const cv::Mat&)> MakeHybridPropose(const QString& tipClass) {
-    if (!samn::vision::OnnxDetector::Available()) return {};
-    const auto student = samn::config_dir() / "models" / "student" / "student.onnx";
-    const auto nudenet = samn::config_dir() / "models" / "nudenet.onnx";
-    std::filesystem::path model;
-    bool use_nudenet = false;
-    if (std::filesystem::exists(student))
-        model = student;
-    else if (std::filesystem::exists(nudenet)) {
-        model = nudenet;
-        use_nudenet = true;
-    } else
-        return {};
+    auto model = FindAiTipModel();
+    if (!model) return {};
     auto det = std::make_shared<samn::vision::OnnxDetector>();
     std::string err;
-    if (!det->Load(model, &err)) return {};
+    if (!det->Load(model->path, &err)) return {};
     const std::string want = tipClass.toStdString();
-    std::vector<std::string> student_names;
-    if (!use_nudenet) {
-        QFile f(QString::fromStdU16String((samn::config_dir() / "models" / "student" / "classes.json").u16string()));
-        if (f.open(QIODevice::ReadOnly)) {
-            for (const QJsonValue& v : QJsonDocument::fromJson(f.readAll()).object().value("classes").toArray())
-                student_names.push_back(v.toString().toStdString());
-        }
-    }
-    return [det, want, use_nudenet, student_names](const cv::Mat& bgr) -> std::optional<cv::Rect> {
+    return [det, model = *model, want](const cv::Mat& bgr) -> std::optional<cv::Rect> {
         std::string why;
-        const auto dets = det->Detect(bgr, 0.25f, &why);
-        if (dets.empty()) return std::nullopt;
-        const auto& nn = samn::vision::NudeNetClasses();
-        for (const auto& d : dets) {
-            std::string label;
-            if (use_nudenet) {
-                if (d.cls >= 0 && size_t(d.cls) < nn.size()) label = samn::vision::NudeNetToLabel(nn[size_t(d.cls)]);
-            } else if (d.cls >= 0 && size_t(d.cls) < student_names.size()) {
-                label = student_names[size_t(d.cls)];
-            }
-            if (label != want && !(want == "glans" && label == "penis") && !(want == "penis" && label == "glans"))
-                continue;
-            return cv::Rect(int(std::lround(d.box.x)), int(std::lround(d.box.y)), int(std::lround(d.box.width)),
-                            int(std::lround(d.box.height)));
-        }
-        return std::nullopt;
+        const auto pick = PickExpectedTip(ListAiHits(det->Detect(bgr, 0.25f, &why), model), want);
+        if (!pick) return std::nullopt;
+        return cv::Rect(pick->x, pick->y, pick->w, pick->h);
     };
 }
 
@@ -111,6 +104,7 @@ GeneratorController::GeneratorController(QObject* parent) : QObject(parent) {
             Qt::QueuedConnection);
     });
     loadSettings();
+    refreshAiTipHint();
 }
 
 void GeneratorController::loadSettings() {
@@ -207,8 +201,10 @@ void GeneratorController::saveSetting(const char* key, const nlohmann::json& val
 // The runner cancels and joins first (GD-25: nothing outlives the app).
 GeneratorController::~GeneratorController() {
     cancelFind();
+    ++ai_seq_;  // drop a late suggest result
     if (queue_cancel_) *queue_cancel_ = true;
     if (finder_.joinable()) finder_.join();
+    if (ai_worker_.joinable()) ai_worker_.join();
     if (queue_worker_.joinable()) queue_worker_.join();
     runner_.reset();
 }
@@ -507,6 +503,175 @@ void GeneratorController::pickCandidate(int index) {
     setBox(QRect(c.value("x").toInt(), c.value("y").toInt(), c.value("w").toInt(), c.value("h").toInt()));
 }
 
+bool GeneratorController::aiTipAvailable() const {
+    return fake_ai_ready_ || AiTipModelStatus() == AiTipReady::kReady;
+}
+
+void GeneratorController::refreshAiTipHint() {
+    if (suggesting_ai_tip_) {
+        ai_tip_hint_ = tr("Looking only for %1 (strict AI; no class fallback)…").arg(tip_class_);
+        return;
+    }
+    if (hasAiTipProposal()) {
+        ai_tip_hint_ = tr("AI proposal ready — Apply to set the tip box. AI never writes the curve.");
+        return;
+    }
+    if (!ai_detections_.isEmpty()) {
+        ai_tip_hint_ = tr("%n AI box(es), none match %1. Click one, then Apply.", nullptr, ai_detections_.size())
+                           .arg(tip_class_);
+        return;
+    }
+    if (fake_ai_ready_) {
+        ai_tip_hint_ = tr("Local AI model ready — Suggest tip does not write the box until Apply.");
+        return;
+    }
+    switch (AiTipModelStatus()) {
+        case AiTipReady::kNoOnnx:
+            ai_tip_hint_ = tr("This build has no ONNX Runtime — Suggest tip (AI) is off.");
+            break;
+        case AiTipReady::kNoModel:
+            ai_tip_hint_ = tr("No AI model found (models/student/student.onnx or models/nudenet.onnx). "
+                              "Train the student in AI Train, or download NudeNet.");
+            break;
+        case AiTipReady::kReady:
+            ai_tip_hint_ = tr("Local AI model ready — Suggest tip does not write the box until Apply.");
+            break;
+    }
+}
+
+void GeneratorController::setFakeAiHitsForTest(const QVariantList& hits) {
+    fake_ai_ready_ = true;
+    fake_ai_hits_ = hits;
+    refreshAiTipHint();
+    emit aiTipChanged();
+}
+
+void GeneratorController::finishAiSuggest(const QVariantList& hits, const QString& forVideo, quint64 seq) {
+    if (seq != ai_seq_ || forVideo != video_path_) return;
+    suggesting_ai_tip_ = false;
+    ai_detections_ = hits;
+    ai_tip_proposal_.clear();
+    if (const auto pick = PickExpectedTip(HitsFromList(hits), tip_class_.toStdString()))
+        ai_tip_proposal_ = HitMap(*pick);
+    if (hits.isEmpty())
+        setStatus(tr("No AI boxes on this frame."));
+    else if (hasAiTipProposal())
+        setStatus(tr("AI proposal ready — Apply to set the tip box."));
+    else
+        setStatus(tr("%n AI box(es), none match %1. Click one, then Apply.", nullptr, hits.size()).arg(tip_class_));
+    refreshAiTipHint();
+    emit aiTipChanged();
+}
+
+bool GeneratorController::suggestAiTip() {
+    if (video_path_.isEmpty() || running_ || queue_running_ || suggesting_ai_tip_) return false;
+    if (!aiTipAvailable()) {
+        refreshAiTipHint();
+        setStatus(ai_tip_hint_);
+        emit aiTipChanged();
+        return false;
+    }
+    if (frame_.isNull()) {
+        setStatus(tr("No frame to search — open a video first."));
+        return false;
+    }
+    const quint64 seq = ++ai_seq_;
+    suggesting_ai_tip_ = true;
+    refreshAiTipHint();
+    emit aiTipChanged();
+    setStatus(ai_tip_hint_);
+    if (fake_ai_ready_) {
+        finishAiSuggest(fake_ai_hits_, video_path_, seq);
+        return true;
+    }
+    if (ai_worker_.joinable()) ai_worker_.join();
+    const QImage copy = frame_.convertToFormat(QImage::Format_BGR888);
+    const QSize video = video_size_;
+    const QString forVideo = video_path_;
+    QPointer<GeneratorController> self(this);
+    ai_worker_ = std::thread([self, copy, video, forVideo, seq] {
+        QVariantList list;
+        QString error;
+        do {
+            auto model = FindAiTipModel();
+            if (!model) {
+                error = QStringLiteral("no-model");
+                break;
+            }
+            cv::Mat mat(copy.height(), copy.width(), CV_8UC3, const_cast<uchar*>(copy.constBits()),
+                        size_t(copy.bytesPerLine()));
+            mat = mat.clone();
+            const double sx = video.width() > 0 ? double(video.width()) / copy.width() : 1.0;
+            const double sy = video.height() > 0 ? double(video.height()) / copy.height() : 1.0;
+            auto det = std::make_shared<samn::vision::OnnxDetector>();
+            std::string why;
+            if (!det->Load(model->path, &why)) {
+                error = QString::fromStdString(why);
+                break;
+            }
+            for (AiTipHit h : ListAiHits(det->Detect(mat, 0.25f, &why), *model)) {
+                h.x = int(std::lround(h.x * sx));
+                h.y = int(std::lround(h.y * sy));
+                h.w = int(std::lround(h.w * sx));
+                h.h = int(std::lround(h.h * sy));
+                list.append(HitMap(h));
+            }
+        } while (false);
+        QMetaObject::invokeMethod(
+            qApp,
+            [self, list, error, forVideo, seq] {
+                if (!self) return;
+                if (seq != self->ai_seq_ || forVideo != self->video_path_) {
+                    self->suggesting_ai_tip_ = false;
+                    emit self->aiTipChanged();
+                    return;
+                }
+                if (!error.isEmpty() && list.isEmpty()) {
+                    self->suggesting_ai_tip_ = false;
+                    self->setStatus(error == QLatin1String("no-model")
+                                        ? tr("No AI model found (models/student/student.onnx or models/nudenet.onnx).")
+                                        : tr("AI tip failed: %1.").arg(error));
+                    self->refreshAiTipHint();
+                    emit self->aiTipChanged();
+                    return;
+                }
+                self->finishAiSuggest(list, forVideo, seq);
+            },
+            Qt::QueuedConnection);
+    });
+    return true;
+}
+
+bool GeneratorController::applyAiTip() {
+    if (!hasAiTipProposal()) return false;
+    const QVariantMap p = ai_tip_proposal_;
+    setBox(QRect(p.value("x").toInt(), p.value("y").toInt(), p.value("w").toInt(), p.value("h").toInt()));
+    setStatus(tr("Tip box applied from AI proposal."));
+    ai_tip_proposal_.clear();
+    refreshAiTipHint();
+    emit aiTipChanged();
+    return true;
+}
+
+void GeneratorController::dismissAiTip() {
+    if (ai_detections_.isEmpty() && ai_tip_proposal_.isEmpty() && !suggesting_ai_tip_) return;
+    ++ai_seq_;
+    suggesting_ai_tip_ = false;
+    ai_detections_.clear();
+    ai_tip_proposal_.clear();
+    setStatus(tr("AI tip proposal dismissed."));
+    refreshAiTipHint();
+    emit aiTipChanged();
+}
+
+void GeneratorController::pickAiDetection(int index) {
+    if (index < 0 || index >= ai_detections_.size()) return;
+    ai_tip_proposal_ = ai_detections_.at(index).toMap();
+    setStatus(tr("AI proposal ready — Apply to set the tip box."));
+    refreshAiTipHint();
+    emit aiTipChanged();
+}
+
 QString GeneratorController::videoName() const { return QFileInfo(video_path_).fileName(); }
 
 bool GeneratorController::openVideo(const QString& pathOrUrl, bool lookForTip) {
@@ -541,6 +706,11 @@ bool GeneratorController::openVideo(const QString& pathOrUrl, bool lookForTip) {
     cancelFind();  // a search on the old video ends; its result is not used
     tip_candidates_.clear();
     emit tipCandidatesChanged();
+    ai_detections_.clear();
+    ai_tip_proposal_.clear();
+    ++ai_seq_;
+    refreshAiTipHint();
+    emit aiTipChanged();
     output_path_.clear();
     review_.clear();
     log_.clear();

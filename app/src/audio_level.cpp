@@ -18,20 +18,27 @@ void AudioLevelDecoder::cancel() {
     decoder_->stop();
     decoder_.reset();
     rms_.reset();
+    onsets_.reset();
+    tempoAcc_.reset();
 }
 
-void AudioLevelDecoder::start(const QString& path, int stepMs, qint64 maxMs) {
+void AudioLevelDecoder::start(const QString& path, int stepMs, qint64 maxMs, bool withOnsets) {
     cancel();
     path_ = path;
     stepMs_ = stepMs > 0 ? stepMs : samn::kAudioLevelStepMs;
     maxMs_ = maxMs;
+    withOnsets_ = withOnsets;
+    onsetTempo_ = {};
+    onsetBlocks_.clear();
     const QFileInfo fi(path);
     if (!fi.isFile()) {
         emit failed(tr("Video not found: %1").arg(path));
         return;
     }
     if (path == cachePath_ && fi.size() == cacheSize_ && fi.lastModified() == cacheTime_ && stepMs_ == cacheStep_ &&
-        maxMs_ == cacheMaxMs_) {
+        maxMs_ == cacheMaxMs_ && (!withOnsets_ || cacheHasOnsets_)) {
+        onsetTempo_ = cacheOnsetTempo_;
+        onsetBlocks_ = cacheOnsetBlocks_;
         emit finished(cache_);
         return;
     }
@@ -43,6 +50,16 @@ void AudioLevelDecoder::start(const QString& path, int stepMs, qint64 maxMs) {
     decoder_->start();
 }
 
+namespace {
+
+void DrainOnsets(std::optional<samn::OnsetCurve>& onsets, std::optional<samn::TempoAccumulator>& tempo) {
+    if (!onsets || !tempo) return;
+    auto v = onsets->TakeValues();
+    if (!v.empty()) tempo->Push(v.data(), v.size());
+}
+
+}  // namespace
+
 void AudioLevelDecoder::onBuffer() {
     if (!decoder_) return;
     const QAudioBuffer buf = decoder_->read();
@@ -53,6 +70,14 @@ void AudioLevelDecoder::onBuffer() {
     if (bytesPerSample <= 0 || fmt.sampleRate() <= 0) return;
     // The window is fixed by the first buffer's rate (one stream, one rate).
     if (!rms_) rms_.emplace(static_cast<size_t>(std::max<qint64>(1, qint64(fmt.sampleRate()) * stepMs_ / 1000)));
+    // OnsetCurve accepts 4–96 kHz; other rates keep loudness only.
+    if (withOnsets_ && !onsets_) {
+        const int sr = fmt.sampleRate();
+        if (sr >= 4000 && sr <= 96000) {
+            onsets_.emplace(sr);
+            tempoAcc_.emplace(onsets_->FramesPerSecond());
+        }
+    }
     const auto* data = buf.constData<char>();
     const qsizetype frames = buf.frameCount();
     const bool capped = maxMs_ >= 0;
@@ -61,13 +86,17 @@ void AudioLevelDecoder::onBuffer() {
         float sum = 0;
         for (int c = 0; c < channels; ++c)
             sum += fmt.normalizedSampleValue(data + (f * channels + c) * bytesPerSample);
-        rms_->Push(sum / static_cast<float>(channels));
+        const float mono = sum / static_cast<float>(channels);
+        rms_->Push(mono);
+        if (onsets_) onsets_->Push(&mono, 1);
         // Stop inside the buffer: one buffer can hold far more than maxMs.
         if (capped && qint64(rms_->Windows().size()) * qint64(stepMs_) >= maxMs_) {
+            DrainOnsets(onsets_, tempoAcc_);
             finishDecode(true);
             return;
         }
     }
+    DrainOnsets(onsets_, tempoAcc_);
 }
 
 void AudioLevelDecoder::onDone() { finishDecode(false); }
@@ -75,13 +104,23 @@ void AudioLevelDecoder::onDone() { finishDecode(false); }
 void AudioLevelDecoder::finishDecode(bool stopDecoder) {
     if (!decoder_) return;
     const auto rms = rms_ ? rms_->Finish() : std::vector<double>{};
+    if (onsets_) {
+        onsets_->Finish();
+        DrainOnsets(onsets_, tempoAcc_);
+        if (tempoAcc_) onsetTempo_ = tempoAcc_->Estimate();
+        onsetBlocks_ = onsets_->TakeBlocks();
+    }
     // Release first so a stop() that re-enters onBuffer / onDone is a no-op.
     QAudioDecoder* dec = decoder_.release();
     dec->disconnect(this);
     if (stopDecoder) dec->stop();
     dec->deleteLater();
     rms_.reset();
+    onsets_.reset();
+    tempoAcc_.reset();
     if (rms.empty()) {
+        onsetTempo_ = {};
+        onsetBlocks_.clear();
         emit failed(tr("No readable sound track"));
         return;
     }
@@ -91,7 +130,10 @@ void AudioLevelDecoder::finishDecode(bool stopDecoder) {
     cacheTime_ = fi.lastModified();
     cacheStep_ = stepMs_;
     cacheMaxMs_ = maxMs_;
+    cacheHasOnsets_ = withOnsets_;
     cache_ = samn::NormalizeLoudness(rms);
+    cacheOnsetTempo_ = onsetTempo_;
+    cacheOnsetBlocks_ = onsetBlocks_;
     emit finished(cache_);
 }
 
@@ -101,6 +143,10 @@ void AudioLevelDecoder::onError() {
     decoder_->disconnect(this);
     decoder_.release()->deleteLater();
     rms_.reset();
+    onsets_.reset();
+    tempoAcc_.reset();
+    onsetTempo_ = {};
+    onsetBlocks_.clear();
     emit failed(msg.isEmpty() ? tr("No readable sound track") : msg);
 }
 

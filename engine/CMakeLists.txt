@@ -3,7 +3,8 @@
 file(GLOB SAMN_ENGINE_SOURCES CONFIGURE_DEPENDS src/*.cpp)
 add_library(samn_engine STATIC ${SAMN_ENGINE_SOURCES})
 target_include_directories(samn_engine PUBLIC include PRIVATE src)
-target_link_libraries(samn_engine PUBLIC samn_vision samn_core)
+find_package(Threads REQUIRED)
+target_link_libraries(samn_engine PUBLIC samn_vision samn_core PRIVATE Threads::Threads)
 if(MSVC)
   target_compile_options(samn_engine PRIVATE /W4 /utf-8)
 else()
@@ -25,3 +26,9 @@ target_link_libraries(samn_selfcheck PRIVATE samn_engine)
 add_executable(samn_bench tools/samn_bench.cpp)
 target_include_directories(samn_bench PRIVATE ${PROJECT_SOURCE_DIR}/tests/engine)
 target_link_libraries(samn_bench PRIVATE samn_engine)
+
+# Peak memory and speed of label tracking between two keys on a synthetic clip
+# (docs/benchmarks/LABEL_MEMORY_2026-11-08.md). By hand, not in ctest.
+add_executable(samn_label_mem EXCLUDE_FROM_ALL tools/samn_label_mem.cpp)
+target_include_directories(samn_label_mem PRIVATE ${PROJECT_SOURCE_DIR}/tests/engine)
+target_link_libraries(samn_label_mem PRIVATE samn_engine)

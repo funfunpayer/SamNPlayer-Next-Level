@@ -383,6 +383,100 @@ private slots:
         qInstallMessageHandler(g_previous);
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }
+
+    // Playback → Suggest: polarity text, apply O-zone, ring-down at the playhead.
+    void playbackSuggestCard() {
+        QTemporaryDir files;
+        const QString src = files.filePath("peak.funscript");
+        {
+            QByteArray body = "{\"actions\":[";
+            for (int i = 0; i <= 100; ++i) {
+                if (i) body += ',';
+                body += QStringLiteral("{\"at\":%1,\"pos\":%2}").arg(i * 100).arg(i >= 90 ? 90 : 20).toUtf8();
+            }
+            body += "]}";
+            QFile f(src);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(body);
+        }
+        g_messages.clear();
+        g_previous = qInstallMessageHandler(capture);
+        {
+            QQmlEngine engine;
+            engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
+            engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+            QQmlComponent comp(&engine);
+            comp.setData(R"(
+                import QtQuick
+                import SamN
+                Item {
+                    width: 360; height: 2200
+                    property alias player: pc
+                    property alias panel: panel
+                    DeviceController { id: dev }
+                    PlayerController { id: pc; device: dev }
+                    InspectorPanel { id: panel; anchors.fill: parent; ctrl: pc; device: dev; tab: 2 }
+                })",
+                         QUrl("qrc:/test/WrapperSuggest.qml"));
+            QVERIFY2(comp.status() == QQmlComponent::Ready, qPrintable(comp.errorString()));
+            QQuickWindow window;
+            window.resize(360, 900);
+            std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
+            QVERIFY(root);
+            root->setParentItem(window.contentItem());
+            window.show();
+            QVERIFY(QTest::qWaitForWindowExposed(&window));
+            auto* player = root->property("player").value<PlayerController*>();
+            QVERIFY(player);
+            auto* apply = root->findChild<QQuickItem*>("applySuggestedOZone");
+            auto* ring = root->findChild<QQuickItem*>("ringDown");
+            auto* check = root->findChild<QQuickItem*>("checkPolarity");
+            QVERIFY(apply && ring && check);
+            QCOMPARE(apply->property("text").toString(), QStringLiteral("Apply suggested O-zone"));
+            QCOMPARE(ring->property("text").toString(), QStringLiteral("Ring-down at playhead"));
+            QCOMPARE(check->property("text").toString(), QStringLiteral("Check / invert direction"));
+            QVERIFY(!apply->isEnabled());
+            QVERIFY(!ring->isEnabled());
+            QVERIFY(player->openPath(src));
+            QTRY_VERIFY(apply->isEnabled());
+            QTRY_VERIFY(ring->isEnabled());
+            auto* reason = root->findChild<QQuickItem*>("polarityReason");
+            QVERIFY(reason);
+            QTRY_VERIFY(reason->isVisible());
+            QVERIFY(!reason->property("text").toString().isEmpty());
+
+            const int points = player->pointCount();
+            QVERIFY(QMetaObject::invokeMethod(apply, "clicked"));
+            auto* zone = root->findChild<QQuickItem*>("ozoneNote");
+            QVERIFY(zone);
+            QTRY_VERIFY(zone->isVisible());
+            QVERIFY(zone->property("text").toString().contains("O-zone"));
+            QVERIFY(player->hasMarker());
+            QVERIFY(!player->oMarkers().isEmpty());
+            QCOMPARE(player->pointCount(), points);  // apply does not invert or rewrite the stroke
+
+            player->setVideoPositionMs(player->scriptDurationMs());
+            QVERIFY(QMetaObject::invokeMethod(ring, "clicked"));
+            auto* note = root->findChild<QQuickItem*>("ringDownNote");
+            QVERIFY(note);
+            QTRY_VERIFY(note->isVisible());
+            QVERIFY(player->toolNote().contains("Ring-down"));
+            QVERIFY(player->pointCount() > points);
+            QCOMPARE(player->actions().back().pos, 0);
+
+            const QString other = files.filePath("other.funscript");
+            {
+                QFile f(other);
+                QVERIFY(f.open(QIODevice::WriteOnly));
+                f.write(R"({"actions":[{"at":0,"pos":10},{"at":500,"pos":90},{"at":1000,"pos":10},{"at":1500,"pos":90}]})");
+            }
+            QVERIFY(player->openPath(other));
+            QTRY_VERIFY(!zone->isVisible());
+            QTRY_VERIFY(!note->isVisible());
+        }
+        qInstallMessageHandler(g_previous);
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
 };
 
 QTEST_MAIN(InspectorQmlTest)

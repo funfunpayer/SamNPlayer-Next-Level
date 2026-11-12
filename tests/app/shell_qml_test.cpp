@@ -302,6 +302,42 @@ private slots:
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }
 
+    // PARITY item 21: Library HelpChips on Local Files / Recent / Favorites /
+    // Scripts / Analysis resolve and a click opens the popover.
+    void libraryHelpChipsResolve() {
+        {
+            Shell s;
+            loadShell(s, 0);
+            QVERIFY(s.one("LibraryPanel"));
+            struct Row { const char* key; const char* snippet; };
+            const Row rows[] = {
+                {"library.local-files", "Opens a video or script"},
+                {"library.recent", "Newest scripts you opened"},
+                {"library.favorites", "Scripts you starred"},
+                {"library.scripts", "Imported = opened from disk"},
+                {"library.analysis", "Audio Analysis opens the waveform"},
+            };
+            QQuickItem* local = nullptr;
+            for (const Row& row : rows) {
+                QQuickItem* chip = nullptr;
+                for (QQuickItem* c : itemsOfType(s.root(), "HelpChip"))
+                    if (c->property("key").toString() == QLatin1String(row.key) && c->isVisible()) chip = c;
+                QVERIFY2(chip, row.key);
+                QVERIFY2(chip->property("text").toString().contains(QLatin1String(row.snippet)),
+                         qPrintable(QString("%1: %2").arg(row.key, chip->property("text").toString())));
+                if (QLatin1String(row.key) == QLatin1String("library.local-files")) local = chip;
+            }
+            QVERIFY(local);
+            QVERIFY(!local->property("open").toBool());
+            QTest::mouseClick(s.window, Qt::LeftButton, {},
+                              local->mapToScene(QPointF(local->width() / 2, local->height() / 2)).toPoint());
+            QTRY_VERIFY_WITH_TIMEOUT(local->property("open").toBool(), kWait);
+            QTest::keyClick(s.window, Qt::Key_Escape);
+            QTRY_VERIFY_WITH_TIMEOUT(!local->property("open").toBool(), kWait);
+        }
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
+
     void shellLoadsWithoutWarningsAndShowsItsIcons() {
         {
             Shell s;
@@ -565,6 +601,20 @@ private slots:
             page->setProperty("tab", 2);
             QTRY_VERIFY_WITH_TIMEOUT(byName("systemTab")->isVisible(), kWait);
             QVERIFY(byName("systemCheckAgain") && byName("systemCopyReport"));
+            QVERIFY(byName("reportPathField") && byName("reportPathChoose") && byName("reportPathDefault"));
+            QCOMPARE(byName("reportPathStatus")->property("text").toString(),
+                     QStringLiteral("No metrics recorded yet (path empty)."));
+            {
+                QObject* settings = page->property("settings").value<QObject*>();
+                QVERIFY(settings);
+                QCOMPARE(settings->property("reportPath").toString(), QString());
+                settings->setProperty("reportPath", QStringLiteral("/tmp/metrics.jsonl"));
+                QCOMPARE(byName("reportPathField")->property("text").toString(), QStringLiteral("/tmp/metrics.jsonl"));
+                QCOMPARE(byName("reportPathStatus")->property("text").toString(), QStringLiteral("/tmp/metrics.jsonl"));
+                settings->setProperty("reportPath", QString());
+                QCOMPARE(byName("reportPathStatus")->property("text").toString(),
+                         QStringLiteral("No metrics recorded yet (path empty)."));
+            }
             QMetaObject::invokeMethod(page->property("system").value<QObject*>(), "refresh");
             QTRY_VERIFY_WITH_TIMEOUT(byName("systemItem_settings"), kWait);
             QVERIFY(byName("systemItem_gpu") && byName("systemItem_ai-gpu"));
@@ -686,6 +736,25 @@ private slots:
                 if (c->isVisible() && c->property("text").isValid()) cells << c->property("text").toString();
             QCOMPARE(cells.mid(5), QStringList({"raw sweep vibration", "12", "1", "4.3 ms", "9.5 ms"}));
             QCOMPARE(byName("diagStatus")->property("text").toString(), QStringLiteral("Done."));
+            QVERIFY(!byName("diagHistoryHeading") || !byName("diagHistoryHeading")->isVisible());
+            {
+                QFile hist(dev->diagnosticsHistoryPath());
+                QVERIFY(hist.open(QIODevice::WriteOnly | QIODevice::Truncate));
+                hist.write("{\"startedAt\":\"2025-01-01T00:00:00.000Z\",\"name\":\"Old\",\"kind\":\"ble\",\"commands\":3,\"errors\":0,\"interrupted\":false}\n");
+                hist.write("{\"startedAt\":\"2025-06-02T12:00:00.000Z\",\"name\":\"Mock device\",\"kind\":\"mock\",\"commands\":12,\"errors\":1,\"interrupted\":true}\n");
+            }
+            QVERIFY(QMetaObject::invokeMethod(tab, "refreshHistory"));
+            QTRY_VERIFY(byName("diagHistoryHeading") && byName("diagHistoryHeading")->isVisible());
+            QStringList histLines;
+            for (QQuickItem* i : descendants(tab))
+                if (i->objectName() == QLatin1String("diagHistoryLine") && i->isVisible())
+                    histLines << i->property("text").toString();
+            QCOMPARE(histLines.size(), 2);
+            QVERIFY(histLines.at(0).contains(QStringLiteral("2025-06-02 (Mock)")));
+            QVERIFY(histLines.at(0).contains(QStringLiteral("12 commands, 1 errors, interrupted")));
+            QVERIFY(histLines.at(1).contains(QStringLiteral("2025-01-01 (Old)")));
+            QVERIFY(histLines.at(1).contains(QStringLiteral("3 commands, 0 errors")));
+            QVERIFY(!histLines.at(1).contains(QStringLiteral("interrupted")));
             if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT_DEVICE"); !shot.isEmpty()) {
                 QTest::qWait(300);
                 s.window->grabWindow().save(QString::fromLocal8Bit(shot));
@@ -1280,6 +1349,17 @@ private slots:
             s.window->setProperty("mode", 1);
             QTRY_COMPARE_WITH_TIMEOUT(s.mode(), 1, kWait);
             QTRY_VERIFY_WITH_TIMEOUT(byName("openHandbookCreate"), kWait);
+            // The Generator page is built by an asynchronous Loader and lays out a
+            // moment after its header button exists; the stage clips its rows to
+            // its column, so a click before that lands on nothing.
+            {
+                QQuickItem* stage = nullptr;
+                QTRY_VERIFY_WITH_TIMEOUT((stage = [&] {
+                    for (QQuickItem* i : descendants(s.root()))
+                        if (i->objectName() == QLatin1String("stageSplit") && i->isVisible()) return i;
+                    return static_cast<QQuickItem*>(nullptr);
+                }()) && stage->width() > 300, kWait);
+            }
             click(byName("openHandbookCreate"));
             QTRY_VERIFY_WITH_TIMEOUT(handbook->isVisible(), kWait);
             click(byName("handbookClose"));

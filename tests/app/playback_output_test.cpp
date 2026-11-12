@@ -794,6 +794,10 @@ private slots:
         QCOMPARE(p.activeLane(), QStringLiteral("twist"));
         p.stepActiveLane(1);
         QCOMPARE(p.activeLane(), QStringLiteral("stroke"));
+        p.stepActiveLane(1000);  // End → last
+        QCOMPARE(p.activeLane(), QStringLiteral("twist"));
+        p.stepActiveLane(-1000);  // Home → first
+        QCOMPARE(p.activeLane(), QStringLiteral("stroke"));
         // A Sam Neo 2 class device has no twist: the pick falls back.
         p.setActiveLane("twist");
         connectMock(dev);

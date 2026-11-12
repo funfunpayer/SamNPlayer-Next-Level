@@ -137,12 +137,12 @@ PlayerController::PlayerController(QObject* parent)
 }
 PlayerController::~PlayerController() = default;
 
-void PlayerController::setDevice(DeviceController* device) {
+void PlayerController::setDeviceService(DeviceService* device) {
     if (device == device_) return;
     if (device_) disconnect(device_, nullptr, this, nullptr);
     device_ = device;
     output_.setDevice(device);
-    if (device_) connect(device_, &DeviceController::statusChanged, this, &PlayerController::lanesChanged);
+    if (device_) connect(device_, &DeviceService::statusChanged, this, &PlayerController::lanesChanged);
     emit deviceChanged();
     emit lanesChanged();
 }
@@ -182,8 +182,17 @@ void PlayerController::setActiveLane(const QString& lane) {
 void PlayerController::stepActiveLane(int delta) {
     const QStringList choices = laneChoices();
     if (choices.size() < 2) return;
-    const int i = std::max<int>(0, int(choices.indexOf(activeLane_)));
     const int n = int(choices.size());
+    // |delta| >= n: Home / End from the legend (first / last lane).
+    if (delta <= -n) {
+        setActiveLane(choices.first());
+        return;
+    }
+    if (delta >= n) {
+        setActiveLane(choices.last());
+        return;
+    }
+    const int i = std::max<int>(0, int(choices.indexOf(activeLane_)));
     setActiveLane(choices[((i + delta) % n + n) % n]);
 }
 
@@ -689,6 +698,7 @@ bool PlayerController::openScript(const QString& pathIn, const QString& videoIn)
 
     scriptPath_ = path;
     loadMarks(path);
+    refreshScriptAnalysis();
     {
         const auto v = settings().get("playback.omarker_intensity", 0.5);
         oMarkerIntensity_ = v.is_number() ? std::clamp(v.get<double>(), 0.0, 1.0) : 0.5;
@@ -926,6 +936,10 @@ void PlayerController::clearScript() {
     playbackSource_ = QStringLiteral("recipe");
     emit mappedChanged();
     stroke_.clear();
+    if (!scriptAnalysisSummary_.isEmpty()) {
+        scriptAnalysisSummary_.clear();
+        emit scriptAnalysisSummaryChanged();
+    }
     vibration_.clear();
     suction_.clear();
     axisActions_.clear();

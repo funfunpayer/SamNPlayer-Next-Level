@@ -4,6 +4,7 @@
 #include <QFile>
 #include <QGuiApplication>
 #include <QHoverEvent>
+#include <QMouseEvent>
 #include <QMediaPlayer>
 #include <QQmlComponent>
 #include <QQmlEngine>
@@ -15,6 +16,7 @@
 #include <QtTest>
 
 #include <algorithm>
+#include <cmath>
 
 #include "device_controller.h"
 #include "frame_provider.h"
@@ -142,6 +144,16 @@ private slots:
         g_messages.clear();
         g_previous = qInstallMessageHandler(capture);
         runSceneThumbs();
+        qInstallMessageHandler(g_previous);
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
+
+    // PARITY quick win: header "Player" + empty-script wording, stage keys
+    // hint + help chip, and the Player shortcuts actually fire.
+    void headerKeysAndShortcuts() {
+        g_messages.clear();
+        g_previous = qInstallMessageHandler(capture);
+        runHeaderKeysAndShortcuts();
         qInstallMessageHandler(g_previous);
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }
@@ -327,16 +339,42 @@ private:
             QCoreApplication::sendEvent(area, &leave);
             QTRY_VERIFY(!tip->isVisible());
         }
-        // 0.7 legend chips: a click on a lane's name shows it in the main curve;
+        // 0.7 legend chips: toolbar row above the ruler + left name column.
         // Up / Down move on (two lanes: stroke and twist, wrapping).
+        auto* legend = named(page, "axisLegend");
+        QVERIFY(legend && legend->isVisible());
+        auto* twistChip = named(page, "axisChip_twist");
+        QVERIFY(twistChip && twistChip->isVisible());
         auto* twistName = named(page, "laneName_twist");
         QVERIFY(twistName && twistName->isVisible());
-        QTest::mouseClick(page->window(), Qt::LeftButton, {},
-                          twistName->mapToScene(QPointF(twistName->width() / 2, twistName->height() / 2)).toPoint());
+        QTRY_VERIFY(twistChip->width() > 10);
+        QTRY_VERIFY(twistChip->height() > 10);
+        {
+            QQuickItem* area = nullptr;
+            for (QQuickItem* child : twistChip->childItems()) {
+                if (QString::fromLatin1(child->metaObject()->className()).contains(QLatin1String("MouseArea")))
+                    area = child;
+            }
+            QVERIFY2(area, "no MouseArea on axis chip");
+            QVERIFY2(area->width() > 10 && area->height() > 10,
+                     qPrintable(QStringLiteral("MouseArea %1x%2 enabled=%3")
+                                    .arg(area->width())
+                                    .arg(area->height())
+                                    .arg(area->isEnabled())));
+            // Deliver press/release to the MouseArea itself (window click can miss stacked QML).
+            const QPointF local(area->width() / 2, area->height() / 2);
+            QMouseEvent press(QEvent::MouseButtonPress, local, area->mapToScene(local),
+                              Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+            QMouseEvent release(QEvent::MouseButtonRelease, local, area->mapToScene(local),
+                                Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+            QVERIFY(QCoreApplication::sendEvent(area, &press));
+            QVERIFY(QCoreApplication::sendEvent(area, &release));
+        }
         QTRY_COMPARE(ctrl->activeLane(), QStringLiteral("twist"));
         QCOMPARE(named(page, "mainCurve")->property("lane").toString(), QStringLiteral("twist"));
         QCOMPARE(named(page, "mainCurveLane")->property("text").toString(), QStringLiteral("Twist"));
         QVERIFY(twistName->property("active").toBool());
+        QVERIFY(twistChip->property("active").toBool());
         QTest::keyClick(page->window(), Qt::Key_Down);
         QTRY_COMPARE(ctrl->activeLane(), QStringLiteral("stroke"));
         QCOMPARE(named(page, "mainCurve")->property("lane").toString(), QStringLiteral("stroke"));
@@ -641,13 +679,16 @@ private:
         QVERIFY(ctrl->lastError().contains(QStringLiteral("broken.mp4")));
     }
 
-    // Centre of slot i, matching PlayerTimeline.thumbMs (upper clamp only once
-    // the video's duration is known). The frame URL rounds it; the click seeks
-    // the centre itself.
+    // Centre of slot i, matching PlayerTimeline.thumbMs (power-of-two grid snap
+    // like the Generator strip, then clamp once the video duration is known).
     static double thumbCentre(double t0, double t1, double durationMs, int i) {
-        const double raw = t0 + (i + 0.5) * (t1 - t0) / 24.0;
-        const double hi = durationMs > 0 ? durationMs - 1.0 : raw;
-        return std::min(std::max(0.0, raw), std::max(0.0, hi));
+        const double span = std::max(1.0, t1 - t0);
+        const double step = std::max(1.0, span / 24.0);
+        const double grid = std::pow(2.0, std::floor(std::log2(step)));
+        const double raw = t0 + (i + 0.5) * span / 24.0;
+        const double snapped = std::round(raw / grid) * grid;
+        const double hi = durationMs > 0 ? durationMs - 1.0 : snapped;
+        return std::min(std::max(0.0, snapped), std::max(0.0, hi));
     }
     static qint64 thumbMs(double t0, double t1, double durationMs, int i) {
         return qRound64(thumbCentre(t0, t1, durationMs, i));
@@ -676,13 +717,94 @@ private:
             *why = src;
             return false;
         }
-        if (rest.mid(s1 + 1, s2 - s1 - 1) != QLatin1String("40")) {
+        if (rest.mid(s1 + 1, s2 - s1 - 1) != QLatin1String("72")) {
             *why = src;
             return false;
         }
         *ms = rest.left(s1).toLongLong();
         *path = QUrl::fromPercentEncoding(rest.mid(s2 + 1).toUtf8());
         return true;
+    }
+
+    void runHeaderKeysAndShortcuts() {
+        QQmlEngine engine;
+        engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
+        engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+        engine.addImageProvider(QStringLiteral("frames"), new samn::ui::FrameProvider);
+        QQmlComponent comp(&engine);
+        comp.setData(R"(
+            import QtQuick
+            import SamN
+            Item {
+                width: 1000; height: 700
+                property alias page: pp
+                DeviceController { id: dev }
+                PlayerPage { id: pp; anchors.fill: parent; device: dev }
+            })",
+                     QUrl("qrc:/test/Wrapper.qml"));
+        QVERIFY2(comp.status() == QQmlComponent::Ready, qPrintable(comp.errorString()));
+        QQuickWindow window;
+        window.resize(1000, 700);
+        std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
+        QVERIFY(root);
+        root->setParentItem(window.contentItem());
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto* page = root->property("page").value<QQuickItem*>();
+        auto* ctrl = page->property("controller").value<PlayerController*>();
+        QVERIFY(page && ctrl);
+
+        QCOMPARE(named(page, "playerHeaderTitle")->property("text").toString(), QStringLiteral("Player"));
+        QCOMPARE(named(page, "playerHeaderScriptLabel")->property("text").toString(),
+                 QStringLiteral("No Emotion Script selected"));
+
+        QTemporaryDir dir;
+        const QString script = dir.filePath(QStringLiteral("keys.funscript"));
+        QFile f(script);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(R"({"actions":[{"at":0,"pos":0},{"at":2000,"pos":100},{"at":5000,"pos":0},{"at":8000,"pos":50}]})");
+        f.close();
+        QVERIFY(ctrl->openPath(script));
+        QTRY_VERIFY(ctrl->hasScript());
+        QCOMPARE(named(page, "playerHeaderScriptLabel")->property("text").toString(), QStringLiteral("keys.funscript"));
+
+        auto* hint = named(page, "keysHint");
+        QVERIFY(hint && hint->isVisible());
+        QVERIFY(hint->property("text").toString().contains(QStringLiteral("Space")));
+        QVERIFY(named(page, "keysHintHelp")->isVisible());
+
+        // Shortcuts (Player page visible, no overlay).
+        const qint64 before = ctrl->playheadMs();
+        QTest::keyClick(&window, Qt::Key_Right);
+        QTRY_VERIFY(ctrl->playheadMs() >= before + 4000);  // +5 s, clamped by duration
+        QTest::keyClick(&window, Qt::Key_Left);
+        QTRY_VERIFY(ctrl->playheadMs() < before + 4000);
+
+        const int off0 = ctrl->offsetMs();
+        QTest::keyClick(&window, Qt::Key_Plus);
+        QTRY_COMPARE(ctrl->offsetMs(), off0 + 10);
+        QTest::keyClick(&window, Qt::Key_Minus);
+        QTRY_COMPARE(ctrl->offsetMs(), off0);
+
+        QVERIFY(!ctrl->loopEnabled());
+        QTest::keyClick(&window, Qt::Key_L);
+        QTRY_VERIFY(ctrl->loopEnabled());
+        QTest::keyClick(&window, Qt::Key_L);
+        QTRY_VERIFY(!ctrl->loopEnabled());
+
+        QTest::keyClick(&window, Qt::Key_T);
+        QTRY_VERIFY(page->property("theatre").toBool());
+        QTest::keyClick(&window, Qt::Key_T);
+        QTRY_VERIFY(!page->property("theatre").toBool());
+
+        const int marks0 = ctrl->oMarkers().size();
+        QTest::keyClick(&window, Qt::Key_O);
+        QTRY_COMPARE(ctrl->oMarkers().size(), marks0 + 1);
+
+        QTest::keyClick(&window, Qt::Key_Space);
+        QTRY_VERIFY(page->property("playing").toBool());
+        QTest::keyClick(&window, Qt::Key_Space);
+        QTRY_VERIFY(!page->property("playing").toBool());
     }
 
     void runSceneThumbs() {
@@ -732,7 +854,7 @@ private:
                 why = QStringLiteral("strip hidden");
                 return false;
             }
-            if (std::abs(chapter->height() - 66.0) > 0.5) {
+            if (std::abs(chapter->height() - 78.0) > 0.5) {
                 why = QStringLiteral("chapter height %1").arg(chapter->height());
                 return false;
             }
@@ -782,15 +904,18 @@ private:
         QTRY_VERIFY_WITH_TIMEOUT(media->mediaStatus() != QMediaPlayer::LoadingMedia || media->duration() > 0, 10000);
         QVERIFY2(QTest::qWaitFor(sourcesMatch, 5000), qPrintable(why));
         QVERIFY(named(page, "sceneThumb_23")->x() > named(page, "sceneThumb_0")->x() + 20);
-        // The 24 centres are spread across the view, one slot apart.
+        // The 24 centres are spread across the view on the power-of-two grid
+        // (adjacent slots may share a key; opposite rounding can span 2 grids).
         {
-            const double step = (ctrl->viewEndMs() - ctrl->viewStartMs()) / 24.0;
+            const double span = ctrl->viewEndMs() - ctrl->viewStartMs();
+            const double step = span / 24.0;
             QVERIFY(step > 1.0);
+            const double grid = std::pow(2.0, std::floor(std::log2(std::max(1.0, step))));
             qint64 prev = thumbMs(ctrl->viewStartMs(), ctrl->viewEndMs(), double(media->duration()), 0);
             for (int i = 1; i < 24; ++i) {
                 const qint64 ms = thumbMs(ctrl->viewStartMs(), ctrl->viewEndMs(), double(media->duration()), i);
                 QVERIFY(ms >= prev);
-                QVERIFY(ms - prev <= qRound64(step) + 1);
+                QVERIFY(ms - prev <= qRound64(2.0 * grid) + 1);
                 prev = ms;
             }
             QVERIFY(prev > thumbMs(ctrl->viewStartMs(), ctrl->viewEndMs(), double(media->duration()), 0));

@@ -7,10 +7,16 @@
 #include <QtTest>
 #include <chrono>
 
+#include "ai_tip.h"
 #include "generator_controller.h"
 #include "samn/samn_file.h"
 #include "samn/settings.h"
+#include "samn/vision/onnx_detector.h"
 #include "synthetic_clips.h"
+
+#include <QDir>
+#include <QFile>
+#include <opencv2/core.hpp>
 
 using samn::ui::GeneratorController;
 namespace clips = samn::engine::testclips;
@@ -881,6 +887,134 @@ private slots:
         QVERIFY(!QFileInfo::exists(own.filePath("long.funscript")));
         QVERIFY(!QFileInfo::exists(own.filePath("long.samn")));
         QCOMPARE(g.step(), 3);
+    }
+
+    void aiTipHelperPicksMatchingClassWithoutFallback() {
+        using samn::ui::AiTipModel;
+        using samn::ui::ListAiHits;
+        using samn::ui::PickExpectedTip;
+        QVERIFY(samn::ui::LabelsMatchTip("penis", "glans"));
+        QVERIFY(samn::ui::LabelsMatchTip("glans", "penis"));
+        QVERIFY(!samn::ui::LabelsMatchTip("face", "glans"));
+        AiTipModel nn;
+        nn.nudenet = true;
+        samn::vision::Detection penis;
+        penis.cls = 14;  // MALE_GENITALIA_EXPOSED → penis
+        penis.score = 0.9f;
+        penis.box = cv::Rect2f(10, 20, 40, 50);
+        samn::vision::Detection face;
+        face.cls = 1;  // FACE_FEMALE → face
+        face.score = 0.8f;
+        face.box = cv::Rect2f(100, 10, 30, 30);
+        samn::vision::Detection covered;
+        covered.cls = 16;  // FEMALE_BREAST_COVERED → no label
+        covered.score = 0.95f;
+        covered.box = cv::Rect2f(5, 5, 40, 40);
+        const auto hits = ListAiHits({face, penis, covered}, nn);
+        QCOMPARE(int(hits.size()), 2);
+        const auto pick = PickExpectedTip(hits, "glans");
+        QVERIFY(pick);
+        QCOMPARE(pick->x, 10);
+        QCOMPARE(pick->y, 20);
+        QCOMPARE(QString::fromStdString(pick->label), QStringLiteral("penis"));
+        QVERIFY(!PickExpectedTip(hits, "mouth"));
+    }
+
+    void suggestAiTipStaysPendingUntilApply() {
+        GeneratorController g;
+        g.setAutoTip(false);
+        const auto restore = qScopeGuard([&] { g.setAutoTip(true); });
+        QVERIFY(!g.aiTipAvailable());
+        QVERIFY(g.aiTipHint().contains(QLatin1String("No AI model")) ||
+                g.aiTipHint().contains(QLatin1String("no ONNX Runtime")));
+        QVERIFY(!g.suggestAiTip());  // no video
+        QVERIFY(g.openVideo(clip("ai_tip.mp4", 8), false));
+        QVERIFY(!g.hasBox());
+        QVERIFY(!g.suggestAiTip());  // no model
+        QVERIFY(!g.hasBox());
+        QVERIFY(g.status().contains(QLatin1String("No AI model")) ||
+                g.status().contains(QLatin1String("no ONNX Runtime")));
+
+        g.setFakeAiHitsForTest({QVariantMap{{"x", 20},
+                                            {"y", 30},
+                                            {"w", 40},
+                                            {"h", 50},
+                                            {"score", 0.9},
+                                            {"label", "penis"},
+                                            {"cls", 14}},
+                                QVariantMap{{"x", 80},
+                                            {"y", 10},
+                                            {"w", 24},
+                                            {"h", 24},
+                                            {"score", 0.7},
+                                            {"label", "face"},
+                                            {"cls", 1}}});
+        QVERIFY(g.aiTipAvailable());
+        QVERIFY(g.suggestAiTip());
+        QVERIFY(g.hasAiTipProposal());
+        QVERIFY(!g.hasBox());  // Apply required
+        QCOMPARE(g.aiDetections().size(), 2);
+        QCOMPARE(g.aiTipProposal().value("x").toInt(), 20);
+        QCOMPARE(g.aiTipProposal().value("label").toString(), QStringLiteral("penis"));
+        QVERIFY(g.applyAiTip());
+        QCOMPARE(g.box(), QRect(20, 30, 40, 50));
+        QVERIFY(!g.hasAiTipProposal());
+        QCOMPARE(g.status(), QStringLiteral("Tip box applied from AI proposal."));
+    }
+
+    void dismissAndPickAiDetectionStillNeedApply() {
+        GeneratorController g;
+        g.setAutoTip(false);
+        const auto restore = qScopeGuard([&] { g.setAutoTip(true); });
+        QVERIFY(g.openVideo(clip("ai_tip2.mp4", 8), false));
+        g.setFakeAiHitsForTest({QVariantMap{{"x", 12},
+                                            {"y", 14},
+                                            {"w", 32},
+                                            {"h", 32},
+                                            {"score", 0.6},
+                                            {"label", "face"},
+                                            {"cls", 1}}});
+        QVERIFY(g.suggestAiTip());
+        QVERIFY(!g.hasAiTipProposal());  // face ≠ glans, no fallback
+        QCOMPARE(g.aiDetections().size(), 1);
+        QVERIFY(!g.hasBox());
+        g.pickAiDetection(1);  // ignored
+        QVERIFY(!g.hasAiTipProposal());
+        g.pickAiDetection(0);
+        QVERIFY(g.hasAiTipProposal());
+        QVERIFY(!g.hasBox());
+        g.dismissAiTip();
+        QVERIFY(!g.hasAiTipProposal());
+        QVERIFY(g.aiDetections().isEmpty());
+        QVERIFY(!g.hasBox());
+        QCOMPARE(g.status(), QStringLiteral("AI tip proposal dismissed."));
+        QVERIFY(!g.applyAiTip());
+    }
+
+    void suggestAiTipOnTinyOnnxDoesNotWriteTheBox() {
+        if (!samn::vision::OnnxDetector::Available()) {
+            QSKIP("this build has no ONNX Runtime");
+        }
+        const QString src = QStringLiteral(SAMN_VISION_TESTDATA) + "/tiny_nudenet.onnx";
+        QVERIFY(QFileInfo::exists(src));
+        const QString models = dir_.filePath("config/models");
+        QVERIFY(QDir().mkpath(models));
+        const QString dest = models + "/nudenet.onnx";
+        QFile::remove(dest);
+        QVERIFY(QFile::copy(src, dest));
+        GeneratorController g;
+        g.setAutoTip(false);
+        const auto restore = qScopeGuard([&] {
+            g.setAutoTip(true);
+            QFile::remove(dest);
+        });
+        QVERIFY(g.openVideo(clip("ai_onnx.mp4", 8), false));
+        QVERIFY(g.aiTipAvailable());
+        const QRect before = g.box();
+        QVERIFY(g.suggestAiTip());
+        QTRY_VERIFY_WITH_TIMEOUT(!g.suggestingAiTip(), 30000);
+        QCOMPARE(g.box(), before);  // never silent-write
+        QVERIFY(!g.hasBox());
     }
 
     void closingTheAppDuringARunReturnsPromptly() {

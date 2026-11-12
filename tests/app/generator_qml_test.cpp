@@ -278,6 +278,22 @@ private slots:
         QTRY_VERIFY(named(root.get(), "vibSourceRow")->isVisible());
         QVERIFY(!named(root.get(), "neoFeel")->isVisible());
         QVERIFY(named(root.get(), "feelHint")->isVisible());
+        // The Feel card shows the everyday controls; the rest opens on demand.
+        QVERIFY(named(root.get(), "styleCombo")->isVisible());
+        QVERIFY(named(root.get(), "feelDeviceCombo")->isVisible());
+        QVERIFY(!named(root.get(), "feelMore")->isVisible());
+        QVERIFY(!named(root.get(), "contactMarks")->isVisible());
+        QVERIFY(named(root.get(), "feelMoreToggle")->property("text").toString().startsWith("More"));
+        QMetaObject::invokeMethod(named(root.get(), "feelMoreToggle"), "clicked");
+        QTRY_VERIFY(named(root.get(), "feelMore")->isVisible());
+        QVERIFY(named(root.get(), "toggle_autoTip")->isVisible());
+        QVERIFY(named(root.get(), "feelMoreToggle")->property("text").toString().startsWith("Fewer"));
+        // Fold again, then drawn areas open the options and take the toggle away (no dead button).
+        QMetaObject::invokeMethod(named(root.get(), "feelMoreToggle"), "clicked");
+        QTRY_VERIFY(!named(root.get(), "feelMore")->isVisible());
+        QVERIFY(named(root.get(), "feelMoreToggle")->property("text").toString().startsWith("More"));
+        QMetaObject::invokeMethod(named(root.get(), "feelMoreToggle"), "clicked");
+        QTRY_VERIFY(named(root.get(), "feelMore")->isVisible());
         gen->setFeelDevice("stroker");
         QTRY_VERIFY(!named(root.get(), "contactMarks")->isVisible());
         gen->setShowAllFeel(true);
@@ -308,8 +324,23 @@ private slots:
         QMetaObject::invokeMethod(named(root.get(), "markContact"), "clicked");
         QTRY_VERIFY(gen->markContact());
         const QRect tip = gen->box();
-        const QPointF c1 = frame->mapToScene(QPointF(ir.x() + 20 * s, ir.y() + 20 * s));
-        const QPointF c2 = frame->mapToScene(QPointF(ir.x() + 80 * s, ir.y() + 70 * s));
+        // The frame has moved and resized since it was measured above (cards open,
+        // rows change); measure it again, settled, right before the drag.
+        {
+            QRectF last;
+            int steady = 0;
+            QTRY_VERIFY([&] {
+                const QRectF now = frame->property("imageRect").toRectF();
+                steady = (now == last && !now.isEmpty()) ? steady + 1 : 0;
+                last = now;
+                QTest::qWait(40);
+                return steady >= 3;
+            }());
+            ir = last;
+        }
+        const double sc = ir.width() / 320.0;
+        const QPointF c1 = frame->mapToScene(QPointF(ir.x() + 20 * sc, ir.y() + 20 * sc));
+        const QPointF c2 = frame->mapToScene(QPointF(ir.x() + 80 * sc, ir.y() + 70 * sc));
         QTest::mousePress(&window, Qt::LeftButton, {}, c1.toPoint());
         QTest::mouseMove(&window, ((c1 + c2) / 2).toPoint());
         QTRY_VERIFY(named(root.get(), "contactDraft")->isVisible());
@@ -317,6 +348,9 @@ private slots:
         QTest::mouseRelease(&window, Qt::LeftButton, {}, c2.toPoint());
         QTRY_COMPARE(gen->contactAreas().size(), 1);
         QVERIFY(!gen->markContact());
+        // Drawn areas keep the options open and take the toggle away (no dead button).
+        QTRY_VERIFY(named(root.get(), "feelMore")->isVisible());
+        QTRY_VERIFY(!named(root.get(), "feelMoreToggle")->isVisible());
         QCOMPARE(gen->box(), tip);
         const QVariantMap area = gen->contactAreas().first().toMap();
         QVERIFY(qAbs(area.value("x").toInt() - 20) <= 2);
@@ -696,6 +730,339 @@ private slots:
         QTRY_COMPARE(align->property("currentIndex").toInt(), 0);
         QTRY_COMPARE(post->property("currentIndex").toInt(), 0);
         gen->setOptimizeTarget(QString());
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
+    }
+
+    void suggestTipAiDisabledWithoutModelAndApplyCommits() {
+        g_messages.clear();
+        const QString video = dir_.filePath("ai_tip.mp4");
+        QVERIFY(samn::engine::testclips::WriteMoving(std::filesystem::path(video.toStdU16String()), 8, 80.0, 1.0));
+        QQmlEngine engine;
+        engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
+        engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+        engine.addImageProvider(QStringLiteral("frames"), new samn::ui::FrameProvider);
+        QQmlComponent comp(&engine);
+        comp.setData(R"(
+            import QtQuick
+            import SamN
+            Rectangle {
+                width: 1400; height: 820; color: "#021024"
+                property alias page: gp
+                GeneratorPage { id: gp; anchors.fill: parent; anchors.margins: 20 }
+            })",
+                     QUrl("qrc:/test/AiTip.qml"));
+        QVERIFY2(comp.status() == QQmlComponent::Ready, qPrintable(comp.errorString()));
+        QQuickWindow window;
+        window.resize(1400, 820);
+        std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
+        QVERIFY(root);
+        root->setParentItem(window.contentItem());
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto* page = root->property("page").value<QQuickItem*>();
+        auto* gen = page->property("controller").value<GeneratorController*>();
+        QVERIFY(page && gen);
+        gen->setAutoTip(false);
+        QVERIFY(gen->openVideo(video, false));
+        QTRY_VERIFY(named(root.get(), "suggestAiTip"));
+        QVERIFY(!named(root.get(), "suggestAiTip")->isEnabled());
+        QVERIFY(named(root.get(), "aiTipHint")->isVisible());
+        QVERIFY(!named(root.get(), "applyAiTip")->isVisible());
+        QVERIFY(!gen->hasBox());
+
+        gen->setFakeAiHitsForTest({QVariantMap{{"x", 40},
+                                               {"y", 50},
+                                               {"w", 48},
+                                               {"h", 36},
+                                               {"score", 0.88},
+                                               {"label", "penis"},
+                                               {"cls", 14}}});
+        QTRY_VERIFY(named(root.get(), "suggestAiTip")->isEnabled());
+        QMetaObject::invokeMethod(named(root.get(), "suggestAiTip"), "clicked");
+        QTRY_VERIFY(gen->hasAiTipProposal());
+        QVERIFY(!gen->hasBox());
+        QTRY_VERIFY(named(root.get(), "applyAiTip")->isVisible());
+        QTRY_VERIFY(named(root.get(), "aiTipProposal")->isVisible());
+        QTRY_VERIFY(named(root.get(), "aiDetection_0"));
+        QMetaObject::invokeMethod(named(root.get(), "applyAiTip"), "clicked");
+        QTRY_COMPARE(gen->box(), QRect(40, 50, 48, 36));
+        QTRY_VERIFY(!named(root.get(), "applyAiTip")->isVisible());
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
+    }
+
+    // Review-card Improve panel: Start/End, Fill and Heal defaults, button
+    // runs EditorController::improveScript on the open script.
+    void improvePanelShowsAndRuns() {
+        g_messages.clear();
+        QTemporaryDir scripts;
+        QVERIFY(scripts.isValid());
+        const QString script = scripts.filePath(QStringLiteral("clip.funscript"));
+        {
+            QFile f(script);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(R"({"actions":[{"at":0,"pos":10},{"at":2000,"pos":90}]})");
+        }
+        QQmlEngine engine;
+        engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
+        engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+        engine.addImageProvider(QStringLiteral("frames"), new samn::ui::FrameProvider);
+        QQmlComponent comp(&engine);
+        comp.setData(R"(
+            import QtQuick
+            import SamN
+            Rectangle {
+                width: 1400; height: 820; color: "#021024"
+                property alias page: gp
+                GeneratorPage { id: gp; anchors.fill: parent; anchors.margins: 20 }
+            })",
+                     QUrl("qrc:/test/ImprovePanel.qml"));
+        QVERIFY2(comp.status() == QQmlComponent::Ready, qPrintable(comp.errorString()));
+        QQuickWindow window;
+        window.resize(1400, 820);
+        std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
+        QVERIFY(root);
+        root->setParentItem(window.contentItem());
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto* page = root->property("page").value<QQuickItem*>();
+        auto* edit = page->property("editor").value<QObject*>();
+        QVERIFY(page && edit);
+        bool opened = false;
+        QVERIFY(QMetaObject::invokeMethod(edit, "open", Q_RETURN_ARG(bool, opened), Q_ARG(QString, script)));
+        QVERIFY(opened);
+        QTRY_VERIFY(named(root.get(), "improvePanel")->isVisible());
+        QVERIFY(named(root.get(), "improveStart"));
+        QVERIFY(named(root.get(), "improveEnd"));
+        QCOMPARE(named(root.get(), "improveFill")->property("checked").toBool(), true);
+        QCOMPARE(named(root.get(), "improveHeal")->property("checked").toBool(), true);
+        QVERIFY(named(root.get(), "improveButton")->isVisible());
+        QMetaObject::invokeMethod(named(root.get(), "improveButton"), "clicked");
+        const QString status = edit->property("status").toString();
+        QVERIFY2(status.startsWith("Improved:"), qPrintable(status));
+        QTRY_VERIFY(named(root.get(), "improveStatus")->isVisible());
+        QVERIFY2(named(root.get(), "improveStatus")->property("text").toString().startsWith("Improved:"),
+                 qPrintable(named(root.get(), "improveStatus")->property("text").toString()));
+        const QString other = scripts.filePath(QStringLiteral("other.funscript"));
+        {
+            QFile f(other);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(R"({"actions":[{"at":0,"pos":0},{"at":1000,"pos":100},{"at":2000,"pos":0}]})");
+        }
+        opened = false;
+        QVERIFY(QMetaObject::invokeMethod(edit, "open", Q_RETURN_ARG(bool, opened), Q_ARG(QString, other)));
+        QVERIFY(opened);
+        QTRY_VERIFY(!named(root.get(), "improveStatus")->isVisible());
+        QCOMPARE(named(root.get(), "improvePanel")->property("lastStatus").toString(), QString());
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
+    }
+    // The transport in a narrow card with wide left controls (what Windows fonts
+    // make of the time and speed): the slider, then the 10 s buttons, give way
+    // and nothing overlaps; wide, everything is there. Without allowTight (the
+    // Player) nothing is hidden.
+    void transportClosesUpBeforeItOverlaps() {
+        g_messages.clear();
+        QQmlEngine engine;
+        engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
+        engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+        QQmlComponent comp(&engine);
+        comp.setData(R"(
+            import QtQuick
+            import SamN
+            Item {
+                property alias tight: t
+                property alias loose: l
+                property real w: 900
+                width: w; height: 300
+                VideoTransport { id: t; objectName: "tightTransport"; compact: true; allowTight: true; width: parent.w; y: 0
+                    leftItems: [Item { width: 220; height: 24 }] }
+                VideoTransport { id: l; objectName: "looseTransport"; compact: true; width: parent.w; y: 120
+                    leftItems: [Item { width: 220; height: 24 }] }
+            })",
+                     QUrl("qrc:/test/Transport.qml"));
+        QVERIFY2(comp.status() == QQmlComponent::Ready, qPrintable(comp.errorString()));
+        QQuickWindow window;
+        std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
+        QVERIFY(root);
+        root->setParentItem(window.contentItem());
+        window.resize(900, 300);
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto* t = named(root.get(), "tightTransport");
+        auto* l = named(root.get(), "looseTransport");
+        // Wide: all there, not crowded.
+        QTRY_VERIFY(!t->property("crowded").toBool());
+        QVERIFY(!t->property("tight").toBool());
+        QVERIFY(!t->property("veryTight").toBool());
+        // Narrower: the slider goes first, then the 10 s buttons; never crowded.
+        for (int w : {700, 620, 560, 520, 480, 460, 440}) {
+            root->setProperty("w", w);
+            QTest::qWait(80);
+            QTRY_VERIFY2(!t->property("crowded").toBool(), qPrintable(QString("crowded at %1").arg(w)));
+        }
+        QVERIFY(t->property("veryTight").toBool());
+        QVERIFY(!named(t, "back10Button")->isVisible());
+        // The same width without allowTight (the Player) hides nothing.
+        QVERIFY(!l->property("tight").toBool());
+        QVERIFY(named(l, "back10Button")->isVisible());
+        QVERIFY(named(l, "volume")->isVisible());
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
+    }
+
+    // The Create side (Video, Feel, Create) is one scroll area: on a short
+    // window every control can be brought into view.
+    void createSideScrollsOnAShortWindow() {
+        g_messages.clear();
+        const QString video = dir_.filePath("scroll.mp4");
+        QVERIFY(samn::engine::testclips::WriteMoving(std::filesystem::path(video.toStdU16String()), 4, 80.0, 1.0));
+        const QString script = dir_.filePath("scroll.funscript");
+        {
+            QFile f(script);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(R"({"actions":[{"at":0,"pos":10},{"at":2000,"pos":90},{"at":4000,"pos":20}]})");
+        }
+        for (const QSize size : {QSize(960, 600), QSize(1180, 700), QSize(1400, 820)}) {
+            QQmlEngine engine;
+            engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
+            engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+            engine.addImageProvider(QStringLiteral("frames"), new samn::ui::FrameProvider);
+            QQmlComponent comp(&engine);
+            comp.setData(R"(
+                import QtQuick
+                import SamN
+                Rectangle {
+                    color: "#021024"
+                    property alias page: gp
+                    GeneratorPage { id: gp; anchors.fill: parent; anchors.margins: 20 }
+                })",
+                         QUrl("qrc:/test/CreateScroll.qml"));
+            QVERIFY2(comp.status() == QQmlComponent::Ready, qPrintable(comp.errorString()));
+            QQuickWindow window;
+            window.resize(size);
+            std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
+            QVERIFY(root);
+            root->setParentItem(window.contentItem());
+            root->setSize(size);
+            window.show();
+            QVERIFY(QTest::qWaitForWindowExposed(&window));
+            auto* page = root->property("page").value<QQuickItem*>();
+            auto* gen = page->property("controller").value<GeneratorController*>();
+            QVERIFY(gen);
+            gen->openVideo(video);
+            QTRY_VERIFY(gen->hasVideo());
+            gen->setContactVibration(true);
+            QTest::qWait(300);
+            if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT_SCROLL"); !shot.isEmpty())
+                window.grabWindow().save(QString::fromLocal8Bit(shot + "_" + QByteArray::number(size.width()) + "_default.png"));
+            page->setProperty("feelMore", true);
+            auto* scroll = named(root.get(), "createScroll");
+            QVERIFY(scroll);
+            QTRY_VERIFY(scroll->property("contentHeight").toReal() > 0);
+            // The opened feel options need a moment to lay out.
+            QTRY_VERIFY(named(root.get(), "feelMore")->isVisible());
+            QTest::qWait(300);
+            const qreal view = scroll->height();
+            const qreal content = scroll->property("contentHeight").toReal();
+            QVERIFY2(view > 200, qPrintable(QString("view %1").arg(view)));
+            // Whether an item lies fully inside the scroll area's viewport.
+            auto inView = [&](const char* name) {
+                auto* item = named(root.get(), name);
+                if (!item || !item->isVisible()) return false;
+                const qreal top = item->mapToItem(scroll, QPointF(0, 0)).y();
+                return top >= -0.5 && top + item->height() <= scroll->height() + 0.5;
+            };
+            auto* edit = page->property("editor").value<QObject*>();
+            bool opened = false;
+            QVERIFY(QMetaObject::invokeMethod(edit, "open", Q_RETURN_ARG(bool, opened), Q_ARG(QString, script)));
+            QVERIFY(opened);
+            QTRY_VERIFY(named(root.get(), "alignBar")->isVisible());
+            // The stage never paints over the side panels: its cards and their
+            // rows stay inside the stage column, on the narrowest window too.
+            auto* stage = named(root.get(), "stageSplit");
+            QTRY_VERIFY(stage->width() > 300);
+            QTRY_COMPARE(named(root.get(), "projectPanel")->width(), size.width() < 1220 ? 44.0 : 248.0);
+            for (const char* name : {"editorCard", "generatorTransport", "tipRow", "editorToolbar", "alignBar", "rangeBar", "ruler"}) {
+                auto* item = named(root.get(), name);
+                QVERIFY2(item, name);
+                // The layout settles a moment after the video and the script open.
+                auto right = [&] { return item->mapToItem(stage, QPointF(item->width(), 0)).x(); };
+                // On a failure the message names the chain of parents and their widths,
+                // and the widest children of the first parent that is too wide.
+                auto chain = [&] {
+                    QString out;
+                    for (QQuickItem* p = item; p && p != stage->parentItem(); p = p->parentItem())
+                        out += QString(" <%1 %2 w=%3 iw=%4 x=%5>").arg(p->objectName(), QString::fromLatin1(p->metaObject()->className()))
+                                   .arg(p->width()).arg(p->implicitWidth()).arg(p->x());
+                    return out;
+                };
+                // The layout hints (minimum / preferred width, fill) of the children of
+                // the first QQuickColumnLayout above the item: a child whose minimum is
+                // wider than the column makes the whole column overflow.
+                auto hints = [&] {
+                    QString out;
+                    QQuickItem* col = nullptr;
+                    for (QQuickItem* p = item; p && !col; p = p->parentItem())
+                        if (QByteArray(p->metaObject()->className()).contains("ColumnLayout")) col = p;
+                    if (!col) return out;
+                    std::function<void(QQuickItem*, int)> dump = [&](QQuickItem* c, int depth) {
+                        QObject* att = nullptr;
+                        for (QObject* o : c->children())
+                            if (QByteArray(o->metaObject()->className()) == "QQuickLayoutAttached") att = o;
+                        out += QString("\n%1  [%2 %3 vis=%4 w=%5 iw=%6 min=%7 pref=%8 fill=%9]")
+                                   .arg(QString(depth * 4, ' '), c->objectName(), QString::fromLatin1(c->metaObject()->className()))
+                                   .arg(c->isVisible()).arg(c->width()).arg(c->implicitWidth())
+                                   .arg(att ? att->property("minimumWidth").toString() : QStringLiteral("-"))
+                                   .arg(att ? att->property("preferredWidth").toString() : QStringLiteral("-"))
+                                   .arg(att ? att->property("fillWidth").toString() : QStringLiteral("-"));
+                        if (QByteArray(c->metaObject()->className()).contains("RowLayout") && depth == 0)
+                            for (QQuickItem* d : c->childItems()) dump(d, depth + 1);
+                    };
+                    for (QQuickItem* c : col->childItems()) dump(c, 0);
+                    return out;
+                };
+                QTRY_VERIFY2(right() <= stage->width() + 0.5,
+                             qPrintable(QString("%1 ends at %2 of %3:%4%5").arg(name).arg(right()).arg(stage->width()).arg(chain(), hints())));
+            }
+            // A toolbar wider than its place scrolls to its last control.
+            auto* bar = named(root.get(), "rangeBar");
+            QVERIFY(bar);
+            if (bar->property("overflows").toBool()) {
+                bar->setProperty("contentX", bar->property("contentWidth").toReal() - bar->width());
+                auto* last = named(root.get(), "markerText");
+                QVERIFY(last);
+                QTRY_VERIFY(last->mapToItem(bar, QPointF(last->width(), 0)).x() <= bar->width() + 0.5);
+                bar->setProperty("contentX", 0);
+            }
+            QCOMPARE(named(root.get(), "projectPanel")->property("collapsed").toBool(), size.width() < 1220);
+            // The transport's controls do not overlap on any of the sizes.
+            QVERIFY(!named(root.get(), "generatorTransport")->property("crowded").toBool());
+            // A selected mark does not change the height of the tip row (the video would jump).
+            auto* tip = named(root.get(), "tipRow");
+            const qreal tipH = tip->height();
+            QCOMPARE(tip->property("implicitHeight").toReal(), tipH);
+            QVERIFY(inView("chooseVideo"));
+            const QByteArray tag = QByteArray::number(size.width());
+            if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT_SCROLL"); !shot.isEmpty())
+                window.grabWindow().save(QString::fromLocal8Bit(shot + "_" + tag + "_top.png"));
+            if (size.height() <= 600) {
+                // Short window: more content than room, the bar is on.
+                QVERIFY2(content > view, qPrintable(QString("content %1 view %2").arg(content).arg(view)));
+                QVERIFY(!inView("createButton"));
+            }
+            scroll->setProperty("contentY", qMax<qreal>(0, content - view));
+            QTRY_VERIFY(inView("createButton"));
+            if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT_SCROLL"); !shot.isEmpty())
+                window.grabWindow().save(QString::fromLocal8Bit(shot + "_" + tag + "_bottom.png"));
+            // Every control of the side can be reached: walk the content in steps.
+            for (const char* name : {"styleCombo", "feelDeviceCombo", "toggle_contactVibration", "tipClassCombo",
+                                     "contactClassCombo", "contactCurveCombo", "createButton"}) {
+                auto* item = named(root.get(), name);
+                QVERIFY2(item, name);
+                QVERIFY2(item->isVisible(), name);
+                const qreal y = item->mapToItem(scroll->property("contentItem").value<QQuickItem*>(), QPointF(0, 0)).y();
+                scroll->setProperty("contentY", qBound<qreal>(0, y - 20, qMax<qreal>(0, content - view)));
+                QTRY_VERIFY2(inView(name), name);
+            }
+        }
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
     }
 };

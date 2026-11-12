@@ -2,7 +2,7 @@ find_package(Qt6 REQUIRED COMPONENTS Test)
 find_package(ZLIB REQUIRED)  # zip_builder.h
 set(CMAKE_AUTOMOC ON)
 # One Qt Test executable per controller (QTEST_MAIN each).
-foreach(t player_controller library_controller icon_provider device_transports device_controller playback_output training_controller settings_controller update_checker notices system_check mode_registry)
+foreach(t player_controller library_controller icon_provider device_transports device_controller playback_output training_controller settings_controller update_checker notices system_check mode_registry device_service)
   add_executable(${t}_test ${t}_test.cpp)
   target_link_libraries(${t}_test PRIVATE samn_app Qt6::Test)
   # fake_servers.h reuses the Buttplug message shapes of the core tests.
@@ -42,7 +42,8 @@ set_tests_properties(shell_qml_test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offs
 # The Generator mode on generated test clips (tests/engine/synthetic_clips.h).
 add_executable(generator_controller_test generator_controller_test.cpp)
 target_link_libraries(generator_controller_test PRIVATE samn_app Qt6::Test)
-target_include_directories(generator_controller_test PRIVATE ${CMAKE_SOURCE_DIR}/tests/engine)
+target_include_directories(generator_controller_test PRIVATE ${CMAKE_SOURCE_DIR}/tests/engine ${CMAKE_SOURCE_DIR}/app/src)
+target_compile_definitions(generator_controller_test PRIVATE SAMN_VISION_TESTDATA="${CMAKE_SOURCE_DIR}/tests/vision/data")
 add_test(NAME generator_controller_test COMMAND generator_controller_test)
 set_tests_properties(generator_controller_test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 

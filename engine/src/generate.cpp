@@ -70,9 +70,9 @@ TrajectoryData BuildTrajectory(const TrackResult& tr) {
         tr.partner_ys.size() == tr.times_ms.size();
     const size_t n_extras = std::min(tr.extra_xs.size(), tr.extra_ys.size());
     t.extras.resize(n_extras);
-    for (size_t i = 0; i < tr.times_ms.size() && i < tr.xs.size() && i < tr.frame_ys.size(); ++i) {
+    for (size_t i = 0; i < tr.times_ms.size() && i < tr.frame_xs.size() && i < tr.frame_ys.size(); ++i) {
         if (!t.tip.empty() && tr.times_ms[i] - t.tip.back().at_ms < kTipPathStepMs) continue;
-        t.tip.push_back({tr.times_ms[i], tenth(tr.xs[i]), tenth(tr.frame_ys[i])});
+        t.tip.push_back({tr.times_ms[i], tenth(tr.frame_xs[i]), tenth(tr.frame_ys[i])});
         if (have_partner) t.partner.push_back({tr.times_ms[i], tenth(tr.partner_xs[i]), tenth(tr.partner_ys[i])});
         for (size_t e = 0; e < n_extras; ++e) {
             if (tr.extra_xs[e].size() != tr.times_ms.size() || tr.extra_ys[e].size() != tr.times_ms.size()) continue;
