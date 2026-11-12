@@ -1655,6 +1655,7 @@ Item {
                             text: qsTr("Use Player video")
                             onClicked: gen.openVideo(page.playerVideoUrl.toString())
                         }
+                        HelpChip { key: "gen-use-player-video"; Layout.alignment: Qt.AlignVCenter }
                     }
                 }
             }
@@ -1695,6 +1696,7 @@ Item {
                             textFormat: Text.PlainText
                             text: qsTr("For device"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
                         }
+                        HelpChip { key: "gen-device-target"; Layout.alignment: Qt.AlignVCenter }
                         FlowCombo {
                             objectName: "feelDeviceCombo"
                             Layout.fillWidth: true
@@ -1711,6 +1713,7 @@ Item {
                             textFormat: Text.PlainText
                             text: qsTr("Show all"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                         }
+                        HelpChip { key: "gen-show-all-feel"; Layout.alignment: Qt.AlignVCenter }
                         FlowToggle {
                             objectName: "toggle_showAllFeel"
                             checked: gen.showAllFeel
@@ -1734,6 +1737,7 @@ Item {
                                 textFormat: Text.PlainText
                                 text: qsTr("Scene"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                             }
+                            HelpChip { key: "gen-scene-feel"; Layout.alignment: Qt.AlignVCenter }
                             FlowCombo {
                                 objectName: "sceneFeelCombo"
                                 Layout.fillWidth: true
@@ -1766,6 +1770,7 @@ Item {
                                 textFormat: Text.PlainText
                                 text: qsTr("Suction"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                             }
+                            HelpChip { key: "gen-feel-balance"; Layout.alignment: Qt.AlignVCenter }
                         }
                         RowLayout {
                             Layout.fillWidth: true
@@ -1774,6 +1779,7 @@ Item {
                                 Layout.fillWidth: true
                                 text: qsTr("Vibration follows suction"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
                             }
+                            HelpChip { key: "gen-vib-follow"; Layout.alignment: Qt.AlignVCenter }
                             FlowToggle {
                                 objectName: "toggle_vibFollow"
                                 enabled: !gen.running
@@ -1796,6 +1802,7 @@ Item {
                             textFormat: Text.PlainText
                             text: qsTr("Vibration from"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                         }
+                        HelpChip { key: "gen-vib-source"; Layout.alignment: Qt.AlignVCenter }
                         FlowCombo {
                             objectName: "vibSourceCombo"
                             Layout.fillWidth: true
@@ -1876,6 +1883,7 @@ Item {
                                     textFormat: Text.PlainText
                                     text: qsTr("Tip"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                                 }
+                                HelpChip { key: "generator.tip-glans-penis"; Layout.alignment: Qt.AlignVCenter }
                                 FlowCombo {
                                     objectName: "tipClassCombo"
                                     Layout.fillWidth: true
@@ -1889,6 +1897,7 @@ Item {
                                     textFormat: Text.PlainText
                                     text: qsTr("Contact"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                                 }
+                                HelpChip { key: "generator.contact-mouth-nipple"; Layout.alignment: Qt.AlignVCenter }
                                 FlowCombo {
                                     objectName: "contactClassCombo"
                                     Layout.fillWidth: true
@@ -2075,6 +2084,7 @@ Item {
                                     textFormat: Text.PlainText
                                     text: qsTr("Extra type"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                                 }
+                                HelpChip { key: "generator.extra-type"; Layout.alignment: Qt.AlignVCenter }
                                 FlowCombo {
                                     objectName: "extraClassCombo"
                                     Layout.fillWidth: true

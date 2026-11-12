@@ -5,6 +5,7 @@
 #include <QDirIterator>
 #include <QFile>
 #include <QGuiApplication>
+#include <QHash>
 #include <QQmlComponent>
 #include <QQmlContext>
 #include <QQmlEngine>
@@ -276,6 +277,77 @@ private slots:
             }
         }
         QVERIFY(found >= 20);
+    }
+
+    // The other way round: every catalogue text is either on a chip or listed
+    // below with the reason it is not. The list may only shrink: a key that
+    // gets a chip must leave it (a stale entry fails), a new unplaced key fails.
+    void unplacedHelpKeysAreListedWithAReason() {
+        QFile cat(QStringLiteral(SAMN_APP_QML_DIR) + "/HelpTexts.js");
+        QVERIFY(cat.open(QIODevice::ReadOnly));
+        const QString js = QString::fromUtf8(cat.readAll()).remove(QLatin1Char('\r'));
+        QSet<QString> keys;
+        static const QRegularExpression entry(QStringLiteral("^    \"([^\"]+)\": \"(.+)\",$"), QRegularExpression::MultilineOption);
+        auto e = entry.globalMatch(js);
+        while (e.hasNext()) keys.insert(e.next().captured(1));
+        static const QRegularExpression use(QStringLiteral("(?:HelpChip\\s*\\{[^}]*?\\bkey|\\bhelp)\\s*:\\s*\"([\\w.\\-]+)\""));
+        QSet<QString> placed;
+        QDirIterator qml(QStringLiteral(SAMN_APP_QML_DIR), {"*.qml"}, QDir::Files);
+        while (qml.hasNext()) {
+            QFile f(qml.next());
+            QVERIFY(f.open(QIODevice::ReadOnly));
+            auto m = use.globalMatch(QString::fromUtf8(f.readAll()));
+            while (m.hasNext()) placed.insert(m.next().captured(1));
+        }
+        // Reasons (PARITY_REMAINING items): AI = 22 opt-in AI helpers (D-057, D-129);
+        // SCENEMAP = 18 Scene Map and rhythm grid; AITRAIN = AI Train and Benchmark
+        // were rebuilt in D-155 and have none of the 0.7 controls; NOCTRL = SamNPlayer 2
+        // has no such control; SAME = another chip on the same control.
+        static const QHash<QString, QString> reasons = [] {
+            QHash<QString, QString> r;
+            auto add = [&r](const char* why, std::initializer_list<const char*> ks) {
+                for (const char* k : ks) r.insert(QString::fromLatin1(k), QString::fromLatin1(why));
+            };
+            add("AI (item 22, D-057/D-129): opt-in AI helper not built",
+                {"gen-ai-detections", "gen-ai-roi", "gen-ai-script-discard", "gen-ai-script-draft", "gen-ai-script-export",
+                 "gen-ai-script-keep", "gen-contact-points", "gen-contact-points-path", "gen-contact-points-pick",
+                 "gen-contact-points-run", "gen-contact-verify", "gen-cp-lmstudio", "gen-cp-nudenet", "gen-cp-ollama",
+                 "gen-import-contact-candidates", "gen-label-scene", "gen-suggest-profile", "gen-seed-suggest",
+                 "gen-scene-proposals-beside", "gen-scene-proposals-dismiss", "gen-scene-proposals-load",
+                 "gen-scene-apply-partner", "gen-scene-apply-primary", "generator.accept", "generator.reject",
+                 "st-ai-pref-classes", "st-ai-setup-check", "st-ai-setup-models", "st-ai-setup-teachers",
+                 "st-apply-ai-setup", "st-open-ai-train"});
+            add("SCENEMAP (item 18): scene map, rhythm grid and learning export not built",
+                {"gen-scene-map", "gen-scene-map-export", "gen-scene-map-mark-sticky", "gen-scene-map-overlay",
+                 "gen-scene-map-suggest", "gen-rhythm-grid", "generator.map-window", "generator.mark",
+                 "st-collect-learning", "st-delete-learning"});
+            add("AITRAIN (D-155): the 0.7 AI Train / Benchmark controls do not exist in the rebuilt page",
+                {"bm-cancel", "bm-suggest-pair", "roi_training.box-scale", "roi_training.dataset-folder",
+                 "roi_training.epochs", "roi_training.sampling-every-n-th-frame", "roi_training.time-s", "rt-add-tag",
+                 "rt-bootstrap", "rt-cancel-run", "rt-cancel-train", "rt-delete-mark", "rt-extract-audio",
+                 "rt-install-deps", "rt-mark-next", "rt-only-new", "rt-open-settings", "rt-pick-image"});
+            add("NOCTRL: SamNPlayer 2 has no such control (one engine, no Auto-Retry, no Improve panel, no feel segments)",
+                {"gen-candidates", "gen-capture-trajectory", "gen-improve-audio", "gen-improve-audio-fill", "gen-improve-heal-rhythm", "gen-improve-repair", "gen-perscene",
+                 "gen-profile-hint", "gen-retry", "gen-seg-f-speech-only",
+                 "pb-scene-feel", "pb-seg-f-speech-only", "pb-seg-heatbands", "pb-seg-heatbands-opacity-row", "st-install-ffmpeg", "topbar-donate"});
+            add("SAME: another chip already sits on this control, or a chip here would crowd the control",
+                {"gen-pos-overlay-toggle" /* a pill on the preview */, "pb-aa-detect" /* From audio carries pb-bpm-auto */,
+                 "pb-vib-source-apply" /* Sound Curve card carries pb-aa-write */});
+            return r;
+        }();
+        QStringList unlisted, stale;
+        for (const QString& k : keys)
+            if (!placed.contains(k) && !reasons.contains(k)) unlisted << k;
+        for (auto it = reasons.cbegin(); it != reasons.cend(); ++it) {
+            if (!keys.contains(it.key())) stale << it.key() + " (not in HelpTexts.js)";
+            else if (placed.contains(it.key())) stale << it.key() + " (now has a chip: remove it from the list)";
+        }
+        unlisted.sort(); stale.sort();
+        QVERIFY2(unlisted.isEmpty(), qPrintable("help texts with no chip and no reason: " + unlisted.join(", ")));
+        QVERIFY2(stale.isEmpty(), qPrintable("stale entries: " + stale.join(", ")));
+        // The count may only go down: lower this when a key gets its chip.
+        QVERIFY2(reasons.size() <= 78, qPrintable(QString("%1 unplaced keys").arg(reasons.size())));
+        QVERIFY2(placed.size() >= 134, qPrintable(QString("only %1 keys placed").arg(placed.size())));
     }
 
     // A "?" opens its text below it; Esc closes it.
@@ -1375,7 +1447,7 @@ private slots:
                 // JS arrays arrive as QVariantList or QJSValue; count either way.
                 int n = secs.toList().size();
                 if (n == 0) n = secs.value<QVariantList>().size();
-                QCOMPARE(n, 11);
+                QCOMPARE(n, 13);
             }
             click(byName("handbookCloseButton"));
             QTRY_VERIFY_WITH_TIMEOUT(!handbook->isVisible(), kWait);

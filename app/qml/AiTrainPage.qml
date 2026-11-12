@@ -302,6 +302,7 @@ Item {
                                 enabled: !labelCtl.teacherBusy
                                 onClicked: labelCtl.testTeacher()
                             }
+                            HelpChip { key: "st-ai-server-check"; Layout.alignment: Qt.AlignVCenter }
                         }
                         RowLayout {
                             Layout.fillWidth: true; spacing: 8
@@ -352,6 +353,7 @@ Item {
                         RowLayout {
                             Layout.fillWidth: true; spacing: 8
                             Text { textFormat: Text.PlainText; text: qsTr("Runs on"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
+                            HelpChip { key: "roi_training.device"; Layout.alignment: Qt.AlignVCenter }
                             FlowCombo {
                                 id: deviceBox
                                 objectName: "trainDevice"
@@ -383,6 +385,7 @@ Item {
                                 enabled: !trainCtl.training
                                 onClicked: trainCtl.setUpEnvironment()
                             }
+                            HelpChip { key: "st-ai-setup-train"; Layout.alignment: Qt.AlignVCenter }
                             FlowButton {
                                 objectName: "trainSetUpStop"
                                 visible: trainCtl.settingUp
