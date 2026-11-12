@@ -1675,6 +1675,7 @@ Item {
                         Layout.fillWidth: true; spacing: 6
                         FlowCombo {
                             objectName: "styleCombo"
+                            Layout.minimumWidth: 0
                             Layout.fillWidth: true
                             enabled: !gen.running
                             textRole: "label"; valueRole: "value"
@@ -1693,10 +1694,12 @@ Item {
                         Layout.fillWidth: true; spacing: 8
                         Text {
                             textFormat: Text.PlainText
+                            Layout.fillWidth: true; Layout.maximumWidth: implicitWidth; Layout.minimumWidth: 0; elide: Text.ElideRight
                             text: qsTr("For device"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
                         }
                         FlowCombo {
                             objectName: "feelDeviceCombo"
+                            Layout.minimumWidth: 0
                             Layout.fillWidth: true
                             enabled: !gen.running
                             textRole: "label"; valueRole: "value"
@@ -1709,6 +1712,7 @@ Item {
                         }
                         Text {
                             textFormat: Text.PlainText
+                            Layout.fillWidth: true; Layout.maximumWidth: implicitWidth; Layout.minimumWidth: 0; elide: Text.ElideRight
                             text: qsTr("Show all"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                         }
                         FlowToggle {
@@ -1732,10 +1736,12 @@ Item {
                             Layout.fillWidth: true; spacing: 8
                             Text {
                                 textFormat: Text.PlainText
+                                Layout.fillWidth: true; Layout.maximumWidth: implicitWidth; Layout.minimumWidth: 0; elide: Text.ElideRight
                                 text: qsTr("Scene"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                             }
                             FlowCombo {
                                 objectName: "sceneFeelCombo"
+                                Layout.minimumWidth: 0
                                 Layout.fillWidth: true
                                 enabled: !gen.running
                                 textRole: "label"; valueRole: "value"
@@ -1753,10 +1759,12 @@ Item {
                             Layout.fillWidth: true; spacing: 8
                             Text {
                                 textFormat: Text.PlainText
+                                Layout.fillWidth: true; Layout.maximumWidth: implicitWidth; Layout.minimumWidth: 0; elide: Text.ElideRight
                                 text: qsTr("Vibration"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                             }
                             FlowSlider {
                                 objectName: "feelBalance"
+                                Layout.minimumWidth: 0
                                 Layout.fillWidth: true
                                 enabled: !gen.running
                                 from: -100; to: 100; value: gen.feelBalance
@@ -1764,6 +1772,7 @@ Item {
                             }
                             Text {
                                 textFormat: Text.PlainText
+                                Layout.fillWidth: true; Layout.maximumWidth: implicitWidth; Layout.minimumWidth: 0; elide: Text.ElideRight
                                 text: qsTr("Suction"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                             }
                         }
@@ -1771,7 +1780,7 @@ Item {
                             Layout.fillWidth: true
                             Text {
                                 textFormat: Text.PlainText
-                                Layout.fillWidth: true
+                                Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight
                                 text: qsTr("Vibration follows suction"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
                             }
                             FlowToggle {
@@ -1794,10 +1803,12 @@ Item {
                         Layout.fillWidth: true; spacing: 8
                         Text {
                             textFormat: Text.PlainText
+                            Layout.fillWidth: true; Layout.maximumWidth: implicitWidth; Layout.minimumWidth: 0; elide: Text.ElideRight
                             text: qsTr("Vibration from"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                         }
                         FlowCombo {
                             objectName: "vibSourceCombo"
+                            Layout.minimumWidth: 0
                             Layout.fillWidth: true
                             enabled: !gen.running
                             textRole: "label"; valueRole: "value"
@@ -2232,26 +2243,32 @@ Item {
                         Item {
                             objectName: "advancedToggle"
                             Layout.fillWidth: true
-                            implicitHeight: advHead.implicitHeight
-                            RowLayout {
+                            implicitHeight: 24
+                            Item {
                                 id: advHead
                                 anchors.fill: parent
-                                spacing: 8
                                 Text {
+                                    id: advTitle
+                                    anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
                                     textFormat: Text.PlainText
                                     text: qsTr("Advanced")
                                     color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 13; font.weight: Font.Medium
                                 }
-                                Text {
-                                    textFormat: Text.PlainText
-                                    Layout.fillWidth: true; wrapMode: Text.WordWrap
-                                    text: qsTr("Everyday Create works with this closed")
-                                    color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 11
-                                }
                                 Icon {
+                                    id: advChevron
+                                    anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
                                     name: "chevronDown"; width: 16; height: 16; color: Theme.textDim
                                     rotation: advancedBox.advancedOpen ? 180 : 0
                                     Behavior on rotation { NumberAnimation { duration: Theme.animFast } }
+                                }
+                                Text {
+                                    anchors.left: advTitle.right; anchors.leftMargin: 8
+                                    anchors.right: advChevron.left; anchors.rightMargin: 8
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    textFormat: Text.PlainText
+                                    elide: Text.ElideRight
+                                    text: qsTr("Everyday Create works with this closed")
+                                    color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 11
                                 }
                             }
                             MouseArea {
@@ -2346,26 +2363,32 @@ Item {
                                 Item {
                                     objectName: "expertToggle"
                                     Layout.fillWidth: true
-                                    implicitHeight: expHead.implicitHeight
-                                    RowLayout {
+                                    implicitHeight: 24
+                                    Item {
                                         id: expHead
                                         anchors.fill: parent
-                                        spacing: 8
                                         Text {
+                                            id: expTitle
+                                            anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
                                             textFormat: Text.PlainText
                                             text: qsTr("Expert")
                                             color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 12; font.weight: Font.Medium
                                         }
-                                        Text {
-                                            textFormat: Text.PlainText
-                                            Layout.fillWidth: true; wrapMode: Text.WordWrap
-                                            text: qsTr("Smoothing, spacing, RDP, max speed — Everyday leaves these alone")
-                                            color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 11
-                                        }
                                         Icon {
+                                            id: expChevron
+                                            anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
                                             name: "chevronDown"; width: 14; height: 14; color: Theme.textDim
                                             rotation: expertBox.expertOpen ? 180 : 0
                                             Behavior on rotation { NumberAnimation { duration: Theme.animFast } }
+                                        }
+                                        Text {
+                                            anchors.left: expTitle.right; anchors.leftMargin: 8
+                                            anchors.right: expChevron.left; anchors.rightMargin: 8
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            textFormat: Text.PlainText
+                                            elide: Text.ElideRight
+                                            text: qsTr("Smoothing, spacing, RDP, max speed — Everyday leaves these alone")
+                                            color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 11
                                         }
                                     }
                                     MouseArea {
