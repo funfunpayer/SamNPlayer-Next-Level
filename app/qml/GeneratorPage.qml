@@ -2640,7 +2640,7 @@ Item {
                             text: qsTr("Trim Start/End in seconds (0 = leave that end), heal tracker-loss windows, and fill long gaps. Does not invent motion from audio.")
                             color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                         }
-                        RowLayout {
+                        Flow {
                             Layout.fillWidth: true
                             spacing: 6
                             enabled: !edit.busy
@@ -2653,7 +2653,7 @@ Item {
                             FlowTextField {
                                 id: improveStart
                                 objectName: "improveStart"
-                                Layout.preferredWidth: 56
+                                width: 56
                                 maxLength: 10
                                 placeholder: "0"
                             }
@@ -2666,7 +2666,7 @@ Item {
                             FlowTextField {
                                 id: improveEnd
                                 objectName: "improveEnd"
-                                Layout.preferredWidth: 56
+                                width: 56
                                 maxLength: 10
                                 placeholder: "0"
                             }

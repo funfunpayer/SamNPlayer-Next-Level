@@ -81,6 +81,14 @@ target_link_libraries(generator_qml_test PRIVATE samn_app samn_appplugin Qt6::Te
 target_include_directories(generator_qml_test PRIVATE ${CMAKE_SOURCE_DIR}/tests/engine)
 add_test(NAME generator_qml_test COMMAND generator_qml_test)
 set_tests_properties(generator_qml_test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_MEDIA_BACKEND=ffmpeg")
+# Windows fonts are wider than the Linux ones and the layout must hold with them: the same
+# narrow-window check with bigger text (QT_FONT_DPI is not honoured the same way on Windows,
+# where CI runs the real fonts anyway).
+if(NOT WIN32)
+  add_test(NAME generator_qml_wide_fonts COMMAND generator_qml_test createSideScrollsOnAShortWindow)
+  set_tests_properties(generator_qml_wide_fonts PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_MEDIA_BACKEND=ffmpeg;QT_FONT_DPI=160")
+endif()
 
 add_executable(script_clock_test script_clock_test.cpp)
 target_link_libraries(script_clock_test PRIVATE samn_app Qt6::Test)
