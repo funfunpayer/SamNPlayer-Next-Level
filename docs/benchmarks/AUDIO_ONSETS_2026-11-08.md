@@ -1,4 +1,4 @@
-# Audio onsets, tempo, beats and the heart rhythm: before and after (8 Nov 2026, revised 9 Nov after review)
+# Audio onsets, tempo, beats and the heart rhythm: before and after (8 Nov 2026, revised 9 Nov after review, follow-up 12 Nov)
 
 Decision: D-168. Code: `core/include/samn/audio_onsets.h`, `audio_tempo.h`, `base_rhythm.h`, `improve.h` (`FillGapsRhythmic`).
 Bench: `tests/bench/audio_onset_bench.cpp` (built with the tests; `audio_onset_bench` prints the tables below,
@@ -89,7 +89,7 @@ before or after the fix. Those tempi are tested anyway. The same 1/3 errors did 
   most 3v / (40 (1 - v)^2): 0.93 % at 10 % variation and 0.24 % at the default 3 %, at any tempo from 40 to 140 BPM. This is
   tested at 40/140/72 BPM with 10 % and over 60 seeds. With 10 s knots it was up to 4.5 % (40 BPM, 10 %).
 
-## Measured tables (audio_onset_bench, 9 Nov 2026)
+## Measured tables (audio_onset_bench, 12 Nov 2026, after the follow-up)
 
 ### Onsets, tempo, beats (30 s clips, 11025 Hz)
 
@@ -99,7 +99,7 @@ Tempo: % of clips within 4 % (strict / octave-corrected x1/2 x1 x2). Onset F at 
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | clean                  |  14 |  78.6 /  78.6 |  78.6 /  92.9 |  64.3 / 100.0 | 100.0 -> 100.0 | 1.000 -> 0.990 | 0.597 -> 0.875 | 100.0 |
 | jitter 20 ms           |  14 |  78.6 /  78.6 |  64.3 /  92.9 |  64.3 / 100.0 | 100.0 -> 100.0 | 1.000 -> 0.990 | 0.605 -> 0.875 | 100.0 |
-| noise 0.15             |  14 |  35.7 /  35.7 |  78.6 /  92.9 |  64.3 / 100.0 |  33.3 -> 100.0 | 0.779 -> 0.885 | 0.263 -> 0.845 |  35.7 |
+| noise 0.15             |  14 |  35.7 /  35.7 |  78.6 /  92.9 |  64.3 / 100.0 |  33.3 -> 100.0 | 0.779 -> 0.884 | 0.263 -> 0.845 |  35.7 |
 | sparse (no pad)        |  14 |  78.6 /  78.6 |  78.6 /  92.9 |  64.3 / 100.0 | 100.0 -> 100.0 | 1.000 -> 1.000 | 0.597 -> 0.874 | 100.0 |
 | off-beat hats          |  14 |  78.6 /  78.6 |  78.6 /  92.9 |  42.9 / 100.0 | 100.0 ->  66.7 | 0.669 -> 0.989 | 0.597 -> 0.804 | 100.0 |
 | 10 s silence inside    |  14 |  78.6 /  78.6 |  78.6 /  92.9 |  71.4 / 100.0 | 100.0 -> 100.0 | 1.000 -> 0.974 | 0.498 -> 0.718 | 100.0 |
@@ -112,23 +112,36 @@ Tempo: % of clips within 4 % (strict / octave-corrected x1/2 x1 x2). Onset F at 
 
 ### Harder rhythms (30 s clips, 19 tempi 50-176 BPM, 5 ms jitter)
 
-Octave-corrected tempo within 4 % (strict for after in brackets); beat F at 70 ms before -> after; the after misses by ratio to the truth.
+Octave-corrected tempo within 4 % (strict for after in brackets); onset F at 50 ms and beat F at 70 ms before -> after; the after misses by ratio to the truth.
 
-| family | existing | trivial ACF | after | beat F | after misses |
-|---|---:|---:|---:|---:|---|
-| click kick, off-beat hats 0.1 | 31.6 | 94.7 | 100.0 (57.9) | 0.298 -> 0.850 | - |
-| click kick, off-beat hats 0.2 | 31.6 | 84.2 | 100.0 (42.1) | 0.298 -> 0.798 | - |
-| click kick, off-beat hats 0.3 | 31.6 | 84.2 | 100.0 (36.8) | 0.298 -> 0.782 | - |
-| click kick, off-beat hats 0.4 | 31.6 | 84.2 | 100.0 (31.6) | 0.298 -> 0.765 | - |
-| click kick, off-beat hats 0.6 | 31.6 | 94.7 | 100.0 (31.6) | 0.298 -> 0.660 | - |
-| drum kick, off-beat hats 0.4 + noise | 84.2 | 100.0 | 100.0 (57.9) | 0.476 -> 0.844 | - |
-| bass-heavy (sub + kick + 8th hats) | 84.2 | 94.7 | 100.0 (63.2) | 0.477 -> 0.864 | - |
-| bass-heavy, click kick, off-beat hats | 84.2 | 94.7 | 100.0 (57.9) | 0.466 -> 0.848 | - |
-| swing (off-beat at 0.64) | 0.0 | 100.0 | 100.0 (68.4) | 0.312 -> 0.876 | - |
-| hats on every 8th | 31.6 | 84.2 | 100.0 (31.6) | 0.293 -> 0.766 | - |
-| hats on every 16th | 10.5 | 84.2 | 100.0 (57.9) | 0.313 -> 0.846 | - |
-| syncopation (extra hit at 3/4) | 31.6 | 94.7 | 100.0 (63.2) | 0.349 -> 0.860 | - |
-| **all 228 clips** | 40.4 | 91.2 | 100.0 | 0.348 -> 0.813 | |
+| family | existing | trivial ACF | after | onset F | beat F | after misses |
+|---|---:|---:|---:|---:|---:|---|
+| click kick, off-beat hats 0.1 | 31.6 | 94.7 | 100.0 (57.9) | 1.000 -> 0.948 | 0.298 -> 0.850 | - |
+| click kick, off-beat hats 0.2 | 31.6 | 84.2 | 100.0 (42.1) | 1.000 -> 0.999 | 0.298 -> 0.798 | - |
+| click kick, off-beat hats 0.3 | 31.6 | 84.2 | 100.0 (36.8) | 1.000 -> 1.000 | 0.298 -> 0.782 | - |
+| click kick, off-beat hats 0.4 | 31.6 | 84.2 | 100.0 (31.6) | 1.000 -> 1.000 | 0.298 -> 0.765 | - |
+| click kick, off-beat hats 0.6 | 31.6 | 94.7 | 100.0 (31.6) | 1.000 -> 1.000 | 0.298 -> 0.660 | - |
+| drum kick, off-beat hats 0.4 + noise | 84.2 | 100.0 | 100.0 (57.9) | 0.669 -> 0.924 | 0.476 -> 0.844 | - |
+| bass-heavy (sub + kick + 8th hats) | 84.2 | 94.7 | 100.0 (63.2) | 0.580 -> 0.902 | 0.477 -> 0.864 | - |
+| bass-heavy, click kick, off-beat hats | 84.2 | 94.7 | 100.0 (57.9) | 0.596 -> 0.947 | 0.466 -> 0.848 | - |
+| swing (off-beat at 0.64) | 0.0 | 100.0 | 100.0 (68.4) | 1.000 -> 1.000 | 0.312 -> 0.876 | - |
+| hats on every 8th | 31.6 | 84.2 | 100.0 (31.6) | 1.000 -> 1.000 | 0.293 -> 0.766 | - |
+| hats on every 16th | 10.5 | 84.2 | 100.0 (57.9) | 0.904 -> 0.962 | 0.313 -> 0.846 | - |
+| syncopation (extra hit at 3/4) | 31.6 | 94.7 | 100.0 (63.2) | 0.993 -> 0.992 | 0.349 -> 0.860 | - |
+| **all 228 clips** | 40.4 | 91.2 | 100.0 | 0.895 -> 0.973 | 0.348 -> 0.813 | |
+
+### Polymetric layers (limits) (30 s clips, 19 tempi 50-176 BPM, 5 ms jitter)
+
+Octave-corrected tempo within 4 % (strict for after in brackets); onset F at 50 ms and beat F at 70 ms before -> after; the after misses by ratio to the truth.
+
+| family | existing | trivial ACF | after | onset F | beat F | after misses |
+|---|---:|---:|---:|---:|---:|---|
+| tom layer at 2/3 of the tempo | 57.9 | 52.6 | 84.2 (68.4) | 0.886 -> 0.879 | 0.401 -> 0.857 | 162: 1/3, 169: 1/3, 176: 1/3 |
+| tom layer at 3/4 of the tempo | 26.3 | 68.4 | 89.5 (52.6) | 0.913 -> 0.912 | 0.336 -> 0.802 | 169: other, 176: other |
+| tom layer at 1/3 of the tempo | 84.2 | 84.2 | 100.0 (68.4) | 0.854 -> 0.847 | 0.476 -> 0.886 | - |
+| tom layer at 3/2 of the tempo | 0.0 | 73.7 | 73.7 (0.0) | 0.869 -> 0.875 | 0.334 -> 0.588 | 50: 3/2, 57: 3/2, 64: 3/2, 71: 3/2, 78: 3/2 |
+| two tempi summed (x4/3, second at 0.8) | 5.3 | 0.0 | 21.1 (21.1) | 0.896 -> 0.904 | 0.343 -> 0.551 | 50: 4/3, 57: 4/3, 64: 4/3, 78: 2/3, 85: 2/3, 92: 2/3, 120: 1/3, 127: 1/3, 134: 1/3, 141: 1/3, 148: 1/3, 155: 1/3, 162: 1/3, 169: 1/3, 176: 1/3 |
+| **all 95 clips** | 34.7 | 55.8 | 73.7 | 0.884 -> 0.883 | 0.378 -> 0.737 | |
 
 ### Gate limits (19 tempi 50-176 BPM, drum kick + pad, 30 s)
 
@@ -152,10 +165,10 @@ Whole clips: 56->70: 70.0, 64->80: 80.0, 72->90: 90.0, 80->100: 100.0, 96->120: 
 
 | step | ms per second of sound |
 |---|---:|
-| before: 50 ms RMS + loudness + EstimateBpmFromLoudness | 0.0511 |
-| OnsetCurve (FFT, band flux, gate) | 0.8337 |
-| EstimateTempo | 0.0086 |
-| TrackBeats | 0.0042 |
+| before: 50 ms RMS + loudness + EstimateBpmFromLoudness | 0.0407 |
+| OnsetCurve (FFT, band flux, gate) | 0.5595 |
+| EstimateTempo | 0.0078 |
+| TrackBeats | 0.0040 |
 
 Peak heap of the after analysis on 10 min, outputs kept: 591.6 KiB (onset curve 25840 values, 960 beats).
 
@@ -163,7 +176,7 @@ Peak heap of the after analysis on 10 min, outputs kept: 591.6 KiB (onset curve 
 
 | frames | peak heap of the analysis | bound | tempo | wall time | ms per second of sound |
 |---:|---:|---:|---:|---:|---:|
-| 1550391 | 23.5 KiB | 32 KiB | 75.0 BPM | 22.2 s | 0.6157 |
+| 1550391 | 23.5 KiB | 32 KiB | 75.0 BPM | 16.9 s | 0.4698 |
 
 ### Gap fill: linear (default) vs heart rhythm (generator.rhythmic_fill)
 
@@ -179,7 +192,7 @@ gap r0 = Pearson at lag 0 and gap MAE = mean |position error| in the holes on a 
 
 Rhythmic at least as good as linear on the existing metrics (Doctor, gap r) where the script strokes or holds: NO
 
-Peak RSS of the whole bench process: 33772 KiB
+Peak RSS of the whole bench process: 33620 KiB
 
 ### Harder rhythms, first version of this PR (0f370d8) (30 s clips, 19 tempi 50-176 BPM, 5 ms jitter)
 
@@ -211,11 +224,55 @@ Octave-corrected tempo within 4 % (strict for after in brackets); beat F at 70 m
 | quiet master, -50 dB | 100.0 % | 0.0 % |
 | music with speech over it | 100.0 % | 100.0 % |
 
+## Follow-up of 12 Nov: polymetric limits, onset gap, holding fill
+
+**Polymetric layers are a limit, not fixed.** The pulse comb fixes subdivisions of one beat (the harder table: 100 %). A
+second layer at another ratio of the tempo is different: the common period of the two layers, or the layer itself, can win.
+New family table "Polymetric layers": a tom layer at 0.7 of the kick's level on its own grid, and a second drum track at
+0.8 level at 4/3 of the tempo. Octave-corrected, 19 tempi each:
+
+| layer | old Player estimate | trivial ACF | EstimateTempo | misses |
+|---|---:|---:|---:|---|
+| tom at 2/3 of the tempo | 57.9 % | 52.6 % | 84.2 % | 1/3 at 162-176 BPM |
+| tom at 3/4 | 26.3 % | 68.4 % | 89.5 % | 169, 176 BPM |
+| tom at 1/3 | 84.2 % | 84.2 % | 100 % | - |
+| tom at 3/2 | 0 % | 73.7 % | 73.7 % | locks to the 1.5x layer at 50-78 BPM |
+| two tempi summed (x4/3, second at 0.8) | 5.3 % | 0 % | 21.1 % | the other tempo, 2/3 or 1/3 |
+
+- **The reviewer's generator gave** 2/3: 64 %, 3/4: 91 %, 1/3: 95 %, 3/2: 91 %, two tempi x1.33: 73 %, also all at or
+  above the trivial ACF. With his generator, 3/2 is the one family where the merged code is worse than the first version
+  (0f370d8): it locks to the 1.5x layer at 51 and 63 BPM.
+- **Two tempi at nearly the same level** are ambiguous by construction. "The tempo" is defined here as the louder one.
+- **A tried fix, not adopted:** the pulse must divide the best comb's period by a power of two. It lowered every table:
+  basic 100 -> 87.8 %, harder 100 -> 80.7 %, polymetric 73.7 -> 61.1 %, and the 3/2 family only rose 73.7 -> 78.9 %. No
+  cheap, principled fix was found, so this is documented only. The header of `audio_tempo.h` now says "for subdivisions of
+  one beat".
+
+**Onset minimum gap.** The review's nit fix rounded the 70 ms minimum gap up to whole frames: 4 frames, that is 93 ms at
+11025 Hz. That dropped the second of two hits 75 ms apart. Two onsets are now compared as times: never closer than 70 ms
+minus half a frame (58 ms at 11025 Hz, 62 ms at 4 kHz, 59 ms at 96 kHz). New test: clicks 75 ms apart at 11025 Hz are
+both found, and the 4-96 kHz test now checks that bound.
+
+Onset F after the change:
+- basic table 0.933 (unchanged; none of its hits are closer than 70 ms);
+- harder families 0.972 -> 0.973 (16th hats 0.954 -> 0.962, syncopation 0.985 -> 0.992);
+- the bass kick + sub family stays 0.902. The reviewer's 0.84 -> 0.74 drop does not reproduce with my generator.
+
+Tempo and beats are unchanged.
+
+**Holding fill = FillGaps.** With `generator.rhythmic_fill` on, the straight-line branch for a holding script stepped
+`t < next` instead of FillGaps' `k < dt / step`. When the step did not divide the gap (37 ms, or half the period of a
+1.2 Hz audio tempo), that added one point within one step of the anchor. Gaps longer than the threshold but too short for
+a stroke (at most 428 ms) were left unfilled. Both now give exactly FillGaps' points, tested over 7 steps and gaps. The fill
+bench is unchanged (its holes are longer); the default is still off.
+
 ## Before wiring into the app
 
-- `EstimateTempo` should go into the app (for "BPM from audio", or the Generator) only after a check on real music. The
-  ratio errors are fixed on every synthetic family here, but these families were written to cover the failure the review
-  found. A real-music set may find other patterns.
+- Since #236 the Player's "BPM from audio" uses `EstimateTempo` when `AssessTempo` trusts it, otherwise the loudness
+  estimate (`PickPlaybackAudioBpm`). That wiring is not measured here.
+- `EstimateTempo` has not been checked on real music. The ratio errors are fixed on every subdivision family here, but these
+  families were written to cover the failure the review found. Polymetric material (above) and real-music sets may still
+  give a wrong tempo.
 - The thresholds were all set on these signals only: the gate (-80 dBFS absolute, 35 dB relative, flatness 0.30, quiet share
   0.25, confidence 0.30 / 0.60) and the pulse comb (75 % of the best, 320 BPM, triple handicap 0.9).
 
@@ -223,4 +280,4 @@ Octave-corrected tempo within 4 % (strict for after in brackets); beat F at 70 m
 
 - Real music, speech or film sound: every number above is synthetic.
 - Windows / MSVC: built and run on Linux only (GCC 13; clean under clang `-Wconversion`), not compiled with MSVC here.
-- The app does not yet decode into `OnsetCurve`. The Player's "BPM from audio" still uses the loudness estimate.
+- The app path since #236 (decode -> `OnsetCurve` -> `PickPlaybackAudioBpm`).

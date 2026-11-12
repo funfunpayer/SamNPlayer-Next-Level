@@ -319,33 +319,23 @@ const char* RatioClass(double est, double truth) {
     return "other";
 }
 
-void HardFamilies() {
-    std::printf("\n## Harder rhythms (30 s clips, 19 tempi 50-176 BPM, 5 ms jitter)\n\n");
-    std::printf("Octave-corrected tempo within 4 %% (strict for after in brackets); beat F at 70 ms before -> after; the after misses by ratio to the truth.\n\n");
-    std::printf("| family | existing | trivial ACF | after | beat F | after misses |\n|---|---:|---:|---:|---:|---|\n");
-    struct Fam {
-        const char* name;
-        void (*apply)(synth::Spec&);
-    };
-    static const Fam fams[] = {
-        {"click kick, off-beat hats 0.1", [](synth::Spec& s) { s.click_kick = true; s.pad = 0; s.offbeat_hats = true; s.hat_level = 0.1; s.hat_decay_ms = 30; }},
-        {"click kick, off-beat hats 0.2", [](synth::Spec& s) { s.click_kick = true; s.pad = 0; s.offbeat_hats = true; s.hat_level = 0.2; s.hat_decay_ms = 30; }},
-        {"click kick, off-beat hats 0.3", [](synth::Spec& s) { s.click_kick = true; s.pad = 0; s.offbeat_hats = true; s.hat_level = 0.3; s.hat_decay_ms = 30; }},
-        {"click kick, off-beat hats 0.4", [](synth::Spec& s) { s.click_kick = true; s.pad = 0; s.offbeat_hats = true; s.hat_level = 0.4; s.hat_decay_ms = 30; }},
-        {"click kick, off-beat hats 0.6", [](synth::Spec& s) { s.click_kick = true; s.pad = 0; s.offbeat_hats = true; s.hat_level = 0.6; s.hat_decay_ms = 30; }},
-        {"drum kick, off-beat hats 0.4 + noise", [](synth::Spec& s) { s.offbeat_hats = true; s.hat_level = 0.4; s.noise = 0.03; s.hat_decay_ms = 30; }},
-        {"bass-heavy (sub + kick + 8th hats)", [](synth::Spec& s) { s.sub_bass = 0.9; s.hit = 0.4; s.hat_every = 2; s.hat_level = 0.2; }},
-        {"bass-heavy, click kick, off-beat hats", [](synth::Spec& s) { s.sub_bass = 0.9; s.hit = 0.4; s.click_kick = true; s.offbeat_hats = true; s.hat_level = 0.3; }},
-        {"swing (off-beat at 0.64)", [](synth::Spec& s) { s.click_kick = true; s.pad = 0; s.offbeat_hats = true; s.swing = 0.64; s.hat_level = 0.4; s.hat_decay_ms = 30; }},
-        {"hats on every 8th", [](synth::Spec& s) { s.click_kick = true; s.pad = 0; s.hat_every = 2; s.hat_level = 0.4; s.hat_decay_ms = 30; }},
-        {"hats on every 16th", [](synth::Spec& s) { s.click_kick = true; s.pad = 0; s.hat_every = 4; s.hat_level = 0.3; s.hat_decay_ms = 30; }},
-        {"syncopation (extra hit at 3/4)", [](synth::Spec& s) { s.click_kick = true; s.syncopation = 0.5; }},
-    };
+struct Fam {
+    const char* name;
+    void (*apply)(synth::Spec&);
+};
+
+// 19 tempi 50-176 BPM per family: tempo (octave-corrected; strict for
+// after in brackets), onset and beat F before -> after, the after misses.
+void FamilyTable(const char* title, const Fam* fams, std::size_t count) {
+    std::printf("\n## %s (30 s clips, 19 tempi 50-176 BPM, 5 ms jitter)\n\n", title);
+    std::printf("Octave-corrected tempo within 4 %% (strict for after in brackets); onset F at 50 ms and beat F at 70 ms before -> after; the after misses by ratio to the truth.\n\n");
+    std::printf("| family | existing | trivial ACF | after | onset F | beat F | after misses |\n|---|---:|---:|---:|---:|---:|---|\n");
     int all = 0, all_ex = 0, all_tr = 0, all_af = 0;
-    double all_bb = 0, all_ba = 0;
-    for (const auto& f : fams) {
+    double all_bb = 0, all_ba = 0, all_ob = 0, all_oa = 0;
+    for (std::size_t fi = 0; fi < count; ++fi) {
+        const Fam& f = fams[fi];
         int n = 0, ex = 0, tr = 0, af = 0, af_strict = 0;
-        double bb = 0, ba = 0;
+        double bb = 0, ba = 0, ob = 0, oa = 0;
         std::string misses;
         for (double bpm = 50; bpm <= 176 + 1e-9; bpm += 7) {
             synth::Spec s;
@@ -364,23 +354,59 @@ void HardFamilies() {
             af_strict += synth::TempoWithin(a.tempo.bpm, bpm);
             bb += synth::FMeasure(c.beats_ms, b.beats_ms, 70);
             ba += synth::FMeasure(c.beats_ms, a.beats.beats_ms, 70);
+            ob += synth::FMeasure(c.onsets_ms, b.onsets_ms, 50);
+            oa += synth::FMeasure(c.onsets_ms, a.onsets_ms, 50);
             if (!ok) {
                 char buf[48];
                 std::snprintf(buf, sizeof buf, "%s%.0f: %s", misses.empty() ? "" : ", ", bpm, RatioClass(a.tempo.bpm, bpm));
                 misses += buf;
             }
         }
-        std::printf("| %s | %.1f | %.1f | %.1f (%.1f) | %.3f -> %.3f | %s |\n", f.name, 100.0 * ex / n, 100.0 * tr / n,
-                    100.0 * af / n, 100.0 * af_strict / n, bb / n, ba / n, misses.empty() ? "-" : misses.c_str());
+        std::printf("| %s | %.1f | %.1f | %.1f (%.1f) | %.3f -> %.3f | %.3f -> %.3f | %s |\n", f.name, 100.0 * ex / n,
+                    100.0 * tr / n, 100.0 * af / n, 100.0 * af_strict / n, ob / n, oa / n, bb / n, ba / n,
+                    misses.empty() ? "-" : misses.c_str());
         all += n;
         all_ex += ex;
         all_tr += tr;
         all_af += af;
         all_bb += bb;
         all_ba += ba;
+        all_ob += ob;
+        all_oa += oa;
     }
-    std::printf("| **all %d clips** | %.1f | %.1f | %.1f | %.3f -> %.3f | |\n", all, 100.0 * all_ex / all,
-                100.0 * all_tr / all, 100.0 * all_af / all, all_bb / all, all_ba / all);
+    std::printf("| **all %d clips** | %.1f | %.1f | %.1f | %.3f -> %.3f | %.3f -> %.3f | |\n", all, 100.0 * all_ex / all,
+                100.0 * all_tr / all, 100.0 * all_af / all, all_ob / all, all_oa / all, all_bb / all, all_ba / all);
+}
+
+void HardFamilies() {
+    static const Fam fams[] = {
+        {"click kick, off-beat hats 0.1", [](synth::Spec& s) { s.click_kick = true; s.pad = 0; s.offbeat_hats = true; s.hat_level = 0.1; s.hat_decay_ms = 30; }},
+        {"click kick, off-beat hats 0.2", [](synth::Spec& s) { s.click_kick = true; s.pad = 0; s.offbeat_hats = true; s.hat_level = 0.2; s.hat_decay_ms = 30; }},
+        {"click kick, off-beat hats 0.3", [](synth::Spec& s) { s.click_kick = true; s.pad = 0; s.offbeat_hats = true; s.hat_level = 0.3; s.hat_decay_ms = 30; }},
+        {"click kick, off-beat hats 0.4", [](synth::Spec& s) { s.click_kick = true; s.pad = 0; s.offbeat_hats = true; s.hat_level = 0.4; s.hat_decay_ms = 30; }},
+        {"click kick, off-beat hats 0.6", [](synth::Spec& s) { s.click_kick = true; s.pad = 0; s.offbeat_hats = true; s.hat_level = 0.6; s.hat_decay_ms = 30; }},
+        {"drum kick, off-beat hats 0.4 + noise", [](synth::Spec& s) { s.offbeat_hats = true; s.hat_level = 0.4; s.noise = 0.03; s.hat_decay_ms = 30; }},
+        {"bass-heavy (sub + kick + 8th hats)", [](synth::Spec& s) { s.sub_bass = 0.9; s.hit = 0.4; s.hat_every = 2; s.hat_level = 0.2; }},
+        {"bass-heavy, click kick, off-beat hats", [](synth::Spec& s) { s.sub_bass = 0.9; s.hit = 0.4; s.click_kick = true; s.offbeat_hats = true; s.hat_level = 0.3; }},
+        {"swing (off-beat at 0.64)", [](synth::Spec& s) { s.click_kick = true; s.pad = 0; s.offbeat_hats = true; s.swing = 0.64; s.hat_level = 0.4; s.hat_decay_ms = 30; }},
+        {"hats on every 8th", [](synth::Spec& s) { s.click_kick = true; s.pad = 0; s.hat_every = 2; s.hat_level = 0.4; s.hat_decay_ms = 30; }},
+        {"hats on every 16th", [](synth::Spec& s) { s.click_kick = true; s.pad = 0; s.hat_every = 4; s.hat_level = 0.3; s.hat_decay_ms = 30; }},
+        {"syncopation (extra hit at 3/4)", [](synth::Spec& s) { s.click_kick = true; s.syncopation = 0.5; }},
+    };
+    FamilyTable("Harder rhythms", fams, sizeof fams / sizeof fams[0]);
+}
+
+// A second, polymetric layer (toms at a ratio of the tempo) or two tempi
+// summed: the common period of the two layers can win. A limit, measured.
+void PolymetricFamilies() {
+    static const Fam fams[] = {
+        {"tom layer at 2/3 of the tempo", [](synth::Spec& s) { s.layer_ratio = 2.0 / 3; }},
+        {"tom layer at 3/4 of the tempo", [](synth::Spec& s) { s.layer_ratio = 3.0 / 4; }},
+        {"tom layer at 1/3 of the tempo", [](synth::Spec& s) { s.layer_ratio = 1.0 / 3; }},
+        {"tom layer at 3/2 of the tempo", [](synth::Spec& s) { s.layer_ratio = 3.0 / 2; }},
+        {"two tempi summed (x4/3, second at 0.8)", [](synth::Spec& s) { s.layer_ratio = 4.0 / 3; s.layer_level = 0.8; }},
+    };
+    FamilyTable("Polymetric layers (limits)", fams, sizeof fams / sizeof fams[0]);
 }
 
 // The gate on quiet masters and on music with speech over it.
@@ -690,6 +716,7 @@ int main(int argc, char** argv) {
     Row total;
     Families(total);
     HardFamilies();
+    PolymetricFamilies();
     GateLimits();
     TempoChanges();
     Speed();

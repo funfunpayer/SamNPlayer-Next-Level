@@ -115,7 +115,7 @@ struct OnsetPickOptions {
     double delta = 0.20;
     // And be at least this strong (a steady tone leaves rounding noise).
     double min_strength = 1.0;
-    // At least this long between two onsets.
+    // At least this long between two onsets (within half a frame).
     int wait_ms = 70;
 };
 

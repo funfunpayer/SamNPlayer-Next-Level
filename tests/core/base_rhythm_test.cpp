@@ -185,6 +185,33 @@ TEST_CASE("rhythmic fill: continues the script's own strokes through a gap") {
     CHECK(Same(Inside(out, -1, 12001), Inside(gapped, -1, 12001)));
 }
 
+TEST_CASE("rhythmic fill: where the script holds, the output is exactly FillGaps") {
+    // Steps that do not divide the gap (37 ms, or half the period of a
+    // 1.2 Hz audio tempo, 417 ms), and gaps too short for a stroke: the
+    // straight-line branch must add the same points as FillGaps.
+    std::vector<samn::Action> hold;
+    for (int64_t t = 0; t <= 20000; t += 200) hold.push_back({t, 40 + int(t / 200 % 2)});
+    struct Case {
+        int64_t from, to, max_gap, step;
+        double hz;
+    };
+    for (const Case c : {Case{3000, 7000, 800, 37, 0}, Case{3000, 7000, 800, 0, 1.2}, Case{2000, 2777, 500, 0, 0},
+                         Case{5000, 5400, 300, 37, 0}, Case{4000, 12345, 800, 100, 0}, Case{1000, 1900, 800, 333, 0},
+                         Case{6000, 9001, 800, 0, 2.7}}) {
+        CAPTURE(c.from);
+        CAPTURE(c.to);
+        CAPTURE(c.step);
+        CAPTURE(c.hz);
+        const auto in = WithGap(hold, c.from, c.to);
+        int g1 = 0, p1 = 0, g2 = 0, p2 = 0;
+        const auto rhythmic = samn::FillGapsRhythmic(in, c.max_gap, c.step, c.hz, samn::BaseRhythm{}, &g1, &p1);
+        const auto linear = samn::FillGaps(in, c.max_gap, c.step, c.hz, &g2, &p2);
+        CHECK(Same(rhythmic, linear));
+        CHECK(g1 == g2);
+        CHECK(p1 == p2);
+    }
+}
+
 TEST_CASE("rhythmic fill: holds where the script holds, heart rhythm without strokes") {
     // A script holding at 30 around the gap: a straight line as in FillGaps.
     std::vector<samn::Action> hold;
