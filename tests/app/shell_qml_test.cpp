@@ -5,6 +5,7 @@
 #include <QDirIterator>
 #include <QFile>
 #include <QGuiApplication>
+#include <QHash>
 #include <QQmlComponent>
 #include <QQmlContext>
 #include <QQmlEngine>
@@ -276,6 +277,101 @@ private slots:
             }
         }
         QVERIFY(found >= 20);
+    }
+
+    // The other way round: every catalogue text is either on a chip or listed
+    // below with the reason it is not. The list may only shrink: a key that
+    // gets a chip must leave it (a stale entry fails), a new unplaced key fails.
+    void unplacedHelpKeysAreListedWithAReason() {
+        QFile cat(QStringLiteral(SAMN_APP_QML_DIR) + "/HelpTexts.js");
+        QVERIFY(cat.open(QIODevice::ReadOnly));
+        const QString js = QString::fromUtf8(cat.readAll()).remove(QLatin1Char('\r'));
+        QSet<QString> keys;
+        static const QRegularExpression entry(QStringLiteral("^    \"([^\"]+)\": \"(.+)\",$"), QRegularExpression::MultilineOption);
+        auto e = entry.globalMatch(js);
+        while (e.hasNext()) keys.insert(e.next().captured(1));
+        static const QRegularExpression use(QStringLiteral("(?:HelpChip\\s*\\{[^}]*?\\bkey|\\bhelp)\\s*:\\s*\"([\\w.\\-]+)\""));
+        QSet<QString> placed;
+        QDirIterator qml(QStringLiteral(SAMN_APP_QML_DIR), {"*.qml"}, QDir::Files);
+        while (qml.hasNext()) {
+            QFile f(qml.next());
+            QVERIFY(f.open(QIODevice::ReadOnly));
+            auto m = use.globalMatch(QString::fromUtf8(f.readAll()));
+            while (m.hasNext()) placed.insert(m.next().captured(1));
+        }
+        // Every reason was checked against the code (file names in the text).
+        static const QHash<QString, QString> reasons = [] {
+            QHash<QString, QString> r;
+            auto add = [&r](const char* why, std::initializer_list<const char*> ks) {
+                for (const char* k : ks) r.insert(QString::fromLatin1(k), QString::fromLatin1(why));
+            };
+            add("opt-in AI helper not built (PARITY_REMAINING 22, D-129): no such control in the app",
+                {"gen-ai-script-discard", "gen-ai-script-draft", "gen-ai-script-export", "gen-ai-script-keep",
+                 "gen-contact-points", "gen-contact-points-path", "gen-contact-points-pick", "gen-contact-points-run",
+                 "gen-contact-verify", "gen-cp-lmstudio", "gen-cp-nudenet", "gen-cp-ollama",
+                 "gen-import-contact-candidates", "gen-label-scene", "gen-suggest-profile",
+                 "generator.accept", "generator.reject", "st-ai-pref-classes", "st-ai-setup-check",
+                 "st-ai-setup-models", "st-apply-ai-setup", "st-open-ai-train" /* Settings only has the AI Train plugin toggle */});
+            add("Scene Map not built (PARITY_REMAINING 18): the Editor has scene cards (GeneratorPage.qml Scenes) but no rhythm heatmap, map window, painted marks, proposal buttons or learning export",
+                {"gen-scene-map", "gen-scene-map-export", "gen-scene-map-mark-sticky", "gen-scene-map-overlay",
+                 "gen-scene-map-suggest", "gen-rhythm-grid", "generator.map-window", "generator.mark",
+                 "gen-scene-proposals-beside" /* <clip>.scene.json loads by itself (EditorController) */,
+                 "gen-scene-proposals-dismiss", "gen-scene-proposals-load", "gen-scene-apply-partner",
+                 "gen-scene-apply-primary", "st-collect-learning", "st-delete-learning"});
+            add("same action as a placed chip: Suggest tip (AI) carries gen-ai-tip (GeneratorPage.qml suggestAiTip)",
+                {"gen-ai-roi", "gen-seed-suggest"});
+            add("the AI boxes are drawn on the preview after Suggest tip (AI); there is no 'Show all AI tags' toggle (only Dismiss)",
+                {"gen-ai-detections"});
+            add("no such control: the Generator has no Auto-Retry, per-scene re-find, tip-trajectory checkbox, profile hint line, or the Review audio check / audio-tempo fill / rhythm bridge / Repair span (the Improve panel, GeneratorPage.qml improvePanel, has only Start, End, Fill gaps, Heal)",
+                {"gen-retry", "gen-perscene", "gen-capture-trajectory", "gen-profile-hint", "gen-improve-audio",
+                 "gen-improve-audio-fill", "gen-improve-heal-rhythm", "gen-improve-repair"});
+            add("no such control: the Player has no Feel segment strip (speech-hold filter, heatmap bands, opacity) and no Scene feel select (the Editor has one, gen-scene-feel)",
+                {"gen-seg-f-speech-only", "pb-seg-f-speech-only", "pb-seg-heatbands", "pb-seg-heatbands-opacity-row",
+                 "pb-scene-feel"});
+            add("the control is a pill on the preview (GeneratorPage.qml), a chip there would cover the video",
+                {"gen-pos-overlay-toggle"});
+            add("same action as a placed chip: Inspector From audio carries pb-bpm-auto",
+                {"pb-aa-detect"});
+            add("crowded row: with the chip the fill combos shrink to about 80 px at the 352 px side width, so the chip stays out",
+                {"generator.tip-glans-penis", "generator.contact-mouth-nipple", "gen-show-all-feel", "gen-device-target"});
+            add("AI Train Benchmark is not built (D-155 step 6, AiTrainPage.qml placeholders)",
+                {"bm-cancel", "bm-suggest-pair"});
+            add("no such control in the AI Train label editor (LabelEditor.qml): no box scale, black-intro time field, dataset folder field, audio extraction, only-new filter, Check availability link",
+                {"roi_training.box-scale", "roi_training.dataset-folder", "roi_training.time-s", "rt-extract-audio",
+                 "rt-only-new", "rt-open-settings"});
+            add("a similar control exists in the label editor but the 0.7 text describes other behaviour (free tag boxes, N-th frame, YOLO bootstrap): kept verbatim, not placed",
+                {"rt-add-tag", "rt-bootstrap" /* Add to training set */, "rt-delete-mark" /* Remove this key */,
+                 "rt-mark-next" /* the + button (LabelEditor.qml) adds another object of a label: close, but the text speaks of free tag boxes */, "rt-pick-image" /* Open a clip or image */,
+                 "roi_training.sampling-every-n-th-frame" /* Sample every N ms */});
+            add("the control exists (AiTrainPage.qml) but the 0.7 text is wrong for it: Epochs slider stops at 200 not 500; Stop on Train stops RF-DETR not YOLO; Set up installs RF-DETR not ultralytics; Fetch ffmpeg gets imageio-ffmpeg from PyPI, not a static build",
+                {"roi_training.epochs", "rt-cancel-train", "rt-cancel-run", "rt-install-deps", "st-install-ffmpeg"});
+            add("the control exists but does something else: AI Train Download NudeNet fetches the model only, the text installs onnxruntime and NudeNet",
+                {"st-ai-setup-teachers"});
+            add("no donate button in the top bar: the support card (Main.qml, Settings) links the GitHub page and says the donation page is coming",
+                {"topbar-donate"});
+            return r;
+        }();
+        // Placed chips whose 0.7 wording is a little stale (kept verbatim): the chip is
+        // still right in spirit; fix them in ci/help_texts.py when the texts are revised.
+        static const QStringList staleWording = {
+            "gen-vib-follow" /* says "use Mix"; the slider is labelled Vibration / Suction */,
+            "gen-vib-source" /* says "Contact:"; the option is "Motion only" */,
+            "roi_training.device" /* terse: "auto = best available backend" */,
+            "st-ai-server-check" /* says "(or the default)"; an empty URL gives an error (label_controller.cpp) */};
+        for (const QString& k : staleWording) QVERIFY2(placed.contains(k), qPrintable(k + " is on no chip"));
+        QStringList unlisted, stale;
+        for (const QString& k : keys)
+            if (!placed.contains(k) && !reasons.contains(k)) unlisted << k;
+        for (auto it = reasons.cbegin(); it != reasons.cend(); ++it) {
+            if (!keys.contains(it.key())) stale << it.key() + " (not in HelpTexts.js)";
+            else if (placed.contains(it.key())) stale << it.key() + " (now has a chip: remove it from the list)";
+        }
+        unlisted.sort(); stale.sort();
+        QVERIFY2(unlisted.isEmpty(), qPrintable("help texts with no chip and no reason: " + unlisted.join(", ")));
+        QVERIFY2(stale.isEmpty(), qPrintable("stale entries: " + stale.join(", ")));
+        // The count may only go down: lower this when a key gets its chip.
+        QVERIFY2(reasons.size() <= 80, qPrintable(QString("%1 unplaced keys").arg(reasons.size())));
+        QVERIFY2(placed.size() >= 132, qPrintable(QString("only %1 keys placed").arg(placed.size())));
     }
 
     // A "?" opens its text below it; Esc closes it.
@@ -1375,7 +1471,7 @@ private slots:
                 // JS arrays arrive as QVariantList or QJSValue; count either way.
                 int n = secs.toList().size();
                 if (n == 0) n = secs.value<QVariantList>().size();
-                QCOMPARE(n, 11);
+                QCOMPARE(n, 13);
             }
             click(byName("handbookCloseButton"));
             QTRY_VERIFY_WITH_TIMEOUT(!handbook->isVisible(), kWait);

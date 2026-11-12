@@ -843,6 +843,7 @@ Item {
                             color: page.selectedMark !== -2 ? Theme.text : Theme.textDim
                             font.family: Theme.fontSoft; font.pixelSize: 12
                         }
+                        HelpChip { key: "gen-candidates"; visible: gen.tipCandidates.length > 0; Layout.alignment: Qt.AlignVCenter }
                         FlowCombo {
                             objectName: "selectedClassCombo"
                             // Ignore regions have no body-part class (0.7).
@@ -1178,6 +1179,7 @@ Item {
                             HoverHandler { id: keepHover }
                             ToolTipText { shown: keepHover.hovered; text: qsTr("Keep contact vibration when writing from sound") }
                         }
+                        HelpChip { key: "pb-vib-source-apply"; visible: gen.hasVideo; Layout.alignment: Qt.AlignVCenter }
                         FlowButton {
                             objectName: "tool_beatbar"
                             visible: gen.hasVideo
@@ -1648,12 +1650,16 @@ Item {
                             enabled: !gen.running
                             onClicked: videoDialog.open()
                         }
-                        FlowButton {
-                            objectName: "usePlayerVideo"
+                        Row {
+                            spacing: 8
                             visible: page.playerVideoUrl.toString() !== ""
-                            enabled: !gen.running
-                            text: qsTr("Use Player video")
-                            onClicked: gen.openVideo(page.playerVideoUrl.toString())
+                            FlowButton {
+                                objectName: "usePlayerVideo"
+                                enabled: !gen.running
+                                text: qsTr("Use Player video")
+                                onClicked: gen.openVideo(page.playerVideoUrl.toString())
+                            }
+                            HelpChip { key: "gen-use-player-video"; anchors.verticalCenter: parent.verticalCenter }
                         }
                     }
                 }
@@ -1739,6 +1745,7 @@ Item {
                                 Layout.fillWidth: true; Layout.maximumWidth: implicitWidth; Layout.minimumWidth: 0; elide: Text.ElideRight
                                 text: qsTr("Scene"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                             }
+                            HelpChip { key: "gen-scene-feel"; Layout.alignment: Qt.AlignVCenter }
                             FlowCombo {
                                 objectName: "sceneFeelCombo"
                                 Layout.minimumWidth: 0
@@ -1775,6 +1782,7 @@ Item {
                                 Layout.fillWidth: true; Layout.maximumWidth: implicitWidth; Layout.minimumWidth: 0; elide: Text.ElideRight
                                 text: qsTr("Suction"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                             }
+                            HelpChip { key: "gen-feel-balance"; Layout.alignment: Qt.AlignVCenter }
                         }
                         RowLayout {
                             Layout.fillWidth: true
@@ -1783,6 +1791,7 @@ Item {
                                 Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight
                                 text: qsTr("Vibration follows suction"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
                             }
+                            HelpChip { key: "gen-vib-follow"; Layout.alignment: Qt.AlignVCenter }
                             FlowToggle {
                                 objectName: "toggle_vibFollow"
                                 enabled: !gen.running
@@ -1806,6 +1815,7 @@ Item {
                             Layout.fillWidth: true; Layout.maximumWidth: implicitWidth; Layout.minimumWidth: 0; elide: Text.ElideRight
                             text: qsTr("Vibration from"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                         }
+                        HelpChip { key: "gen-vib-source"; Layout.alignment: Qt.AlignVCenter }
                         FlowCombo {
                             objectName: "vibSourceCombo"
                             Layout.minimumWidth: 0
@@ -2089,6 +2099,7 @@ Item {
                                     textFormat: Text.PlainText
                                     text: qsTr("Extra type"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                                 }
+                                HelpChip { key: "generator.extra-type"; Layout.alignment: Qt.AlignVCenter }
                                 FlowCombo {
                                     objectName: "extraClassCombo"
                                     Layout.fillWidth: true
