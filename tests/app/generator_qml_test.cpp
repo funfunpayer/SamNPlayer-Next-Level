@@ -1052,6 +1052,30 @@ private slots:
             QTRY_VERIFY(inView("createButton"));
             if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT_SCROLL"); !shot.isEmpty())
                 window.grabWindow().save(QString::fromLocal8Bit(shot + "_" + tag + "_bottom.png"));
+            // Nothing in the Create side sticks out sideways (a chip or label that widens a
+            // row would push a control out of its card at the narrow width).
+            {
+                auto* side = named(root.get(), "createScroll")->property("contentItem").value<QQuickItem*>();
+                QVERIFY(side);
+                std::function<void(QQuickItem*, QStringList&)> walk = [&](QQuickItem* it, QStringList& bad) {
+                    for (QQuickItem* c : it->childItems()) {
+                        if (!c->isVisible() || c->width() <= 0 || c->height() <= 0) continue;
+                        const QByteArray cls = c->metaObject()->className();
+                        const qreal right = c->mapToItem(scroll, QPointF(c->width(), 0)).x();
+                        // Text with elide / wrap and the layouts themselves may be as wide as their parent; a real
+                        // control (button, combo, chip, toggle, slider) must end inside the scroll area.
+                        if (right > scroll->width() + 0.5 &&
+                            (cls.contains("FlowButton") || cls.contains("FlowCombo") || cls.contains("HelpChip") ||
+                             cls.contains("FlowToggle") || cls.contains("FlowSlider")))
+                            bad << QString("%1 %2 ends at %3 of %4").arg(QString::fromLatin1(cls), c->objectName()).arg(right).arg(scroll->width());
+                        walk(c, bad);
+                    }
+                };
+                QStringList bad;
+                QTest::qWait(200);
+                walk(side, bad);
+                QVERIFY2(bad.isEmpty(), qPrintable(QString("%1 control(s) stick out at %2 px: %3").arg(bad.size()).arg(size.width()).arg(bad.mid(0, 6).join("; "))));
+            }
             // Every control of the side can be reached: walk the content in steps.
             for (const char* name : {"styleCombo", "feelDeviceCombo", "toggle_contactVibration", "tipClassCombo",
                                      "contactClassCombo", "contactCurveCombo", "createButton"}) {

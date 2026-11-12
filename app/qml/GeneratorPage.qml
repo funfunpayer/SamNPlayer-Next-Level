@@ -2711,14 +2711,17 @@ Item {
                             text: qsTr("Turn the finished script into a clean any-device stroke, or bake Sam Neo 2 vibration and suction.")
                             color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                         }
-                        RowLayout {
+                        // A Flow, not a RowLayout: the combo and two buttons have a fixed
+                        // width, and a row keeps them at their sum (432 px) as its minimum,
+                        // which widened the whole Create column past its card. A Flow wraps.
+                        Flow {
                             Layout.fillWidth: true
                             spacing: 6
                             enabled: !edit.busy
                             FlowCombo {
                                 id: postAdaptTarget
                                 objectName: "postAdaptTarget"
-                                Layout.preferredWidth: 140; Layout.preferredHeight: 36
+                                width: 140; height: 36
                                 readonly property var targets: ["general", "neo2"]
                                 model: [qsTr("Any device"), qsTr("Sam Neo 2")]
                                 currentIndex: Math.max(0, targets.indexOf(gen.optimizeTarget !== "" ? gen.optimizeTarget : "general"))
