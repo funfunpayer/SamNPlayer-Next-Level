@@ -43,6 +43,7 @@
 #include "samn/playback.h"
 #include "samn/playback_mapping.h"
 #include "samn/contact_marks.h"
+#include "samn/sam_file.h"
 #include "samn/samn_file.h"
 #include "samn/script_finder.h"
 
@@ -636,6 +637,32 @@ bool PlayerController::openScript(const QString& pathIn, const QString& videoIn)
     // D-132: a lane the file carries shows without a device.
     vibrationFromScript_ = !doc.vibration.empty();
     suctionFromScript_ = !doc.suction.empty();
+    // D-170: a 0.7 .sam beside the script fills the vibration lane when
+    // SamNPlayer 2 has no vibration of its own for it (no Neo lane, no contact
+    // vibration in the recipe, not a distance profile). Read only.
+    samLane_.clear();
+    QString samNote;
+    {
+        const QString samPath = FromU8(samn::SamSidecarPath(U8(path)));
+        std::error_code ec;
+        if (std::filesystem::is_regular_file(std::filesystem::u8path(U8(samPath)), ec)) {
+            const QString name = QFileInfo(samPath).fileName();
+            const samn::SamReadResult sam = samn::LoadSam(std::filesystem::u8path(U8(samPath)));
+            if (!sam.file) {
+                samNote = tr("Ignored %1: %2").arg(name, FromU8(sam.error));
+            } else if (!doc.vibration.empty() || doc.recipe.contact_vibration || samn::IsDistanceProfile(doc.profile)) {
+                // SamNPlayer 2 maps its own vibration for this script: nothing to import.
+            } else if (!samn::SamHasContactIntensity(*sam.file)) {
+                samNote = tr("%1 has no contact intensity: not imported.").arg(name);
+            } else {
+                samLane_ = samn::SamIntensityLane(*sam.file);
+                vibrationFromScript_ = true;
+                samNote = tr("Imported contact intensity from %1 (%2 points, read only).")
+                              .arg(name)
+                              .arg(samLane_.size());
+            }
+        }
+    }
     // A new script starts on the stroke.
     if (activeLane_ != QLatin1String("stroke")) {
         activeLane_ = QStringLiteral("stroke");
@@ -693,6 +720,7 @@ bool PlayerController::openScript(const QString& pathIn, const QString& videoIn)
     setVideo(video);
     setView(samn::FullView(timelineMs()));
     setVideoPositionMs(0);
+    if (!samNote.isEmpty()) setError(samNote);
     emit scriptOpened(scriptPath_);
     return true;
 }
@@ -715,6 +743,13 @@ void PlayerController::remap(bool fresh) {
     // these frames), on the device tick.
     vibration_ = LaneFrom(frames, false);
     suction_ = LaneFrom(frames, true);
+    if (!samLane_.empty()) {
+        // D-170: the imported .sam intensity is the vibration, through the same live adjust.
+        std::vector<samn::Frame> imported;
+        imported.reserve(samLane_.size());
+        for (const auto& a : samLane_) imported.push_back({a.at, a.pos / 100.0, 0.0});
+        vibration_ = LaneFrom(samn::AdjustDeviceFrames(imported, plan.adjust), false);
+    }
     audioVibApplied_ = false;
     if (fresh)
         output_.setScript(stroke_, vibration_, suction_, axisActions_);
@@ -880,6 +915,7 @@ void PlayerController::setUiValue(const QString& key, const QVariant& value) {
 
 void PlayerController::clearScript() {
     resetCurveHistory({});
+    samLane_.clear();
     strength_.clear();
     activeStrength_.clear();
     contactMarks_.clear();
