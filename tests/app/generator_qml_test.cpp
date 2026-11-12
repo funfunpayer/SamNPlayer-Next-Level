@@ -1075,7 +1075,40 @@ private slots:
                 QStringList bad;
                 QTest::qWait(200);
                 walk(side, bad);
-                QVERIFY2(bad.isEmpty(), qPrintable(QString("%1 control(s) stick out at %2 px: %3").arg(bad.size()).arg(size.width()).arg(bad.mid(0, 6).join("; "))));
+                if (!bad.isEmpty()) {
+                    // Say where the width comes from: the first offender's ancestors, and for each
+                    // layout among them its children with their widths and layout hints.
+                    auto hint = [](QQuickItem* c) {
+                        QObject* att = nullptr;
+                        for (QObject* o : c->children())
+                            if (QByteArray(o->metaObject()->className()) == "QQuickLayoutAttached") att = o;
+                        return QString("%1 '%2' vis=%3 w=%4 iw=%5 min=%6 pref=%7 fill=%8")
+                            .arg(QString::fromLatin1(c->metaObject()->className()), c->objectName()).arg(c->isVisible())
+                            .arg(c->width()).arg(c->implicitWidth())
+                            .arg(att ? att->property("minimumWidth").toString() : QStringLiteral("-"))
+                            .arg(att ? att->property("preferredWidth").toString() : QStringLiteral("-"))
+                            .arg(att ? att->property("fillWidth").toString() : QStringLiteral("-"));
+                    };
+                    QString why;
+                    const QByteArray first = bad.first().section(' ', 1, 1).toLatin1();
+                    QQuickItem* off = nullptr;
+                    std::function<void(QQuickItem*)> find = [&](QQuickItem* it) {
+                        for (QQuickItem* c : it->childItems()) {
+                            if (off) return;
+                            if (!first.isEmpty() && c->objectName() == QString::fromLatin1(first) && c->isVisible()) { off = c; return; }
+                            find(c);
+                        }
+                    };
+                    find(side);
+                    for (QQuickItem* p = off; p && p != side->parentItem(); p = p->parentItem()) {
+                        why += "\n  ^ " + hint(p);
+                        if (QByteArray(p->metaObject()->className()).contains("Layout"))
+                            for (QQuickItem* d : p->childItems())
+                                if (d->isVisible() && d->width() > 0) why += "\n      - " + hint(d);
+                    }
+                    QFAIL(qPrintable(QString("%1 control(s) stick out at %2 px (scroll %3): %4%5")
+                                         .arg(bad.size()).arg(size.width()).arg(scroll->width()).arg(bad.join("; "), why)));
+                }
             }
             // Every control of the side can be reached: walk the content in steps.
             for (const char* name : {"styleCombo", "feelDeviceCombo", "toggle_contactVibration", "tipClassCombo",

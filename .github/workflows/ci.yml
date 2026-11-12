@@ -161,6 +161,14 @@ jobs:
           for t in device_transports device_controller playback_output player_controller library_controller icon_provider training_controller settings_controller update_checker notices system_check mode_registry inspector_qml player_page_qml shell_qml generator_qml generator_controller label_controller model_download train_controller aitrain_qml training_qml editor_controller frame_cache script_clock clip_prep_controller; do
             exe=$(find build -name "${t}_test" -o -name "${t}_test.exe" | head -1)
             [ -n "$exe" ] || continue
+            # train_controller's functions build on each other (one temp config
+            # dir, one environment): run alone they fail by design. Run it whole.
+            if [ "$t" = train_controller ]; then
+              "$exe" -v1 -o "fail-$t.txt,txt" > /dev/null 2>&1; rc=$?
+              echo "$t (whole) exit $rc"
+              if [ $rc -ne 0 ]; then tail -120 "fail-$t.txt"; fi
+              continue
+            fi
             for f in $("$exe" -functions | sed 's/()//'); do
               # The first run writes the log: a function that fails once and
               # passes on a second run (a timing problem) shows its failure here.
