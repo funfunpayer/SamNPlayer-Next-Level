@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -356,4 +357,244 @@ TEST_CASE("camera: the track cache keeps the frame pixels of both axes") {
     CHECK(back->xs == r.xs);
     CHECK(back->frame_xs == r.frame_xs);
     CHECK(back->frame_ys == r.frame_ys);
+}
+
+// Noisy and small pictures (PR #201 review). At the 1 px RANSAC distance a
+// noisy background's inlier share falls under the gate in many frames
+// (here 47 of 300 at 192x144, 84 of 300 at 320x240); a gated frame adds
+// nothing, so that frame's camera step is lost and a steady pan comes back
+// as part drift. Filling those frames (carry, 3 px fallback, interpolation)
+// fixed this scene but broke shake, parallax and abrupt stops (review of the
+// fixes; numbers in DETECTION_CAMERA2D_FIXES_2026-11-10.md), so the loss
+// stays: a known limit.
+namespace {
+
+tc::CameraScene NoisyPan(int w) {
+    tc::CameraScene c = PanX(45 * w / 320.0, 0.25, true);
+    c.w = w;
+    c.h = w * 3 / 4;
+    c.disc_r = int(std::lround(35 * w / 320.0));
+    c.amp = 80 * w / 320.0;
+    c.texture_density = w < 320 ? 0.8 : 0.6;
+    c.blur_px = w < 320 ? 3 : 5;
+    c.noise_sigma = w < 320 ? 20 : 25;
+    c.jpeg_quality = 20;
+    return c;
+}
+
+cv::Rect BoxX(int w) {
+    const int b = int(std::lround(120 * w / 320.0));
+    return {w / 2 - b / 2, w * 3 / 8 - b / 2, b, b};
+}
+
+double Median(std::vector<double> v) {
+    std::sort(v.begin(), v.end());
+    return v.empty() ? 0.0 : v[v.size() / 2];
+}
+
+// p95 of |track motion since frame 0 - true motion of the disc in the scene|.
+double PosErrP95(const TrackResult& r, const tc::SceneInfo& s) {
+    std::vector<double> e;
+    for (size_t i = 0; i < r.positions.size(); ++i) {
+        const double truth = -s.signal(double(r.times_ms[i]) / 1000.0) + s.signal(double(r.times_ms[0]) / 1000.0);
+        e.push_back(std::abs((r.positions[i] - r.positions[0]) - truth));
+    }
+    std::sort(e.begin(), e.end());
+    return e.empty() ? 0.0 : e[static_cast<size_t>(0.95 * double(e.size() - 1))];
+}
+
+// The same scene under several noise draws (seeds 1 to 5). On a noisy
+// picture the gated frames, and so the lost camera steps, depend on the
+// exact pixels: one draw gave r 0.923 to 0.970 (320 px pan) and the CI
+// runners' encoder gave 0.933 where this machine gave 0.970 for the same
+// seed. A median over draws is what can be pinned; one draw is not.
+struct OverSeeds {
+    std::vector<double> r, p95;
+    double MedianR() const { return Median(r); }
+    double MedianP95() const { return Median(p95); }
+};
+
+OverSeeds TrackOverSeeds(const fs::path& dir, const std::string& name, tc::CameraScene c, const cv::Rect& box) {
+    OverSeeds out;
+    for (unsigned seed = 1; seed <= 5; ++seed) {
+        c.noise_seed = seed;
+        const fs::path clip = dir / (name + "_" + std::to_string(seed) + ".mp4");
+        const tc::SceneInfo s = Scene(clip, c);
+        const TrackResult r = Track(clip, box, Cam(TrackAxis::kX));
+        out.r.push_back(R(r, s));
+        out.p95.push_back(PosErrP95(r, s));
+        std::error_code ec;
+        fs::remove(clip, ec);
+    }
+    return out;
+}
+
+std::string List(const std::vector<double>& v) {
+    std::string out;
+    for (const double x : v) out += (out.empty() ? "" : " ") + std::to_string(x).substr(0, 5);
+    return out;
+}
+
+
+}  // namespace
+
+TEST_CASE("camera: a noisy picture keeps most of its compensation (known limit: gated frames lose their step)") {
+    TempDir dir;
+    for (const int w : {320, 192}) {
+        const fs::path clip = dir.path / ("noisy_" + std::to_string(w) + ".mp4");
+        const tc::SceneInfo s = Scene(clip, NoisyPan(w));
+        const TrackResult raw = Track(clip, BoxX(w), Cam(TrackAxis::kX, false));
+        const TrackResult comp = Track(clip, BoxX(w), Cam(TrackAxis::kX));
+        CHECK(R(raw, s) < 0.9);
+        CHECK(comp.stats.camera_frames_gated > 0);
+        const OverSeeds seeds = TrackOverSeeds(dir.path, "noisy_" + std::to_string(w), NoisyPan(w), BoxX(w));
+        // Printed on every run: the gated scenes differ per environment (doc).
+        MESSAGE(w << " px: raw r " << R(raw, s) << ", compensated r over noise draws " << List(seeds.r));
+        // Gated frames adding nothing, median over the draws: 0.946 at 320 px
+        // (0.923 to 0.965), 0.991 at 192 px (0.955 to 0.994). 0.999 would
+        // need a gap fill that is safe on shake and stops (there is none).
+        CHECK(seeds.MedianR() >= (w == 320 ? 0.90 : 0.94));
+    }
+}
+
+TEST_CASE("camera: the self-check's camera trust stays 0.7's 3 px inlier share") {
+    TempDir dir;
+    const fs::path clip = dir.path / "noisy_checks.mp4";
+    Scene(clip, NoisyPan(320));
+    TrackOptions o = Cam(TrackAxis::kX);
+    o.record_checks = true;
+    const TrackResult r = Track(clip, BoxX(320), o);
+    std::vector<double> shares;
+    for (const double v : r.checks.camera_inliers)
+        if (!std::isnan(v)) shares.push_back(v);
+    REQUIRE(shares.size() > 120);
+    // c6 (self_check.h, c6_min 0.4) was calibrated on the 3 px share; the
+    // 1 px share of this clip has a median near 0.52, the 3 px share near 0.82.
+    CHECK_MESSAGE(Median(shares) >= 0.7, "median recorded share " << Median(shares));
+    // Recording does not change the track.
+    CHECK(r.positions == Track(clip, BoxX(320), Cam(TrackAxis::kX)).positions);
+}
+
+TEST_CASE("camera: an implausible or broken estimate is not used") {
+    // A fit with every point an inlier can still be no camera of a stroke
+    // video: a zoom of 1.3 or a turn of 0.3 rad (17 degrees) in one frame,
+    // or a matrix that is not finite.
+    const auto fit = [](double scale, double angle) {
+        CameraMotion c;
+        c.ok = true;
+        c.inliers = 1;
+        c.m = cv::Matx23d(scale * std::cos(angle), -scale * std::sin(angle), 0, scale * std::sin(angle),
+                          scale * std::cos(angle), 0);
+        return c;
+    };
+    CHECK(fit(1.05, 0.02).Usable());
+    CHECK_FALSE(fit(1.3, 0).Usable());
+    CHECK_FALSE(fit(0.75, 0).Usable());
+    CHECK_FALSE(fit(1, 0.3).Usable());
+    CameraMotion broken = fit(1, 0);
+    broken.m(0, 2) = std::numeric_limits<double>::quiet_NaN();
+    CHECK_FALSE(broken.Usable());
+}
+
+TEST_CASE("camera: a held box stays where it was in the scene") {
+    TempDir dir;
+    const fs::path clip = dir.path / "held.mp4";
+    tc::CameraScene c = PanX(45, 0.25, true);
+    c.hide_from_s = 2.0;
+    c.hide_to_s = 3.6;
+    c.texture_density = 0.2;  // little to latch onto: the tracker reports the loss
+    Scene(clip, c);
+    const TrackResult r = Track(clip, kBoxX, Cam(TrackAxis::kX));
+    int held = 0, moved = 0;
+    for (size_t i = 1; i < r.lost.size(); ++i) {
+        if (r.lost[i] != kLostTracker) continue;
+        ++held;
+        // The tracker repeats its last box; the camera moved on: that is no
+        // motion of the tip in the scene.
+        if (r.xs[i] != r.xs[i - 1] || r.ys[i] != r.ys[i - 1]) ++moved;
+    }
+    REQUIRE(held >= 10);
+    CHECK_MESSAGE(moved == 0, moved << " of " << held << " held frames moved");
+}
+
+TEST_CASE("camera: a shift of more than a quarter of the picture is no camera step") {
+    CameraMotion c;
+    c.ok = true;
+    c.inliers = 1;
+    c.frame = cv::Size(320, 240);
+    c.m(0, 2) = 70;  // under 80 = a quarter of 320
+    CHECK(c.Usable());
+    c.m(0, 2) = 90;
+    CHECK_FALSE(c.Usable());
+    c.m(0, 2) = 0;
+    c.m(1, 2) = -61;  // over 60 = a quarter of 240
+    CHECK_FALSE(c.Usable());
+}
+
+TEST_CASE("camera: a held position does not reach across a scene cut") {
+    std::vector<double> v{1, 2, 3, 4, 5};
+    const std::vector<uint8_t> lost{0, 0, kLostTracker, kLostTracker, 0};
+    HoldLostPositions(v, lost, {2});  // frame 2 starts a new scene
+    CHECK(v == std::vector<double>{1, 2, 3, 3, 5});
+    std::vector<double> w{1, 2, 3, 4, 5};
+    HoldLostPositions(w, lost, {});
+    CHECK(w == std::vector<double>{1, 2, 2, 2, 5});
+}
+
+TEST_CASE("camera: the track reports frames whose fine fit was gated") {
+    TempDir dir;
+    const fs::path clip = dir.path / "gated.mp4";
+    Scene(clip, NoisyPan(320));
+    const TrackResult noisy = Track(clip, BoxX(320), Cam(TrackAxis::kX));
+    CHECK(noisy.stats.camera_frames_gated > 10);
+    CHECK(noisy.stats.camera_frames_lost >= noisy.stats.camera_frames_gated);  // a gated frame has no trusted step
+
+    const fs::path clean = dir.path / "clean_gated.mp4";
+    Scene(clean, PanX(45, 0.25, true));
+    CHECK(Track(clean, kBoxX, Cam(TrackAxis::kX)).stats.camera_frames_gated == 0);
+}
+
+// Second review of the gap handling: a frame without a trusted fit must not
+// invent a step. Carrying the last step (or a looser 3 px fit) helps a
+// steady noisy pan but turns shake, parallax and an abrupt stop into
+// drift. These scenes pin that the compensation does no worse there than a
+// gated frame adding nothing.
+namespace {
+
+tc::CameraScene Degraded(tc::CameraScene c) {
+    c.texture_density = 0.6;
+    c.blur_px = 5;
+    c.noise_sigma = 25;
+    c.jpeg_quality = 20;
+    return c;
+}
+
+}  // namespace
+
+TEST_CASE("camera: shake under gating gains no invented steps; an abrupt stop stays bounded") {
+    TempDir dir;
+    {
+        tc::CameraScene c = PanX(0, 0, true);
+        c.camera.pan_x = tc::Shake(6, 7);
+        c.camera.pan_y = tc::Shake(4, 8);
+        const OverSeeds seeds = TrackOverSeeds(dir.path, "shake", Degraded(c), kBoxX);
+        MESSAGE("shake over noise draws: r " << List(seeds.r) << ", position error p95 " << List(seeds.p95));
+        // Medians with a gated frame adding nothing: r 0.973, p95 27.1 px.
+        // Carrying the last step (the first review round): 0.861, 53.1 px;
+        // shake does not persist.
+        CHECK(seeds.MedianR() >= 0.93);
+        CHECK(seeds.MedianP95() <= 40);
+    }
+    {
+        tc::CameraScene c = PanX(0, 0, true);
+        const auto go = tc::StopGo(40, 1.5, 1.5);
+        c.camera.pan_x = [go](double t) { return go(t) - 60; };
+        const OverSeeds seeds = TrackOverSeeds(dir.path, "stop", Degraded(c), kBoxX);
+        MESSAGE("stop over noise draws: r " << List(seeds.r) << ", position error p95 " << List(seeds.p95));
+        // Medians r 0.964, p95 23.6 px. Losing a gated step is bounded;
+        // inventing one is not (the bench's 12 s stop_noisy: carrying took
+        // track r 0.768 to 0.561).
+        CHECK(seeds.MedianR() >= 0.92);
+        CHECK(seeds.MedianP95() <= 35);
+    }
 }
