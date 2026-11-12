@@ -448,7 +448,8 @@ TEST_CASE("camera: a noisy picture keeps most of its compensation (known limit: 
         CHECK(R(raw, s) < 0.9);
         CHECK(comp.stats.camera_frames_gated > 0);
         const OverSeeds seeds = TrackOverSeeds(dir.path, "noisy_" + std::to_string(w), NoisyPan(w), BoxX(w));
-        INFO(w << " px: raw r " << R(raw, s) << ", compensated r over noise draws " << List(seeds.r));
+        // Printed on every run: the gated scenes differ per environment (doc).
+        MESSAGE(w << " px: raw r " << R(raw, s) << ", compensated r over noise draws " << List(seeds.r));
         // Gated frames adding nothing, median over the draws: 0.946 at 320 px
         // (0.923 to 0.965), 0.991 at 192 px (0.955 to 0.994). 0.999 would
         // need a gap fill that is safe on shake and stops (there is none).
@@ -577,7 +578,7 @@ TEST_CASE("camera: shake under gating gains no invented steps; an abrupt stop st
         c.camera.pan_x = tc::Shake(6, 7);
         c.camera.pan_y = tc::Shake(4, 8);
         const OverSeeds seeds = TrackOverSeeds(dir.path, "shake", Degraded(c), kBoxX);
-        INFO("shake over noise draws: r " << List(seeds.r) << ", position error p95 " << List(seeds.p95));
+        MESSAGE("shake over noise draws: r " << List(seeds.r) << ", position error p95 " << List(seeds.p95));
         // Medians with a gated frame adding nothing: r 0.973, p95 27.1 px.
         // Carrying the last step (the first review round): 0.861, 53.1 px;
         // shake does not persist.
@@ -589,7 +590,7 @@ TEST_CASE("camera: shake under gating gains no invented steps; an abrupt stop st
         const auto go = tc::StopGo(40, 1.5, 1.5);
         c.camera.pan_x = [go](double t) { return go(t) - 60; };
         const OverSeeds seeds = TrackOverSeeds(dir.path, "stop", Degraded(c), kBoxX);
-        INFO("stop over noise draws: r " << List(seeds.r) << ", position error p95 " << List(seeds.p95));
+        MESSAGE("stop over noise draws: r " << List(seeds.r) << ", position error p95 " << List(seeds.p95));
         // Medians r 0.964, p95 23.6 px. Losing a gated step is bounded;
         // inventing one is not (the bench's 12 s stop_noisy: carrying took
         // track r 0.768 to 0.561).
