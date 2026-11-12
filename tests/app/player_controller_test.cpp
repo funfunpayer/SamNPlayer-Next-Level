@@ -1657,8 +1657,9 @@ private slots:
         const QDateTime stamp = QFileInfo(sam).lastModified();
         PlayerController c;
         QVERIFY(c.openPath(path));
-        QVERIFY(c.lastError().contains("clip.sam"));
-        QVERIFY(c.lastError().contains("read only"));
+        QVERIFY(c.toolNote().contains("clip.sam"));
+        QVERIFY(c.toolNote().contains("read only"));
+        QVERIFY(c.lastError().isEmpty());  // an info note, not the red error bar
         c.setVideoPositionMs(500);
         QCOMPARE(c.vibrationNow(), 60);  // the sidecar's 0.6, not the mapped value
         QVERIFY(c.showVibrationLane());
@@ -1683,7 +1684,7 @@ private slots:
         own.setVideoPositionMs(600);
         const int mapped = own.vibrationNow();
         QVERIFY(mapped > 30 && mapped < 100);
-        QVERIFY(!own.lastError().contains("Imported"));
+        QVERIFY(!own.toolNote().contains("Imported"));
 
         // A hostile sidecar: the script still opens, the note names the problem.
         const QString bad = d.filePath("bad.funscript");
@@ -1698,7 +1699,9 @@ private slots:
         PlayerController b;
         QVERIFY(b.openPath(bad));
         QVERIFY(b.hasScript());
-        QVERIFY(b.lastError().startsWith("Ignored bad.sam"));
+        QVERIFY(b.toolNote().startsWith("Ignored bad.sam"));
+        QVERIFY(b.toolNote().size() < 300);
+        QVERIFY(b.lastError().isEmpty());
         b.setVideoPositionMs(500);
         QCOMPARE(b.vibrationNow(), plainVib);  // the mapping is untouched
 
@@ -1708,7 +1711,90 @@ private slots:
         writeFile(d.filePath("thin.sam"), R"({"version":"0.1","frames":[{"time":0,"motion":{"position":50}}]})");
         PlayerController t;
         QVERIFY(t.openPath(thin));
-        QVERIFY(t.lastError().contains("no contact intensity"));
+        QVERIFY(t.toolNote().contains("no contact intensity"));
+
+        // 0.003 passes 0.7's > 0.001 gate but is 0 percent: not "Imported".
+        const QString faint = d.filePath("faint.funscript");
+        writeFile(faint, zigzag());
+        writeFile(d.filePath("faint.sam"),
+                  R"({"version":"0.1","frames":[{"time":0,"motion":{"intensity":0.003}},{"time":9000,"motion":{"intensity":0.004}}]})");
+        PlayerController f;
+        QVERIFY(f.openPath(faint));
+        QVERIFY(f.toolNote().contains("no contact intensity"));
+        QVERIFY(!f.toolNote().contains("Imported"));
+    }
+
+    // The imported lane covers the .sam's own time range only: outside it the
+    // mapped vibration stays (no first / last value held).
+    void samSidecarDoesNotHoldItsEdgeValues() {
+        QTemporaryDir d;
+        const QString plainPath = d.filePath("plain.funscript");
+        writeFile(plainPath, zigzag());
+        const QString path = d.filePath("range.funscript");
+        writeFile(path, zigzag());
+        writeFile(d.filePath("range.sam"),
+                  R"({"version":"0.1","frames":[{"time":2000,"motion":{"intensity":0.5}},{"time":4000,"motion":{"intensity":0.9}}]})");
+        PlayerController plain;
+        QVERIFY(plain.openPath(plainPath));
+        PlayerController c;
+        QVERIFY(c.openPath(path));
+        for (const qint64 ms : {500, 1750, 4500, 8000}) {
+            plain.setVideoPositionMs(ms);
+            c.setVideoPositionMs(ms);
+            QCOMPARE(c.vibrationNow(), plain.vibrationNow());
+        }
+        c.setVideoPositionMs(2000);
+        QCOMPARE(c.vibrationNow(), 50);
+        c.setVideoPositionMs(3000);
+        QCOMPARE(c.vibrationNow(), 70);
+        c.setVideoPositionMs(4000);
+        QCOMPARE(c.vibrationNow(), 90);
+    }
+
+    // "Rest means rest": an empty phase silences the imported vibration too,
+    // also where the file holds no point inside the phase.
+    void samSidecarFollowsThePhaseShape() {
+        QTemporaryDir d;
+        const QString src = d.filePath("src.funscript");
+        writeFile(src, zigzag());
+        samn::Document doc = samn::LoadFunscriptFile(std::filesystem::u8path(src.toStdString()));
+        doc.recipe.phase_ranges = {{2000, 6000, "empty"}};
+        const QString path = d.filePath("ph.samn");
+        samn::SaveDocument(std::filesystem::u8path(path.toStdString()), doc);
+        writeFile(d.filePath("ph.sam"),
+                  R"({"version":"0.1","frames":[{"time":0,"motion":{"intensity":0.6}},{"time":10000,"motion":{"intensity":0.6}}]})");
+        PlayerController c;
+        QVERIFY(c.openPath(path));
+        QVERIFY(c.toolNote().contains("Imported"));
+        c.setVideoPositionMs(500);
+        QCOMPARE(c.vibrationNow(), 60);
+        c.setVideoPositionMs(4000);  // middle of the empty phase: no vibration, as suction rests
+        QCOMPARE(c.vibrationNow(), 0);
+        c.setVideoPositionMs(8000);
+        QCOMPARE(c.vibrationNow(), 60);
+    }
+
+    // The info note never hides the video-link warning (lastError would).
+    void samSidecarNoteKeepsTheVideoLinkWarning() {
+        QTemporaryDir d;
+        const QString script = d.filePath("probe.funscript");
+        writeFile(script, zigzag(11, 100));
+        writeFile(d.filePath("probe.sam"),
+                  R"({"version":"0.1","frames":[{"time":0,"motion":{"intensity":0.5}},{"time":900,"motion":{"intensity":0.5}}]})");
+        writeFile(d.filePath("clip.mp4"), "x");
+        writeFile(d.filePath("clip.mkv"), "x");
+        PlayerController c;
+        QVERIFY(c.openScript(script, d.filePath("clip.mp4")));
+        QVERIFY(c.toolNote().contains("Imported"));
+        QVERIFY(c.attachVideo(d.filePath("clip.mkv")));
+        QVERIFY(c.videoLinkWarning().contains(QStringLiteral("Container")));
+        QVERIFY(c.videoLinkSuggestPlayable());
+        QVERIFY(c.lastError().isEmpty());  // PlayerStatusBars shows the warning only then
+        // A script without a sidecar clears the note it set.
+        const QString other = d.filePath("other.funscript");
+        writeFile(other, zigzag());
+        QVERIFY(c.openScript(other));
+        QVERIFY(c.toolNote().isEmpty());
     }
 
     // 0.7 contact controls: strength 0-2 (0 mutes), off, sensitivity and

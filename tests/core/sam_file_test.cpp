@@ -1,6 +1,7 @@
 // The 0.7 `.sam` sidecar reader (sam_file.h): synthetic fixtures only.
 #include <doctest/doctest.h>
 
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
@@ -280,4 +281,83 @@ TEST_CASE("sam: mutated and random input never crashes and stays well formed") {
         for (auto& c : junk) c = static_cast<char>(next() & 0xFF);
         check(junk);
     }
+}
+
+TEST_CASE("sam: an error is short and never quotes the file") {
+    const std::string pre = R"({"version":"0.1","frames":[{"time":1,"motion":{"intensity":)";
+    const std::string digits(5u << 20, '7');
+    const std::string longText(5u << 20, 'x');
+    const std::string inputs[] = {
+        pre + digits + "x}}]}",                                             // digit run then junk
+        pre + digits + ".",                                                 // digit run, truncated
+        R"({"version":")" + longText,                                       // unterminated string
+        R"({"version":"0.1","frames":[{"time":1}],")" + longText + "\":",  // bad / unfinished key
+        R"({"version":")" + longText + "\xFF\"}",                           // invalid UTF-8 after a long string
+        R"({"version":"0.1","frames":[{"time":")" + longText + "\"}]}",     // wrong type with a long value
+    };
+    for (const auto& in : inputs) {
+        const auto r = ParseSam(in);
+        CHECK_FALSE(r.file);
+        CHECK_FALSE(r.error.empty());
+        CHECK(r.error.size() <= samn::kSamMaxErrorChars);
+        CHECK(r.error.find("json.exception") == std::string::npos);
+        CHECK(r.error.find("xxxx") == std::string::npos);
+        CHECK(r.error.find("7777") == std::string::npos);
+    }
+}
+
+TEST_CASE("sam: a long version string is cut") {
+    const auto r = ParseSam(R"({"version":")" + std::string(4u << 20, 'v') + R"(","frames":[{"time":1}]})");
+    REQUIRE(r.file);
+    CHECK(r.file->version.size() == 256);
+}
+
+TEST_CASE("sam: float times are rounded, huge ones refused, underflow is zero") {
+    auto t = [](const std::string& v) {
+        return ParseSam(R"({"version":"0.1","frames":[{"time":)" + v + "}]}");
+    };
+    REQUIRE(t("1500.6").file);
+    CHECK(t("1500.6").file->frames[0].time_ms == 1501);  // rounded, not truncated
+    CHECK(t("1500.4").file->frames[0].time_ms == 1500);
+    CHECK(t("8.9e15").file);
+    CHECK_FALSE(t("9e15").file);
+    CHECK_FALSE(t("-9e15").file);
+    CHECK_FALSE(t("1e308").file);
+    const auto tiny = ParseSam(R"({"version":"0.1","frames":[{"time":1,"motion":{"intensity":1e-400}}]})");
+    REQUIRE(tiny.file);
+    CHECK(tiny.file->frames[0].intensity == 0);
+    CHECK_FALSE(ParseSam(R"({"version":"0.1","frames":[{"time":1e999}]})").file);
+}
+
+TEST_CASE("sam: intensity under half a percent passes the 0.7 gate but gives an empty lane") {
+    const auto r = ParseSam(doc(frame(0, 0, 0.003) + "," + frame(100, 0, 0.004)));
+    REQUIRE(r.file);
+    CHECK(samn::SamHasContactIntensity(*r.file));  // 0.7's > 0.001
+    for (const auto& a : samn::SamIntensityLane(*r.file)) CHECK(a.pos == 0);
+}
+
+TEST_CASE("sam: the cached load follows the file") {
+    namespace fs = std::filesystem;
+    const fs::path dir = fs::temp_directory_path() / "samn_sam_cache_test";
+    fs::create_directories(dir);
+    const fs::path p = dir / "c.sam";
+    {
+        std::ofstream(p, std::ios::binary) << doc(frame(5, 0, 0.5));
+    }
+    const auto a = samn::LoadSamCached(p);
+    REQUIRE(a.file);
+    CHECK(a.file->frames[0].time_ms == 5);
+    const auto b = samn::LoadSamCached(p);  // from the cache
+    REQUIRE(b.file);
+    CHECK(b.file->frames[0].time_ms == 5);
+    {
+        std::ofstream(p, std::ios::binary) << doc(frame(7, 0, 0.5) + "," + frame(9, 0, 0.5));
+    }
+    fs::last_write_time(p, fs::last_write_time(p) + std::chrono::seconds(5));
+    const auto c = samn::LoadSamCached(p);
+    REQUIRE(c.file);
+    CHECK(c.file->frames.size() == 2);
+    fs::remove(p);
+    CHECK_FALSE(samn::LoadSamCached(p).file);  // gone: an error, not the stale entry
+    fs::remove_all(dir);
 }

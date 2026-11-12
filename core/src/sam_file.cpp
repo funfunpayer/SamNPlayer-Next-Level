@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <mutex>
 
 #include <nlohmann/json.hpp>
 
@@ -34,7 +35,8 @@ public:
         std::string t = text;
         std::replace(t.begin(), t.end(), ',', '.');
         const ParsedDouble p = ParseDoublePrefix(t);
-        if (!p.ok || p.out_of_range || !std::isfinite(p.value)) return Fail("a number is out of range");
+        // Overflow (1e999) rejects the file as in Go; underflow (1e-400) is 0.
+        if (!p.ok || !std::isfinite(p.value)) return Fail("a number is out of range");
         return Scalar(Kind::Number, p.value, nullptr);
     }
     bool string(std::string& v) { return Scalar(Kind::String, 0, &v); }
@@ -48,8 +50,9 @@ public:
     }
     bool end_object() { return Close(); }
     bool end_array() { return Close(); }
-    bool parse_error(std::size_t, const std::string&, const nlohmann::json::exception& e) {
-        if (err.empty()) err = std::string("not valid JSON: ") + e.what();
+    bool parse_error(std::size_t byte, const std::string&, const nlohmann::json::exception&) {
+        // Never echo nlohmann's text: it quotes the offending token, which can be the whole file.
+        if (err.empty()) err = "it is not valid JSON (problem near byte " + std::to_string(byte) + ")";
         return false;
     }
 
@@ -125,7 +128,7 @@ private:
         if (st_.size() == 1) {
             if (k == "version") {
                 if (kind != Kind::String) return Fail("version must be text");
-                file.version = *text;
+                file.version = text->substr(0, 256);
             } else if (k == "frames") {
                 return Fail("frames must be a list");
             } else if (k == "metadata") {
@@ -169,6 +172,7 @@ SamReadResult ParseSam(std::string_view data) {
         r.error = "The .sam file is too large (limit 64 MB).";
         return r;
     }
+    // Go's json rejects a BOM; editors on Windows write one, so it is skipped here.
     if (data.size() >= 3 && data.compare(0, 3, "\xEF\xBB\xBF") == 0) data.remove_prefix(3);
     // nlohmann reads a NUL as the end of the input; text never holds one.
     if (data.find('\0') != std::string_view::npos) {
@@ -179,11 +183,13 @@ SamReadResult ParseSam(std::string_view data) {
     bool ok = false;
     try {
         ok = nlohmann::json::sax_parse(data.begin(), data.end(), &h, nlohmann::json::input_format_t::json, true);
-    } catch (const std::exception& e) {
-        if (h.err.empty()) h.err = e.what();
+    } catch (const std::exception&) {
+        if (h.err.empty()) h.err = "it could not be read";
     }
     if (!ok) {
-        r.error = "Invalid .sam file: " + (h.err.empty() ? std::string("not valid JSON") : h.err) + ".";
+        // h.err is built from fixed words, field names and numbers only.
+        r.error = "Invalid .sam file: " + (h.err.empty() ? std::string("it is not valid JSON") : h.err) + ".";
+        if (r.error.size() > kSamMaxErrorChars) r.error.resize(kSamMaxErrorChars);
         return r;
     }
     if (h.file.version.empty()) {
@@ -218,6 +224,34 @@ SamReadResult LoadSam(const fs::path& path) {
         return r;
     }
     return ParseSam(*bytes);
+}
+
+SamReadResult LoadSamCached(const fs::path& path) {
+    // One entry: reopening the same script (undo, redo, a range edit reload)
+    // does not parse a large file again. Keyed by path, size and mtime.
+    struct Entry {
+        std::string path;
+        uintmax_t size = 0;
+        fs::file_time_type mtime;
+        SamReadResult result;
+        bool valid = false;
+    };
+    static std::mutex mu;
+    static Entry cache;
+    std::error_code ec;
+    const auto size = fs::file_size(path, ec);
+    const auto mtime = ec ? fs::file_time_type{} : fs::last_write_time(path, ec);
+    const std::string key = path.u8string();
+    if (!ec) {
+        std::lock_guard<std::mutex> lock(mu);
+        if (cache.valid && cache.path == key && cache.size == size && cache.mtime == mtime) return cache.result;
+    }
+    SamReadResult r = LoadSam(path);
+    if (!ec) {
+        std::lock_guard<std::mutex> lock(mu);
+        cache = Entry{key, size, mtime, r, true};
+    }
+    return r;
 }
 
 std::string SamSidecarPath(const std::string& script_path) {

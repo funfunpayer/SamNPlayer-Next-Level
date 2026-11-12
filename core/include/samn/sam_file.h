@@ -30,6 +30,7 @@ namespace samn {
 constexpr size_t kSamMaxBytes = 64u * 1024 * 1024;
 constexpr size_t kSamMaxFrames = 1000000;
 constexpr size_t kSamMaxDepth = 32;
+constexpr size_t kSamMaxErrorChars = 200;  // an error never echoes the file
 
 struct SamFrame {
     int64_t time_ms = 0;     // "time", default 0 when missing
@@ -50,11 +51,26 @@ struct SamReadResult {
     std::string error;            // set on failure: one English sentence
 };
 
+// Deviations from Go's encoding/json (0.7 sam.Parse), all deliberate:
+//  - a UTF-8 BOM is skipped (Go rejects it); a NUL byte is refused;
+//  - a float `time` is rounded to the nearest millisecond (Go rejects 1500.5
+//    for int64); |time| of 9e15 or more is refused;
+//  - a number that overflows (1e999) refuses the file; underflow (1e-400) is 0;
+//  - keys are case-sensitive (Go matches them case-insensitively);
+//  - a repeated "frames" key appends (Go keeps the last one's elements);
+//  - frames with a negative time are dropped (counted in `dropped`), and a
+//    frame without `time` has time 0 (as Go's zero value);
+//  - strings are cut to 256 characters; errors are at most 200 characters and
+//    never quote the file.
 // Parses a .sam document (UTF-8, a leading BOM and CRLF are accepted). Never
 // throws; bad, oversized, binary, deeply nested or non-finite input gives an
 // error. A field of the wrong type is an error naming the field, as in 0.7;
 // null counts as missing; unknown fields are skipped.
 SamReadResult ParseSam(std::string_view data);
+
+// LoadSam with a one-entry cache keyed by path, size and mtime (a script
+// reloaded after undo or a range edit does not parse again). Thread safe.
+SamReadResult LoadSamCached(const std::filesystem::path& path);
 
 // Reads and parses `path`; a missing or unreadable file gives an error.
 SamReadResult LoadSam(const std::filesystem::path& path);
