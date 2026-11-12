@@ -1955,6 +1955,7 @@ Item {
                                     spacing: 8
                                     Text {
                                         textFormat: Text.PlainText
+                                        Layout.fillWidth: true; Layout.maximumWidth: implicitWidth; Layout.minimumWidth: 0; elide: Text.ElideRight
                                         text: qsTr("Feel probe")
                                         color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                                     }
@@ -1963,12 +1964,14 @@ Item {
                                     Text {
                                         objectName: "feelProbeActive"
                                         textFormat: Text.PlainText
+                                        Layout.fillWidth: true; Layout.maximumWidth: implicitWidth; Layout.minimumWidth: 0; elide: Text.ElideRight
                                         text: qsTr("%1% active").arg(Math.round(feelProbeBox.probe.activePct || 0))
                                         color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 12
                                     }
                                     Text {
                                         objectName: "feelProbePeak"
                                         textFormat: Text.PlainText
+                                        Layout.fillWidth: true; Layout.maximumWidth: implicitWidth; Layout.minimumWidth: 0; elide: Text.ElideRight
                                         text: qsTr("peak %1").arg(Math.round(feelProbeBox.probe.peak || 0))
                                         color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                                     }
@@ -2025,7 +2028,7 @@ Item {
                                     color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11
                                 }
                             }
-                            RowLayout {
+                            Flow {
                                 Layout.fillWidth: true; spacing: 8
                                 FlowButton {
                                     objectName: "markContact"
@@ -2185,7 +2188,8 @@ Item {
                         textFormat: Text.PlainText
                         text: qsTr("4 · Create"); color: Theme.text; font.family: Theme.font; font.pixelSize: 15
                     }
-                    RowLayout {
+                    Flow {
+                        Layout.fillWidth: true
                         spacing: 8
                         FlowButton {
                             objectName: "createButton"
@@ -2633,7 +2637,7 @@ Item {
                                 placeholder: "0"
                             }
                         }
-                        RowLayout {
+                        Flow {
                             Layout.fillWidth: true
                             enabled: !edit.busy
                             Text {
@@ -2748,7 +2752,7 @@ Item {
                     }
                     // The queue (0.7 "Create queue"): each video gets its tip
                     // found and its script created with the settings above.
-                    RowLayout {
+                    Flow {
                         Layout.fillWidth: true; spacing: 6
                         FlowButton {
                             objectName: "addToQueue"

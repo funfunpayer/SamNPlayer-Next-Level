@@ -1064,9 +1064,10 @@ private slots:
                         const qreal right = c->mapToItem(scroll, QPointF(c->width(), 0)).x();
                         // Text with elide / wrap and the layouts themselves may be as wide as their parent; a real
                         // control (button, combo, chip, toggle, slider) must end inside the scroll area.
-                        if (right > scroll->width() + 0.5 &&
+                        if (right > scroll->width() - 14 &&
                             (cls.contains("FlowButton") || cls.contains("FlowCombo") || cls.contains("HelpChip") ||
-                             cls.contains("FlowToggle") || cls.contains("FlowSlider")))
+                             cls.contains("FlowToggle") || cls.contains("FlowSlider") || cls.contains("FlowTextField") ||
+                             cls.contains("IconButton") || cls.contains("FlowTabs")))
                             bad << QString("%1 %2 ends at %3 of %4").arg(QString::fromLatin1(cls), c->objectName()).arg(right).arg(scroll->width());
                         walk(c, bad);
                     }
