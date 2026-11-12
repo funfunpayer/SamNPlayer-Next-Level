@@ -106,19 +106,38 @@ New: a held position does not reach across a scene cut. All 21 camera cases pass
 
 ## Platform dependence of the gated scenes
 
-The CI runners failed the first version of two tests with numbers different from this machine. The scenes and seeds were the same, and so were the OS (Ubuntu 24.04), OpenCV (4.6.0+dfsg-13.1ubuntu1) and GCC 13.3:
+The CI runners failed the first version of two tests with numbers different from this machine's, for the same scenes and seeds. The environments differ (versions from the CI logs):
 
-| scene, noise draw 1234 | this machine (Xeon, AVX-512) | CI runner (Release and ASan alike) |
+| environment | OS | OpenCV | FFmpeg |
+|---|---|---|---|
+| this machine (Xeon, AVX-512) | Ubuntu 24.04 | 4.6.0 | 6.1 (Ubuntu 24.04 package) |
+| CI Linux, Release and ASan + UBSan | Ubuntu 26.04 runner image | 4.10.0 (amd64v3 packages) | 8.0.1 |
+| CI Windows | windows-latest | 4.14.0 (vcpkg, with ffmpeg) | vcpkg |
+
+The same noise draw (1234) in each environment:
+
+| case | here | CI Linux (Release = ASan) | CI Windows |
+|---|---:|---:|---:|
+| noisy pan 320 px, raw r (no compensation) | 0.681188 | 0.680558 | 0.680037 |
+| noisy pan 320 px, compensated r | 0.970318 | 0.932699 | 0.948675 |
+| shake + noise: r / position error p95 | 0.98427 / 15.77 px | 0.938361 / 25.68 px | passed (>= 0.975, <= 25; values not printed) |
+
+What this shows:
+
+- **Not the build flags.** An ASan + UBSan RelWithDebInfo build here, with the CI flags, gives exactly this machine's unoptimised numbers. On CI, Release and ASan agree with each other.
+- **The pictures differ between environments.** The raw track already differs, so the encoded and decoded test clips differ: other OpenCV and FFmpeg versions, other mp4v encoder code. Building OpenCV 4.10 with FFmpeg 8 here was not done; it would not fit the disk and time budget.
+- **Gating amplifies the difference.** Where nothing is gated the difference stays small: a clean pan over four noise draws gives r 0.9990 to 0.9992. Where a quarter or more of the frames are gated, which frames are gated depends on the exact pixels, and every gated frame loses its camera step. One noise draw then moves r by up to 0.05 and position error p95 by up to 4x. A different environment acts like a different draw.
+- **Main has the same dependence, and the identity with main holds per draw.** Main and this change give identical r and p95 on all eight noise draws of the two 6 s test scenes. They also match in every quality row of the five gated 12 s bench scenes, re-run with two other noise draws (bench binaries with a temporary seed override, not committed). The same rows across those draws:
+
+| bench scene | track r (draw 1234 / 1 / 2) | position error p95 px (1234 / 1 / 2) |
 |---|---|---|
-| noisy pan 320 px, raw r (no compensation) | 0.681188 | 0.680558 |
-| noisy pan 320 px, compensated r | 0.970318 | 0.932699 |
-| shake + noise, r / p95 | 0.98427 / 15.77 px | 0.938361 / 25.68 px |
+| pan_noisy | 0.942 / 0.943 / 0.953 | 17.4 / 19.5 / 17.5 |
+| pan_lowres_noisy | 0.976 / 0.981 / 0.980 | 7.9 / 8.0 / 6.9 |
+| shake_noisy | 0.993 / 0.991 / 0.991 | 11.8 / 11.4 / 11.9 |
+| parallax_noisy | 0.995 / 0.987 / 0.986 | 7.8 / 16.1 / 15.8 |
+| stop_noisy | 0.768 / 0.794 / 0.789 | 57.0 / 52.5 / 52.7 |
 
-- **Not the build.** An ASan + UBSan RelWithDebInfo build here (the CI flags) gives exactly this machine's unoptimised numbers. On CI, Release and ASan agree with each other.
-- **The input differs.** The raw track differs already, so the input pictures differ between the machines. The likely source is the CPU-dispatched SIMD code in the mp4v encoder and in OpenCV. Not verified: the runner's CPU is not in the log, and `OPENCV_CPU_DISABLE` did not change the local result.
-- **Gating amplifies it.** The difference is small where nothing is gated: a clean pan over four noise draws gives r 0.9990 to 0.9992. Where a quarter or more of the frames are gated, which frames are gated depends on the exact pixels, and every gated frame loses its camera step. One noise draw then moves r by up to 0.05 and position error p95 by up to 4x (table above); a different machine acts like a different draw.
-- **Not caused by this change.** Main and this change give the same r and p95 on every one of eight noise draws of both scenes (one run each), so main has the same dependence. Main itself was not run on CI.
-- **For the bench:** the rows of `pan_noisy`, `pan_lowres_noisy`, `shake_noisy`, `stop_noisy` (and in part `parallax_noisy`) hold for this machine only. On another machine they move like another noise draw. The main-vs-change identity holds per draw. The ungated scenes are stable.
+  So these rows hold for this machine and draw only; on CI they would move by about this much. The tests therefore score gated scenes over five draws (Tests). Main itself was not run on CI.
 
 ## Cost
 
