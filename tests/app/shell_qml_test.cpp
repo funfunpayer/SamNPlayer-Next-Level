@@ -319,8 +319,8 @@ private slots:
                  "gen-scene-proposals-dismiss", "gen-scene-proposals-load", "gen-scene-apply-partner",
                  "gen-scene-apply-primary", "st-collect-learning", "st-delete-learning"});
             add("same action as a placed chip: Suggest tip (AI) carries gen-ai-tip (GeneratorPage.qml suggestAiTip)",
-                {"gen-ai-roi", "gen-seed-suggest"});
-            // Show all AI tags places gen-ai-detections (this PR); do not exempt it.
+                {"gen-ai-roi"});
+            // Tip+2nd places gen-seed-suggest; Show all places gen-ai-detections — do not exempt them.
             add("no such control: the Generator has no Auto-Retry, per-scene re-find, tip-trajectory checkbox, profile hint line, or the Review audio check / rhythm bridge / Repair span (Improve panel Use audio has fill-to-sound-tempo, not the 0.7 audio-check / rhythm / repair extras)",
                 {"gen-retry", "gen-perscene", "gen-capture-trajectory", "gen-profile-hint", "gen-improve-audio",
                  "gen-improve-heal-rhythm", "gen-improve-repair"});

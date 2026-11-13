@@ -1111,6 +1111,16 @@ private slots:
         QVERIFY(!samn::ui::ContactClassForLabel("face"));
         QVERIFY(!samn::ui::ContactClassForLabel("penis"));
         QVERIFY(!samn::ui::ContactClassForLabel("glans"));
+        using samn::ui::PickBestContact;
+        samn::vision::Detection breastDet;
+        breastDet.cls = 3;  // FEMALE_BREAST_EXPOSED → breast
+        breastDet.score = 0.7f;
+        breastDet.box = cv::Rect2f(200, 40, 30, 30);
+        const auto withBreast = ListAiHits({face, penis, covered, breastDet}, nn);
+        const auto contact = PickBestContact(withBreast, "glans");
+        QVERIFY(contact);
+        QCOMPARE(QString::fromStdString(contact->label), QStringLiteral("breast"));
+        QVERIFY(!PickBestContact(hits, "glans"));  // tip + face only
     }
 
     void yoloMapsOntoOurLabelsAndLoadsBeforeNudeNet() {
@@ -1255,6 +1265,71 @@ private slots:
         QVERIFY(!g.hasBox());
         QCOMPARE(g.status(), QStringLiteral("AI tip proposal dismissed."));
         QVERIFY(!g.applyAiTip());
+    }
+
+    void suggestTipAndSecondProposesTipAndContactUntilApply() {
+        GeneratorController g;
+        g.setAutoTip(false);
+        const auto restore = qScopeGuard([&] { g.setAutoTip(true); });
+        QVERIFY(g.openVideo(clip("ai_tip2nd.mp4", 8), false));
+        QVERIFY(!g.tipAndSecondSeedsAvailable());
+        QVERIFY(!g.suggestTipAndSecond());  // no model
+        g.setFakeAiHitsForTest({QVariantMap{{"x", 20},
+                                            {"y", 30},
+                                            {"w", 40},
+                                            {"h", 50},
+                                            {"score", 0.9},
+                                            {"label", "penis"},
+                                            {"cls", 14}},
+                                QVariantMap{{"x", 80},
+                                            {"y", 10},
+                                            {"w", 28},
+                                            {"h", 24},
+                                            {"score", 0.8},
+                                            {"label", "breast"},
+                                            {"cls", 3}},
+                                QVariantMap{{"x", 4},
+                                            {"y", 4},
+                                            {"w", 20},
+                                            {"h", 20},
+                                            {"score", 0.5},
+                                            {"label", "face"},
+                                            {"cls", 1}}});
+        QVERIFY(g.suggestTipAndSecond());
+        QVERIFY(g.tipAndSecondSeedsAvailable());
+        QVERIFY(g.hasAiTipProposal());
+        QVERIFY(g.hasAiContactProposal());
+        QVERIFY(!g.hasBox());
+        QVERIFY(g.contactAreas().isEmpty());
+        QCOMPARE(g.aiTipProposal().value("x").toInt(), 20);
+        QCOMPARE(g.aiContactProposal().value("x").toInt(), 80);
+        QCOMPARE(g.aiContactProposal().value("cls").toString(), QStringLiteral("breasts"));
+        QVERIFY(g.applyAiTip());
+        QCOMPARE(g.box(), QRect(20, 30, 40, 50));
+        QVERIFY(g.hasAiContactProposal());  // contact still pending
+        QVERIFY(g.applyAiContact());
+        QCOMPARE(g.contactAreas().size(), 1);
+        QVERIFY(!g.hasAiContactProposal());
+        QVERIFY(g.hasBox());
+    }
+
+    void suggestTipAndSecondNeedsBothSeeds() {
+        GeneratorController g;
+        g.setAutoTip(false);
+        const auto restore = qScopeGuard([&] { g.setAutoTip(true); });
+        QVERIFY(g.openVideo(clip("ai_tip2nd_only.mp4", 8), false));
+        g.setFakeAiHitsForTest({QVariantMap{{"x", 20},
+                                            {"y", 30},
+                                            {"w", 40},
+                                            {"h", 50},
+                                            {"score", 0.9},
+                                            {"label", "penis"},
+                                            {"cls", 14}}});
+        QVERIFY(g.suggestTipAndSecond());
+        QVERIFY(!g.tipAndSecondSeedsAvailable());
+        QVERIFY(!g.hasAiTipProposal());
+        QVERIFY(!g.hasAiContactProposal());
+        QVERIFY(g.status().contains(QLatin1String("Tip+2nd needs tip")));
     }
 
     void listAiDetectionsClickApplyDoesNotWriteUntilApply() {

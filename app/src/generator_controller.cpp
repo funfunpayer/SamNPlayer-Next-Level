@@ -664,34 +664,75 @@ void GeneratorController::setFakeAiHitsForTest(const QVariantList& hits) {
     emit aiTipChanged();
 }
 
-void GeneratorController::finishAiSuggest(const QVariantList& hits, const QString& forVideo, quint64 seq,
-                                         bool pickExpected) {
+bool GeneratorController::proposeTipAndSecondFromHits(const std::vector<AiTipHit>& hits) {
+    ai_tip_proposal_.clear();
+    ai_contact_proposal_.clear();
+    const auto tip = PickExpectedTip(hits, tip_class_.toStdString());
+    if (!tip) return false;
+    const auto contact = PickBestContact(hits, tip_class_.toStdString(), contact_class_.toStdString());
+    if (!contact) return false;
+    ai_tip_proposal_ = HitMap(*tip);
+    QVariantMap pending = HitMap(*contact);
+    if (const auto mapped = ContactClassForLabel(contact->label))
+        pending.insert(QStringLiteral("cls"), QString::fromStdString(*mapped));
+    ai_contact_proposal_ = pending;
+    return true;
+}
+
+bool GeneratorController::tipAndSecondSeedsAvailable() const {
+    const auto hits = HitsFromList(ai_detections_);
+    if (!PickExpectedTip(hits, tip_class_.toStdString())) return false;
+    return PickBestContact(hits, tip_class_.toStdString(), contact_class_.toStdString()).has_value();
+}
+
+void GeneratorController::finishAiSuggest(const QVariantList& hits, const QString& forVideo, quint64 seq, int mode) {
     if (seq != ai_seq_ || forVideo != video_path_) return;
     suggesting_ai_tip_ = false;
     ai_detections_ = hits;
     ai_tip_proposal_.clear();
     ai_contact_proposal_.clear();
-    if (pickExpected) {
-        if (const auto pick = PickExpectedTip(HitsFromList(hits), tip_class_.toStdString()))
-            ai_tip_proposal_ = HitMap(*pick);
+    const auto parsed = HitsFromList(hits);
+    if (mode == 2) {
+        if (proposeTipAndSecondFromHits(parsed))
+            setStatus(tr("Tip+2nd ready — Apply tip, then Apply contact. AI never writes the curve."));
+        else if (hits.isEmpty())
+            setStatus(tr("No AI boxes on this frame."));
+        else
+            setStatus(tr("Tip+2nd needs tip (%1) and a contact box on this frame.").arg(tip_class_));
+    } else if (mode == 1) {
+        if (const auto pick = PickExpectedTip(parsed, tip_class_.toStdString())) ai_tip_proposal_ = HitMap(*pick);
+        if (hits.isEmpty())
+            setStatus(tr("No AI boxes on this frame."));
+        else if (hasAiTipProposal())
+            setStatus(tr("AI proposal ready — Apply to set the tip box."));
+        else
+            setStatus(tr("%n AI box(es), none match %1. Click one, then Apply.", nullptr, hits.size()).arg(tip_class_));
+    } else {
+        if (hits.isEmpty())
+            setStatus(tr("No AI boxes on this frame."));
+        else
+            setStatus(tr("%n AI box(es). Click = tip proposal (Apply), Shift-click = contact.", nullptr, hits.size()));
     }
-    if (hits.isEmpty())
-        setStatus(tr("No AI boxes on this frame."));
-    else if (hasAiTipProposal())
-        setStatus(tr("AI proposal ready — Apply to set the tip box."));
-    else if (pickExpected)
-        setStatus(tr("%n AI box(es), none match %1. Click one, then Apply.", nullptr, hits.size()).arg(tip_class_));
-    else
-        setStatus(tr("%n AI box(es). Click = tip proposal (Apply), Shift-click = contact.", nullptr, hits.size()));
     refreshAiTipHint();
     emit aiTipChanged();
 }
 
-bool GeneratorController::suggestAiTip() { return runAiDetect(true); }
+bool GeneratorController::suggestAiTip() { return runAiDetect(1); }
 
-bool GeneratorController::listAiDetections() { return runAiDetect(false); }
+bool GeneratorController::listAiDetections() { return runAiDetect(0); }
 
-bool GeneratorController::runAiDetect(bool pickExpected) {
+bool GeneratorController::suggestTipAndSecond() {
+    if (!ai_detections_.isEmpty() && tipAndSecondSeedsAvailable()) {
+        if (!proposeTipAndSecondFromHits(HitsFromList(ai_detections_))) return false;
+        setStatus(tr("Tip+2nd ready — Apply tip, then Apply contact. AI never writes the curve."));
+        refreshAiTipHint();
+        emit aiTipChanged();
+        return true;
+    }
+    return runAiDetect(2);
+}
+
+bool GeneratorController::runAiDetect(int mode) {
     if (video_path_.isEmpty() || running_ || queue_running_ || suggesting_ai_tip_) return false;
     if (!aiTipAvailable()) {
         refreshAiTipHint();
@@ -709,7 +750,7 @@ bool GeneratorController::runAiDetect(bool pickExpected) {
     emit aiTipChanged();
     setStatus(ai_tip_hint_);
     if (fake_ai_ready_) {
-        finishAiSuggest(fake_ai_hits_, video_path_, seq, pickExpected);
+        finishAiSuggest(fake_ai_hits_, video_path_, seq, mode);
         return true;
     }
     if (ai_worker_.joinable()) ai_worker_.join();
@@ -717,7 +758,7 @@ bool GeneratorController::runAiDetect(bool pickExpected) {
     const QSize video = video_size_;
     const QString forVideo = video_path_;
     QPointer<GeneratorController> self(this);
-    ai_worker_ = std::thread([self, copy, video, forVideo, seq, pickExpected] {
+    ai_worker_ = std::thread([self, copy, video, forVideo, seq, mode] {
         QVariantList list;
         QString error;
         do {
@@ -747,7 +788,7 @@ bool GeneratorController::runAiDetect(bool pickExpected) {
         } while (false);
         QMetaObject::invokeMethod(
             qApp,
-            [self, list, error, forVideo, seq, pickExpected] {
+            [self, list, error, forVideo, seq, mode] {
                 if (!self) return;
                 if (seq != self->ai_seq_ || forVideo != self->video_path_) {
                     self->suggesting_ai_tip_ = false;
@@ -763,7 +804,7 @@ bool GeneratorController::runAiDetect(bool pickExpected) {
                     emit self->aiTipChanged();
                     return;
                 }
-                self->finishAiSuggest(list, forVideo, seq, pickExpected);
+                self->finishAiSuggest(list, forVideo, seq, mode);
             },
             Qt::QueuedConnection);
     });
