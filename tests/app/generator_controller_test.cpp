@@ -79,7 +79,7 @@ private slots:
         QCOMPARE(g.box(), QRect(300, 200, 20, 40));
         g.setBox(QRect(10, 10, 5, 40));  // narrower than 8 px: a click, no box
         QVERIFY(!g.hasBox());
-        QVERIFY(g.boxLabel().contains("No tip box"));
+        QVERIFY(g.boxLabel().contains("Create finds the tip"));
         g.setBox(QRect(220, 200, -120, -160));  // dragged up and left
         QCOMPARE(g.box(), QRect(100, 40, 120, 160));
         QVERIFY(g.boxLabel().contains("x=100 y=40 w=120 h=160"));
@@ -211,6 +211,68 @@ private slots:
         // With overwrite: replaced.
         QVERIFY(g.create(true));
         QTRY_COMPARE_WITH_TIMEOUT(created.count(), 2, 60000);
+    }
+
+    void createWithoutABoxFindsTheTipAndWrites() {
+        QTemporaryDir own;
+        const QString video = own.filePath("nobox.mp4");
+        clips::WriteMoving(std::filesystem::path(video.toStdU16String()), 8, 80.0, 1.0);
+        GeneratorController g;
+        g.setAutoTip(false);
+        const auto restore = qScopeGuard([&] { g.setAutoTip(true); });
+        QVERIFY(g.openVideo(video, false));
+        QVERIFY(!g.hasBox());
+        QCOMPARE(g.boxLabel(), QStringLiteral("Create finds the tip — no box to paint."));
+        QSignalSpy created(&g, &GeneratorController::created);
+        QVERIFY(g.create());
+        QVERIFY(g.finding());
+        QCOMPARE(g.status(), QStringLiteral("Finding tip, then creating…"));
+        QTRY_COMPARE_WITH_TIMEOUT(created.count(), 1, 60000);
+        QVERIFY(g.hasBox());
+        QVERIFY(QFileInfo::exists(own.filePath("nobox.funscript")));
+        QVERIFY2(g.status().startsWith("Done"), qPrintable(g.status()));
+    }
+
+    void createWithoutABoxRetriesWhenTheFirstFindIsWeak() {
+        GeneratorController g;
+        QStringList seen;
+        connect(&g, &GeneratorController::statusChanged, this, [&] { seen << g.status(); });
+        const QString still = dir_.filePath("still_create.mp4");
+        clips::WriteMoving(std::filesystem::path(still.toStdU16String()), 6, 0.0, 1.0);
+        QVERIFY(g.openVideo(still));
+        QVERIFY(g.autoFinding());
+        QVERIFY(g.create());
+        QCOMPARE(g.status(), QStringLiteral("Finding tip, then creating…"));
+        QTRY_VERIFY_WITH_TIMEOUT(!g.finding() && !g.running(), 60000);
+        QVERIFY(seen.contains(QStringLiteral("Retrying find…")));
+        QVERIFY2(g.status().contains(QLatin1String("Create again")) ||
+                     g.status().contains(QLatin1String("Find tip as override")),
+                 qPrintable(g.status()));
+        QVERIFY(!g.hasBox());
+        QVERIFY(!QFileInfo::exists(dir_.filePath("still_create.funscript")));
+    }
+
+    void createWithoutABoxSeedsAStrongAiTipWhenMotionIsWeak() {
+        QTemporaryDir own;
+        const QString video = own.filePath("still_ai.mp4");
+        clips::WriteMoving(std::filesystem::path(video.toStdU16String()), 4, 0.0, 1.0);
+        GeneratorController g;
+        g.setAutoTip(false);
+        const auto restore = qScopeGuard([&] { g.setAutoTip(true); });
+        QVERIFY(g.openVideo(video, false));
+        QVERIFY(!g.hasBox());
+        g.setFakeAiHitsForTest({QVariantMap{{"x", 20},
+                                            {"y", 30},
+                                            {"w", 40},
+                                            {"h", 50},
+                                            {"score", 0.9},
+                                            {"label", "penis"},
+                                            {"cls", 14}}});
+        QSignalSpy created(&g, &GeneratorController::created);
+        QVERIFY(g.create());
+        QTRY_COMPARE_WITH_TIMEOUT(created.count(), 1, 60000);
+        QCOMPARE(g.box(), QRect(20, 30, 40, 50));
+        QVERIFY(QFileInfo::exists(own.filePath("still_ai.funscript")));
     }
 
     void contactAreasAndClassesGoIntoTheScript() {
@@ -768,7 +830,7 @@ private slots:
         QVERIFY(!g.finding());
         QVERIFY(!g.hasBox());
         QVERIFY(g.tipCandidates().isEmpty());
-        QCOMPARE(g.status(), QStringLiteral("Drag a box around the moving tip on the frame."));
+        QCOMPARE(g.status(), QStringLiteral("Create finds the tip — no box to paint."));
     }
 
     // The Player's "Create script" for a video while the search for the one

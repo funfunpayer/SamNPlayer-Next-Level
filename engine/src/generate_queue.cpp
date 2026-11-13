@@ -5,7 +5,7 @@
 #include <system_error>
 
 #include "samn/vision/canceled.h"
-#include "samn/engine/tip_find.h"
+#include "samn/engine/tip_resolve.h"
 #include "samn/samn_file.h"
 
 namespace samn::engine {
@@ -53,19 +53,15 @@ QueueItemOutcome GenerateQueueItem(const std::filesystem::path& video, const Que
         return out;
     }
 
-    TipFindOptions to;
+    TipResolveOptions to;
     to.cancel = cancel;
     to.progress = [&](int p) { report(p / 5); };
+    if (settings.tip_max_seconds > 0) to.max_seconds = settings.tip_max_seconds;
     std::string error;
-    const auto tip = FindTip(video, to, &error);
+    const auto tip = ResolveTipForCreate(video, to, &error);
     if (!tip) {
         out.status = error == kCanceled ? QueueItemStatus::kCanceled : QueueItemStatus::kFailed;
         out.message = error;
-        return out;
-    }
-    if (tip->candidates.empty() || tip->candidates.front().score < kWeakTipScore) {
-        out.status = QueueItemStatus::kFailed;
-        out.message = "only weak motion found - mark the tip by hand";
         return out;
     }
     out.box = tip->box;
@@ -74,6 +70,7 @@ QueueItemOutcome GenerateQueueItem(const std::filesystem::path& video, const Que
     GenerateRequest req;
     req.video = video;
     req.box = tip->box;
+    req.start_ms = tip->start_ms;
     req.signal = settings.signal;
     req.axis = settings.axis;
     req.camera_compensation = settings.camera_compensation;

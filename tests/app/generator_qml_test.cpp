@@ -84,6 +84,8 @@ private slots:
         QVERIFY(gen);
         QVERIFY(!named(root.get(), "createButton")->isEnabled());
         QVERIFY(!named(root.get(), "usePlayerVideo")->isVisible());
+        QCOMPARE(named(root.get(), "emptyHint")->property("text").toString(),
+                 QStringLiteral("Create finds the tip — no box to paint"));
         // Video / curves stage: remembered share (drag handle).
         QVERIFY(named(root.get(), "stageSplit"));
         QVERIFY(named(root.get(), "editorCard"));
@@ -107,6 +109,7 @@ private slots:
         QVERIFY(gen->autoFinding());
         QCOMPARE(named(root.get(), "findTip")->property("text").toString(), QStringLiteral("Find tip"));
         QVERIFY(named(root.get(), "createButton")->isEnabled());
+        QVERIFY(named(root.get(), "stepPrompt")->property("text").toString().contains(QLatin1String("Create finds the tip")));
         QCOMPARE(named(root.get(), "videoLabel")->property("text").toString(), QStringLiteral("clip.mp4"));
 
         // D-154: the left column names the video and lists it under Recent videos;
@@ -168,6 +171,10 @@ private slots:
         QTRY_VERIFY(named(root.get(), "clearBox")->isVisible());
         QMetaObject::invokeMethod(named(root.get(), "clearBox"), "clicked");
         QTRY_VERIFY(!gen->hasBox());
+        QVERIFY(named(root.get(), "createButton")->isEnabled());
+        QVERIFY(named(root.get(), "boxLabel")->property("text").toString().contains(QLatin1String("Create finds the tip")));
+        QVERIFY(named(root.get(), "stepPrompt")->property("text").toString().contains(QLatin1String("Create finds the tip")));
+        QVERIFY(named(root.get(), "previewCoach")->property("text").toString().contains(QLatin1String("Create finds the tip")));
 
         // A drag over the frame becomes the tip box in video pixels. The seek
         // row and box label appear with the video and shrink the frame, so

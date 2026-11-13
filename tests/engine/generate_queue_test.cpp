@@ -4,6 +4,8 @@
 #include <filesystem>
 
 #include "samn/engine/generate_queue.h"
+#include "samn/engine/tip_find.h"
+#include "samn/engine/tip_resolve.h"
 #include "synthetic_clips.h"
 
 namespace fs = std::filesystem;
@@ -46,6 +48,28 @@ TEST_CASE("queue item: finds the tip, creates beside the video, skips a second t
     CHECK(again.status == QueueItemStatus::kSkipped);
     s.overwrite = true;
     CHECK(GenerateQueueItem(dir / "a.clip.mp4", s, {}, {}).status == QueueItemStatus::kDone);
+    fs::remove_all(dir);
+}
+
+TEST_CASE("queue item: still intro then motion uses the resolver") {
+    const fs::path dir = Dir("samn_queue_item_resolve");
+    REQUIRE(clips::WriteStillThenMoving(dir / "later.mp4", 4, 4, 80.0));
+    samn::engine::TipFindOptions fo;
+    fo.max_seconds = 2;
+    fo.start_ms = 0;
+    std::string error;
+    const auto at0 = samn::engine::FindTip(dir / "later.mp4", fo, &error);
+    REQUIRE(at0.has_value());
+    REQUIRE(!at0->candidates.empty());
+    CHECK(at0->candidates.front().score < samn::engine::kWeakTipScore);
+
+    QueueSettings s;
+    s.signal.profile = "standard";
+    s.tip_max_seconds = 2;
+    const auto done = GenerateQueueItem(dir / "later.mp4", s, {}, {});
+    REQUIRE_MESSAGE(done.status == QueueItemStatus::kDone, done.message);
+    CHECK(fs::exists(done.output));
+    CHECK(done.box.area() > 0);
     fs::remove_all(dir);
 }
 
