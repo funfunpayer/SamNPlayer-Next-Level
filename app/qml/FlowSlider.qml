@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Layouts
 import SamN
 
 // A horizontal slider: cyan→orange fill, glowing knob.
@@ -9,6 +10,8 @@ Item {
     property real value: 0
     signal moved(real value)
     implicitWidth: 140; implicitHeight: 20
+    // A control that fills its row may shrink with it; one that does not keeps its size.
+    Layout.minimumWidth: Layout.fillWidth ? 0 : (Layout.preferredWidth >= 0 ? Layout.preferredWidth : implicitWidth)
     readonly property real frac: to > from ? Math.max(0, Math.min(1, (value - from) / (to - from))) : 0
     Rectangle { anchors.verticalCenter: parent.verticalCenter; width: parent.width; height: 5; radius: 2.5; color: Qt.rgba(1, 1, 1, 0.10) }
     Rectangle {

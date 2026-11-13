@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Layouts
 import SamN
 
 // A one-line text field in the Flow look.
@@ -11,6 +12,8 @@ Rectangle {
     property bool secret: false
     signal accepted()
     implicitWidth: 200; implicitHeight: 32
+    // A control that fills its row may shrink with it; one that does not keeps its size.
+    Layout.minimumWidth: Layout.fillWidth ? 0 : (Layout.preferredWidth >= 0 ? Layout.preferredWidth : implicitWidth)
     radius: 10
     color: Qt.rgba(1, 1, 1, 0.03)
     border.color: input.activeFocus ? Theme.cyan : Theme.cardBorder

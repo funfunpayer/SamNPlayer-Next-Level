@@ -32,13 +32,16 @@ Rectangle {
         width: 16; height: 16
         color: label.color
         anchors.verticalCenter: parent.verticalCenter
-        x: (root.width - label.implicitWidth - 22) / 2
+        x: (root.width - label.width - 22) / 2
     }
     Text {
         textFormat: Text.PlainText
         id: label
         anchors.verticalCenter: parent.verticalCenter
-        x: root.icon !== "" ? lead.x + 22 : (root.width - implicitWidth) / 2
+        // A button squeezed below its natural width elides its label instead of spilling out.
+        width: Math.min(implicitWidth, Math.max(0, root.width - 32 - (root.icon !== "" ? 22 : 0)))
+        elide: Text.ElideRight
+        x: root.icon !== "" ? lead.x + 22 : (root.width - width) / 2
         color: root.primary ? "#02101f" : Theme.text
         font.family: Theme.fontSoft; font.pixelSize: 14
         font.weight: root.primary ? Font.DemiBold : Font.Normal

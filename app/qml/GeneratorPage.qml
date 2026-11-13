@@ -1681,6 +1681,7 @@ Item {
                         Layout.fillWidth: true; spacing: 6
                         FlowCombo {
                             objectName: "styleCombo"
+                            Layout.minimumWidth: 0
                             Layout.fillWidth: true
                             enabled: !gen.running
                             textRole: "label"; valueRole: "value"
@@ -1699,10 +1700,12 @@ Item {
                         Layout.fillWidth: true; spacing: 8
                         Text {
                             textFormat: Text.PlainText
+                            Layout.fillWidth: true; Layout.maximumWidth: implicitWidth; Layout.minimumWidth: 0; elide: Text.ElideRight
                             text: qsTr("For device"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
                         }
                         FlowCombo {
                             objectName: "feelDeviceCombo"
+                            Layout.minimumWidth: 0
                             Layout.fillWidth: true
                             enabled: !gen.running
                             textRole: "label"; valueRole: "value"
@@ -1715,6 +1718,7 @@ Item {
                         }
                         Text {
                             textFormat: Text.PlainText
+                            Layout.fillWidth: true; Layout.maximumWidth: implicitWidth; Layout.minimumWidth: 0; elide: Text.ElideRight
                             text: qsTr("Show all"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                         }
                         FlowToggle {
@@ -1738,11 +1742,13 @@ Item {
                             Layout.fillWidth: true; spacing: 8
                             Text {
                                 textFormat: Text.PlainText
+                                Layout.fillWidth: true; Layout.maximumWidth: implicitWidth; Layout.minimumWidth: 0; elide: Text.ElideRight
                                 text: qsTr("Scene"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                             }
                             HelpChip { key: "gen-scene-feel"; Layout.alignment: Qt.AlignVCenter }
                             FlowCombo {
                                 objectName: "sceneFeelCombo"
+                                Layout.minimumWidth: 0
                                 Layout.fillWidth: true
                                 enabled: !gen.running
                                 textRole: "label"; valueRole: "value"
@@ -1760,10 +1766,12 @@ Item {
                             Layout.fillWidth: true; spacing: 8
                             Text {
                                 textFormat: Text.PlainText
+                                Layout.fillWidth: true; Layout.maximumWidth: implicitWidth; Layout.minimumWidth: 0; elide: Text.ElideRight
                                 text: qsTr("Vibration"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                             }
                             FlowSlider {
                                 objectName: "feelBalance"
+                                Layout.minimumWidth: 0
                                 Layout.fillWidth: true
                                 enabled: !gen.running
                                 from: -100; to: 100; value: gen.feelBalance
@@ -1771,6 +1779,7 @@ Item {
                             }
                             Text {
                                 textFormat: Text.PlainText
+                                Layout.fillWidth: true; Layout.maximumWidth: implicitWidth; Layout.minimumWidth: 0; elide: Text.ElideRight
                                 text: qsTr("Suction"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                             }
                             HelpChip { key: "gen-feel-balance"; Layout.alignment: Qt.AlignVCenter }
@@ -1779,7 +1788,7 @@ Item {
                             Layout.fillWidth: true
                             Text {
                                 textFormat: Text.PlainText
-                                Layout.fillWidth: true
+                                Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight
                                 text: qsTr("Vibration follows suction"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
                             }
                             HelpChip { key: "gen-vib-follow"; Layout.alignment: Qt.AlignVCenter }
@@ -1803,11 +1812,13 @@ Item {
                         Layout.fillWidth: true; spacing: 8
                         Text {
                             textFormat: Text.PlainText
+                            Layout.fillWidth: true; Layout.maximumWidth: implicitWidth; Layout.minimumWidth: 0; elide: Text.ElideRight
                             text: qsTr("Vibration from"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                         }
                         HelpChip { key: "gen-vib-source"; Layout.alignment: Qt.AlignVCenter }
                         FlowCombo {
                             objectName: "vibSourceCombo"
+                            Layout.minimumWidth: 0
                             Layout.fillWidth: true
                             enabled: !gen.running
                             textRole: "label"; valueRole: "value"
@@ -1965,6 +1976,7 @@ Item {
                                     spacing: 8
                                     Text {
                                         textFormat: Text.PlainText
+                                        Layout.fillWidth: true; Layout.maximumWidth: implicitWidth; Layout.minimumWidth: 0; elide: Text.ElideRight
                                         text: qsTr("Feel probe")
                                         color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                                     }
@@ -1973,12 +1985,14 @@ Item {
                                     Text {
                                         objectName: "feelProbeActive"
                                         textFormat: Text.PlainText
+                                        Layout.fillWidth: true; Layout.maximumWidth: implicitWidth; Layout.minimumWidth: 0; elide: Text.ElideRight
                                         text: qsTr("%1% active").arg(Math.round(feelProbeBox.probe.activePct || 0))
                                         color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 12
                                     }
                                     Text {
                                         objectName: "feelProbePeak"
                                         textFormat: Text.PlainText
+                                        Layout.fillWidth: true; Layout.maximumWidth: implicitWidth; Layout.minimumWidth: 0; elide: Text.ElideRight
                                         text: qsTr("peak %1").arg(Math.round(feelProbeBox.probe.peak || 0))
                                         color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                                     }
@@ -2035,7 +2049,7 @@ Item {
                                     color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11
                                 }
                             }
-                            RowLayout {
+                            Flow {
                                 Layout.fillWidth: true; spacing: 8
                                 FlowButton {
                                     objectName: "markContact"
@@ -2073,6 +2087,7 @@ Item {
                                 Layout.fillWidth: true; spacing: 8
                                 FlowButton {
                                     objectName: "addExtra"
+                                    Layout.fillWidth: true; Layout.maximumWidth: implicitWidth; Layout.minimumWidth: 0
                                     text: gen.markExtra ? qsTr("Drag the area on the frame…") : qsTr("+ Another contact area")
                                     enabled: gen.hasVideo && !gen.running
                                     onClicked: gen.markExtra = !gen.markExtra
@@ -2117,6 +2132,7 @@ Item {
                                 Layout.fillWidth: true; spacing: 8
                                 FlowButton {
                                     objectName: "addIgnore"
+                                    Layout.fillWidth: true; Layout.maximumWidth: implicitWidth; Layout.minimumWidth: 0
                                     text: gen.markIgnore ? qsTr("Drag the region on the frame…") : qsTr("+ Ignore region")
                                     enabled: gen.hasVideo && !gen.running
                                     onClicked: gen.markIgnore = !gen.markIgnore
@@ -2196,10 +2212,12 @@ Item {
                         textFormat: Text.PlainText
                         text: qsTr("4 · Create"); color: Theme.text; font.family: Theme.font; font.pixelSize: 15
                     }
-                    RowLayout {
+                    Flow {
+                        Layout.fillWidth: true
                         spacing: 8
                         FlowButton {
                             objectName: "createButton"
+                            width: Math.min(implicitWidth, parent.width)
                             text: qsTr("Create Emotion Script"); primary: true
                             // No tip yet: Create finds it first (0.7), or waits for the automatic search.
                             enabled: gen.hasVideo && !gen.running && (!gen.finding || gen.autoFinding)
@@ -2239,26 +2257,32 @@ Item {
                         Item {
                             objectName: "advancedToggle"
                             Layout.fillWidth: true
-                            implicitHeight: advHead.implicitHeight
-                            RowLayout {
+                            implicitHeight: 24
+                            Item {
                                 id: advHead
                                 anchors.fill: parent
-                                spacing: 8
                                 Text {
+                                    id: advTitle
+                                    anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
                                     textFormat: Text.PlainText
                                     text: qsTr("Advanced")
                                     color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 13; font.weight: Font.Medium
                                 }
-                                Text {
-                                    textFormat: Text.PlainText
-                                    Layout.fillWidth: true; wrapMode: Text.WordWrap
-                                    text: qsTr("Everyday Create works with this closed")
-                                    color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 11
-                                }
                                 Icon {
+                                    id: advChevron
+                                    anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
                                     name: "chevronDown"; width: 16; height: 16; color: Theme.textDim
                                     rotation: advancedBox.advancedOpen ? 180 : 0
                                     Behavior on rotation { NumberAnimation { duration: Theme.animFast } }
+                                }
+                                Text {
+                                    anchors.left: advTitle.right; anchors.leftMargin: 8
+                                    anchors.right: advChevron.left; anchors.rightMargin: 8
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    textFormat: Text.PlainText
+                                    elide: Text.ElideRight
+                                    text: qsTr("Everyday Create works with this closed")
+                                    color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 11
                                 }
                             }
                             MouseArea {
@@ -2353,26 +2377,32 @@ Item {
                                 Item {
                                     objectName: "expertToggle"
                                     Layout.fillWidth: true
-                                    implicitHeight: expHead.implicitHeight
-                                    RowLayout {
+                                    implicitHeight: 24
+                                    Item {
                                         id: expHead
                                         anchors.fill: parent
-                                        spacing: 8
                                         Text {
+                                            id: expTitle
+                                            anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
                                             textFormat: Text.PlainText
                                             text: qsTr("Expert")
                                             color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 12; font.weight: Font.Medium
                                         }
-                                        Text {
-                                            textFormat: Text.PlainText
-                                            Layout.fillWidth: true; wrapMode: Text.WordWrap
-                                            text: qsTr("Smoothing, spacing, RDP, max speed — Everyday leaves these alone")
-                                            color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 11
-                                        }
                                         Icon {
+                                            id: expChevron
+                                            anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
                                             name: "chevronDown"; width: 14; height: 14; color: Theme.textDim
                                             rotation: expertBox.expertOpen ? 180 : 0
                                             Behavior on rotation { NumberAnimation { duration: Theme.animFast } }
+                                        }
+                                        Text {
+                                            anchors.left: expTitle.right; anchors.leftMargin: 8
+                                            anchors.right: expChevron.left; anchors.rightMargin: 8
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            textFormat: Text.PlainText
+                                            elide: Text.ElideRight
+                                            text: qsTr("Smoothing, spacing, RDP, max speed — Everyday leaves these alone")
+                                            color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 11
                                         }
                                     }
                                     MouseArea {
@@ -2613,7 +2643,7 @@ Item {
                             text: qsTr("Trim Start/End in seconds (0 = leave that end), heal tracker-loss windows, and fill long gaps. Does not invent motion from audio.")
                             color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                         }
-                        RowLayout {
+                        Flow {
                             Layout.fillWidth: true
                             spacing: 6
                             enabled: !edit.busy
@@ -2626,7 +2656,7 @@ Item {
                             FlowTextField {
                                 id: improveStart
                                 objectName: "improveStart"
-                                Layout.preferredWidth: 56
+                                width: 56
                                 maxLength: 10
                                 placeholder: "0"
                             }
@@ -2639,12 +2669,12 @@ Item {
                             FlowTextField {
                                 id: improveEnd
                                 objectName: "improveEnd"
-                                Layout.preferredWidth: 56
+                                width: 56
                                 maxLength: 10
                                 placeholder: "0"
                             }
                         }
-                        RowLayout {
+                        Flow {
                             Layout.fillWidth: true
                             enabled: !edit.busy
                             Text {
@@ -2722,14 +2752,17 @@ Item {
                             text: qsTr("Turn the finished script into a clean any-device stroke, or bake Sam Neo 2 vibration and suction.")
                             color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                         }
-                        RowLayout {
+                        // A Flow, not a RowLayout: the combo and two buttons have a fixed
+                        // width, and a row keeps them at their sum (432 px) as its minimum,
+                        // which widened the whole Create column past its card. A Flow wraps.
+                        Flow {
                             Layout.fillWidth: true
                             spacing: 6
                             enabled: !edit.busy
                             FlowCombo {
                                 id: postAdaptTarget
                                 objectName: "postAdaptTarget"
-                                Layout.preferredWidth: 140; Layout.preferredHeight: 36
+                                width: 140; height: 36
                                 readonly property var targets: ["general", "neo2"]
                                 model: [qsTr("Any device"), qsTr("Sam Neo 2")]
                                 currentIndex: Math.max(0, targets.indexOf(gen.optimizeTarget !== "" ? gen.optimizeTarget : "general"))
@@ -2756,7 +2789,7 @@ Item {
                     }
                     // The queue (0.7 "Create queue"): each video gets its tip
                     // found and its script created with the settings above.
-                    RowLayout {
+                    Flow {
                         Layout.fillWidth: true; spacing: 6
                         FlowButton {
                             objectName: "addToQueue"

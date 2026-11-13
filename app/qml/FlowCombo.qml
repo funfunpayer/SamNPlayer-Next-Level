@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Layouts
 import QtQuick.Controls.Basic  // Basic: our own look on every system (the native Windows style ignores it)
 import SamN
 
@@ -6,6 +7,8 @@ import SamN
 ComboBox {
     id: root
     implicitHeight: 34
+    // A control that fills its row may shrink with it; one that does not keeps its size.
+    Layout.minimumWidth: Layout.fillWidth ? 0 : (Layout.preferredWidth >= 0 ? Layout.preferredWidth : implicitWidth)
     font.family: Theme.fontSoft
     font.pixelSize: 13
     background: Rectangle {
