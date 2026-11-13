@@ -320,8 +320,7 @@ private slots:
                  "gen-scene-apply-primary", "st-collect-learning", "st-delete-learning"});
             add("same action as a placed chip: Suggest tip (AI) carries gen-ai-tip (GeneratorPage.qml suggestAiTip)",
                 {"gen-ai-roi", "gen-seed-suggest"});
-            add("the AI boxes are drawn on the preview after Suggest tip (AI); there is no 'Show all AI tags' toggle (only Dismiss)",
-                {"gen-ai-detections"});
+            // Show all AI tags places gen-ai-detections (this PR); do not exempt it.
             add("no such control: the Generator has no Auto-Retry, per-scene re-find, tip-trajectory checkbox, profile hint line, or the Review audio check / rhythm bridge / Repair span (Improve panel Use audio has fill-to-sound-tempo, not the 0.7 audio-check / rhythm / repair extras)",
                 {"gen-retry", "gen-perscene", "gen-capture-trajectory", "gen-profile-hint", "gen-improve-audio",
                  "gen-improve-heal-rhythm", "gen-improve-repair"});
@@ -333,7 +332,7 @@ private slots:
             add("same action as a placed chip: Inspector From audio carries pb-bpm-auto",
                 {"pb-aa-detect"});
             add("crowded row: with the chip the fill combos shrink to about 80 px at the 352 px side width, so the chip stays out",
-                {"generator.tip-glans-penis", "generator.contact-mouth-nipple", "gen-show-all-feel", "gen-device-target"});
+                {"generator.contact-mouth-nipple", "gen-show-all-feel", "gen-device-target"});
             add("AI Train Benchmark is not built (D-155 step 6, AiTrainPage.qml placeholders)",
                 {"bm-cancel", "bm-suggest-pair"});
             add("no such control in the AI Train label editor (LabelEditor.qml): no box scale, black-intro time field, dataset folder field, audio extraction, only-new filter, Check availability link",

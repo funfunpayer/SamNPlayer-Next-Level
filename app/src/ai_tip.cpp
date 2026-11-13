@@ -75,4 +75,11 @@ std::optional<AiTipHit> PickExpectedTip(const std::vector<AiTipHit>& hits, std::
     return std::nullopt;
 }
 
+std::optional<std::string> ContactClassForLabel(std::string_view label) {
+    if (label == "breasts" || label == "breast") return std::string("breasts");
+    if (label == "nipples" || label == "nipple") return std::string("nipples");
+    if (label == "mouth") return std::string("mouth");
+    return std::nullopt;
+}
+
 }  // namespace samn::ui
