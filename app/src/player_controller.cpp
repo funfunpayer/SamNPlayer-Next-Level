@@ -43,6 +43,7 @@
 #include "samn/playback.h"
 #include "samn/playback_mapping.h"
 #include "samn/contact_marks.h"
+#include "samn/sam_file.h"
 #include "samn/samn_file.h"
 #include "samn/script_finder.h"
 
@@ -645,6 +646,37 @@ bool PlayerController::openScript(const QString& pathIn, const QString& videoIn)
     // D-132: a lane the file carries shows without a device.
     vibrationFromScript_ = !doc.vibration.empty();
     suctionFromScript_ = !doc.suction.empty();
+    // D-170: a 0.7 .sam beside the script fills the vibration lane when
+    // SamNPlayer 2 has no vibration of its own for it (no Neo lane, no contact
+    // vibration in the recipe, not a distance profile). Read only.
+    samLane_.clear();
+    QString samNote;
+    {
+        const QString samPath = FromU8(samn::SamSidecarPath(U8(path)));
+        std::error_code ec;
+        if (std::filesystem::is_regular_file(std::filesystem::u8path(U8(samPath)), ec)) {
+            const QString name = QFileInfo(samPath).fileName();
+            const samn::SamReadResult sam = samn::LoadSamCached(std::filesystem::u8path(U8(samPath)));
+            if (!sam.file) {
+                samNote = tr("Ignored %1: %2").arg(name, FromU8(sam.error));
+            } else if (!doc.vibration.empty() || doc.recipe.contact_vibration || samn::IsDistanceProfile(doc.profile)) {
+                // SamNPlayer 2 maps its own vibration for this script: nothing to import.
+            } else {
+                // The lane is whole percent: 0.001-0.005 passes 0.7's gate but rounds to 0.
+                auto lane = samn::SamIntensityLane(*sam.file);
+                const bool any = std::any_of(lane.begin(), lane.end(), [](const samn::Action& a) { return a.pos > 0; });
+                if (!any) {
+                    samNote = tr("%1 has no contact intensity: not imported.").arg(name);
+                } else {
+                    samLane_ = std::move(lane);
+                    vibrationFromScript_ = true;
+                    samNote = tr("Imported contact intensity from %1 (%2 points, read only).")
+                                  .arg(name)
+                                  .arg(samLane_.size());
+                }
+            }
+        }
+    }
     // A new script starts on the stroke.
     if (activeLane_ != QLatin1String("stroke")) {
         activeLane_ = QStringLiteral("stroke");
@@ -703,6 +735,18 @@ bool PlayerController::openScript(const QString& pathIn, const QString& videoIn)
     setVideo(video);
     setView(samn::FullView(timelineMs()));
     setVideoPositionMs(0);
+    // An info note, not an error: lastError would hide the video-link warning.
+    if (!samNote.isEmpty()) {
+        toolNote_ = samNote;
+        samNote_ = samNote;
+        emit toolNoteChanged();
+    } else if (!samNote_.isEmpty()) {
+        if (toolNote_ == samNote_) {
+            toolNote_.clear();
+            emit toolNoteChanged();
+        }
+        samNote_.clear();
+    }
     emit scriptOpened(scriptPath_);
     return true;
 }
@@ -725,6 +769,42 @@ void PlayerController::remap(bool fresh) {
     // these frames), on the device tick.
     vibration_ = LaneFrom(frames, false);
     suction_ = LaneFrom(frames, true);
+    if (!samLane_.empty()) {
+        // D-170: inside the .sam's time range its intensity is the vibration,
+        // through the same live adjust and phase shape ("rest means rest") as
+        // the mapped one; before and after it the mapped vibration stays.
+        // The sparse points go onto the device tick first (as 0.7's Densify did),
+        // so a phase that holds no point of its own still shapes the vibration.
+        std::vector<samn::Frame> imported;
+        const int64_t first = samLane_.front().at, last = samLane_.back().at;
+        // At most 2 million ticks, whatever times a hostile file holds.
+        const int64_t tick = std::max<int64_t>({10, static_cast<int64_t>(plan.map.tick_ms), (last - first) / 2000000 + 1});
+        imported.reserve(static_cast<size_t>((last - first) / tick + 2));
+        size_t seg = 0;
+        for (int64_t t = first;; t += tick) {
+            const int64_t at = std::min(t, last);
+            while (seg + 1 < samLane_.size() && samLane_[seg + 1].at <= at) ++seg;
+            double v = samLane_[seg].pos;
+            if (seg + 1 < samLane_.size()) {
+                const auto& a = samLane_[seg];
+                const auto& b = samLane_[seg + 1];
+                v = a.pos + (b.pos - a.pos) * double(at - a.at) / double(b.at - a.at);
+            }
+            imported.push_back({at, v / 100.0, 0.0});
+            if (at == last) break;
+        }
+        imported = samn::AdjustDeviceFrames(imported, plan.adjust);
+        samn::ApplyPhaseShape(imported, plan.map.phase_ranges);
+        const std::vector<samn::Action> sam = LaneFrom(imported, false);
+        std::vector<samn::Action> merged;
+        merged.reserve(vibration_.size() + sam.size());
+        for (const auto& a : vibration_)
+            if (a.at < sam.front().at) merged.push_back(a);
+        merged.insert(merged.end(), sam.begin(), sam.end());
+        for (const auto& a : vibration_)
+            if (a.at > sam.back().at) merged.push_back(a);
+        vibration_ = std::move(merged);
+    }
     audioVibApplied_ = false;
     if (fresh)
         output_.setScript(stroke_, vibration_, suction_, axisActions_);
@@ -890,6 +970,7 @@ void PlayerController::setUiValue(const QString& key, const QVariant& value) {
 
 void PlayerController::clearScript() {
     resetCurveHistory({});
+    samLane_.clear();
     strength_.clear();
     activeStrength_.clear();
     contactMarks_.clear();

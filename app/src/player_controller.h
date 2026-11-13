@@ -702,6 +702,11 @@ private:
     int offsetMs_ = 0;
     QString toolNote_;
     bool vibrationFromScript_ = false, suctionFromScript_ = false;
+    // D-170: the intensity of a 0.7 `<script>.sam` found beside the script,
+    // as a 0-100 lane; empty when none was imported. It replaces the mapped
+    // vibration; SamNPlayer 2 never writes a .sam.
+    std::vector<samn::Action> samLane_;
+    QString samNote_;  // the toolNote this import set, cleared with it
     QString playbackSource_ = QStringLiteral("recipe");
     std::map<std::string, std::vector<samn::Action>> axisActions_;
     QString activeLane_ = QStringLiteral("stroke");

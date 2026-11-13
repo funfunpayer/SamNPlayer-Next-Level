@@ -16,6 +16,7 @@ Functions use PascalCase and struct fields use snake_case.
 | `mapper.h` | Script → suction/vibration frames (heatmap, device) | Go `funscript/mapper.go` | ✅ values identical |
 | `marks.h` | Bookmarks and chapters, OFS times; the marked range (`<script>.marker.json`) | Go `funscript/bookmarks.go` | ✅ files byte-identical |
 | `script_finder.h` | Script for a video: beside it, folders, tolerant names, variants | Go `app_open_media.go` | ✅ |
+| `sam_file.h` | Read-only reader of the 0.7 `<script>.sam` sidecar (streaming, size / frame / depth caps); its contact intensity becomes the Player's vibration lane (D-170) | Go `sam/sam.go`, `sam/sidecar.go` | ✅ |
 | `settings.h` | Settings JSON with 0.7 keys, atomic writes | — | ✅ |
 | `text.h` | `FoldCase`: UTF-8 lower case without ICU (Latin, Greek, Cyrillic, full-width); `AsciiLower` (A-Z only) for protocol words, extensions and JSON keys | Go `strings.ToLower` | ✅ |
 | `number.h` | `ParseDoublePrefix` / `StrToDouble` / `FormatFixed`: decimal numbers that ignore the process locale (strtod, stod and `%f` read it; a comma locale made "1.6" read as 1) | — | ✅ incl. comma-locale tests |
