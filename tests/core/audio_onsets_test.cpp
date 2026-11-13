@@ -143,18 +143,39 @@ TEST_CASE("onsets: drum hits are found within 50 ms") {
     CHECK(samn::PickOnsets(a.curve, a.fps).size() <= 1);
 }
 
-TEST_CASE("onsets: the minimum gap holds at every frame rate") {
-    // 4 kHz and 96 kHz give 62.5 and 46.875 values per second: 70 ms is
-    // 4.4 and 3.3 values, which must round up, not to the nearest.
+TEST_CASE("onsets: the minimum gap is wait_ms within half a frame at every frame rate") {
+    // Times, not frame counts: 70 ms is 3.0 values at 11025 Hz (43.07 per
+    // second), 4.4 at 4 kHz and 3.3 at 96 kHz. Two onsets are never closer
+    // than 70 ms minus half a frame, and none that far apart is dropped.
     for (const int rate : {4000, 11025, 44100, 96000}) {
         CAPTURE(rate);
         const double fps = samn::OnsetCurve(rate).FramesPerSecond();
+        const double half_frame = 500.0 / fps;
         std::vector<float> curve(600, 0.0f);
-        for (std::size_t i = 0; i < curve.size(); i += 3) curve[i] = 10.0f + float(i % 7);
+        std::size_t spikes = 0;
+        for (std::size_t i = 0; i < curve.size(); i += 3, ++spikes) curve[i] = 10.0f + float(i % 7);
         const auto on = samn::PickOnsets(curve, fps);
         REQUIRE(on.size() >= 10);
-        for (std::size_t k = 1; k < on.size(); ++k) CHECK(on[k] - on[k - 1] >= 70.0 - 1e-9);
+        for (std::size_t k = 1; k < on.size(); ++k) CHECK(on[k] - on[k - 1] >= 70.0 - half_frame - 1e-9);
+        if (3000.0 / fps >= 70.0 - half_frame) CHECK(on.size() == spikes);
     }
+}
+
+TEST_CASE("onsets: two clicks 75 ms apart at 11025 Hz are both kept") {
+    const int sr = samn::kOnsetSampleRate;
+    std::vector<float> samples(std::size_t(sr * 20), 0.0f);
+    synth::Rng rng(3);
+    std::vector<double> truth;
+    for (double t = 0.5; t < 19.5; t += 0.6) {
+        for (double at : {t, t + 0.075}) {
+            synth::AddHit(samples, sr, at, 0.6, rng, false, true);
+            truth.push_back(at * 1000);
+        }
+    }
+    const auto a = Analyse(samples);
+    const auto found = samn::PickOnsets(a.curve, a.fps);
+    CHECK(found.size() == truth.size());
+    CHECK(synth::FMeasure(truth, found, 50) >= 0.98);
 }
 
 TEST_CASE("tempo: Estimate leaves the accumulator unchanged and repeats") {

@@ -252,15 +252,21 @@ std::vector<double> PickOnsets(const std::vector<float>& curve, double fps, cons
     if (n < 3 || !(fps > 0) || !std::isfinite(fps)) return out;
     const auto mean_half = std::size_t(std::max(1L, std::lround(0.1 * fps)));
     const auto range_half = std::size_t(std::max(1L, std::lround(2.0 * fps)));
-    // Rounded up: the gap between two onsets is never under wait_ms.
-    const auto wait = std::max<std::int64_t>(1, std::int64_t(std::ceil(opts.wait_ms * fps / 1000.0 - 1e-9)));
+    // Compared as times, within half a frame: two onsets are never closer
+    // than wait_ms minus half a frame (rounding up to whole frames made the
+    // gap 93 ms at 11025 Hz and dropped hits 75 ms apart). At 43.07 values
+    // per second (11025, 22050, 44100 Hz) the +-2 value peak test below
+    // already keeps peaks 3 values (69.7 ms) apart, so the default 70 ms is
+    // inert there and "70 ms minus half a frame" (58 ms) is a bound, not
+    // reached; it matters at other rates and for a longer wait_ms.
+    const double wait_frames = std::max(1.0, opts.wait_ms * fps / 1000.0 - 0.5);
     // Prefix sums for the local mean (one double per value).
     std::vector<double> prefix(n + 1, 0.0);
     for (std::size_t i = 0; i < n; ++i) prefix[i + 1] = prefix[i] + double(curve[i]);
     // Sliding maximum over +-range_half (monotonic deque of indices).
     std::deque<std::size_t> dq;
     std::size_t next_in = 0;
-    std::int64_t last = -wait - 1;
+    double last = -1e300;
     for (std::size_t i = 0; i < n; ++i) {
         const std::size_t hi = std::min(n - 1, i + range_half);
         while (next_in <= hi) {
@@ -280,8 +286,8 @@ std::vector<double> PickOnsets(const std::vector<float>& curve, double fps, cons
         const std::size_t a = i >= mean_half ? i - mean_half : 0, b = std::min(n, i + mean_half + 1);
         const double mean = (prefix[b] - prefix[a]) / double(b - a);
         if (v < mean + opts.delta * range) continue;
-        if (std::int64_t(i) - last < wait) continue;
-        last = std::int64_t(i);
+        if (double(i) - last < wait_frames - 1e-9) continue;
+        last = double(i);
         out.push_back(1000.0 * double(i) / fps);
     }
     return out;
