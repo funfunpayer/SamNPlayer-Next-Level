@@ -86,6 +86,8 @@ class LabelController : public QObject {
     Q_PROPERTY(bool localTeacherAvailable READ localTeacherAvailable CONSTANT)
     // NudeNet's model file, "" until fetched or chosen (aitrain.nudenet.path).
     Q_PROPERTY(QString nudenetPath READ nudenetPath NOTIFY teacherChanged)
+    // FunGen YOLO drop-in for Generator Suggest tip (models/fungen.onnx).
+    Q_PROPERTY(QString fungenPath READ fungenPath NOTIFY teacherChanged)
     // The teachers going through the clip (votes): busy and 0..100.
     Q_PROPERTY(bool clipTeaching READ clipTeaching NOTIFY teacherChanged)
     Q_PROPERTY(int clipTeachProgress READ clipTeachProgress NOTIFY teacherChanged)
@@ -200,6 +202,10 @@ public:
     // A NudeNet model file the user already has (it must load and have
     // NudeNet's 18 classes); made the teacher.
     Q_INVOKABLE bool chooseNudeNet(const QString& pathOrUrl);
+    QString fungenPath() const;
+    // FunGen YOLO .onnx from Discord (YOLOv8 head). Copied to
+    // models/fungen.onnx for Generator Suggest tip / hybrid; not a teacher.
+    Q_INVOKABLE bool chooseFunGen(const QString& pathOrUrl);
     // Tests: where NudeNet is fetched from.
     void setNudeNetSource(const ModelSource& source) { nudenet_source_ = source; }
     QString teacherStatus() const { return teacher_status_; }
@@ -289,6 +295,7 @@ private:
     QStringList clip_errors_;
     QString teacher_kind_ = QStringLiteral("server");
     QString nudenet_path_;
+    QString fungen_path_;
     ModelSource nudenet_source_ = NudeNetSource();
     int model_download_ = -1;
     QNetworkReply* download_reply_ = nullptr;

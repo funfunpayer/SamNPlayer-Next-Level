@@ -1077,6 +1077,7 @@ private slots:
         QVERIFY(samn::ui::LabelsMatchTip("glans", "penis"));
         QVERIFY(!samn::ui::LabelsMatchTip("face", "glans"));
         AiTipModel nn;
+        nn.kind = samn::ui::AiTipKind::kNudeNet;
         nn.nudenet = true;
         samn::vision::Detection penis;
         penis.cls = 14;  // MALE_GENITALIA_EXPOSED → penis
@@ -1110,6 +1111,72 @@ private slots:
         QVERIFY(!samn::ui::ContactClassForLabel("face"));
         QVERIFY(!samn::ui::ContactClassForLabel("penis"));
         QVERIFY(!samn::ui::ContactClassForLabel("glans"));
+    }
+
+    void funGenYoloMapsOntoOurLabelsAndLoadsBeforeNudeNet() {
+        using samn::ui::AiTipKind;
+        using samn::ui::AiTipModel;
+        using samn::ui::FindAiTipModel;
+        using samn::ui::FunGenClassNames;
+        using samn::ui::FunGenToLabel;
+        using samn::ui::LabelForDetection;
+        using samn::ui::ListAiHits;
+        using samn::ui::PickExpectedTip;
+        QCOMPARE(QString::fromStdString(FunGenToLabel("penis")), QStringLiteral("penis"));
+        QCOMPARE(QString::fromStdString(FunGenToLabel("glans")), QStringLiteral("glans"));
+        QCOMPARE(QString::fromStdString(FunGenToLabel("breast")), QStringLiteral("breast"));
+        QCOMPARE(QString::fromStdString(FunGenToLabel("face")), QStringLiteral("mouth"));
+        QCOMPARE(QString::fromStdString(FunGenToLabel("hand")), QStringLiteral("hand"));
+        QVERIFY(FunGenToLabel("anus").empty());
+        QVERIFY(FunGenToLabel("navel").empty());
+        QCOMPARE(int(FunGenClassNames().size()), 11);
+        QCOMPARE(QString::fromStdString(FunGenClassNames()[2]), QStringLiteral("penis"));
+
+        AiTipModel fg;
+        fg.kind = AiTipKind::kFunGen;
+        fg.names = FunGenClassNames();
+        samn::vision::Detection tip;
+        tip.cls = 2;  // penis
+        tip.score = 0.9f;
+        tip.box = cv::Rect2f(10, 20, 40, 50);
+        samn::vision::Detection face;
+        face.cls = 0;  // face → mouth
+        face.score = 0.8f;
+        face.box = cv::Rect2f(100, 10, 30, 30);
+        samn::vision::Detection anus;
+        anus.cls = 6;
+        anus.score = 0.95f;
+        anus.box = cv::Rect2f(5, 5, 40, 40);
+        const auto hits = ListAiHits({face, tip, anus}, fg);
+        QCOMPARE(int(hits.size()), 2);
+        QCOMPARE(QString::fromStdString(hits[0].label), QStringLiteral("mouth"));
+        const auto pick = PickExpectedTip(hits, "glans");
+        QVERIFY(pick);
+        QCOMPARE(QString::fromStdString(pick->label), QStringLiteral("penis"));
+        QCOMPARE(QString::fromStdString(LabelForDetection(anus, fg)), QString());
+
+        if (!samn::vision::OnnxDetector::Available()) return;
+        const QString models = dir_.filePath("config/models");
+        QVERIFY(QDir().mkpath(models));
+        const QString fungen = models + "/fungen.onnx";
+        const QString nudenet = models + "/nudenet.onnx";
+        QFile::remove(fungen);
+        QFile::remove(nudenet);
+        QVERIFY(QFile::copy(QStringLiteral(SAMN_VISION_TESTDATA) + "/tiny_yolo.onnx", fungen));
+        QVERIFY(QFile::copy(QStringLiteral(SAMN_VISION_TESTDATA) + "/tiny_nudenet.onnx", nudenet));
+        {
+            QFile classes(models + "/fungen.classes.json");
+            QVERIFY(classes.open(QIODevice::WriteOnly));
+            classes.write(R"({"classes":["penis","breast"]})");
+        }
+        const auto m = FindAiTipModel();
+        QVERIFY(m);
+        QCOMPARE(m->kind, AiTipKind::kFunGen);
+        QFile::remove(fungen);
+        const auto nn = FindAiTipModel();
+        QVERIFY(nn);
+        QCOMPARE(nn->kind, AiTipKind::kNudeNet);
+        QFile::remove(nudenet);
     }
 
     void suggestAiTipStaysPendingUntilApply() {

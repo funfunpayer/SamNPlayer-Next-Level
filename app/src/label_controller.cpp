@@ -69,6 +69,11 @@ LabelController::LabelController(QObject* parent) : QObject(parent) {
         if (const QString k = text("aitrain.teacher.kind"); k == QLatin1String("nudenet") || k == QLatin1String("student")) teacher_kind_ = k;
         if (const auto v = settings().get("aitrain.retrack_after_drag", true); v.is_boolean()) retrack_after_drag_ = v.get<bool>();
         nudenet_path_ = text("aitrain.nudenet.path");
+        fungen_path_ = text("generator.ai_fungen_path");
+        if (fungen_path_.isEmpty()) {
+            const QString drop = QString::fromStdU16String((samn::config_dir() / "models" / "fungen.onnx").u16string());
+            if (QFileInfo::exists(drop)) fungen_path_ = drop;
+        }
     } catch (const std::exception&) {
         // Unreadable settings: start without a teacher.
     }
@@ -597,6 +602,52 @@ bool LabelController::chooseNudeNet(const QString& pathOrUrl) {
     teacher_kind_ = QStringLiteral("nudenet");
     saveSetting("aitrain.teacher.kind", teacher_kind_);
     setTeacherStatus(tr("NudeNet is ready: Ask the teacher (A) uses it."));
+    return true;
+}
+
+QString LabelController::fungenPath() const {
+    if (!fungen_path_.isEmpty() && QFileInfo::exists(fungen_path_)) return fungen_path_;
+    const QString drop = QString::fromStdU16String((samn::config_dir() / "models" / "fungen.onnx").u16string());
+    if (QFileInfo::exists(drop)) return drop;
+    return {};
+}
+
+bool LabelController::chooseFunGen(const QString& pathOrUrl) {
+    if (local_busy_) return false;
+    if (!localTeacherAvailable()) {
+        setTeacherStatus(tr("This build cannot run models itself (no ONNX Runtime)."));
+        return false;
+    }
+    const QString path = LocalPath(pathOrUrl);
+    auto det = std::make_shared<samn::vision::OnnxDetector>();
+    std::string why;
+    if (!det->Load(FsPath(path), &why)) {
+        setTeacherStatus(tr("That model does not load: %1").arg(QString::fromStdString(why)));
+        return false;
+    }
+    if (det->isDetr()) {
+        setTeacherStatus(tr("That looks like our student (DETR), not a FunGen YOLO .onnx."));
+        return false;
+    }
+    if (det->classCount() < 2) {
+        setTeacherStatus(tr("That YOLO model has too few classes for FunGen."));
+        return false;
+    }
+    const auto destDir = samn::config_dir() / "models";
+    std::error_code ec;
+    std::filesystem::create_directories(destDir, ec);
+    const QString dest = QString::fromStdU16String((destDir / "fungen.onnx").u16string());
+    if (QFileInfo(path).canonicalFilePath() != QFileInfo(dest).canonicalFilePath()) {
+        QFile::remove(dest);
+        if (!QFile::copy(path, dest)) {
+            setTeacherStatus(tr("Could not copy the model into models/fungen.onnx."));
+            return false;
+        }
+    }
+    fungen_path_ = dest;
+    saveSetting("generator.ai_fungen_path", dest);
+    setTeacherStatus(tr("FunGen YOLO ready for Generator Suggest tip (models/fungen.onnx). Not used as Ask-the-teacher."));
+    emit teacherChanged();
     return true;
 }
 

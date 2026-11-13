@@ -59,6 +59,12 @@ Item {
         nameFilters: [qsTr("ONNX model (*.onnx)"), qsTr("All files (*)")]
         onAccepted: labelCtl.chooseNudeNet(selectedFile.toString())
     }
+    FileDialog {
+        id: fungenDialog
+        title: qsTr("Choose a FunGen YOLO model (.onnx)")
+        nameFilters: [qsTr("ONNX model (*.onnx)"), qsTr("All files (*)")]
+        onAccepted: labelCtl.chooseFunGen(selectedFile.toString())
+    }
 
     component Step: GlassCard {
         id: step
@@ -264,6 +270,44 @@ Item {
                                 textFormat: Text.PlainText; elide: Text.ElideMiddle
                                 text: labelCtl.nudenetPath !== "" ? qsTr("Ready") : qsTr("Not fetched yet")
                                 color: labelCtl.nudenetPath !== "" ? Theme.cyan : Theme.textDim
+                                font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                        }
+                    }
+                }
+                // FunGen YOLO for Generator Suggest tip (not Ask-the-teacher).
+                GlassCard {
+                    objectName: "fungenCard"
+                    visible: page.tab === 0
+                    Layout.fillWidth: true
+                    implicitHeight: fungenCol.implicitHeight + 28
+                    ColumnLayout {
+                        id: fungenCol
+                        anchors.fill: parent; anchors.margins: 14; spacing: 8
+                        Text { textFormat: Text.PlainText; text: qsTr("FunGen YOLO (Generator)"); color: Theme.text; font.family: Theme.font; font.pixelSize: 15 }
+                        Text {
+                            textFormat: Text.PlainText
+                            Layout.fillWidth: true; wrapMode: Text.WordWrap
+                            text: labelCtl.localTeacherAvailable
+                                  ? qsTr("Drop FunGen’s Discord YOLO .onnx here for Generator Suggest tip / Show all tags / hybrid re-acquire. Priority: our student, then FunGen, then NudeNet. Classes map to tip (penis/glans) and contact (breast; face→mouth). Weights stay yours — we do not ship or download them.")
+                                  : qsTr("This build cannot run models itself (it has no ONNX Runtime).")
+                            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true; spacing: 8
+                            visible: labelCtl.localTeacherAvailable
+                            FlowButton {
+                                objectName: "fungenChoose"
+                                text: qsTr("Choose FunGen .onnx…")
+                                enabled: !labelCtl.teacherBusy
+                                onClicked: fungenDialog.open()
+                            }
+                            Text {
+                                objectName: "fungenState"
+                                Layout.fillWidth: true
+                                textFormat: Text.PlainText; elide: Text.ElideMiddle
+                                text: labelCtl.fungenPath !== "" ? qsTr("Ready — models/fungen.onnx") : qsTr("Not chosen yet")
+                                color: labelCtl.fungenPath !== "" ? Theme.cyan : Theme.textDim
                                 font.family: Theme.fontSoft; font.pixelSize: 12
                             }
                         }
