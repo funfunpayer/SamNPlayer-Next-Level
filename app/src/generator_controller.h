@@ -483,6 +483,9 @@ private:
     std::unique_ptr<samn::Settings> settings_;
     void loadSettings();
     void saveSetting(const char* key, const nlohmann::json& value);
+    // When a tip path exists and a local model is present, turn hybrid
+    // re-acquire on unless the user saved Off (FunGen2: no Advanced toggle).
+    void ensureHybridAssistForTipPath();
     // Gap / outlier / cache / Sliding / Adaptive / Expert into a run's signal options.
     void applySwitches(engine::SignalOptions& signal, std::filesystem::path& track_cache_dir) const;
     engine::TrackAxis trackAxis() const;

@@ -184,7 +184,14 @@ void GeneratorController::loadSettings() {
         gap_handling_ = flag("generator.gap_handling", gap_handling_);
         outlier_rejection_ = flag("generator.outlier_rejection", outlier_rejection_);
         track_cache_ = flag("generator.track_cache", track_cache_);
-        hybrid_reacquire_ = flag("generator.hybrid_reacquire", hybrid_reacquire_);
+        // FunGen2 has no Advanced tip-loss toggle: when a model is present and
+        // the user never set the key, default AI re-acquire on so a painted /
+        // Found tip path is helped without opening Advanced.
+        if (const auto v = s.get("generator.hybrid_reacquire"); v.is_boolean()) {
+            hybrid_reacquire_ = v.get<bool>();
+        } else if (aiTipAvailable()) {
+            hybrid_reacquire_ = true;
+        }
         if (const auto v = s.get("generator.max_analysis_fps"); v.is_number()) setMaxAnalysisFps(v.get<int>());
         if (const auto v = s.get("generator.editor_share"); v.is_number()) setEditorShare(v.get<double>());
         contact_vibration_ = flag("generator.contact_vibration", contact_vibration_);
@@ -310,6 +317,7 @@ bool GeneratorController::startTipSearch(bool resolve) {
         std::optional<TipSearchFound> r;
         try {
             if (resolve) {
+                // Guest Create: short windows, shown frame first (kCreateTipMaxSeconds).
                 samn::engine::TipResolveOptions o;
                 o.preview_ms = startMs;
                 o.cancel = [cancel] { return cancel->load(); };
@@ -322,8 +330,11 @@ bool GeneratorController::startTipSearch(bool resolve) {
                     }
                 }
             } else {
+                // Find tip / auto-on-open: still from the shown frame, but snappy
+                // (12 s) — FunGen2 does not chew 45 s before Create.
                 samn::engine::TipFindOptions o;
-                o.start_ms = startMs;  // 0.7: from the shown frame
+                o.start_ms = startMs;
+                o.max_seconds = 12;
                 o.cancel = [cancel] { return cancel->load(); };
                 if (auto tip = samn::engine::FindTip(video, o, &error))
                     r = TipSearchFound{tip->box, tip->candidates.empty() ? 0 : tip->candidates.front().score, startMs,
@@ -937,6 +948,9 @@ void GeneratorController::installBox(const QRect& box, double atMs) {
     emit boxLabelChanged();
     emit stepChanged();
     refreshPov();
+    // Advanced stays closed for Everyday: when the user (or Create) sets a tip
+    // and a local model exists, turn AI re-acquire on unless they saved Off.
+    if (!next.isNull()) ensureHybridAssistForTipPath();
     scheduleTipPreview();
 }
 
@@ -1188,10 +1202,24 @@ QString SceneTitle(const QString& s) {
 }
 }  // namespace
 
+void GeneratorController::ensureHybridAssistForTipPath() {
+    if (hybrid_reacquire_ || !aiTipAvailable()) return;
+    try {
+        if (settings_) {
+            const auto v = settings_->get("generator.hybrid_reacquire");
+            if (v.is_boolean() && !v.get<bool>()) return;  // user saved Off
+        }
+    } catch (const std::exception&) {
+    }
+    hybrid_reacquire_ = true;
+    emit optionsChanged();
+}
+
 void GeneratorController::setFeelDevice(const QString& d) {
     if (d == feel_device_ || !kFeelDevices.contains(d)) return;
     feel_device_ = d;
     saveSetting("generator.feel.device", d.toStdString());
+    // Optimize on Review follows Feel when unset — no Advanced open needed.
     emit feelChanged();
 }
 
@@ -1821,7 +1849,7 @@ void GeneratorController::startTipPreview(quint64 seq) {
         engine::TrackOptions to;
         to.start_ms = int64_t(std::floor(at));
         to.max_analysis_fps = 8;  // lighter than Create; overlay only
-        to.max_frames = 400;
+        to.max_frames = 200;      // ~25 s overlay seed — guest path stays snappy
         to.camera_compensation = false;
         to.scene_cuts = cuts;
         to.appearance_memory = false;
