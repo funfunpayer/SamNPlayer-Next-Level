@@ -41,7 +41,7 @@ const texts = {
     "gen-auto-tip": "On by default: when a video opens, Find tip looks for the rhythmic motion by itself. A clear find becomes the tip box; an unsure one only shows dashed candidates to click. A box you draw meanwhile is never replaced.",
     "gen-auto-ozone": "Suggests O-markers in the last eighth (highest mean position) only when the ending is clearly high. Classic from signal, no AI model.",
     // src/generator.js:91 (Find tip area)
-    "gen-autoroi": "Auto tip box for Everyday CSRT (not a motion path). Paint/drag only if Find missed. Optional AI when checked.",
+    "gen-autoroi": "Find tip looks for the rhythmic motion (not a motion path to paint). Opening a video and Create already look; this button is the override. Drag a box only if Find missed. After a find, the teal overlay follows the tip as you scrub; drag still edits the seed. Suggest tip (AI) is separate and needs Apply.",
     // src/generator.js:315 (Camera motion compensation)
     "gen-camcomp": "Compensates camera pans using background features. Recommended for moving camera. Default on.",
     "gen-hybrid-reacquire": "Opt-in: after CSRT and appearance memory lose the tip, ask the local student (or NudeNet) for one candidate box — only kept if it still matches the start look. Off by default (Everyday unchanged). Needs a model under Settings → AI.",
@@ -50,7 +50,7 @@ const texts = {
     // src/generator.js:319 (Record tip trajectory (optional feel — not required to Creat)
     "gen-capture-trajectory": "Records tip (x,y) per frame for Feel Stage A (buzz when tip grazes a contact mark) and the Play overlay. Not a user-drawn stroke path — Create never requires this. Soft-on with Contact vib; CSRT only.",
     // src/generator.js:457 (Peak-emphasis contact vib (same as Feel → Curve → Impulse))
-    "gen-contact-impulse": "Same as Feel → Curve → Impulse (peaks only). Prefer the Curve control in step 3; this Advanced mirror stays in sync. Opt-in experiment — Everyday Soft onset stays default. Does not change stroke CSRT, Follow/Ignore marks, or Enforcement.",
+    "gen-contact-impulse": "Same as Feel → Curve → Impulse (peaks only). Prefer Feel → Curve; this Advanced mirror stays in sync. Opt-in experiment — Everyday Soft onset stays default. Does not change stroke CSRT, Follow/Ignore marks, or Enforcement.",
     // src/generator.js:330 (Use contact points (teachers JSON))
     "gen-contact-points": "VLM1: load a contact_points.py JSON so the rhythm grid can search near teacher contact points when the tip box is far away (>3 cells). Needs Rhythm-robust signal on. Empty/off = bit-identical. Build via Generate below or CLI. Never a default.",
     // src/generator.js:333
@@ -62,7 +62,7 @@ const texts = {
     // src/generator.js:338 (Verify with the engine (hybrid, K=1.5))
     "gen-contact-verify": "Hybrid assist: keep a teacher contact point only where the Go CSRT rhythm grid measures ≥1.5× stronger signal than at its own cell. Needs Use contact points + path. Off = every loaded point steers (same as CLI --contact-verify 0). Default off — measured K=1.5; never Everyday.",
     // src/generator.js:249 (Contact vibration (on by default))
-    "gen-contact-vibration": "Extra vibration on deep strokes (high position / stroke depth). On by default. When on, Step 2 shows optional touch-point marks (mouth · nipple/breast · tip). Not a stroke path — Create works without them. Marks store where touch should feel.",
+    "gen-contact-vibration": "Extra vibration on deep strokes (high position / stroke depth). On by default. Optional touch-point marks (mouth · nipple/breast) sit behind More feel / contact… — not a stroke path. Create works without them. Marks store where touch should feel.",
     // src/generator.js:348 (LM Studio vision)
     "gen-cp-lmstudio": "Ask LM Studio vision model if the local server is up.",
     // src/generator.js:344 (NudeNet)
@@ -101,16 +101,16 @@ const texts = {
     // src/generator.js:214 (+ Ignore region (black))
     "gen-mask-add": "Ignore region (black): exclude a wrong latch (knees, background). Same as Scene map → Ignore. Does not drive the stroke; use when auto tip/heatmap fails onto the wrong part.",
     // src/generator.js:24 (User handbook)
-    "gen-open-handbook": "Opens the in-app handbook: Create steps, gaps, AI export, Play map.",
+    "gen-open-handbook": "Opens the in-app handbook: Everyday Create, gaps, AI, Play map.",
     "gen-outliers": "On by default: a single frame that jumps far from its neighbours (5 × their median deviation) is treated as a tracking loss, not as a stroke. Off = every frame counts, as in 0.7.",
     // src/generator.js:515 (Optimize for)
-    "gen-optimize-target": "After Create, optimize the new script: for any device (fill gaps only) or for Sam Neo 2 (adds contact vibration and baked vibration / suction).",
+    "gen-optimize-target": "On Review after Create (or with an open script). Off keeps the script as created. Any device: fill and heal gaps. Sam Neo 2: also contact vibration and baked vibration / suction. Default follows the Feel device.",
     // src/generator.js:468 (Re-find region after each cut (Python-only; soft-ignored on )
     "gen-perscene": "Re-searches the tip region after each hard cut (Python PerSceneROI). On Go-CSRT portable builds this is soft-ignored — cuts still re-anchor, Everyday stays on Go CSRT (#338/#339). Prefer leaving off unless you intentionally use the Python path.",
     // src/generator.js:152 (0–100 on video)
     "gen-pos-overlay-toggle": "0–100 stroke gauge over the preview. Moves with Time/Frame after Create (and after AI draft, before Keep). Turn off anytime.",
     // src/generator.js:242 (Everyday: auto tip → Create. Contact marks (Step 2) are opti)
-    "gen-profile-hint": "Everyday: auto tip → Create (no motion-path marking). Contact vibration adds feel — on by default. Optional contact marks in Step 2 are touch points only. Use the rhythm heatmap → Ignore (black) only when detections latch onto the wrong part (knees etc.).",
+    "gen-profile-hint": "Everyday: choose a video → Create finds the tip (no motion-path paint). Find tip is the override. Contact vibration adds feel — on by default. Optional contact marks are touch points only. Use Ignore (black) only when detections latch onto the wrong part (knees etc.).",
     // src/generator.js:70 (Clear queue)
     "gen-queue-clear": "Drop remaining queued videos; keep the current clip.",
     // src/generator.js:68 (Create queue)
@@ -203,7 +203,7 @@ const texts = {
     // src/generator.js:234 (Style)
     "generator.style": "Recommended = Autotune's cleanup plus ignored single-frame jumps and a 500/s speed limit (default). Normal = 0.7's everyday feel. Soft = gentler. Autotune = 0.7's extra cleanup for noisy clips.",
     // src/generator.js:146 (Time (s))
-    "generator.time-s": "Seek past a black intro before marking the region.",
+    "generator.time-s": "Seek past a black intro before Find tip / Create. You do not paint a motion path first.",
     // src/generator.js:178 (Tip (glans/penis))
     "generator.tip-glans-penis": "Optional tip label: Glans preferred, or whole Penis. Empty = any. Contact-vibe set only — not required for CSRT Create.",
     // SamN2, Player → Library (Analysis)
