@@ -73,14 +73,9 @@ LabelController::LabelController(QObject* parent) : QObject(parent) {
         if (const auto v = settings().get("aitrain.retrack_after_drag", true); v.is_boolean()) retrack_after_drag_ = v.get<bool>();
         nudenet_path_ = text("aitrain.nudenet.path");
         yolo_path_ = text("generator.ai_yolo_path");
-        if (yolo_path_.isEmpty()) yolo_path_ = text("generator.ai_fungen_path");  // legacy key
         if (yolo_path_.isEmpty()) {
             const QString drop = QString::fromStdU16String((samn::config_dir() / "models" / "yolo.onnx").u16string());
             if (QFileInfo::exists(drop)) yolo_path_ = drop;
-        }
-        if (yolo_path_.isEmpty()) {
-            const QString legacy = QString::fromStdU16String((samn::config_dir() / "models" / "fungen.onnx").u16string());
-            if (QFileInfo::exists(legacy)) yolo_path_ = legacy;
         }
     } catch (const std::exception&) {
         // Unreadable settings: start without a teacher.
@@ -674,8 +669,6 @@ QString LabelController::yoloPath() const {
     if (!yolo_path_.isEmpty() && QFileInfo::exists(yolo_path_)) return yolo_path_;
     const QString drop = QString::fromStdU16String((samn::config_dir() / "models" / "yolo.onnx").u16string());
     if (QFileInfo::exists(drop)) return drop;
-    const QString legacy = QString::fromStdU16String((samn::config_dir() / "models" / "fungen.onnx").u16string());
-    if (QFileInfo::exists(legacy)) return legacy;
     return {};
 }
 
@@ -723,7 +716,6 @@ bool LabelController::chooseYolo(const QString& pathOrUrl) {
         srcDir + "/classes.json",
         srcDir + "/" + srcInfo.completeBaseName() + ".classes.json",
         srcDir + "/yolo.classes.json",
-        srcDir + "/fungen.classes.json",
     };
     QString classSrc;
     for (const QString& c : classCandidates) {

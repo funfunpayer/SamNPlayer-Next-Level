@@ -29,31 +29,21 @@ std::vector<std::string> LoadYoloNames() {
     if (!names.empty()) return names;
     names = LoadJsonClassNames(samn::config_dir() / "models" / "yolo.classes.json");
     if (!names.empty()) return names;
-    // Legacy FunGen drop folder name.
-    names = LoadJsonClassNames(samn::config_dir() / "models" / "fungen" / "classes.json");
-    if (!names.empty()) return names;
-    names = LoadJsonClassNames(samn::config_dir() / "models" / "fungen.classes.json");
-    if (!names.empty()) return names;
     return YoloBodyClassNames();
 }
 
 std::filesystem::path YoloOnnxPath() {
     try {
         const samn::Settings s;
-        for (const char* key : {"generator.ai_yolo_path", "generator.ai_fungen_path"}) {
-            const auto v = s.get(key);
-            if (!v.is_string()) continue;
+        const auto v = s.get("generator.ai_yolo_path");
+        if (v.is_string()) {
             const auto p = std::filesystem::path(v.get<std::string>());
             std::error_code ec;
             if (!p.empty() && std::filesystem::exists(p, ec)) return p;
         }
     } catch (const std::exception&) {
     }
-    const auto yolo = samn::config_dir() / "models" / "yolo.onnx";
-    std::error_code ec;
-    if (std::filesystem::exists(yolo, ec)) return yolo;
-    // Legacy filename from an earlier drop-in path.
-    return samn::config_dir() / "models" / "fungen.onnx";
+    return samn::config_dir() / "models" / "yolo.onnx";
 }
 
 }  // namespace

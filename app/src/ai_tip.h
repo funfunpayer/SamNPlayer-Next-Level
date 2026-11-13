@@ -44,7 +44,6 @@ enum class AiTipReady {
 //   config_dir()/models/yolo.onnx  (+ optional models/yolo/classes.json)
 //   config_dir()/models/nudenet.onnx
 // Optional override: settings key generator.ai_yolo_path (absolute file).
-// Legacy drop path models/fungen.onnx is still read if yolo.onnx is absent.
 AiTipReady AiTipModelStatus();
 std::optional<AiTipModel> FindAiTipModel();
 
