@@ -636,7 +636,9 @@ private slots:
             g.setMaxSpeed(0);
             g.setMaxAnalysisFps(0);
             g.setEditorShare(0.40);
-            g.setHybridReacquire(false);
+            // Unset — do not write false (that means user Off and blocks
+            // FunGen2 auto-on in later tip/Apply tests that share settings).
+            samn::Settings().set("generator.hybrid_reacquire", nullptr);
         }
     }
 
@@ -1146,6 +1148,9 @@ private slots:
         QCOMPARE(g.aiDetections().size(), 2);
         QCOMPARE(g.aiTipProposal().value("x").toInt(), 20);
         QCOMPARE(g.aiTipProposal().value("label").toString(), QStringLiteral("penis"));
+        // Everyday default: key unset (not Off). Shared settings from earlier
+        // Expert knob tests must not leave false or auto-on is skipped.
+        samn::Settings().set("generator.hybrid_reacquire", nullptr);
         QVERIFY(g.applyAiTip());
         QCOMPARE(g.box(), QRect(20, 30, 40, 50));
         QVERIFY(!g.hasAiTipProposal());
@@ -1153,7 +1158,7 @@ private slots:
         // FunGen2-like: setting a tip path turns AI re-acquire on when a model
         // is present and the user never saved Off (Advanced stays closed).
         QVERIFY(g.hybridReacquire());
-        g.setHybridReacquire(false);  // restore for later tests
+        samn::Settings().set("generator.hybrid_reacquire", nullptr);
     }
 
     void dismissAndPickAiDetectionStillNeedApply() {
