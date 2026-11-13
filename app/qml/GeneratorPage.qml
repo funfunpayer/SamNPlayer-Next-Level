@@ -1179,7 +1179,7 @@ Item {
                             onClicked: scriptDialog.open()
                         }
                     }
-                    // Align & lanes: axes / From sound / beat bar. Everyday Optimize lives on Review.
+                    // Align & lanes: axes / beat bar. Everyday Optimize + Use audio live on Review.
                     ScrollRow {
                         id: alignBar
                         objectName: "alignBar"
@@ -1192,23 +1192,6 @@ Item {
                             text: qsTr("Axes from stroke"); icon: "effects"
                             onClicked: edit.axesFromStroke()
                         }
-                        FlowButton {
-                            objectName: "tool_sound"
-                            text: qsTr("From sound"); icon: "audio"
-                            enabled: gen.hasVideo
-                            onClicked: edit.vibrationFromSound(keepContact.checked)
-                            HoverHandler { id: soundHover }
-                            ToolTipText { shown: soundHover.hovered; text: qsTr("Write vibration from the video's sound into the script") }
-                        }
-                        FlowToggle {
-                            id: keepContact
-                            objectName: "keepContact"
-                            checked: false
-                            visible: gen.hasVideo
-                            HoverHandler { id: keepHover }
-                            ToolTipText { shown: keepHover.hovered; text: qsTr("Keep contact vibration when writing from sound") }
-                        }
-                        HelpChip { key: "pb-vib-source-apply"; visible: gen.hasVideo; Layout.alignment: Qt.AlignVCenter }
                         FlowButton {
                             objectName: "tool_beatbar"
                             visible: gen.hasVideo
@@ -2743,8 +2726,8 @@ Item {
                         }
                     }
                     // 0.7 review "Improve script": Start/End trim, fill gaps,
-                    // heal tracking gaps. Align-to-audio / audio check / rhythm
-                    // bridge / repair span are not on this panel.
+                    // heal tracking gaps, fill to sound tempo. Audio check /
+                    // rhythm bridge / repair span are not on this panel.
                     ColumnLayout {
                         id: improvePanel
                         objectName: "improvePanel"
@@ -2753,12 +2736,23 @@ Item {
                         spacing: 6
                         property bool fillGaps: true
                         property bool healGaps: true
+                        property bool fillToSound: true
+                        property bool pendingImprove: false
                         property string lastStatus: ""
                         // Improve rewrites the file in place; it does not emit
                         // scriptChanged. A different script must not keep the old line.
                         Connections {
                             target: edit
-                            function onScriptChanged() { improvePanel.lastStatus = "" }
+                            function onScriptChanged() {
+                                improvePanel.lastStatus = ""
+                                improvePanel.pendingImprove = false
+                            }
+                            function onBusyChanged() {
+                                if (improvePanel.pendingImprove && !edit.busy) {
+                                    improvePanel.lastStatus = edit.status
+                                    improvePanel.pendingImprove = false
+                                }
+                            }
                         }
                         Text {
                             textFormat: Text.PlainText
@@ -2770,7 +2764,7 @@ Item {
                             textFormat: Text.PlainText
                             Layout.fillWidth: true
                             wrapMode: Text.WordWrap
-                            text: qsTr("Trim Start/End in seconds (0 = leave that end), heal tracker-loss windows, and fill long gaps. Does not invent motion from audio.")
+                            text: qsTr("Trim Start/End in seconds (0 = leave that end), heal tracker-loss windows, and fill long gaps. Fill to sound tempo only spaces the new points — it does not invent motion from audio.")
                             color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                         }
                         Flow {
@@ -2836,6 +2830,61 @@ Item {
                                 onToggled: (c) => improvePanel.healGaps = c
                             }
                         }
+                        ColumnLayout {
+                            id: useAudioBox
+                            objectName: "useAudioBox"
+                            Layout.fillWidth: true
+                            spacing: 6
+                            Text {
+                                textFormat: Text.PlainText
+                                Layout.fillWidth: true
+                                text: qsTr("Use audio")
+                                color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold
+                            }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                enabled: !edit.busy && improvePanel.fillGaps
+                                Text {
+                                    textFormat: Text.PlainText
+                                    Layout.fillWidth: true; Layout.minimumWidth: 0; wrapMode: Text.WordWrap
+                                    text: qsTr("Fill gaps to sound tempo")
+                                    color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                                }
+                                HelpChip { key: "gen-improve-audio-fill"; Layout.alignment: Qt.AlignVCenter }
+                                FlowToggle {
+                                    objectName: "improveFillToSound"
+                                    checked: improvePanel.fillToSound
+                                    onToggled: (c) => improvePanel.fillToSound = c
+                                }
+                            }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                FlowButton {
+                                    objectName: "bakeSoundContact"
+                                    Layout.fillWidth: true
+                                    text: qsTr("Bake vibration from sound + contact")
+                                    icon: "audio"
+                                    enabled: gen.hasVideo && !edit.busy
+                                    onClicked: edit.vibrationFromSound(true)
+                                }
+                                HelpChip { key: "pb-vib-source-apply"; Layout.alignment: Qt.AlignVCenter }
+                            }
+                            FlowButton {
+                                objectName: "bakeSoundOnly"
+                                Layout.fillWidth: true
+                                text: qsTr("Bake vibration from sound")
+                                enabled: gen.hasVideo && !edit.busy
+                                onClicked: edit.vibrationFromSound(false)
+                            }
+                            Text {
+                                objectName: "useAudioLiveLine"
+                                textFormat: Text.PlainText
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                text: qsTr("Live Play audio vibration is Settings → Play. It follows the sound during Play and does not write the script.")
+                                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                        }
                         FlowButton {
                             objectName: "improveButton"
                             text: qsTr("Improve script"); icon: "sliders"
@@ -2845,10 +2894,13 @@ Item {
                                 const rawEnd = improveEnd.text.replace(",", ".")
                                 const start = parseFloat(rawStart)
                                 const end = parseFloat(rawEnd)
+                                improvePanel.pendingImprove = true
                                 improvePanel.lastStatus = edit.improveScript(
                                     (!rawStart || isNaN(start) || start < 0) ? 0 : start,
                                     (!rawEnd || isNaN(end) || end < 0) ? 0 : end,
-                                    improvePanel.fillGaps, improvePanel.healGaps)
+                                    improvePanel.fillGaps, improvePanel.healGaps,
+                                    improvePanel.fillToSound)
+                                if (!edit.busy) improvePanel.pendingImprove = false
                             }
                         }
                         Text {

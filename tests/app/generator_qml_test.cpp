@@ -300,7 +300,9 @@ private slots:
         feelDevice->setProperty("currentIndex", 2);
         QMetaObject::invokeMethod(feelDevice, "activated", Q_ARG(int, 2));
         QTRY_COMPARE(gen->feelKind(), QStringLiteral("vibrator"));
+        QCOMPARE(gen->vibSource(), QStringLiteral("sound+contact"));
         QTRY_VERIFY(named(root.get(), "vibSourceRow")->isVisible());
+        QCOMPARE(named(root.get(), "vibSourceCombo")->property("currentIndex").toInt(), 1);
         QVERIFY(!named(root.get(), "neoFeel")->isVisible());
         QVERIFY(named(root.get(), "feelHint")->isVisible());
         QVERIFY(named(root.get(), "toggle_autoTip")->isVisible());
@@ -552,10 +554,11 @@ private slots:
         QMetaObject::invokeMethod(ask, "accepted");
         QTRY_COMPARE(edit->property("undoText").toString(), QStringLiteral("Undo: Invert curve"));
 
-        // Align bar: axes / From sound / beat bar (Everyday Optimize is on Review).
+        // Align bar: axes / beat bar (Optimize + Use audio live on Review).
         QVERIFY(named(root.get(), "alignBar")->isVisible());
         QVERIFY(named(root.get(), "tool_axes")->isVisible());
-        QVERIFY(named(root.get(), "tool_sound")->isVisible());
+        QVERIFY(!named(root.get(), "tool_sound"));
+        QVERIFY(named(root.get(), "useAudioBox")->isVisible());
         QVERIFY(named(root.get(), "softEdges")->isVisible());
         QVERIFY(named(root.get(), "capIntensity"));
         QCOMPARE(page->property("capIntensity").toInt(), 400);
@@ -925,6 +928,18 @@ private slots:
         QVERIFY(named(root.get(), "improveEnd"));
         QCOMPARE(named(root.get(), "improveFill")->property("checked").toBool(), true);
         QCOMPARE(named(root.get(), "improveHeal")->property("checked").toBool(), true);
+        QVERIFY(named(root.get(), "useAudioBox")->isVisible());
+        QCOMPARE(named(root.get(), "improveFillToSound")->property("checked").toBool(), true);
+        QVERIFY(named(root.get(), "bakeSoundContact"));
+        QVERIFY(named(root.get(), "bakeSoundOnly"));
+        QVERIFY(!named(root.get(), "bakeSoundContact")->isEnabled());
+        QVERIFY(!named(root.get(), "bakeSoundOnly")->isEnabled());
+        QVERIFY2(named(root.get(), "useAudioLiveLine")->property("text").toString().contains("Settings"),
+                 qPrintable(named(root.get(), "useAudioLiveLine")->property("text").toString()));
+        QVERIFY(!named(root.get(), "tool_sound"));
+        QVERIFY(!named(root.get(), "keepContact"));
+        QMetaObject::invokeMethod(named(root.get(), "improveFillToSound"), "toggled", Q_ARG(bool, false));
+        QCOMPARE(named(root.get(), "improvePanel")->property("fillToSound").toBool(), false);
         QVERIFY(named(root.get(), "improveButton")->isVisible());
         QMetaObject::invokeMethod(named(root.get(), "improveButton"), "clicked");
         const QString status = edit->property("status").toString();

@@ -79,6 +79,20 @@ TEST_CASE("playback BPM: silence and a weak pulse fall back to loudness") {
     CHECK(gw.confidence == doctest::Approx(0.10));
 }
 
+TEST_CASE("gap fill Hz: only a reliable onset tempo, never the loudness fallback") {
+    samn::PlaybackBpmGuess onsets;
+    onsets.bpm = 90;
+    onsets.source = samn::PlaybackBpmSource::kOnsets;
+    CHECK(samn::GapFillAudioHz(onsets) == doctest::Approx(1.5));
+
+    samn::PlaybackBpmGuess loud;
+    loud.bpm = 120;
+    loud.source = samn::PlaybackBpmSource::kLoudness;
+    CHECK(samn::GapFillAudioHz(loud) == 0);
+
+    CHECK(samn::GapFillAudioHz({}) == 0);
+}
+
 TEST_CASE("playback BPM: both failing leaves no guess") {
     samn::TempoReliability none;
     none.reason = "no sound analysed";

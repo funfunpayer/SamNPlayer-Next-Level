@@ -398,4 +398,9 @@ PlaybackBpmGuess PickPlaybackAudioBpm(const TempoEstimate& tempo, const TempoRel
     return out;
 }
 
+double GapFillAudioHz(const PlaybackBpmGuess& guess) {
+    if (guess.source != PlaybackBpmSource::kOnsets || !(guess.bpm > 0) || !std::isfinite(guess.bpm)) return 0;
+    return guess.bpm / 60.0;
+}
+
 }  // namespace samn

@@ -1,5 +1,6 @@
 // EditorController (D-137, D-144): editing a script's curves with the mouse
 // and the range tools, undo, and the save after every finished change (0.7).
+#include <QFile>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QtTest>
@@ -51,6 +52,42 @@ QString WriteToneThenSilence(const QString& path) {
     auto u16 = [&h](quint16 v) { h.append(reinterpret_cast<const char*>(&v), 2); };
     h.append("RIFF"); u32(36 + pcm.size()); h.append("WAVEfmt "); u32(16); u16(1); u16(1);
     u32(rate); u32(rate * 2); u16(2); u16(16); h.append("data"); u32(pcm.size());
+    QFile f(path);
+    f.open(QIODevice::WriteOnly);
+    f.write(h + pcm);
+    return path;
+}
+
+// 16-bit mono WAV: 8 s of 90 BPM clicks (a short 1 kHz burst every 667 ms).
+QString WriteClickWav(const QString& path) {
+    const int rate = 11025;
+    const int n = 8 * rate;
+    QByteArray pcm;
+    pcm.resize(n * 2);
+    auto* s = reinterpret_cast<qint16*>(pcm.data());
+    for (int i = 0; i < n; ++i) s[i] = 0;
+    const int period = int(std::lround(rate * 60.0 / 90.0));
+    const int burst = rate / 200;
+    for (int t0 = 0; t0 + burst < n; t0 += period) {
+        for (int i = 0; i < burst; ++i) {
+            s[t0 + i] = qint16(20000 * std::sin(2 * 3.14159265358979 * 1000 * i / rate));
+        }
+    }
+    QByteArray h;
+    auto u32 = [&h](quint32 v) { h.append(reinterpret_cast<const char*>(&v), 4); };
+    auto u16 = [&h](quint16 v) { h.append(reinterpret_cast<const char*>(&v), 2); };
+    h.append("RIFF");
+    u32(36 + pcm.size());
+    h.append("WAVEfmt ");
+    u32(16);
+    u16(1);
+    u16(1);
+    u32(rate);
+    u32(rate * 2);
+    u16(2);
+    u16(16);
+    h.append("data");
+    u32(pcm.size());
     QFile f(path);
     f.open(QIODevice::WriteOnly);
     f.write(h + pcm);
@@ -810,6 +847,72 @@ private slots:
         QCOMPARE(int(samn::LoadFunscript(Fs(healPath)).actions.size()), int(hStroke.size()));
         QVERIFY(heal.undo());
         QCOMPARE(heal.session().Axis("stroke").size(), healBefore);
+    }
+
+    // ImproveOptions::audio_hz: 1 Hz → 500 ms steps; linear positions (rhythmic
+    // fill stays off, D-168). The 6th argument skips a video decode.
+    void improveScriptSpacesFillByAudioHz() {
+        const auto writeGap = [&](const char* name) {
+            const QString path = dir_.filePath(QString::fromLatin1(name));
+            std::ofstream(Fs(path)) << R"({"version":"1.0","actions":[{"at":0,"pos":0},{"at":2000,"pos":100}]})";
+            return path;
+        };
+        EditorController def;
+        QVERIFY(def.open(writeGap("improve-hz-default.funscript")));
+        const QString defMsg = def.improveScript(0, 0, true, false);
+        QVERIFY2(defMsg.startsWith("Improved:"), qPrintable(defMsg));
+        QVERIFY(!defMsg.contains("BPM sound"));
+        const auto& defStroke = def.session().Axis("stroke");
+        QVERIFY(defStroke.size() > 2);
+
+        EditorController audio;
+        QVERIFY(audio.open(writeGap("improve-hz-audio.funscript")));
+        const QString msg = audio.improveScript(0, 0, true, false, true, 1.0);
+        QVERIFY2(msg.startsWith("Improved:"), qPrintable(msg));
+        QVERIFY2(msg.contains("60 BPM sound"), qPrintable(msg));
+        const auto& stroke = audio.session().Axis("stroke");
+        QCOMPARE(int(stroke.size()), 5);
+        QCOMPARE(stroke[1].at, int64_t(500));
+        QCOMPARE(stroke[1].pos, 25);
+        QCOMPARE(stroke[2].at, int64_t(1000));
+        QCOMPARE(stroke[2].pos, 50);
+        QCOMPARE(stroke[3].at, int64_t(1500));
+        QCOMPARE(stroke[3].pos, 75);
+        QVERIFY(stroke.size() < defStroke.size());
+
+        EditorController none;
+        QVERIFY(none.open(writeGap("improve-hz-nosound.funscript")));
+        const QString noVideo = none.improveScript(0, 0, true, false, true);
+        QVERIFY2(noVideo.startsWith("Improved:"), qPrintable(noVideo));
+        QCOMPARE(none.session().Axis("stroke").size(), defStroke.size());
+    }
+
+    // Fill-to-sound-tempo from a click track uses the same decoder / tempo
+    // path as Player "From audio". Unreadable sound in CI is a fail.
+    void improveScriptUsesSoundTempoWhenTheBeatIsClear() {
+        const QString path = dir_.filePath("improve-click.funscript");
+        std::ofstream(Fs(path)) << R"({"version":"1.0","actions":[{"at":0,"pos":0},{"at":2000,"pos":100}]})";
+        const QString wav = WriteClickWav(dir_.filePath("improve-clicks.wav"));
+        EditorController e;
+        QVERIFY(e.open(path));
+        e.setVideoPath(wav);
+        const QString started = e.improveScript(0, 0, true, false, true);
+        QVERIFY2(!started.isEmpty(), qPrintable(e.status()));
+        if (e.busy()) QTRY_VERIFY_WITH_TIMEOUT(!e.busy(), 20000);
+        const QString status = e.status();
+        QVERIFY2(status.startsWith("Improved:"), qPrintable(status));
+        const size_t n = e.session().Axis("stroke").size();
+        if (n >= 20) {
+            if (qEnvironmentVariableIsSet("CI")) QFAIL("No reliable sound tempo in CI");
+            QSKIP("No reliable sound tempo in this environment");
+        }
+        QVERIFY(n > 2);
+        QVERIFY(n < 20);
+        const auto& stroke = e.session().Axis("stroke");
+        for (size_t i = 1; i + 1 < n; ++i) {
+            const double f = double(stroke[i].at) / 2000.0;
+            QCOMPARE(stroke[i].pos, int(std::lround(f * 100)));
+        }
     }
 
     // A chapter removed in the Player (from the .samn) stays removed in the

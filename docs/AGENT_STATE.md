@@ -3,7 +3,18 @@
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
 
-**Last update:** 13 Nov 2026, Cursor, branch `cursor/gen-auto-tip-create-635a`: FunGen2 Create never requires a painted tip; rebased onto main after #251 POV. Do not touch feel_heatbands / Speech-Hold / handbook / `.sam`.
+
+**Last update:** 13 Nov 2026, Cursor, branch `cursor/fungen2-use-audio-635a`: Use audio on Review (rebased after #248). Do not touch feel_heatbands / Speech-Hold / handbook / `.sam`.
+
+## Handover: Use audio (13 Nov)
+
+Owner: sound align / sound→vibration existed, but the settings were scattered. One Review **Use audio** block.
+
+- **Improve fill:** `audio_hz` from reliable video tempo when Fill gaps to sound tempo is on. `rhythmic_fill` stays off (D-168).
+- **QML:** Review Improve → Use audio (fill tempo, bake vib from sound / sound+contact). Live Play = Settings → Play. Align-bar From sound removed.
+- **Vibrator default:** unset → `sound+contact`. Saved `""` stays Motion only.
+- **Tests:** improveScriptSpacesFillByAudioHz, vibSourceDefaults…, QML Use audio toggles.
+
 
 ## Handover: FunGen2 Create finds the tip (13 Nov)
 

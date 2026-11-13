@@ -707,6 +707,30 @@ private slots:
         g.setVibFollow(false);
     }
 
+    // Unset key → sound+contact (vibrator default). A saved "" is Motion only.
+    void vibSourceDefaultsToSoundAndContactAndKeepsASavedChoice() {
+        QTemporaryDir own;
+        const QByteArray prev = qgetenv("SAMN_CONFIG_DIR");
+        qputenv("SAMN_CONFIG_DIR", own.path().toUtf8());
+        const auto restore = qScopeGuard([&] { qputenv("SAMN_CONFIG_DIR", prev); });
+        {
+            GeneratorController g;
+            QCOMPARE(g.vibSource(), QStringLiteral("sound+contact"));
+        }
+        {
+            samn::Settings s;
+            s.set("generator.feel.vib_source", std::string());
+            GeneratorController g;
+            QCOMPARE(g.vibSource(), QString());
+        }
+        {
+            samn::Settings s;
+            s.set("generator.feel.vib_source", std::string("sound"));
+            GeneratorController g;
+            QCOMPARE(g.vibSource(), QStringLiteral("sound"));
+        }
+    }
+
     // The auto scene follows the primary area's class, not the default class
     // for new marks, and the Feel page hears about a change.
     void theAutoSceneFollowsThePrimaryAreaClass() {

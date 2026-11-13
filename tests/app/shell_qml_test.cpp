@@ -322,9 +322,9 @@ private slots:
                 {"gen-ai-roi", "gen-seed-suggest"});
             add("the AI boxes are drawn on the preview after Suggest tip (AI); there is no 'Show all AI tags' toggle (only Dismiss)",
                 {"gen-ai-detections"});
-            add("no such control: the Generator has no Auto-Retry, per-scene re-find, tip-trajectory checkbox, profile hint line, or the Review audio check / audio-tempo fill / rhythm bridge / Repair span (the Improve panel, GeneratorPage.qml improvePanel, has only Start, End, Fill gaps, Heal)",
+            add("no such control: the Generator has no Auto-Retry, per-scene re-find, tip-trajectory checkbox, profile hint line, or the Review audio check / rhythm bridge / Repair span (Improve panel Use audio has fill-to-sound-tempo, not the 0.7 audio-check / rhythm / repair extras)",
                 {"gen-retry", "gen-perscene", "gen-capture-trajectory", "gen-profile-hint", "gen-improve-audio",
-                 "gen-improve-audio-fill", "gen-improve-heal-rhythm", "gen-improve-repair"});
+                 "gen-improve-heal-rhythm", "gen-improve-repair"});
             add("no such control: the Player has no Feel segment strip (speech-hold filter, heatmap bands, opacity) and no Scene feel select (the Editor has one, gen-scene-feel)",
                 {"gen-seg-f-speech-only", "pb-seg-f-speech-only", "pb-seg-heatbands", "pb-seg-heatbands-opacity-row",
                  "pb-scene-feel"});

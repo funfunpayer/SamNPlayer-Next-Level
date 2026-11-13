@@ -113,8 +113,9 @@ class GeneratorController : public QObject {
     // The Sam Neo 2 feel (sceneFeel "auto" / "" Classic / oral / intercourse
     // / breast / hand, feelBalance -100 vibration .. 100 suction, vibFollow)
     // is written into the new script right after Create (0.7
-    // SaveFeelSettings); vibSource ("", "sound+contact", "sound") is the
-    // vibrator's vibration. Remembered (0.7 localStorage gen.feel).
+    // SaveFeelSettings); vibSource ("sound+contact" default, "sound", or
+    // "" motion only) is the vibrator's vibration. An unset key defaults to
+    // sound+contact; a saved "" is Motion only. Remembered (0.7 gen.feel).
     Q_PROPERTY(QString feelDevice READ feelDevice WRITE setFeelDevice NOTIFY feelChanged)
     Q_PROPERTY(QString connectedKind READ connectedKind WRITE setConnectedKind NOTIFY feelChanged)
     Q_PROPERTY(QString feelKind READ feelKind NOTIFY feelChanged)
@@ -460,7 +461,8 @@ private:
     QString contact_curve_ = QStringLiteral("soft");
     QString optimize_target_;
     bool pos_overlay_ = true;
-    QString feel_device_ = QStringLiteral("auto"), connected_kind_, scene_feel_ = QStringLiteral("auto"), vib_source_;
+    QString feel_device_ = QStringLiteral("auto"), connected_kind_, scene_feel_ = QStringLiteral("auto"),
+            vib_source_ = QStringLiteral("sound+contact");
     bool show_all_feel_ = false, vib_follow_ = false;
     int feel_balance_ = 0;
     // The choices are remembered (0.7 "generator.*" settings); the invert

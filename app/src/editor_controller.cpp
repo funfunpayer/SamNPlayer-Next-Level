@@ -14,6 +14,8 @@
 #include "curve_item.h"
 #include "qt_paths.h"
 #include "samn/vision/canceled.h"
+#include "samn/audio_envelope.h"
+#include "samn/audio_tempo.h"
 #include "samn/curve_geometry.h"
 #include "samn/funscript.h"
 #include "samn/improve.h"
@@ -46,13 +48,7 @@ QString LaneTitle(const std::string& lane) {
 
 EditorController::EditorController(QObject* parent) : QObject(parent), sound_(new AudioLevelDecoder(this)) {
     connect(sound_, &AudioLevelDecoder::finished, this, &EditorController::onSoundEnvelope);
-    connect(sound_, &AudioLevelDecoder::failed, this, [this](const QString& error) {
-        // A run for an earlier script: cancelTool() already ended its busy,
-        // and a newer run may be going.
-        if (sound_script_ != script_gen_) return;
-        setBusy(false);
-        setStatus(tr("Vibration from the sound: %1").arg(error));
-    });
+    connect(sound_, &AudioLevelDecoder::failed, this, &EditorController::onSoundFailed);
 }
 
 EditorController::~EditorController() {
@@ -70,6 +66,7 @@ void EditorController::cancelTool() {
     if (tool_cancel_) *tool_cancel_ = true;
     if (sound_->busy()) {
         sound_->cancel();
+        sound_job_ = SoundJob::None;
         setBusy(false);
     }
 }
@@ -633,8 +630,31 @@ QString EditorController::optimizeFor(const QString& target) {
     return msg;
 }
 
-QString EditorController::improveScript(double startSec, double endSec, bool fillGaps, bool healTrackingGaps) {
+QString EditorController::improveScript(double startSec, double endSec, bool fillGaps, bool healTrackingGaps,
+                                        bool fillToSoundTempo, double audioHz) {
     if (!hasScript() || drag_index_ >= 0 || busy_) return {};
+    if (session_.Axis("stroke").size() < 2) {
+        setStatus(tr("The stroke needs at least 2 points."));
+        return {};
+    }
+    const double hz = (audioHz > 0 && std::isfinite(audioHz)) ? audioHz : 0;
+    const bool needSound = fillGaps && fillToSoundTempo && hz <= 0 && !video_path_.isEmpty();
+    if (!needSound) return applyImprove(startSec, endSec, fillGaps, healTrackingGaps, hz);
+
+    improve_start_sec_ = startSec;
+    improve_end_sec_ = endSec;
+    improve_fill_ = fillGaps;
+    improve_heal_ = healTrackingGaps;
+    sound_job_ = SoundJob::Improve;
+    sound_script_ = script_gen_;
+    setBusy(true);
+    setStatus(tr("Measuring sound tempo…"));
+    sound_->start(video_path_, samn::kAudioLevelStepMs, 600000, true);
+    return status_;
+}
+
+QString EditorController::applyImprove(double startSec, double endSec, bool fillGaps, bool healTrackingGaps,
+                                       double audioHz) {
     const std::vector<samn::Action>& stroke = session_.Axis("stroke");
     if (stroke.size() < 2) {
         setStatus(tr("The stroke needs at least 2 points."));
@@ -645,6 +665,8 @@ QString EditorController::improveScript(double startSec, double endSec, bool fil
     o.end_ms = endSec > 0 ? int64_t(std::llround(endSec * 1000.0)) : 0;
     o.fill_gaps = fillGaps;
     o.heal_tracking_gaps = healTrackingGaps;
+    o.audio_hz = (audioHz > 0 && std::isfinite(audioHz)) ? audioHz : 0;
+    // D-168: rhythmic fill stays off on the Improve panel.
     if (healTrackingGaps) {
         try {
             o.tracking_gaps = samn::LoadFunscript(FsPath(path_)).metadata.tracking_gaps;
@@ -659,6 +681,7 @@ QString EditorController::improveScript(double startSec, double endSec, bool fil
         if (res.windows_healed > 0) bits << tr("healed %1").arg(res.windows_healed);
         if (res.points_added > 0) bits << tr("+%1 pts").arg(res.points_added);
         if (res.trimmed) bits << tr("trimmed");
+        if (o.audio_hz > 0) bits << tr("%1 BPM sound").arg(int(std::lround(o.audio_hz * 60.0)));
         QString msg = tr("Improved: %1 points").arg(res.after_count);
         if (!bits.isEmpty()) msg += QStringLiteral(" (%1)").arg(bits.join(QStringLiteral(" · ")));
         msg += tr(" — open Play to edit dots/curve.");
@@ -693,14 +716,36 @@ bool EditorController::vibrationFromSound(bool withContact) {
     }
     sound_with_contact_ = withContact;
     sound_script_ = script_gen_;
+    sound_job_ = SoundJob::Vibration;
     setBusy(true);
     setStatus(tr("Reading the sound…"));
     sound_->start(video_path_, int(samn::kSoundVibStepMs));
     return true;
 }
 
+void EditorController::onSoundFailed(const QString& error) {
+    if (sound_script_ != script_gen_) return;
+    const SoundJob job = sound_job_;
+    sound_job_ = SoundJob::None;
+    setBusy(false);
+    if (job == SoundJob::Improve) {
+        applyImprove(improve_start_sec_, improve_end_sec_, improve_fill_, improve_heal_, 0);
+        return;
+    }
+    setStatus(tr("Vibration from the sound: %1").arg(error));
+}
+
 void EditorController::onSoundEnvelope(const std::vector<double>& envelope) {
     if (sound_script_ != script_gen_) return;  // another script by now (its busy ended there)
+    if (sound_job_ == SoundJob::Improve) {
+        sound_job_ = SoundJob::None;
+        setBusy(false);
+        const auto rel = samn::AssessTempo(sound_->onsetBlocks(), sound_->onsetTempo());
+        const auto guess = samn::PickPlaybackAudioBpm(sound_->onsetTempo(), rel, envelope);
+        applyImprove(improve_start_sec_, improve_end_sec_, improve_fill_, improve_heal_, samn::GapFillAudioHz(guess));
+        return;
+    }
+    sound_job_ = SoundJob::None;
     setBusy(false);
     if (!hasScript()) return;
     if (drag_index_ >= 0) release();

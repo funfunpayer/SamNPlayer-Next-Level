@@ -172,7 +172,11 @@ public:
     // only): Start/End in seconds (0 = unbound), then heal tracker-loss windows,
     // then fill long gaps. Core order. One undo step; same save/reload as
     // optimizeFor. Returns the status (empty when nothing could be done).
-    Q_INVOKABLE QString improveScript(double startSec, double endSec, bool fillGaps, bool healTrackingGaps);
+    // fillToSoundTempo: when filling, space new points at half the video's
+    // reliable onset tempo (ImproveOptions::audio_hz). audioHz > 0 skips the
+    // decode (tests, or a tempo already measured). Rhythmic fill stays off (D-168).
+    Q_INVOKABLE QString improveScript(double startSec, double endSec, bool fillGaps, bool healTrackingGaps,
+                                      bool fillToSoundTempo = false, double audioHz = 0);
     // Vibration from the video's sound (0.7 "Write as vibration curve");
     // withContact keeps the script's own vibration where it is stronger.
     // Asynchronous: busy until the sound is decoded. A script without a
@@ -248,6 +252,8 @@ private:
     // baked in. The .samn carries this; the .funscript keeps its raw actions.
     std::vector<samn::Action> playedStroke() const;
     void onSoundEnvelope(const std::vector<double>& envelope);
+    void onSoundFailed(const QString& error);
+    QString applyImprove(double startSec, double endSec, bool fillGaps, bool healTrackingGaps, double audioHz);
     void setBusy(bool busy);
     void setProgress(int percent);
     // script: script_gen_ when the run started.
@@ -283,6 +289,10 @@ private:
     std::optional<samn::ContactMarks> contact_marks_;
     bool busy_ = false;
     bool sound_with_contact_ = false;
+    enum class SoundJob { None, Vibration, Improve };
+    SoundJob sound_job_ = SoundJob::None;
+    double improve_start_sec_ = 0, improve_end_sec_ = 0;
+    bool improve_fill_ = false, improve_heal_ = false;
     // Bumped by open() and close(): a tool's result for the script before is dropped.
     quint64 script_gen_ = 0;
     quint64 sound_script_ = 0;  // script_gen_ when the sound tool started
