@@ -882,6 +882,99 @@ private slots:
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
     }
 
+    void showAllAiTagsClickApplyAndShiftContact() {
+        g_messages.clear();
+        const QString video = dir_.filePath("ai_tags.mp4");
+        QVERIFY(samn::engine::testclips::WriteMoving(std::filesystem::path(video.toStdU16String()), 8, 80.0, 1.0));
+        QQmlEngine engine;
+        engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
+        engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+        engine.addImageProvider(QStringLiteral("frames"), new samn::ui::FrameProvider);
+        QQmlComponent comp(&engine);
+        comp.setData(R"(
+            import QtQuick
+            import SamN
+            Rectangle {
+                width: 1400; height: 820; color: "#021024"
+                property alias page: gp
+                GeneratorPage { id: gp; anchors.fill: parent; anchors.margins: 20 }
+            })",
+                     QUrl("qrc:/test/AiTags.qml"));
+        QVERIFY2(comp.status() == QQmlComponent::Ready, qPrintable(comp.errorString()));
+        QQuickWindow window;
+        window.resize(1400, 820);
+        std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
+        QVERIFY(root);
+        root->setParentItem(window.contentItem());
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto* page = root->property("page").value<QQuickItem*>();
+        auto* gen = page->property("controller").value<GeneratorController*>();
+        QVERIFY(page && gen);
+        gen->setAutoTip(false);
+        QVERIFY(gen->openVideo(video, false));
+        QTRY_VERIFY(named(root.get(), "showAllAiTags"));
+        QVERIFY(!named(root.get(), "showAllAiTags")->isEnabled());
+        QVERIFY(named(root.get(), "aiTipHint")->isVisible());
+        QVERIFY(!named(root.get(), "applyAiTip")->isVisible());
+        QVERIFY(!gen->hasBox());
+
+        gen->setFakeAiHitsForTest({QVariantMap{{"x", 40},
+                                               {"y", 50},
+                                               {"w", 48},
+                                               {"h", 36},
+                                               {"score", 0.88},
+                                               {"label", "penis"},
+                                               {"cls", 14}},
+                                   QVariantMap{{"x", 120},
+                                               {"y", 20},
+                                               {"w", 32},
+                                               {"h", 28},
+                                               {"score", 0.7},
+                                               {"label", "breast"},
+                                               {"cls", 3}}});
+        QTRY_VERIFY(named(root.get(), "showAllAiTags")->isEnabled());
+        QMetaObject::invokeMethod(named(root.get(), "showAllAiTags"), "clicked");
+        QTRY_COMPARE(gen->aiDetections().size(), 2);
+        QVERIFY(!gen->hasAiTipProposal());  // Show all does not auto-pick
+        QVERIFY(!gen->hasBox());
+        QTRY_VERIFY(named(root.get(), "aiDetection_0"));
+        QTRY_VERIFY(named(root.get(), "aiDetection_1"));
+        auto* chip0 = named(root.get(), "aiDetection_0");
+        QTest::mouseClick(&window, Qt::LeftButton, {},
+                          chip0->mapToScene(QPointF(chip0->width() / 2, chip0->height() / 2)).toPoint());
+        QTRY_VERIFY(gen->hasAiTipProposal());
+        QVERIFY(!gen->hasBox());
+        QTRY_VERIFY(named(root.get(), "applyAiTip")->isVisible());
+        QMetaObject::invokeMethod(named(root.get(), "applyAiTip"), "clicked");
+        QTRY_COMPARE(gen->box(), QRect(40, 50, 48, 36));
+        QVERIFY(!gen->hasAiTipProposal());
+
+        auto* chip1 = named(root.get(), "aiDetection_1");
+        QVERIFY(chip1);
+        QTest::keyPress(&window, Qt::Key_Shift);
+        QCoreApplication::processEvents();
+        QTest::mouseClick(&window, Qt::LeftButton, Qt::ShiftModifier,
+                          chip1->mapToScene(QPointF(chip1->width() / 2, chip1->height() / 2)).toPoint());
+        QTest::keyRelease(&window, Qt::Key_Shift);
+        QTRY_COMPARE(gen->contactAreas().size(), 1);
+        QCOMPARE(gen->contactAreas().first().toMap().value("x").toInt(), 120);
+        QCOMPARE(gen->contactAreas().first().toMap().value("cls").toString(), QStringLiteral("breasts"));
+        QCOMPARE(gen->box(), QRect(40, 50, 48, 36));  // Shift-click did not write the tip
+
+        auto* advanced = named(root.get(), "advancedPanel");
+        QVERIFY(advanced);
+        QVERIFY(advanced->setProperty("advancedOpen", true));
+        auto* assist = named(root.get(), "aiAssistPanel");
+        QVERIFY(assist);
+        QVERIFY(!named(root.get(), "aiAssistTipClass")->isVisible());
+        QVERIFY(assist->setProperty("aiAssistOpen", true));
+        QTRY_VERIFY(named(root.get(), "aiAssistShowAll")->isVisible());
+        QVERIFY(named(root.get(), "aiAssistTipClass")->isVisible());
+        QVERIFY(named(root.get(), "aiAssistSuggestTip"));
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
+    }
+
     // Review-card Improve panel: Start/End, Fill and Heal defaults, button
     // runs EditorController::improveScript on the open script.
     void improvePanelShowsAndRuns() {

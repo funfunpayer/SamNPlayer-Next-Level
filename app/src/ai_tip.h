@@ -44,5 +44,9 @@ std::vector<AiTipHit> ListAiHits(const std::vector<samn::vision::Detection>& det
 // First hit whose label matches the expected tip class (glans ↔ penis).
 // No fallback to another class.
 std::optional<AiTipHit> PickExpectedTip(const std::vector<AiTipHit>& hits, std::string_view want);
+// Safe contact-class mapping for Shift-click (breast/breasts → breasts,
+// nipple/nipples → nipples, mouth → mouth). face / penis / glans / others
+// return nullopt — those stay a pending contact candidate until Apply.
+std::optional<std::string> ContactClassForLabel(std::string_view label);
 
 }  // namespace samn::ui

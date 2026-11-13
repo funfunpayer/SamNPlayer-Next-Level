@@ -293,7 +293,8 @@ Item {
     // The stored class names (lower case, as 0.7 wrote them) for display.
     function className(c) {
         const names = { glans: qsTr("Glans"), penis: qsTr("Penis"), mouth: qsTr("Mouth"),
-                        nipples: qsTr("Nipples"), breasts: qsTr("Breasts") }
+                        nipples: qsTr("Nipples"), nipple: qsTr("Nipple"), breasts: qsTr("Breasts"),
+                        breast: qsTr("Breast"), face: qsTr("Face") }
         return names[c] || c
     }
 
@@ -709,7 +710,7 @@ Item {
                                 }
                             }
                         }
-                        // AI detections (green, first slice): click sets a pending proposal; Apply commits.
+                        // AI tags: click = pending tip (Apply); Shift-click = contact.
                         Repeater {
                             model: drag.active ? [] : gen.aiDetections
                             delegate: Item {
@@ -734,8 +735,23 @@ Item {
                                     }
                                     MouseArea {
                                         anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                                        onClicked: gen.pickAiDetection(aiHit.index)
+                                        onClicked: (m) => {
+                                            const shift = (m.modifiers | Qt.keyboardModifiers) & Qt.ShiftModifier
+                                            if (shift) {
+                                                if (gen.pickAiDetectionAsContact(aiHit.index))
+                                                    page.selectedMark = Math.max(0, gen.contactAreas.length - 1)
+                                            } else {
+                                                gen.pickAiDetection(aiHit.index)
+                                            }
+                                        }
                                     }
+                                }
+                                Text {
+                                    x: 22; y: 2
+                                    textFormat: Text.PlainText
+                                    text: page.className(modelData.label || "")
+                                    color: "#7ee787"; font.family: Theme.fontSoft; font.pixelSize: 10
+                                    style: Text.Outline; styleColor: "#000000"
                                 }
                             }
                         }
@@ -750,6 +766,18 @@ Item {
                             z: 3
                             color: Qt.rgba(126 / 255, 231 / 255, 135 / 255, 0.14)
                             border.color: "#7ee787"; border.width: 2
+                        }
+                        Rectangle {
+                            objectName: "aiContactProposal"
+                            visible: !drag.active && gen.hasAiContactProposal
+                            readonly property var p: gen.aiContactProposal
+                            x: frameView.imageRect.x + (Number(p.x) || 0) * parent.scaleX
+                            y: frameView.imageRect.y + (Number(p.y) || 0) * parent.scaleY
+                            width: (Number(p.w) || 0) * parent.scaleX
+                            height: (Number(p.h) || 0) * parent.scaleY
+                            z: 3
+                            color: Qt.rgba(242 / 255, 176 / 255, 61 / 255, 0.14)
+                            border.color: "#f2b03d"; border.width: 2
                         }
                         // Find tip's other proposals: dashed, a numbered chip picks one.
                         Repeater {
@@ -934,6 +962,13 @@ Item {
                         }
                         HelpChip { key: "gen-ai-tip"; Layout.alignment: Qt.AlignVCenter }
                         FlowButton {
+                            objectName: "showAllAiTags"
+                            text: gen.suggestingAiTip ? qsTr("Looking…") : qsTr("Show all AI tags")
+                            enabled: !gen.running && gen.aiTipAvailable && !gen.suggestingAiTip
+                            onClicked: gen.listAiDetections()
+                        }
+                        HelpChip { key: "gen-ai-detections"; Layout.alignment: Qt.AlignVCenter }
+                        FlowButton {
                             objectName: "applyAiTip"
                             visible: gen.hasAiTipProposal
                             primary: true
@@ -942,8 +977,15 @@ Item {
                             onClicked: gen.applyAiTip()
                         }
                         FlowButton {
+                            objectName: "applyAiContact"
+                            visible: gen.hasAiContactProposal
+                            text: qsTr("Apply contact")
+                            enabled: !gen.running
+                            onClicked: gen.applyAiContact()
+                        }
+                        FlowButton {
                             objectName: "dismissAiTip"
-                            visible: gen.hasAiTipProposal || gen.aiDetections.length > 0
+                            visible: gen.hasAiTipProposal || gen.hasAiContactProposal || gen.aiDetections.length > 0
                             text: qsTr("Dismiss")
                             enabled: !gen.running
                             onClicked: gen.dismissAiTip()
@@ -2382,6 +2424,129 @@ Item {
                                     onActivated: gen.motionAxis = currentValue
                                 }
                                 HelpChip { key: "generator.motion-axis"; Layout.alignment: Qt.AlignVCenter }
+                            }
+                            // AI assist (closed): Show all tags, Suggest, expected class.
+                            ColumnLayout {
+                                id: aiAssistBox
+                                objectName: "aiAssistPanel"
+                                Layout.fillWidth: true
+                                spacing: 6
+                                property bool aiAssistOpen: false
+                                Item {
+                                    objectName: "aiAssistToggle"
+                                    Layout.fillWidth: true
+                                    implicitHeight: 24
+                                    Item {
+                                        id: aiAssistHead
+                                        anchors.fill: parent
+                                        Text {
+                                            id: aiAssistTitle
+                                            anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
+                                            textFormat: Text.PlainText
+                                            text: qsTr("AI assist")
+                                            color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 12; font.weight: Font.Medium
+                                        }
+                                        Icon {
+                                            id: aiAssistChevron
+                                            anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                                            name: "chevronDown"; width: 14; height: 14; color: Theme.textDim
+                                            rotation: aiAssistBox.aiAssistOpen ? 180 : 0
+                                            Behavior on rotation { NumberAnimation { duration: Theme.animFast } }
+                                        }
+                                        Text {
+                                            anchors.left: aiAssistTitle.right; anchors.leftMargin: 8
+                                            anchors.right: aiAssistChevron.left; anchors.rightMargin: 8
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            textFormat: Text.PlainText
+                                            elide: Text.ElideRight
+                                            text: qsTr("Tags on this frame — Apply required, never writes the curve")
+                                            color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 11
+                                        }
+                                    }
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: aiAssistBox.aiAssistOpen = !aiAssistBox.aiAssistOpen
+                                    }
+                                }
+                                ColumnLayout {
+                                    visible: aiAssistBox.aiAssistOpen
+                                    Layout.fillWidth: true
+                                    spacing: 6
+                                    Text {
+                                        objectName: "aiAssistHint"
+                                        Layout.fillWidth: true
+                                        wrapMode: Text.WordWrap
+                                        textFormat: Text.PlainText
+                                        text: gen.aiTipHint
+                                        color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
+                                    }
+                                    ScrollRow {
+                                        Layout.fillWidth: true
+                                        spacing: 8
+                                        FlowButton {
+                                            objectName: "aiAssistShowAll"
+                                            text: gen.suggestingAiTip ? qsTr("Looking…") : qsTr("Show all AI tags")
+                                            enabled: !gen.running && gen.aiTipAvailable && !gen.suggestingAiTip
+                                            onClicked: gen.listAiDetections()
+                                        }
+                                        HelpChip { key: "gen-ai-detections"; Layout.alignment: Qt.AlignVCenter }
+                                        FlowButton {
+                                            objectName: "aiAssistSuggestTip"
+                                            text: gen.suggestingAiTip ? qsTr("Looking…") : qsTr("Suggest tip (AI)")
+                                            enabled: !gen.running && gen.aiTipAvailable && !gen.suggestingAiTip
+                                            onClicked: gen.suggestAiTip()
+                                        }
+                                        FlowButton {
+                                            objectName: "aiAssistApplyTip"
+                                            visible: gen.hasAiTipProposal
+                                            primary: true
+                                            text: qsTr("Apply AI tip")
+                                            enabled: !gen.running
+                                            onClicked: gen.applyAiTip()
+                                        }
+                                        FlowButton {
+                                            objectName: "aiAssistApplyContact"
+                                            visible: gen.hasAiContactProposal
+                                            text: qsTr("Apply contact")
+                                            enabled: !gen.running
+                                            onClicked: gen.applyAiContact()
+                                        }
+                                        FlowButton {
+                                            objectName: "aiAssistDismiss"
+                                            visible: gen.hasAiTipProposal || gen.hasAiContactProposal || gen.aiDetections.length > 0
+                                            text: qsTr("Dismiss")
+                                            enabled: !gen.running
+                                            onClicked: gen.dismissAiTip()
+                                        }
+                                    }
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 8
+                                        Text {
+                                            textFormat: Text.PlainText
+                                            text: qsTr("Expected body point")
+                                            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                                        }
+                                        FlowCombo {
+                                            objectName: "aiAssistTipClass"
+                                            Layout.fillWidth: true
+                                            enabled: !gen.running
+                                            textRole: "label"; valueRole: "value"
+                                            model: gen.tipClasses.map((c) => ({ label: page.className(c), value: c }))
+                                            currentIndex: Math.max(0, indexOfValue(gen.tipClass))
+                                            onActivated: gen.tipClass = currentValue
+                                        }
+                                        HelpChip { key: "generator.tip-glans-penis"; Layout.alignment: Qt.AlignVCenter }
+                                    }
+                                    Text {
+                                        Layout.fillWidth: true
+                                        wrapMode: Text.WordWrap
+                                        textFormat: Text.PlainText
+                                        text: qsTr("Choose the expected body point for strict AI detection. Click a tag for a tip proposal; Shift-click for contact.")
+                                        color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 11
+                                    }
+                                }
                             }
                             // G4b Expert (closed by default): post-track knobs + Impulse mirror.
                             ColumnLayout {

@@ -1096,6 +1096,18 @@ private slots:
         QCOMPARE(pick->y, 20);
         QCOMPARE(QString::fromStdString(pick->label), QStringLiteral("penis"));
         QVERIFY(!PickExpectedTip(hits, "mouth"));
+        const auto breast = samn::ui::ContactClassForLabel("breast");
+        QVERIFY(breast);
+        QCOMPARE(QString::fromStdString(*breast), QStringLiteral("breasts"));
+        const auto nipples = samn::ui::ContactClassForLabel("nipples");
+        QVERIFY(nipples);
+        QCOMPARE(QString::fromStdString(*nipples), QStringLiteral("nipples"));
+        const auto mouth = samn::ui::ContactClassForLabel("mouth");
+        QVERIFY(mouth);
+        QCOMPARE(QString::fromStdString(*mouth), QStringLiteral("mouth"));
+        QVERIFY(!samn::ui::ContactClassForLabel("face"));
+        QVERIFY(!samn::ui::ContactClassForLabel("penis"));
+        QVERIFY(!samn::ui::ContactClassForLabel("glans"));
     }
 
     void suggestAiTipStaysPendingUntilApply() {
@@ -1167,6 +1179,107 @@ private slots:
         QVERIFY(!g.hasBox());
         QCOMPARE(g.status(), QStringLiteral("AI tip proposal dismissed."));
         QVERIFY(!g.applyAiTip());
+    }
+
+    void listAiDetectionsClickApplyDoesNotWriteUntilApply() {
+        GeneratorController g;
+        g.setAutoTip(false);
+        const auto restore = qScopeGuard([&] { g.setAutoTip(true); });
+        QVERIFY(g.openVideo(clip("ai_show_all.mp4", 8), false));
+        QVERIFY(!g.listAiDetections());  // no model
+        QVERIFY(!g.hasBox());
+        g.setFakeAiHitsForTest({QVariantMap{{"x", 20},
+                                            {"y", 30},
+                                            {"w", 40},
+                                            {"h", 50},
+                                            {"score", 0.9},
+                                            {"label", "penis"},
+                                            {"cls", 14}},
+                                QVariantMap{{"x", 80},
+                                            {"y", 10},
+                                            {"w", 28},
+                                            {"h", 24},
+                                            {"score", 0.8},
+                                            {"label", "breast"},
+                                            {"cls", 3}},
+                                QVariantMap{{"x", 4},
+                                            {"y", 4},
+                                            {"w", 24},
+                                            {"h", 24},
+                                            {"score", 0.5},
+                                            {"label", "face"},
+                                            {"cls", 1}}});
+        QVERIFY(g.listAiDetections());
+        QCOMPARE(g.aiDetections().size(), 3);
+        QVERIFY(!g.hasAiTipProposal());  // Show all does not auto-pick
+        QVERIFY(!g.hasAiContactProposal());
+        QVERIFY(!g.hasBox());
+        QVERIFY(g.contactAreas().isEmpty());
+        g.pickAiDetection(0);
+        QVERIFY(g.hasAiTipProposal());
+        QVERIFY(!g.hasBox());
+        QVERIFY(g.applyAiTip());
+        QCOMPARE(g.box(), QRect(20, 30, 40, 50));
+        QVERIFY(!g.hasAiTipProposal());
+        QCOMPARE(g.status(), QStringLiteral("Tip box applied from AI proposal."));
+    }
+
+    void shiftClickSafeAiTagAddsContactWithoutWritingTip() {
+        GeneratorController g;
+        g.setAutoTip(false);
+        const auto restore = qScopeGuard([&] { g.setAutoTip(true); });
+        QVERIFY(g.openVideo(clip("ai_shift_safe.mp4", 8), false));
+        g.setFakeAiHitsForTest({QVariantMap{{"x", 20},
+                                            {"y", 30},
+                                            {"w", 40},
+                                            {"h", 50},
+                                            {"score", 0.9},
+                                            {"label", "penis"},
+                                            {"cls", 14}},
+                                QVariantMap{{"x", 80},
+                                            {"y", 10},
+                                            {"w", 28},
+                                            {"h", 24},
+                                            {"score", 0.8},
+                                            {"label", "breast"},
+                                            {"cls", 3}}});
+        QVERIFY(g.listAiDetections());
+        QVERIFY(!g.hasBox());
+        QVERIFY(g.pickAiDetectionAsContact(1));  // breast → breasts, Contact vib on
+        QVERIFY(!g.hasBox());
+        QVERIFY(!g.hasAiTipProposal());
+        QCOMPARE(g.contactAreas().size(), 1);
+        QCOMPARE(g.contactAreas().first().toMap().value("x").toInt(), 80);
+        QCOMPARE(g.contactAreas().first().toMap().value("cls").toString(), QStringLiteral("breasts"));
+        QVERIFY(!g.hasAiContactProposal());
+    }
+
+    void shiftClickUnsafeAiTagNeedsApplyContact() {
+        GeneratorController g;
+        g.setAutoTip(false);
+        const auto restore = qScopeGuard([&] { g.setAutoTip(true); });
+        QVERIFY(g.openVideo(clip("ai_shift_face.mp4", 8), false));
+        const QRect before = g.box();
+        g.setFakeAiHitsForTest({QVariantMap{{"x", 12},
+                                            {"y", 14},
+                                            {"w", 32},
+                                            {"h", 32},
+                                            {"score", 0.6},
+                                            {"label", "face"},
+                                            {"cls", 1}}});
+        QVERIFY(g.listAiDetections());
+        QVERIFY(!g.pickAiDetectionAsContact(0));  // face is not a safe contact class
+        QVERIFY(g.hasAiContactProposal());
+        QVERIFY(g.contactAreas().isEmpty());
+        QCOMPARE(g.box(), before);
+        QVERIFY(!g.hasBox());
+        QVERIFY(g.applyAiContact());
+        QCOMPARE(g.contactAreas().size(), 1);
+        QCOMPARE(g.contactAreas().first().toMap().value("x").toInt(), 12);
+        QCOMPARE(g.contactAreas().first().toMap().value("cls").toString(), QStringLiteral("nipples"));
+        QVERIFY(!g.hasAiContactProposal());
+        QVERIFY(!g.hasBox());
+        QCOMPARE(g.status(), QStringLiteral("Contact area applied from AI proposal."));
     }
 
     void suggestAiTipOnTinyOnnxDoesNotWriteTheBox() {
