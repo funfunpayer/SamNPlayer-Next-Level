@@ -52,63 +52,62 @@ ApplicationWindow {
             GradientStop { position: 1; color: Theme.bgBottom }
         }
     }
-    // The ribbons are PNGs rendered once from bg-top.svg / bg-bottom.svg
-    // (QSvgRenderer, 2000 px wide): rasterizing the SVGs at every start took
-    // half a second and they popped in late (Owner 26 Oct).
-    // The silk bands of the Flow look in their corners, large and slowly
-    // drifting: blue from the top right, orange from the bottom left, behind
-    // every mode (Owner, 19 Oct: as strong as on the Training stage).
+    // Silk PNGs pre-rendered from bg-top.svg / bg-bottom.svg at 3200 px
+    // (runtime SVG was slow and popped in late — Owner 26 Oct). Crisp assets,
+    // quieter opacity (weniger ist mehr).
     readonly property bool silkDrift: win.visible && Qt.application.state === Qt.ApplicationActive && !Theme.reducedMotion
     Image {
         id: silkTop
         anchors.right: parent.right; anchors.top: parent.top
         anchors.rightMargin: -parent.width * 0.04 + driftX; anchors.topMargin: -parent.height * 0.03 + driftY
-        width: parent.width * 0.66; fillMode: Image.PreserveAspectFit
-        source: "assets/bg-top.png"; sourceSize.width: 2000
+        width: parent.width * 0.58; fillMode: Image.PreserveAspectFit
+        source: "assets/bg-top.png"; sourceSize.width: 3200
+        smooth: true; mipmap: true
         asynchronous: true
-        opacity: 0.92
+        opacity: 0.62
         property real driftX: 0
         property real driftY: 0
         SequentialAnimation on driftX {
             running: win.silkDrift; loops: Animation.Infinite
-            NumberAnimation { to: -win.width * 0.025; duration: 32000; easing.type: Easing.InOutSine }
+            NumberAnimation { to: -win.width * 0.02; duration: 32000; easing.type: Easing.InOutSine }
             NumberAnimation { to: 0; duration: 32000; easing.type: Easing.InOutSine }
         }
         SequentialAnimation on driftY {
             running: win.silkDrift; loops: Animation.Infinite
-            NumberAnimation { to: win.height * 0.02; duration: 32000; easing.type: Easing.InOutSine }
+            NumberAnimation { to: win.height * 0.015; duration: 32000; easing.type: Easing.InOutSine }
             NumberAnimation { to: 0; duration: 32000; easing.type: Easing.InOutSine }
         }
         SequentialAnimation on opacity {
             running: win.silkDrift; loops: Animation.Infinite
-            NumberAnimation { from: 0.78; to: 1.0; duration: 11000; easing.type: Easing.InOutSine }
-            NumberAnimation { to: 0.78; duration: 11000; easing.type: Easing.InOutSine }
+            NumberAnimation { from: 0.52; to: 0.68; duration: 11000; easing.type: Easing.InOutSine }
+            NumberAnimation { to: 0.52; duration: 11000; easing.type: Easing.InOutSine }
         }
     }
     Image {
         id: silkBottom
         anchors.left: parent.left; anchors.bottom: parent.bottom
         anchors.leftMargin: -parent.width * 0.03 + driftX; anchors.bottomMargin: -parent.height * 0.02 + driftY
-        width: parent.width * 0.58; fillMode: Image.PreserveAspectFit
-        source: "assets/bg-bottom.png"; sourceSize.width: 2000
+        width: parent.width * 0.50; fillMode: Image.PreserveAspectFit
+        source: "assets/bg-bottom.png"; sourceSize.width: 3200
+        smooth: true; mipmap: true
         asynchronous: true
-        opacity: 0.88
+        opacity: 0.55
         property real driftX: 0
         property real driftY: 0
         SequentialAnimation on driftX {
             running: win.silkDrift; loops: Animation.Infinite
-            NumberAnimation { to: win.width * 0.03; duration: 40000; easing.type: Easing.InOutSine }
+            NumberAnimation { to: win.width * 0.022; duration: 40000; easing.type: Easing.InOutSine }
             NumberAnimation { to: 0; duration: 40000; easing.type: Easing.InOutSine }
         }
         SequentialAnimation on driftY {
             running: win.silkDrift; loops: Animation.Infinite
-            NumberAnimation { to: win.height * 0.02; duration: 40000; easing.type: Easing.InOutSine }
+            NumberAnimation { to: win.height * 0.015; duration: 40000; easing.type: Easing.InOutSine }
             NumberAnimation { to: 0; duration: 40000; easing.type: Easing.InOutSine }
         }
         SequentialAnimation on opacity {
             running: win.silkDrift; loops: Animation.Infinite
-            NumberAnimation { from: 0.72; to: 0.95; duration: 14000; easing.type: Easing.InOutSine }
-            NumberAnimation { to: 0.72; duration: 14000; easing.type: Easing.InOutSine }
+            NumberAnimation { from: 0.45; to: 0.60; duration: 14000; easing.type: Easing.InOutSine }
+            NumberAnimation { to: 0.45; duration: 14000; easing.type: Easing.InOutSine }
         }
     }
 

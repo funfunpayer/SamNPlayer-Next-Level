@@ -31,7 +31,9 @@ QImage IconProvider::requestImage(const QString& id, QSize* size, const QSize& r
     QSvgRenderer svg(svgFor(name, color.isValid() ? color : QColor(Qt::white)));
     if (!svg.isValid()) return img;  // unknown icon: empty, never a dummy
     QPainter p(&img);
-    p.setRenderHint(QPainter::Antialiasing);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    p.setRenderHint(QPainter::SmoothPixmapTransform, true);
+    p.setRenderHint(QPainter::TextAntialiasing, true);
     svg.render(&p);
     return img;
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QMetaObject>
 #include <QPainterPath>
 #include <QQuickPaintedItem>
 #include <QtQml/qqmlregistration.h>
@@ -27,6 +28,7 @@ signals:
 
 private:
     void rebuild();
+    void syncTextureSize();
     struct Word {
         QPainterPath path;
         QColor top, bottom, glow;
@@ -34,6 +36,7 @@ private:
     int pixelSize_ = 34;
     Word words_[3];
     double ascent_ = 0;
+    QMetaObject::Connection window_dpr_conn_;
 };
 
 }  // namespace samn::ui

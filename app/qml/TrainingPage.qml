@@ -302,7 +302,8 @@ Item {
                     objectName: "silkBridge"
                     visible: ctl.stage === "rings"
                     source: "assets/stage-ribbons.svg"
-                    sourceSize.width: 2000
+                    sourceSize.width: 3200
+                    smooth: true
                     fillMode: Image.Stretch
                     width: stage.width * 1.2; height: stage.height * 1.0
                     x: (stage.width - width) / 2 + dx; y: (stage.height - height) / 2 + stage.height * 0.04

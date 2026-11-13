@@ -4,6 +4,8 @@
 #include <QFontMetricsF>
 #include <QLinearGradient>
 #include <QPainter>
+#include <QQuickWindow>
+#include <cmath>
 
 namespace samn::ui {
 
@@ -14,7 +16,17 @@ constexpr double kPad = 8;
 
 WordmarkItem::WordmarkItem(QQuickItem* parent) : QQuickPaintedItem(parent) {
     setAntialiasing(true);
+    setMipmap(true);
+    setRenderTarget(QQuickPaintedItem::FramebufferObject);
     rebuild();
+    connect(this, &QQuickItem::widthChanged, this, &WordmarkItem::syncTextureSize);
+    connect(this, &QQuickItem::heightChanged, this, &WordmarkItem::syncTextureSize);
+    connect(this, &QQuickItem::windowChanged, this, [this](QQuickWindow* w) {
+        if (window_dpr_conn_) disconnect(window_dpr_conn_);
+        if (w)
+            window_dpr_conn_ = connect(w, &QQuickWindow::screenChanged, this, &WordmarkItem::syncTextureSize);
+        syncTextureSize();
+    });
 }
 
 void WordmarkItem::setPixelSize(int size) {
@@ -53,8 +65,17 @@ void WordmarkItem::rebuild() {
     update();
 }
 
+void WordmarkItem::syncTextureSize() {
+    const qreal dpr = window() ? window()->devicePixelRatio() : 1.0;
+    const int w = qMax(1, int(std::ceil(width() * dpr)));
+    const int h = qMax(1, int(std::ceil(height() * dpr)));
+    if (textureSize() != QSize(w, h)) setTextureSize(QSize(w, h));
+}
+
 void WordmarkItem::paint(QPainter* p) {
-    p->setRenderHint(QPainter::Antialiasing);
+    p->setRenderHint(QPainter::Antialiasing, true);
+    p->setRenderHint(QPainter::TextAntialiasing, true);
+    p->setRenderHint(QPainter::SmoothPixmapTransform, true);
     const double top = kPad + ascent_ * 0.18, bottom = kPad + ascent_ * 1.1;
     for (const Word& w : words_) {
         // The halo: wide, faint strokes under the letters.

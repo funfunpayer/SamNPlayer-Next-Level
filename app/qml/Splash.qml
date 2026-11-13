@@ -26,11 +26,9 @@ Window {
         Column {
             anchors.centerIn: parent
             spacing: 16
-            Image {
+            BrandLogo {
                 anchors.horizontalCenter: parent.horizontalCenter
-                source: "assets/logo.png"
-                width: 72; height: 72; fillMode: Image.PreserveAspectFit
-                sourceSize.width: 144
+                width: 72; height: 72
             }
             Text {
                 anchors.horizontalCenter: parent.horizontalCenter
