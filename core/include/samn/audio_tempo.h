@@ -124,4 +124,9 @@ struct PlaybackBpmGuess {
 PlaybackBpmGuess PickPlaybackAudioBpm(const TempoEstimate& tempo, const TempoReliability& reliability,
                                       const std::vector<double>& loudness, int step_ms = 50);
 
+// Improve fill spacing: Hz from a reliable onset tempo (PickPlaybackAudioBpm
+// source kOnsets), else 0 so FillGaps uses 100 ms. Playback BPM may fall back
+// to loudness; gap fill does not — a noisy peak is a bad stroke grid.
+double GapFillAudioHz(const PlaybackBpmGuess& guess);
+
 }  // namespace samn
