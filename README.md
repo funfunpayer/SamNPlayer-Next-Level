@@ -69,11 +69,20 @@ Generator with that video.
 
 ### Generator
 
-Make a script from your own video in five steps: video → tip & contact → feel → create → review.
+Make a script from your own video: choose a video → **Create finds the tip** → optional Feel → Review.
+You do not paint a motion path first. Opening a video starts Find tip by itself; Create does the same
+if there is no box yet. **Find tip** is the override when the box missed; **Suggest tip (AI)** stays a
+green proposal until **Apply**. **Show all AI tags** (when a model is present) lists boxes on this
+frame — click = tip proposal, Shift-click = contact; Apply is still required. After Find or Create,
+the teal overlay follows the tip as you scrub. Create searches several time windows and keeps the
+clearest stroke when an early window is only marginal. Feel shows Style and For device; extra
+feel/contact sits behind More. Advanced stays closed.
+
 Classical tracking does the work; nothing is written without you. The Generator is also the
 **Editor**: open any script, drag, add or delete points, undo / redo, and prepare it for a device.
 Several videos can wait in a queue. On the review card, **Improve script** can trim Start/End
-(0 = leave that end), fill long gaps and heal tracker-loss windows.
+(0 = leave that end), fill long gaps and heal tracker-loss windows, and **Optimize** adapts for
+Any device or Sam Neo 2 (Off keeps the script as created).
 
 <p align="center">
   <img src="docs/media/gui-generator.png" alt="Generator mode — steps, feel settings, Create, curves" width="900" />

@@ -2,11 +2,19 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
+**Last update:** 13 Nov 2026, Cursor, branch `cursor/user-handbook-635a`: Everyday Create docs after #249 Use audio on main. Do not touch feel_heatbands / Speech-Hold / `.sam`.
 
+## Handover: user handbook / README / help chips (13 Nov)
 
-**Last update:** 13 Nov 2026, Cursor, branch `cursor/fungen2-use-audio-635a`: Use audio on Review (rebased after #248). Do not touch feel_heatbands / Speech-Hold / handbook / `.sam`.
+Owner: docs besser machen. Match what is on main; say coming or omit for open PRs. No feel_heatbands / Speech-Hold / `.sam` rewrite.
 
-## Handover: Use audio (13 Nov)
+- **On main:** Everyday Create (#250) — video → Create finds the tip → optional Feel → Review; Optimize on Review (Off / Any device / Sam Neo 2); Advanced closed. Live tip overlay (#247) — teal box follows the playhead after Find/Create. Create multi-window tip resolve (#248) — Create searches several time windows; no box to paint. Use audio on Review (#249) — fill gaps to tempo + bake vib from sound.
+- **Docs:** README Generator (not five-step tip-paint first). Handbook Everyday Create + Optimize on Review, Find tip override, Suggest tip (AI) Apply, Show all AI tags (click tip / Shift contact), AI re-acquire when a model is present, Create keeps the clearest tip window when an early pick is marginal. HelpTexts `gen-optimize-target`, `gen-autoroi`, `generator.time-s` (and other drag-first / Step-N tip keys).
+- **On main (also):** POV hint (#251) — Feel/Player close-up vs wide; never a second tip.
+- **Still open (coming):** Training font/layout (#252), hybrid reacquire (#254), AI assist Show-all (#255), tip-resolve best window (#256).
+- **Tests:** `shell_qml_test` help-key placement unchanged (texts only; no keys moved).
+
+## Handover: Use audio (13 Nov) — merged #249
 
 Owner: sound align / sound→vibration existed, but the settings were scattered. One Review **Use audio** block.
 
@@ -15,21 +23,27 @@ Owner: sound align / sound→vibration existed, but the settings were scattered.
 - **Vibrator default:** unset → `sound+contact`. Saved `""` stays Motion only.
 - **Tests:** improveScriptSpacesFillByAudioHz, vibSourceDefaults…, QML Use audio toggles.
 
+## Handover: FunGen2 Create finds the tip (13 Nov) — merged #248
 
-## Handover: FunGen2 Create finds the tip (13 Nov)
-
-Owner: no manual tip required — Create finds it. Live overlay is #247 (on main). This slice is Create + queue. Do not touch feel_heatbands / Speech-Hold / handbook / `.sam`.
+Owner: no manual tip required — Create finds it. Live overlay is #247 (on main).
 
 - **Engine:** `ResolveTipForCreate` (`tip_resolve.h`) runs `FindTip` at 0, ~10 %, ~25 %, ~50 % of duration (plus the shown frame). If candidate #1 is below `kWeakTipScore` (0.05) it tries #2..#N (up to 6), like repair. Early-exit on the first usable pick. Fail closed: `only weak motion found`. `kWeakTipScore` moved here from `generate_queue.h`.
 - **Queue:** `GenerateQueueItem` uses the resolver (not a single FindTip). `QueueSettings.tip_max_seconds` is a test hook (0 = default 45 s/window). Tracking starts at the winning window (`start_ms`).
 - **Create:** no box → resolver. A weak auto/FindTip that Create was waiting for retries the resolver (`Retrying find…`). Optional Create-only AI seed: if motion resolve fails and ONNX/fake hits have a strong class match (score ≥ 0.5, glans ↔ penis), the box is installed without Apply. Suggest tip → Apply is unchanged (D-057). AI never writes the curve. Found boxes use `installBox(..., start_ms)` so the #247 preview path tracks from the winning window.
 - **UX:** empty / no box / openVideo / stepPrompt / coach: "Create finds the tip — no box to paint". Drag and Find tip are override only. Final fail: "Could not find the tip — Create again, or Find tip as override."
 - **Tests:** `tip_resolve_test` (candidate #2, still-then-moving window); queue still-intro; `createWithoutABoxFindsTheTipAndWrites` / retry / AI seed; QML Create enabled + copy.
-- **Left open:** Use audio (#249), AI assist Show-all tags, 0.7 AI-assist collapsible.
+- **Left open:** AI assist Show-all tags (#255), tip-resolve best (#256), 0.7 Tip+2nd / scene proposals.
 
 ## Handover: FunGen2 POV-Contact (13 Nov) — merged #251
 
 Owner: POV overlay on contact/feel path. `ClassifyTipPov` from tip path; Feel/Player hint when known; never a second ROI.
+
+- **Core:** `ClassifyTipPov` / `PovSignalsFromTip` splat the seed tip box (constant w/h, centred on each tracked sample) onto the 3×3 occupancy `ClassifyPov` already reads. Cheap: no video, no OpenCV. Fail closed (empty / zero size / full-frame large+split). One blob — never a second ROI (D-055). `AdvisePovContact` is copy only (`SuggestContact` / `CloseUp` / `WideView`).
+- **TrackBox:** still centres only. `TODO(MeasurePovSignals)` on `TrackResult`: per-frame box w/h (CSRT already has the box) or a 3×3 foreground of the whole frame. Until then the seed size is the weak stand-in.
+- **App:** Generator `povKind` / `povConfidence` / `povHint` after Find/Create/injected path (video size + `box_` + tip path). Player same from `.samn` trajectory + `contactMarks.tip`. First person with no contact area: "Close-up — a contact area may help." Known POV never overwrites the tip, never draws a partner box.
+- **QML:** dim `povHint` on the Everyday Feel strip (visible only when the kind is known — not a control) and on the Player View inspector next to contact marks.
+- **Tests:** `pov_test` (ClassifyTipPov first/third/unknown, advice, PovAt); `povKindFromInjectedTipPath`; `povKindFromStoredTipPath`; QML `povHintShowsWhenCloseUp` / `viewPovHintWhenKnown`.
+- **Left open:** `MeasurePovSignals` from video, `.scene.json`, scene_roles, ONNX, storing POV in the document.
 
 ## Handover: Everyday Create surface (13 Nov) — merged #250
 
