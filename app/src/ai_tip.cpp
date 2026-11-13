@@ -24,44 +24,53 @@ std::vector<std::string> LoadStudentNames() {
     return LoadJsonClassNames(samn::config_dir() / "models" / "student" / "classes.json");
 }
 
-std::vector<std::string> LoadFunGenNames() {
-    // Optional override beside the weights (custom FunGen export order).
-    auto names = LoadJsonClassNames(samn::config_dir() / "models" / "fungen" / "classes.json");
+std::vector<std::string> LoadYoloNames() {
+    auto names = LoadJsonClassNames(samn::config_dir() / "models" / "yolo" / "classes.json");
+    if (!names.empty()) return names;
+    names = LoadJsonClassNames(samn::config_dir() / "models" / "yolo.classes.json");
+    if (!names.empty()) return names;
+    // Legacy FunGen drop folder name.
+    names = LoadJsonClassNames(samn::config_dir() / "models" / "fungen" / "classes.json");
     if (!names.empty()) return names;
     names = LoadJsonClassNames(samn::config_dir() / "models" / "fungen.classes.json");
     if (!names.empty()) return names;
-    return FunGenClassNames();
+    return YoloBodyClassNames();
 }
 
-std::filesystem::path FunGenOnnxPath() {
+std::filesystem::path YoloOnnxPath() {
     try {
         const samn::Settings s;
-        const auto v = s.get("generator.ai_fungen_path");
-        if (v.is_string()) {
+        for (const char* key : {"generator.ai_yolo_path", "generator.ai_fungen_path"}) {
+            const auto v = s.get(key);
+            if (!v.is_string()) continue;
             const auto p = std::filesystem::path(v.get<std::string>());
             std::error_code ec;
             if (!p.empty() && std::filesystem::exists(p, ec)) return p;
         }
     } catch (const std::exception&) {
     }
+    const auto yolo = samn::config_dir() / "models" / "yolo.onnx";
+    std::error_code ec;
+    if (std::filesystem::exists(yolo, ec)) return yolo;
+    // Legacy filename from an earlier drop-in path.
     return samn::config_dir() / "models" / "fungen.onnx";
 }
 
 }  // namespace
 
-const std::vector<std::string>& FunGenClassNames() {
-    // ack00gar/FunGen config/constants.py CLASS_NAMES_TO_IDS
+const std::vector<std::string>& YoloBodyClassNames() {
+    // FunGen-compatible order (ack00gar CLASS_NAMES_TO_IDS) — common Discord YOLO exports.
     static const std::vector<std::string> k{
         "face", "hand", "penis", "glans", "pussy", "butt", "anus", "breast", "navel", "foot", "hips center",
     };
     return k;
 }
 
-std::string FunGenToLabel(std::string_view c) {
+std::string MapYoloBodyLabel(std::string_view c) {
     if (c == "penis") return "penis";
     if (c == "glans") return "glans";
     if (c == "breast") return "breast";
-    if (c == "face") return "mouth";  // FunGen oral / BJ interaction uses face
+    if (c == "face") return "mouth";  // oral / BJ interaction often labeled face
     if (c == "hand") return "hand";
     if (c == "pussy") return "pussy";
     if (c == "butt") return "butt";
@@ -78,13 +87,12 @@ AiTipReady AiTipModelStatus() {
 std::optional<AiTipModel> FindAiTipModel() {
     if (!samn::vision::OnnxDetector::Available()) return std::nullopt;
     const auto student = samn::config_dir() / "models" / "student" / "student.onnx";
-    const auto fungen = FunGenOnnxPath();
+    const auto yolo = YoloOnnxPath();
     const auto nudenet = samn::config_dir() / "models" / "nudenet.onnx";
     std::error_code ec;
     if (std::filesystem::exists(student, ec))
         return AiTipModel{student, AiTipKind::kStudent, false, LoadStudentNames()};
-    if (std::filesystem::exists(fungen, ec))
-        return AiTipModel{fungen, AiTipKind::kFunGen, false, LoadFunGenNames()};
+    if (std::filesystem::exists(yolo, ec)) return AiTipModel{yolo, AiTipKind::kYolo, false, LoadYoloNames()};
     if (std::filesystem::exists(nudenet, ec)) return AiTipModel{nudenet, AiTipKind::kNudeNet, true, {}};
     return std::nullopt;
 }
@@ -103,7 +111,7 @@ std::string LabelForDetection(const samn::vision::Detection& d, const AiTipModel
     }
     if (size_t(d.cls) >= model.names.size()) return {};
     const std::string& raw = model.names[size_t(d.cls)];
-    if (model.kind == AiTipKind::kFunGen) return FunGenToLabel(raw);
+    if (model.kind == AiTipKind::kYolo) return MapYoloBodyLabel(raw);
     return raw;
 }
 

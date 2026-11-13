@@ -79,15 +79,15 @@ class LabelController : public QObject {
     Q_PROPERTY(QStringList teacherModels READ teacherModels NOTIFY teacherChanged)
     Q_PROPERTY(bool teacherBusy READ teacherBusy NOTIFY teacherChanged)
     Q_PROPERTY(QString teacherStatus READ teacherStatus NOTIFY teacherChanged)
-    // Who answers "Ask the teacher": "server" (above), "student" (ours) or "nudenet" (NudeNet
-    // on this computer with ONNX Runtime). Kept as aitrain.teacher.kind.
+    // Who answers "Ask the teacher": "server", "student", "nudenet", or "yolo"
+    // (local YOLO .onnx). Kept as aitrain.teacher.kind.
     Q_PROPERTY(QString teacherKind READ teacherKind WRITE setTeacherKind NOTIFY teacherChanged)
     // Whether this build runs models itself (ONNX Runtime).
     Q_PROPERTY(bool localTeacherAvailable READ localTeacherAvailable CONSTANT)
     // NudeNet's model file, "" until fetched or chosen (aitrain.nudenet.path).
     Q_PROPERTY(QString nudenetPath READ nudenetPath NOTIFY teacherChanged)
-    // FunGen YOLO drop-in for Generator Suggest tip (models/fungen.onnx).
-    Q_PROPERTY(QString fungenPath READ fungenPath NOTIFY teacherChanged)
+    // YOLO drop-in for Generator + Ask-the-teacher (models/yolo.onnx).
+    Q_PROPERTY(QString yoloPath READ yoloPath NOTIFY teacherChanged)
     // The teachers going through the clip (votes): busy and 0..100.
     Q_PROPERTY(bool clipTeaching READ clipTeaching NOTIFY teacherChanged)
     Q_PROPERTY(int clipTeachProgress READ clipTeachProgress NOTIFY teacherChanged)
@@ -202,10 +202,10 @@ public:
     // A NudeNet model file the user already has (it must load and have
     // NudeNet's 18 classes); made the teacher.
     Q_INVOKABLE bool chooseNudeNet(const QString& pathOrUrl);
-    QString fungenPath() const;
-    // FunGen YOLO .onnx from Discord (YOLOv8 head). Copied to
-    // models/fungen.onnx for Generator Suggest tip / hybrid; not a teacher.
-    Q_INVOKABLE bool chooseFunGen(const QString& pathOrUrl);
+    QString yoloPath() const;
+    // YOLO .onnx (YOLOv8 head, e.g. FunGen Discord export). Copied to
+    // models/yolo.onnx for Generator Suggest tip / hybrid and Ask-the-teacher.
+    Q_INVOKABLE bool chooseYolo(const QString& pathOrUrl);
     // Tests: where NudeNet is fetched from.
     void setNudeNetSource(const ModelSource& source) { nudenet_source_ = source; }
     QString teacherStatus() const { return teacher_status_; }
@@ -270,14 +270,17 @@ private:
     bool startServer(const QImage& frame, const std::vector<std::string>& classes, BoxesDone done);
     bool startLocal(const QImage& frame, const std::vector<std::string>& classes, BoxesDone done);
     bool startStudent(const QImage& frame, const std::vector<std::string>& classes, BoxesDone done);
+    bool startYolo(const QImage& frame, const std::vector<std::string>& classes, BoxesDone done);
     struct LocalJob {
         std::shared_ptr<samn::vision::OnnxDetector> det;
         std::filesystem::path path;
-        std::vector<std::string> names;  // the student's classes; NudeNet maps its own
+        std::vector<std::string> names;  // student / YOLO raw names; NudeNet maps its own
         bool nudenet = false;
+        bool yolo_body = false;  // MapYoloBodyLabel on names[cls]
         BoxesDone done;
     };
     LocalJob studentJob(BoxesDone done);
+    LocalJob yoloJob(BoxesDone done);
     bool startLocalJobs(const QImage& frame, const std::vector<std::string>& classes, std::vector<LocalJob> jobs);
     std::shared_ptr<samn::vision::OnnxDetector> student_detector_;
     QDateTime student_stamp_;
@@ -295,7 +298,9 @@ private:
     QStringList clip_errors_;
     QString teacher_kind_ = QStringLiteral("server");
     QString nudenet_path_;
-    QString fungen_path_;
+    QString yolo_path_;
+    std::shared_ptr<samn::vision::OnnxDetector> yolo_detector_;
+    QDateTime yolo_stamp_;
     ModelSource nudenet_source_ = NudeNetSource();
     int model_download_ = -1;
     QNetworkReply* download_reply_ = nullptr;

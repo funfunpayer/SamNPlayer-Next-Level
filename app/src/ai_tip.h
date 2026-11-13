@@ -1,6 +1,6 @@
-// Shared student / FunGen YOLO / NudeNet lookup for Generator AI tip
-// proposals and for hybrid re-acquire (same documented paths). A hit is a
-// proposal only — the tip box is not written until the user Applies (D-057).
+// Shared student / YOLO / NudeNet lookup for Generator AI tip proposals and
+// for hybrid re-acquire (same documented paths). A hit is a proposal only —
+// the tip box is not written until the user Applies (D-057).
 #pragma once
 
 #include <filesystem>
@@ -15,7 +15,7 @@ namespace samn::ui {
 
 enum class AiTipKind {
     kStudent,  // RF-DETR student.onnx + classes.json
-    kFunGen,   // FunGen YOLO .onnx (user-supplied Discord weights)
+    kYolo,     // user YOLO .onnx (e.g. FunGen Discord weights) + optional classes.json
     kNudeNet,  // NudeNet teacher export
 };
 
@@ -23,7 +23,7 @@ struct AiTipModel {
     std::filesystem::path path;
     AiTipKind kind = AiTipKind::kStudent;
     bool nudenet = false;               // kind == kNudeNet (kept for call sites)
-    std::vector<std::string> names;     // student / FunGen class names; unused for NudeNet
+    std::vector<std::string> names;     // student / YOLO class names; unused for NudeNet
 };
 
 struct AiTipHit {
@@ -36,22 +36,23 @@ struct AiTipHit {
 enum class AiTipReady {
     kReady,
     kNoOnnx,   // this build has no ONNX Runtime
-    kNoModel,  // no student / FunGen / NudeNet model on disk
+    kNoModel,  // no student / YOLO / NudeNet model on disk
 };
 
-// Documented paths (priority: student → FunGen → NudeNet):
+// Documented paths (priority: student → YOLO → NudeNet):
 //   config_dir()/models/student/student.onnx
-//   config_dir()/models/fungen.onnx  (+ optional models/fungen/classes.json)
+//   config_dir()/models/yolo.onnx  (+ optional models/yolo/classes.json)
 //   config_dir()/models/nudenet.onnx
-// Optional override: settings key generator.ai_fungen_path (absolute file).
+// Optional override: settings key generator.ai_yolo_path (absolute file).
+// Legacy drop path models/fungen.onnx is still read if yolo.onnx is absent.
 AiTipReady AiTipModelStatus();
 std::optional<AiTipModel> FindAiTipModel();
 
-// FunGen's default YOLO class order (ack00gar CLASS_NAMES_TO_IDS).
-const std::vector<std::string>& FunGenClassNames();
-// Map a FunGen class name onto our tip / contact labels. Empty when unused
+// Default YOLO body-part class order (FunGen-compatible CLASS_NAMES_TO_IDS).
+const std::vector<std::string>& YoloBodyClassNames();
+// Map a YOLO body class name onto our tip / contact labels. Empty when unused
 // (anus, navel, hips center, …). face → mouth for oral contact.
-std::string FunGenToLabel(std::string_view fungen_class);
+std::string MapYoloBodyLabel(std::string_view yolo_class);
 
 bool LabelsMatchTip(std::string_view label, std::string_view want);
 std::string LabelForDetection(const samn::vision::Detection& d, const AiTipModel& model);

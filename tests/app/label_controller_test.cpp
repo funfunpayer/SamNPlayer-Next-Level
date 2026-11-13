@@ -542,19 +542,20 @@ private slots:
         QCOMPARE(again.nudenetPath(), data + "/tiny_nudenet.onnx");
     }
 
-    void chooseFunGenCopiesYoloForGenerator() {
+    void chooseYoloCopiesForGeneratorAndTeacher() {
         if (!samn::vision::OnnxDetector::Available()) return;
         const QString data = QStringLiteral(SAMN_VISION_TESTDATA);
         LabelController c;
-        QVERIFY(c.fungenPath().isEmpty());
-        QVERIFY(!c.chooseFunGen(data + "/tiny_detr.onnx"));  // student DETR rejected
+        QVERIFY(c.yoloPath().isEmpty());
+        QVERIFY(!c.chooseYolo(data + "/tiny_detr.onnx"));  // student DETR rejected
         QVERIFY(c.teacherStatus().contains(QLatin1String("student")) ||
                 c.teacherStatus().contains(QLatin1String("DETR")));
-        QVERIFY(c.chooseFunGen(data + "/tiny_yolo.onnx"));
-        QVERIFY(c.fungenPath().endsWith(QStringLiteral("fungen.onnx")));
-        QVERIFY(QFileInfo::exists(c.fungenPath()));
-        QCOMPARE(samn::Settings().get("generator.ai_fungen_path").get<std::string>(),
-                 c.fungenPath().toStdString());
+        QVERIFY(c.chooseYolo(data + "/tiny_yolo.onnx"));
+        QVERIFY(c.yoloPath().endsWith(QStringLiteral("yolo.onnx")));
+        QVERIFY(QFileInfo::exists(c.yoloPath()));
+        QCOMPARE(c.teacherKind(), QStringLiteral("yolo"));
+        QCOMPARE(samn::Settings().get("generator.ai_yolo_path").get<std::string>(),
+                 c.yoloPath().toStdString());
     }
 
     // Votes (D-155 step 4, Owner 20 Oct): what both teachers see is plain, what

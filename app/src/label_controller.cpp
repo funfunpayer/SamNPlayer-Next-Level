@@ -22,6 +22,7 @@
 #include <filesystem>
 #include <fstream>
 
+#include "ai_tip.h"
 #include "audio_level.h"
 #include "frame_cache.h"
 #include "qt_paths.h"
@@ -66,13 +67,20 @@ LabelController::LabelController(QObject* parent) : QObject(parent) {
         teacher_url_ = text("aitrain.teacher.url");
         teacher_model_ = text("aitrain.teacher.model");
         teacher_key_ = text("aitrain.teacher.key");
-        if (const QString k = text("aitrain.teacher.kind"); k == QLatin1String("nudenet") || k == QLatin1String("student")) teacher_kind_ = k;
+        if (const QString k = text("aitrain.teacher.kind");
+            k == QLatin1String("nudenet") || k == QLatin1String("student") || k == QLatin1String("yolo"))
+            teacher_kind_ = k;
         if (const auto v = settings().get("aitrain.retrack_after_drag", true); v.is_boolean()) retrack_after_drag_ = v.get<bool>();
         nudenet_path_ = text("aitrain.nudenet.path");
-        fungen_path_ = text("generator.ai_fungen_path");
-        if (fungen_path_.isEmpty()) {
-            const QString drop = QString::fromStdU16String((samn::config_dir() / "models" / "fungen.onnx").u16string());
-            if (QFileInfo::exists(drop)) fungen_path_ = drop;
+        yolo_path_ = text("generator.ai_yolo_path");
+        if (yolo_path_.isEmpty()) yolo_path_ = text("generator.ai_fungen_path");  // legacy key
+        if (yolo_path_.isEmpty()) {
+            const QString drop = QString::fromStdU16String((samn::config_dir() / "models" / "yolo.onnx").u16string());
+            if (QFileInfo::exists(drop)) yolo_path_ = drop;
+        }
+        if (yolo_path_.isEmpty()) {
+            const QString legacy = QString::fromStdU16String((samn::config_dir() / "models" / "fungen.onnx").u16string());
+            if (QFileInfo::exists(legacy)) yolo_path_ = legacy;
         }
     } catch (const std::exception&) {
         // Unreadable settings: start without a teacher.
@@ -214,7 +222,7 @@ bool LabelController::startLocal(const QImage& frame, const std::vector<std::str
         return false;
     }
     if (!detector_) detector_ = std::make_shared<samn::vision::OnnxDetector>();
-    return startLocalJobs(frame, classes, {{detector_, FsPath(path), {}, true, done}});
+    return startLocalJobs(frame, classes, {{detector_, FsPath(path), {}, true, false, done}});
 }
 
 bool LabelController::startStudent(const QImage& frame, const std::vector<std::string>& classes, BoxesDone done) {
@@ -240,7 +248,39 @@ LabelController::LocalJob LabelController::studentJob(BoxesDone done) {
     }
     std::vector<std::string> names;
     for (const QString& c : studentClasses()) names.push_back(c.toStdString());
-    return {student_detector_, FsPath(path), names, false, done};
+    return {student_detector_, FsPath(path), names, false, false, done};
+}
+
+LabelController::LocalJob LabelController::yoloJob(BoxesDone done) {
+    const QString path = yoloPath();
+    const QDateTime stamp = QFileInfo(path).lastModified();
+    if (!yolo_detector_ || stamp != yolo_stamp_) {
+        yolo_detector_ = std::make_shared<samn::vision::OnnxDetector>();
+        yolo_stamp_ = stamp;
+    }
+    std::vector<std::string> names = YoloBodyClassNames();
+    const auto custom = samn::config_dir() / "models" / "yolo" / "classes.json";
+    if (QFileInfo::exists(QString::fromStdU16String(custom.u16string()))) {
+        QFile f(QString::fromStdU16String(custom.u16string()));
+        if (f.open(QIODevice::ReadOnly)) {
+            names.clear();
+            for (const QJsonValue& v : QJsonDocument::fromJson(f.readAll()).object().value("classes").toArray())
+                names.push_back(v.toString().toStdString());
+        }
+    }
+    return {yolo_detector_, FsPath(path), names, false, true, done};
+}
+
+bool LabelController::startYolo(const QImage& frame, const std::vector<std::string>& classes, BoxesDone done) {
+    if (!localTeacherAvailable()) {
+        setTeacherStatus(tr("This build cannot run models itself (no ONNX Runtime)."));
+        return false;
+    }
+    if (yoloPath().isEmpty()) {
+        setTeacherStatus(tr("Choose a YOLO .onnx first (Teachers and steps)."));
+        return false;
+    }
+    return startLocalJobs(frame, classes, {yoloJob(done)});
 }
 
 bool LabelController::startLocalJobs(const QImage& frame, const std::vector<std::string>& classes, std::vector<LocalJob> jobs) {
@@ -270,7 +310,8 @@ bool LabelController::startLocalJobs(const QImage& frame, const std::vector<std:
                         const auto& names = samn::vision::NudeNetClasses();
                         if (d.cls >= 0 && size_t(d.cls) < names.size()) label = samn::vision::NudeNetToLabel(names[size_t(d.cls)]);
                     } else if (d.cls >= 0 && size_t(d.cls) < job.names.size()) {
-                        label = job.names[size_t(d.cls)];  // the student was trained on our classes
+                        label = job.names[size_t(d.cls)];
+                        if (job.yolo_body) label = MapYoloBodyLabel(label);
                     }
                     if (label.empty() || std::find(classes.begin(), classes.end(), label) == classes.end()) continue;
                     r.boxes.push_back({label, {d.box.x * sx, d.box.y * sy, d.box.width * sx, d.box.height * sy}});
@@ -338,14 +379,22 @@ bool LabelController::askTeacher() {
     const QString at = QString::number(ms / 1000.0, 'f', 1) + " s";
     const bool local = teacher_kind_ == QLatin1String("nudenet");
     const bool student = teacher_kind_ == QLatin1String("student");
-    const QString who = local ? QStringLiteral("NudeNet") : student ? tr("our student") : teacher_model_;
-    const std::string source = local ? "teacher:nudenet" : student ? "teacher:student" : "teacher:" + teacher_model_.toStdString();
+    const bool yolo = teacher_kind_ == QLatin1String("yolo");
+    const QString who = local     ? QStringLiteral("NudeNet")
+                        : student ? tr("our student")
+                        : yolo    ? QStringLiteral("YOLO")
+                                  : teacher_model_;
+    const std::string source = local     ? "teacher:nudenet"
+                               : student ? "teacher:student"
+                               : yolo    ? "teacher:yolo"
+                                         : "teacher:" + teacher_model_.toStdString();
     const auto done = [this, ms, who, source](std::optional<std::vector<samn::TeacherBox>> boxes, const QString& error) {
         if (!boxes) setTeacherStatus(tr("No answer from %1: %2").arg(who, error));
         else applyProposals(ms, *boxes, source, who);
     };
     const bool started = local     ? startLocal(frame_, teacherClasses(), done)
                          : student ? startStudent(frame_, teacherClasses(), done)
+                         : yolo    ? startYolo(frame_, teacherClasses(), done)
                                    : startServer(frame_, teacherClasses(), done);
     if (started) setTeacherStatus(tr("%1 is looking at %2 …").arg(who, at));
     return started;
@@ -358,8 +407,9 @@ bool LabelController::startVote(const QImage& frame, VoteDone done, bool skipSer
     const bool server = !skipServer && !teacher_url_.isEmpty() && !teacher_model_.isEmpty();
     const bool local = !skipLocal && localTeacherAvailable() && !nudenetPath().isEmpty();
     const bool student = !skipLocal && localTeacherAvailable() && !studentPath().isEmpty();
-    if (!server && !local && !student) {
-        setTeacherStatus(tr("Set up a teacher first: NudeNet here or a model server (Teachers and steps)."));
+    const bool yolo = !skipLocal && localTeacherAvailable() && !yoloPath().isEmpty();
+    if (!server && !local && !student && !yolo) {
+        setTeacherStatus(tr("Set up a teacher first: NudeNet, YOLO, student, or a model server (Teachers and steps)."));
         return false;
     }
     struct State {
@@ -376,19 +426,29 @@ bool LabelController::startVote(const QImage& frame, VoteDone done, bool skipSer
         };
     };
     // Counted before either starts: a teacher may answer before the other is asked.
-    state->pending = int(server) + int(local) + int(student);
+    state->pending = int(server) + int(local) + int(student) + int(yolo);
     if (server && !startServer(frame, classes, answer(teacher_model_.toStdString(), classes))) --state->pending;
     // The local models run in one worker, one after the other.
     std::vector<LocalJob> jobs;
     if (local) {
         if (!detector_) detector_ = std::make_shared<samn::vision::OnnxDetector>();
-        jobs.push_back({detector_, FsPath(nudenetPath()), {}, true, answer("nudenet", localClasses(classes))});
+        jobs.push_back({detector_, FsPath(nudenetPath()), {}, true, false, answer("nudenet", localClasses(classes))});
     }
     if (student) {
         std::vector<std::string> sees;
         for (const QString& c : studentClasses())
             if (std::find(classes.begin(), classes.end(), c.toStdString()) != classes.end()) sees.push_back(c.toStdString());
         jobs.push_back(studentJob(answer("student", sees)));
+    }
+    if (yolo) {
+        std::vector<std::string> sees;
+        for (const auto& raw : YoloBodyClassNames()) {
+            const std::string label = MapYoloBodyLabel(raw);
+            if (!label.empty() && std::find(classes.begin(), classes.end(), label) != classes.end() &&
+                std::find(sees.begin(), sees.end(), label) == sees.end())
+                sees.push_back(label);
+        }
+        jobs.push_back(yoloJob(answer("yolo", sees)));
     }
     if (!jobs.empty() && !startLocalJobs(frame, classes, jobs)) state->pending -= int(jobs.size());
     return state->pending > 0;
@@ -466,7 +526,9 @@ void LabelController::teachNextFrame() {
         // A teacher that failed once sits out the rest of the run: an
         // unreachable server would otherwise cost its timeout at every frame.
         for (const auto& e : errors) {
-            if (e.startsWith(QLatin1String("nudenet: ")) || e.startsWith(QLatin1String("student: "))) clip_skip_local_ = true;
+            if (e.startsWith(QLatin1String("nudenet: ")) || e.startsWith(QLatin1String("student: ")) ||
+                e.startsWith(QLatin1String("yolo: ")))
+                clip_skip_local_ = true;
             else clip_skip_server_ = true;
             if (!clip_errors_.contains(e)) clip_errors_ << e;
         }
@@ -505,7 +567,10 @@ void LabelController::finishTeachClip() {
 }
 
 void LabelController::setTeacherKind(const QString& kind) {
-    const QString k = (kind == QLatin1String("nudenet") || kind == QLatin1String("student")) ? kind : QStringLiteral("server");
+    const QString k =
+        (kind == QLatin1String("nudenet") || kind == QLatin1String("student") || kind == QLatin1String("yolo"))
+            ? kind
+            : QStringLiteral("server");
     if (k == teacher_kind_) return;
     teacher_kind_ = k;
     saveSetting("aitrain.teacher.kind", k);
@@ -605,14 +670,16 @@ bool LabelController::chooseNudeNet(const QString& pathOrUrl) {
     return true;
 }
 
-QString LabelController::fungenPath() const {
-    if (!fungen_path_.isEmpty() && QFileInfo::exists(fungen_path_)) return fungen_path_;
-    const QString drop = QString::fromStdU16String((samn::config_dir() / "models" / "fungen.onnx").u16string());
+QString LabelController::yoloPath() const {
+    if (!yolo_path_.isEmpty() && QFileInfo::exists(yolo_path_)) return yolo_path_;
+    const QString drop = QString::fromStdU16String((samn::config_dir() / "models" / "yolo.onnx").u16string());
     if (QFileInfo::exists(drop)) return drop;
+    const QString legacy = QString::fromStdU16String((samn::config_dir() / "models" / "fungen.onnx").u16string());
+    if (QFileInfo::exists(legacy)) return legacy;
     return {};
 }
 
-bool LabelController::chooseFunGen(const QString& pathOrUrl) {
+bool LabelController::chooseYolo(const QString& pathOrUrl) {
     if (local_busy_) return false;
     if (!localTeacherAvailable()) {
         setTeacherStatus(tr("This build cannot run models itself (no ONNX Runtime)."));
@@ -626,27 +693,31 @@ bool LabelController::chooseFunGen(const QString& pathOrUrl) {
         return false;
     }
     if (det->isDetr()) {
-        setTeacherStatus(tr("That looks like our student (DETR), not a FunGen YOLO .onnx."));
+        setTeacherStatus(tr("That looks like our student (DETR), not a YOLO .onnx."));
         return false;
     }
     if (det->classCount() < 2) {
-        setTeacherStatus(tr("That YOLO model has too few classes for FunGen."));
+        setTeacherStatus(tr("That YOLO model has too few classes."));
         return false;
     }
     const auto destDir = samn::config_dir() / "models";
     std::error_code ec;
     std::filesystem::create_directories(destDir, ec);
-    const QString dest = QString::fromStdU16String((destDir / "fungen.onnx").u16string());
+    const QString dest = QString::fromStdU16String((destDir / "yolo.onnx").u16string());
     if (QFileInfo(path).canonicalFilePath() != QFileInfo(dest).canonicalFilePath()) {
         QFile::remove(dest);
         if (!QFile::copy(path, dest)) {
-            setTeacherStatus(tr("Could not copy the model into models/fungen.onnx."));
+            setTeacherStatus(tr("Could not copy the model into models/yolo.onnx."));
             return false;
         }
     }
-    fungen_path_ = dest;
-    saveSetting("generator.ai_fungen_path", dest);
-    setTeacherStatus(tr("FunGen YOLO ready for Generator Suggest tip (models/fungen.onnx). Not used as Ask-the-teacher."));
+    yolo_path_ = dest;
+    yolo_detector_ = det;
+    yolo_stamp_ = QFileInfo(dest).lastModified();
+    saveSetting("generator.ai_yolo_path", dest);
+    teacher_kind_ = QStringLiteral("yolo");
+    saveSetting("aitrain.teacher.kind", teacher_kind_);
+    setTeacherStatus(tr("YOLO ready: Generator Suggest tip + Ask the teacher (A). models/yolo.onnx"));
     emit teacherChanged();
     return true;
 }

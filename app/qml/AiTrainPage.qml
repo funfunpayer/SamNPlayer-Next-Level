@@ -60,10 +60,10 @@ Item {
         onAccepted: labelCtl.chooseNudeNet(selectedFile.toString())
     }
     FileDialog {
-        id: fungenDialog
-        title: qsTr("Choose a FunGen YOLO model (.onnx)")
+        id: yoloDialog
+        title: qsTr("Choose a YOLO model (.onnx)")
         nameFilters: [qsTr("ONNX model (*.onnx)"), qsTr("All files (*)")]
-        onAccepted: labelCtl.chooseFunGen(selectedFile.toString())
+        onAccepted: labelCtl.chooseYolo(selectedFile.toString())
     }
 
     component Step: GlassCard {
@@ -207,6 +207,14 @@ Item {
                         onClicked: labelCtl.teacherKind = "student"
                     }
                     FlowButton {
+                        objectName: "kindYolo"
+                        visible: labelCtl.yoloPath !== ""
+                        text: qsTr("YOLO here")
+                        checked: labelCtl.teacherKind === "yolo"
+                        enabled: labelCtl.localTeacherAvailable
+                        onClicked: labelCtl.teacherKind = "yolo"
+                    }
+                    FlowButton {
                         objectName: "kindServer"
                         text: qsTr("The model server")
                         checked: labelCtl.teacherKind === "server"
@@ -275,21 +283,21 @@ Item {
                         }
                     }
                 }
-                // FunGen YOLO for Generator Suggest tip (not Ask-the-teacher).
+                // YOLO for Generator Suggest tip + Ask-the-teacher (A).
                 GlassCard {
-                    objectName: "fungenCard"
+                    objectName: "yoloCard"
                     visible: page.tab === 0
                     Layout.fillWidth: true
-                    implicitHeight: fungenCol.implicitHeight + 28
+                    implicitHeight: yoloCol.implicitHeight + 28
                     ColumnLayout {
-                        id: fungenCol
+                        id: yoloCol
                         anchors.fill: parent; anchors.margins: 14; spacing: 8
-                        Text { textFormat: Text.PlainText; text: qsTr("FunGen YOLO (Generator)"); color: Theme.text; font.family: Theme.font; font.pixelSize: 15 }
+                        Text { textFormat: Text.PlainText; text: qsTr("YOLO on this computer"); color: Theme.text; font.family: Theme.font; font.pixelSize: 15 }
                         Text {
                             textFormat: Text.PlainText
                             Layout.fillWidth: true; wrapMode: Text.WordWrap
                             text: labelCtl.localTeacherAvailable
-                                  ? qsTr("Drop FunGen’s Discord YOLO .onnx here for Generator Suggest tip / Show all tags / hybrid re-acquire. Priority: our student, then FunGen, then NudeNet. Classes map to tip (penis/glans) and contact (breast; face→mouth). Weights stay yours — we do not ship or download them.")
+                                  ? qsTr("Your YOLO .onnx (e.g. a FunGen Discord export) for Generator Suggest tip / Show all tags / hybrid, and as Ask-the-teacher (A) so labels feed our student. Priority: student → models/yolo.onnx → NudeNet. Classes map to tip (penis/glans) and contact (breast; face→mouth). We do not ship or download YOLO weights.")
                                   : qsTr("This build cannot run models itself (it has no ONNX Runtime).")
                             color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                         }
@@ -297,17 +305,17 @@ Item {
                             Layout.fillWidth: true; spacing: 8
                             visible: labelCtl.localTeacherAvailable
                             FlowButton {
-                                objectName: "fungenChoose"
-                                text: qsTr("Choose FunGen .onnx…")
+                                objectName: "yoloChoose"
+                                text: qsTr("Choose YOLO .onnx…")
                                 enabled: !labelCtl.teacherBusy
-                                onClicked: fungenDialog.open()
+                                onClicked: yoloDialog.open()
                             }
                             Text {
-                                objectName: "fungenState"
+                                objectName: "yoloState"
                                 Layout.fillWidth: true
                                 textFormat: Text.PlainText; elide: Text.ElideMiddle
-                                text: labelCtl.fungenPath !== "" ? qsTr("Ready — models/fungen.onnx") : qsTr("Not chosen yet")
-                                color: labelCtl.fungenPath !== "" ? Theme.cyan : Theme.textDim
+                                text: labelCtl.yoloPath !== "" ? qsTr("Ready — models/yolo.onnx") : qsTr("Not chosen yet")
+                                color: labelCtl.yoloPath !== "" ? Theme.cyan : Theme.textDim
                                 font.family: Theme.fontSoft; font.pixelSize: 12
                             }
                         }
