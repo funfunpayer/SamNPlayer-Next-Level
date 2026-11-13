@@ -44,7 +44,7 @@ const texts = {
     "gen-autoroi": "Find tip looks for the rhythmic motion (not a motion path to paint). Opening a video and Create already look; this button is the override. Drag a box only if Find missed. After a find, the teal overlay follows the tip as you scrub; drag still edits the seed. Suggest tip (AI) is separate and needs Apply.",
     // src/generator.js:315 (Camera motion compensation)
     "gen-camcomp": "Compensates camera pans using background features. Recommended for moving camera. Default on.",
-    "gen-hybrid-reacquire": "Opt-in: after CSRT and appearance memory lose the tip, ask the local student (or NudeNet) for one candidate box — only kept if it still matches the start look. Off by default (Everyday unchanged). Needs a model under Settings → AI.",
+    "gen-hybrid-reacquire": "Opt-in: after CSRT and appearance memory lose the tip, ask the local student → YOLO (models/yolo.onnx) → NudeNet for one candidate box — only kept if it still matches the start look. Off by default (Everyday unchanged). Choose YOLO in AI Train.",
     // src/generator.js:93 (Show other spots)
     "gen-candidates": "Shows ranked tip candidates when auto Find is unsure. Click = Tip. Shift-click = optional contact (mouth / nipple-breast) when Contact vibration is on.",
     // src/generator.js:319 (Record tip trajectory (optional feel — not required to Creat)
@@ -371,6 +371,8 @@ const texts = {
     "st-ai-setup-teachers": "Install onnxruntime(+gpu) and NudeNet for teachers.",
     // src/settings.js:253 (Install train)
     "st-ai-setup-train": "Create/update the separate train venv (PyTorch + rfdetr).",
+    // AI Train → YOLO on this computer
+    "st-ai-yolo": "Your YOLO .onnx only (export .pt → .onnx first). Copied to models/yolo.onnx; optional classes.json beside the file is kept under models/yolo/. Used as Generator detector and as Ask YOLO (A) teacher so confirmed boxes feed Train the student. We never ship YOLO weights.",
     // src/settings.js:233 (Apply AI setup automatically)
     "st-apply-ai-setup": "Opt-in (Owner 28 Sep). Soft-load .scene.json → fill empty Tip and contact partner. Never with Tf/Tj distance as curve source. Everyday CSRT tip path unchanged.",
     // src/settings.js:120 (Vibration from video audio only)

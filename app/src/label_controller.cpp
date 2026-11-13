@@ -686,6 +686,11 @@ bool LabelController::chooseYolo(const QString& pathOrUrl) {
         return false;
     }
     const QString path = LocalPath(pathOrUrl);
+    if (path.endsWith(QLatin1String(".pt"), Qt::CaseInsensitive) ||
+        path.endsWith(QLatin1String(".pth"), Qt::CaseInsensitive)) {
+        setTeacherStatus(tr("That is a PyTorch .pt — export to YOLO .onnx first (Ultralytics export), then choose the .onnx."));
+        return false;
+    }
     auto det = std::make_shared<samn::vision::OnnxDetector>();
     std::string why;
     if (!det->Load(FsPath(path), &why)) {
@@ -711,13 +716,38 @@ bool LabelController::chooseYolo(const QString& pathOrUrl) {
             return false;
         }
     }
+    // Optional class order beside the chosen weights (FunGen Discord export layout).
+    const QFileInfo srcInfo(path);
+    const QString srcDir = srcInfo.absolutePath();
+    const QStringList classCandidates{
+        srcDir + "/classes.json",
+        srcDir + "/" + srcInfo.completeBaseName() + ".classes.json",
+        srcDir + "/yolo.classes.json",
+        srcDir + "/fungen.classes.json",
+    };
+    QString classSrc;
+    for (const QString& c : classCandidates) {
+        if (QFileInfo::exists(c)) {
+            classSrc = c;
+            break;
+        }
+    }
+    if (!classSrc.isEmpty()) {
+        const auto classDir = destDir / "yolo";
+        std::filesystem::create_directories(classDir, ec);
+        const QString classDest = QString::fromStdU16String((classDir / "classes.json").u16string());
+        QFile::remove(classDest);
+        QFile::copy(classSrc, classDest);
+    }
     yolo_path_ = dest;
     yolo_detector_ = det;
     yolo_stamp_ = QFileInfo(dest).lastModified();
     saveSetting("generator.ai_yolo_path", dest);
     teacher_kind_ = QStringLiteral("yolo");
     saveSetting("aitrain.teacher.kind", teacher_kind_);
-    setTeacherStatus(tr("YOLO ready: Generator Suggest tip + Ask the teacher (A). models/yolo.onnx"));
+    setTeacherStatus(classSrc.isEmpty()
+                         ? tr("YOLO ready: Generator Suggest tip + Ask the teacher (A). models/yolo.onnx")
+                         : tr("YOLO ready (with classes.json): Generator Suggest tip + Ask the teacher (A)."));
     emit teacherChanged();
     return true;
 }

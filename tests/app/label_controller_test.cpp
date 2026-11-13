@@ -547,15 +547,30 @@ private slots:
         const QString data = QStringLiteral(SAMN_VISION_TESTDATA);
         LabelController c;
         QVERIFY(c.yoloPath().isEmpty());
+        QVERIFY(!c.chooseYolo(dir_.filePath("weights.pt")));  // PyTorch export required
+        QVERIFY(c.teacherStatus().contains(QLatin1String(".pt")) ||
+                c.teacherStatus().contains(QLatin1String("onnx")));
         QVERIFY(!c.chooseYolo(data + "/tiny_detr.onnx"));  // student DETR rejected
         QVERIFY(c.teacherStatus().contains(QLatin1String("student")) ||
                 c.teacherStatus().contains(QLatin1String("DETR")));
-        QVERIFY(c.chooseYolo(data + "/tiny_yolo.onnx"));
+        // Optional classes.json beside the onnx is copied to models/yolo/.
+        const QString work = dir_.filePath("yolo_pick");
+        QVERIFY(QDir().mkpath(work));
+        QVERIFY(QFile::copy(data + "/tiny_yolo.onnx", work + "/body.onnx"));
+        {
+            QFile classes(work + "/classes.json");
+            QVERIFY(classes.open(QIODevice::WriteOnly | QIODevice::Truncate));
+            classes.write(R"({"classes":["face","hand","penis","glans","pussy","butt","anus","breast","navel","foot","hips center"]})");
+        }
+        QVERIFY(c.chooseYolo(work + "/body.onnx"));
         QVERIFY(c.yoloPath().endsWith(QStringLiteral("yolo.onnx")));
         QVERIFY(QFileInfo::exists(c.yoloPath()));
         QCOMPARE(c.teacherKind(), QStringLiteral("yolo"));
         QCOMPARE(samn::Settings().get("generator.ai_yolo_path").get<std::string>(),
                  c.yoloPath().toStdString());
+        const QString classDest =
+            QString::fromStdU16String((samn::config_dir() / "models" / "yolo" / "classes.json").u16string());
+        QVERIFY(QFileInfo::exists(classDest));
     }
 
     // Votes (D-155 step 4, Owner 20 Oct): what both teachers see is plain, what
