@@ -67,6 +67,28 @@ inline bool WriteMoving(const std::filesystem::path& p, int seconds, double amp,
     return true;
 }
 
+// Parked disc for still_seconds, then the same 1 Hz stroke as WriteMoving.
+// FindTip from t=0 with a short max_seconds sees only the still; a later
+// window sees the motion (ResolveTipForCreate).
+inline bool WriteStillThenMoving(const std::filesystem::path& p, int still_seconds, int moving_seconds, double amp) {
+    auto w = Writer(p);
+    if (!w.isOpened()) return false;
+    const cv::Mat bg = Texture(kW, kH, 11, 140);
+    const int still_n = int(kFps * still_seconds);
+    const int move_n = int(kFps * moving_seconds);
+    for (int i = 0; i < still_n; ++i) {
+        cv::Mat f = bg.clone();
+        Disc(f, 160, 120);
+        w.write(f);
+    }
+    for (int i = 0; i < move_n; ++i) {
+        cv::Mat f = bg.clone();
+        Disc(f, 160, int(120 + amp / 2 * std::sin(2 * kPi * 1.0 * i / kFps)));
+        w.write(f);
+    }
+    return true;
+}
+
 // The camera window pans over a larger world while the disc moves 1 Hz.
 inline bool WritePanning(const std::filesystem::path& p, int seconds, double amp) {
     auto w = Writer(p);

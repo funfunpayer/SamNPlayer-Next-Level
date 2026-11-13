@@ -3,32 +3,28 @@
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
 
-**Last update:** 13 Nov 2026, Cursor, branch `cursor/gen-pov-contact-635a`: FunGen2 POV-Contact — ClassifyTipPov on the tip path, Feel/Inspector hint when known. Do not touch feel_heatbands / Speech-Hold / handbook / `.sam`.
+**Last update:** 13 Nov 2026, Cursor, branch `cursor/gen-auto-tip-create-635a`: FunGen2 Create never requires a painted tip; rebased onto main after #251 POV. Do not touch feel_heatbands / Speech-Hold / handbook / `.sam`.
 
-## Handover: FunGen2 POV-Contact (13 Nov)
+## Handover: FunGen2 Create finds the tip (13 Nov)
 
-Owner: after Tip + fewer settings, overlay POV on the contact/feel path. Core `ClassifyPov` was unwired. Fold concepts only, no FunGen code. Do not touch feel_heatbands / Speech-Hold / handbook / `.sam`.
+Owner: no manual tip required — Create finds it. Live overlay is #247 (on main). This slice is Create + queue. Do not touch feel_heatbands / Speech-Hold / handbook / `.sam`.
 
-- **Core:** `ClassifyTipPov` / `PovSignalsFromTip` splat the seed tip box (constant w/h, centred on each tracked sample) onto the 3×3 occupancy `ClassifyPov` already reads. Cheap: no video, no OpenCV. Fail closed (empty / zero size / full-frame large+split). One blob — never a second ROI (D-055). `AdvisePovContact` is copy only (`SuggestContact` / `CloseUp` / `WideView`).
-- **TrackBox:** still centres only. `TODO(MeasurePovSignals)` on `TrackResult`: per-frame box w/h (CSRT already has the box) or a 3×3 foreground of the whole frame. Until then the seed size is the weak stand-in.
-- **App:** Generator `povKind` / `povConfidence` / `povHint` after Find/Create/injected path (video size + `box_` + tip path). Player same from `.samn` trajectory + `contactMarks.tip`. First person with no contact area: "Close-up — a contact area may help." Known POV never overwrites the tip, never draws a partner box.
-- **QML:** dim `povHint` on the Everyday Feel strip (visible only when the kind is known — not a control) and on the Player View inspector next to contact marks.
-- **Tests:** `pov_test` (ClassifyTipPov first/third/unknown, advice, PovAt); `povKindFromInjectedTipPath`; `povKindFromStoredTipPath`; QML `povHintShowsWhenCloseUp` / `viewPovHintWhenKnown`.
-- **Left open:** `MeasurePovSignals` from video, `.scene.json`, scene_roles, ONNX, storing POV in the document.
+- **Engine:** `ResolveTipForCreate` (`tip_resolve.h`) runs `FindTip` at 0, ~10 %, ~25 %, ~50 % of duration (plus the shown frame). If candidate #1 is below `kWeakTipScore` (0.05) it tries #2..#N (up to 6), like repair. Early-exit on the first usable pick. Fail closed: `only weak motion found`. `kWeakTipScore` moved here from `generate_queue.h`.
+- **Queue:** `GenerateQueueItem` uses the resolver (not a single FindTip). `QueueSettings.tip_max_seconds` is a test hook (0 = default 45 s/window). Tracking starts at the winning window (`start_ms`).
+- **Create:** no box → resolver. A weak auto/FindTip that Create was waiting for retries the resolver (`Retrying find…`). Optional Create-only AI seed: if motion resolve fails and ONNX/fake hits have a strong class match (score ≥ 0.5, glans ↔ penis), the box is installed without Apply. Suggest tip → Apply is unchanged (D-057). AI never writes the curve. Found boxes use `installBox(..., start_ms)` so the #247 preview path tracks from the winning window.
+- **UX:** empty / no box / openVideo / stepPrompt / coach: "Create finds the tip — no box to paint". Drag and Find tip are override only. Final fail: "Could not find the tip — Create again, or Find tip as override."
+- **Tests:** `tip_resolve_test` (candidate #2, still-then-moving window); queue still-intro; `createWithoutABoxFindsTheTipAndWrites` / retry / AI seed; QML Create enabled + copy.
+- **Left open:** Use audio (#249), AI assist Show-all tags, 0.7 AI-assist collapsible.
 
-## Handover: Everyday Create surface (13 Nov)
+## Handover: FunGen2 POV-Contact (13 Nov) — merged #251
 
-Owner: FunGen2 simplicity — too many settings; keep functions but more automatic; Advanced later. Copy: video → Create finds the tip → optional Feel → Advanced later.
+Owner: POV overlay on contact/feel path. `ClassifyTipPov` from tip path; Feel/Player hint when known; never a second ROI.
 
-- **Create card (pre-Create):** primary is Create Emotion Script plus a short step prompt (`createStepPrompt`). "Optimize after Create" left the Create card.
-- **Feel:** Everyday strip = Style + For device + `feelSummary`. Show all, scene/balance, vibration source, tracking toggles and contact extras sit behind one **More feel / contact…** (`feelMore`, closed by default; still auto-opens when areas or masks exist).
-- **Advanced/Expert:** stay closed. A finished run scrolls to Review and forces `advancedOpen = false` (Everyday scroll does not open Advanced).
-- **Review:** one sibling card after Create (quality + Improve + Adapt). One Everyday Optimize combo (`optimizeAfterCreate`: Off / Any device / Sam Neo 2). Align bar keeps axes / From sound / Beat bar — no second Optimize. Default follows Feel (`""` unset → neo2 if feelKind is neo2 else general; `"off"` keeps as created). First Create persists the resolved target.
-- **Not in this PR:** Use audio group (sibling `cursor/fungen2-use-audio-635a`). No feel_heatbands / Speech-Hold / handbook rewrite / `.sam` format rewrite.
-- **Claude leftovers:** #244 (Adapt Flow wrap) and #246 (`.sam` read-only) are already on `origin/main` — nothing to cherry-pick.
-- **Tests:** `generator_qml_test` `everydayCreateSurfaceStructure`, Review visible when a script exists, Advanced stays closed, single Optimize on Review; `generator_controller_test` `optimizeTargetAcceptsOffAndClearsJunk`.
+## Handover: Everyday Create surface (13 Nov) — merged #250
 
-## Handover: Generator live tip overlay (13 Nov)
+Owner: FunGen2 simplicity — too many settings; Advanced later. Create card is Create-only; Feel strip short; Optimize on Review; Advanced stays closed.
+
+## Handover: Generator live tip overlay (13 Nov) — merged #247
 
 Owner: the teal tip box stayed on the seed (`gen.box`) while the video played or scrubbed. Create/CSRT could already write a path into the script, but the Generator preview never asked it, so the overlay looked frozen. The Player already centres on `tipAt(playheadMs)` when a trajectory exists.
 

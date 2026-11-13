@@ -12,6 +12,7 @@
 #include <QTimer>
 #include <QUrl>
 #include <algorithm>
+#include <optional>
 #include <utility>
 #include <cmath>
 
@@ -23,6 +24,7 @@
 #include "samn/engine/generate_queue.h"
 #include "samn/engine/track_box.h"
 #include "samn/engine/tip_find.h"
+#include "samn/engine/tip_resolve.h"
 #include "samn/contact_marks.h"
 #include "samn/contact_preview.h"
 #include "samn/ozone.h"
@@ -71,6 +73,49 @@ std::vector<AiTipHit> HitsFromList(const QVariantList& list) {
     for (const QVariant& v : list) hits.push_back(HitFromMap(v.toMap()));
     return hits;
 }
+
+// Create-only: a strong class match may install the tip box without Apply
+// (Suggest tip still needs Apply, D-057). Score gate matches "strong".
+constexpr float kStrongAiTipScore = 0.5f;
+
+std::optional<AiTipHit> StrongAiTipSeed(const QImage& frame, const QSize& video, const QString& tipClass, bool fakeReady,
+                                        const QVariantList& fakeHits) {
+    std::vector<AiTipHit> hits;
+    if (fakeReady) {
+        hits = HitsFromList(fakeHits);
+    } else {
+        auto model = FindAiTipModel();
+        if (!model || frame.isNull()) return std::nullopt;
+        const QImage copy = frame.convertToFormat(QImage::Format_BGR888);
+        if (copy.isNull()) return std::nullopt;
+        cv::Mat mat(copy.height(), copy.width(), CV_8UC3, const_cast<uchar*>(copy.constBits()),
+                    size_t(copy.bytesPerLine()));
+        mat = mat.clone();
+        const double sx = video.width() > 0 ? double(video.width()) / copy.width() : 1.0;
+        const double sy = video.height() > 0 ? double(video.height()) / copy.height() : 1.0;
+        auto det = std::make_shared<samn::vision::OnnxDetector>();
+        std::string why;
+        if (!det->Load(model->path, &why)) return std::nullopt;
+        for (AiTipHit h : ListAiHits(det->Detect(mat, 0.25f, &why), *model)) {
+            h.x = int(std::lround(h.x * sx));
+            h.y = int(std::lround(h.y * sy));
+            h.w = int(std::lround(h.w * sx));
+            h.h = int(std::lround(h.h * sy));
+            hits.push_back(std::move(h));
+        }
+    }
+    auto pick = PickExpectedTip(hits, tipClass.toStdString());
+    if (!pick || pick->score < kStrongAiTipScore) return std::nullopt;
+    return pick;
+}
+
+struct TipSearchFound {
+    cv::Rect box;
+    double score = 0;
+    int64_t start_ms = 0;
+    std::vector<samn::engine::TipCandidate> candidates;
+    bool from_ai = false;
+};
 
 // Hybrid tip proposal: student.onnx preferred, else NudeNet if present.
 // Returns empty when ONNX is unavailable or no matching tip-class box.
@@ -237,31 +282,60 @@ bool GeneratorController::findTip() {
         emit findingChanged();
         return true;
     }
+    return startTipSearch(false);
+}
+
+bool GeneratorController::startTipSearch(bool resolve) {
+    if (video_path_.isEmpty() || running_ || queue_running_ || finding_) return false;
     if (finder_.joinable()) finder_.join();
     find_cancel_ = std::make_shared<std::atomic<bool>>(false);
     finding_ = true;
+    find_resolve_ = resolve;
     find_auto_ = false;  // openVideo sets it after this returns
     find_video_ = video_path_;
     emit findingChanged();
-    setStatus(tr("Looking for the rhythmic motion…"));
+    if (!resolve) setStatus(tr("Looking for the rhythmic motion…"));
     const quint64 edits = box_edits_;
     find_start_ms_ = int64_t(std::floor(preview_ms_));
+    const QImage frameCopy = frame_;
+    const QSize videoSize = video_size_;
+    const QString tipClass = tip_class_;
+    const bool fakeReady = fake_ai_ready_;
+    const QVariantList fakeHits = fake_ai_hits_;
     QPointer<GeneratorController> self(this);
-    finder_ = std::thread([self, edits, cancel = find_cancel_, forVideo = video_path_, startMs = int64_t(std::floor(preview_ms_)),
-                           video = std::filesystem::path(video_path_.toStdU16String())] {
-        samn::engine::TipFindOptions o;
-        o.start_ms = startMs;  // 0.7: from the shown frame
-        o.cancel = [cancel] { return cancel->load(); };
+    finder_ = std::thread([self, edits, cancel = find_cancel_, forVideo = video_path_,
+                           startMs = int64_t(std::floor(preview_ms_)), resolve, frameCopy, videoSize, tipClass,
+                           fakeReady, fakeHits, video = std::filesystem::path(video_path_.toStdU16String())] {
         std::string error;
-        std::optional<samn::engine::TipFindResult> r;
+        std::optional<TipSearchFound> r;
         try {
-            r = samn::engine::FindTip(video, o, &error);
+            if (resolve) {
+                samn::engine::TipResolveOptions o;
+                o.preview_ms = startMs;
+                o.cancel = [cancel] { return cancel->load(); };
+                if (auto tip = samn::engine::ResolveTipForCreate(video, o, &error)) {
+                    r = TipSearchFound{tip->box, tip->score, tip->start_ms, tip->candidates, false};
+                } else if (error != samn::kCanceled) {
+                    if (auto ai = StrongAiTipSeed(frameCopy, videoSize, tipClass, fakeReady, fakeHits)) {
+                        r = TipSearchFound{cv::Rect(ai->x, ai->y, ai->w, ai->h), double(ai->score), startMs, {}, true};
+                        error.clear();
+                    }
+                }
+            } else {
+                samn::engine::TipFindOptions o;
+                o.start_ms = startMs;  // 0.7: from the shown frame
+                o.cancel = [cancel] { return cancel->load(); };
+                if (auto tip = samn::engine::FindTip(video, o, &error))
+                    r = TipSearchFound{tip->box, tip->candidates.empty() ? 0 : tip->candidates.front().score, startMs,
+                                       tip->candidates, false};
+            }
         } catch (const std::exception& e) {
             error = e.what();
         }
-        QMetaObject::invokeMethod(qApp, [self, r = std::move(r), error, cancel, forVideo, startMs, edits] {
+        QMetaObject::invokeMethod(qApp, [self, r = std::move(r), error, cancel, forVideo, edits, resolve] {
             if (!self) return;
             self->finding_ = false;
+            self->find_resolve_ = false;
             const bool thenCreate = std::exchange(self->create_after_find_, false);
             const bool automatic = std::exchange(self->find_auto_, false) && !thenCreate;
             const bool again = std::exchange(self->refind_, false);
@@ -272,7 +346,8 @@ bool GeneratorController::findTip() {
             if (again) {
                 // From another frame, or for a video opened meanwhile.
                 self->create_after_find_ = thenCreate;
-                if (!self->findTip()) self->create_after_find_ = false;
+                const bool ok = thenCreate ? self->startTipSearch(true) : self->findTip();
+                if (!ok) self->create_after_find_ = false;
                 else if (thenCreate) self->setStatus(tr("Finding tip, then creating…"));
                 else if (againAutomatic) {
                     self->find_auto_ = true;
@@ -289,17 +364,25 @@ bool GeneratorController::findTip() {
             }
             if (!r) {
                 if (automatic) {
-                    // Nothing found by itself: the usual first step stays.
-                    self->setStatus(tr("Drag a box around the moving tip on the frame."));
+                    self->setStatus(tr("Create finds the tip — no box to paint."));
                     return;
                 }
                 if (thenCreate && error != samn::kCanceled) {
-                    self->setStatus(tr("Find tip failed: %1.").arg(QString::fromStdString(error)));
-                    AppLog::instance().reportError(self->status_);  // 0.7 uiError
-                }
-                else
+                    if (!resolve) {
+                        self->create_after_find_ = true;
+                        self->setStatus(tr("Retrying find…"));
+                        if (!self->startTipSearch(true)) {
+                            self->create_after_find_ = false;
+                            self->setStatus(tr("Could not find the tip — Create again, or Find tip as override."));
+                            AppLog::instance().reportError(self->status_);
+                        }
+                        return;
+                    }
+                    self->setStatus(tr("Could not find the tip — Create again, or Find tip as override."));
+                    AppLog::instance().reportError(self->status_);
+                } else
                     self->setStatus(error == samn::kCanceled ? tr("Find tip: canceled.")
-                                                        : tr("Find tip: %1").arg(QString::fromStdString(error)));
+                                                            : tr("Find tip: %1").arg(QString::fromStdString(error)));
                 return;
             }
             QVariantList list;
@@ -307,28 +390,40 @@ bool GeneratorController::findTip() {
                 list.append(QVariantMap{{"x", c.box.x}, {"y", c.box.y}, {"w", c.box.width}, {"h", c.box.height}, {"score", c.score}});
             self->tip_candidates_ = list;
             emit self->tipCandidatesChanged();
-            // Below this the "rhythm" is compression noise (a still clip
-            // scores about 0.002, a clear stroke above 1).
-            const bool weak = r->candidates.empty() || r->candidates.front().score < 0.05;
+            const bool weak = r->from_ai ? false
+                                         : (r->candidates.empty() || r->candidates.front().score < samn::engine::kWeakTipScore);
             if (automatic && (weak || self->box_edits_ != edits)) {
                 // Unsure, or the user drew a box meanwhile: candidates only (D-159).
                 self->setStatus(self->box_edits_ != edits
                                     ? tr("Your box stays. The dashed boxes are what Find tip saw; click one to use it.")
-                                    : tr("Not sure where the tip is: click a dashed box, or drag one by hand."));
+                                    : tr("Not sure where the tip is: Create will search again, or Find tip / drag as override."));
                 return;
             }
-            self->installBox(QRect(r->box.x, r->box.y, r->box.width, r->box.height), double(startMs));
-            if (thenCreate) {
-                // Create goes on only with a real find; a weak one waits for the user.
-                if (weak) {
-                    self->setStatus(tr("Find tip failed: only weak motion found — check the box, or drag it by hand, then Create."));
+            if (thenCreate && weak && !resolve) {
+                self->create_after_find_ = true;
+                self->setStatus(tr("Retrying find…"));
+                if (!self->startTipSearch(true)) {
+                    self->create_after_find_ = false;
+                    self->setStatus(tr("Could not find the tip — Create again, or Find tip as override."));
                     AppLog::instance().reportError(self->status_);
                 }
-                else self->create(self->create_overwrite_);
                 return;
             }
-            self->setStatus(weak ? tr("Only weak motion found: check the box, or drag it by hand.")
-                                 : tr("Tip found. The dashed boxes are other candidates; click one to use it."));
+            // Resolver/FindTip start_ms: track from the winning window, not only the shown frame.
+            self->installBox(QRect(r->box.x, r->box.y, r->box.width, r->box.height), double(r->start_ms));
+            if (thenCreate) {
+                if (weak) {
+                    self->setStatus(tr("Could not find the tip — Create again, or Find tip as override."));
+                    AppLog::instance().reportError(self->status_);
+                } else
+                    self->create(self->create_overwrite_);
+                return;
+            }
+            if (r->from_ai)
+                self->setStatus(tr("Tip found. The dashed boxes are other candidates; click one to use it."));
+            else
+                self->setStatus(weak ? tr("Only weak motion found: check the box, or Find tip / drag as override.")
+                                     : tr("Tip found. The dashed boxes are other candidates; click one to use it."));
         }, Qt::QueuedConnection);
     });
     return true;
@@ -732,7 +827,7 @@ bool GeneratorController::openVideo(const QString& pathOrUrl, bool lookForTip) {
     emit stepChanged();
     // 0.7's poster: 10 % into the clip, at most 30 s in.
     seekPreview(std::min(duration_ms_ * 0.1, 30000.0));
-    setStatus(tr("Drag a box around the moving tip on the frame."));
+    setStatus(tr("Create finds the tip — no box to paint."));
     if (auto_tip_ && lookForTip && findTip()) {
         if (refind_) pending_auto_ = true;  // starts once the old video's search has ended
         else find_auto_ = true;
@@ -775,7 +870,7 @@ void GeneratorController::installBox(const QRect& box, double atMs) {
 void GeneratorController::clearBox() { setBox(QRect()); }
 
 QString GeneratorController::boxLabel() const {
-    if (!hasBox()) return tr("No tip box yet — drag one on the frame.");
+    if (!hasBox()) return tr("Create finds the tip — no box to paint.");
     const QString coords = tr("Tip (stroke tracker): x=%1 y=%2 w=%3 h=%4")
                                .arg(box_.x())
                                .arg(box_.y())
@@ -1351,15 +1446,26 @@ bool GeneratorController::create(bool overwrite) {
         return false;
     }
     if (!hasBox()) {
-        // 0.7: with no tip, Create finds the tip first, then creates; a
-        // search already looking at this video is waited for, and is the
-        // user's from now on.
-        const bool waits = finding_ && (refind_ || (find_video_ == video_path_ && !*find_cancel_));
-        if (!waits && !findTip()) return false;
-        find_auto_ = pending_auto_ = false;
-        emit findingChanged();
+        // FunGen2: with no tip, Create finds the tip (resolver); a search
+        // already looking at this video is waited for, and is the user's
+        // from now on. A weak first find retries the resolver.
         create_after_find_ = true;
         create_overwrite_ = overwrite;
+        find_auto_ = pending_auto_ = false;
+        emit findingChanged();
+        if (finding_) {
+            const bool usable = find_video_ == video_path_ && !(find_cancel_ && *find_cancel_);
+            if (!usable) {
+                refind_ = true;
+                if (find_cancel_) *find_cancel_ = true;
+            }
+            setStatus(tr("Finding tip, then creating…"));
+            return true;
+        }
+        if (!startTipSearch(true)) {
+            create_after_find_ = false;
+            return false;
+        }
         setStatus(tr("Finding tip, then creating…"));
         return true;
     }

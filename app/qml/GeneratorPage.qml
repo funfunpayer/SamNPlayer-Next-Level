@@ -220,9 +220,9 @@ Item {
         if (gen.running || (gen.finding && gen.status.startsWith(qsTr("Finding tip, then creating"))))
             return qsTr("Step 4: creating… you can Cancel if needed.")
         if (gen.outputPath !== "") return qsTr("Step 5: Review — Improve, Adapt, then Play.")
-        if (!gen.hasBox) return qsTr("Snack 1: Find tip (auto) — or mark only if Find missed. Tip = stroke box, not whole-scene tracking.")
+        if (!gen.hasBox) return qsTr("Create finds the tip — no box to paint. Drag is override only.")
         if (gen.contactVibration && gen.contactAreas.length === 0)
-            return qsTr("Snack 2–3 optional: partner touch for Contact vibe, then Feel. Create unlocks when tip is ready.")
+            return qsTr("Snack 2–3 optional: partner touch for Contact vibe, then Feel. Create finds the tip.")
         return qsTr("Step 4: Create Emotion Script — Advanced stays closed for Everyday; open only if needed.")
     }
     // Short line on the Create card (FunGen2: video → Create finds the tip).
@@ -259,7 +259,7 @@ Item {
             if (gen.hasTipPath)
                 bits.push(qsTr("The teal box follows the tip as you scrub; drag still edits the seed."))
         } else {
-            bits.push(qsTr("Press Find tip, or drag a tip box if Find missed."))
+            bits.push(qsTr("Create finds the tip — no box to paint. Find tip or drag is override only."))
         }
         if (r1 && a) {
             const dx = (r1.x + r1.width / 2) - (a.x + a.w / 2)
@@ -550,9 +550,10 @@ Item {
                                 MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: videoDialog.open() }
                             }
                             Text {
+                                objectName: "emptyHint"
                                 textFormat: Text.PlainText
                                 anchors.horizontalCenter: parent.horizontalCenter
-                                text: qsTr("Then drag a box around the moving tip and create.")
+                                text: qsTr("Create finds the tip — no box to paint")
                                 color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 13
                             }
                         }
@@ -2268,7 +2269,7 @@ Item {
                             objectName: "createButton"
                             width: Math.min(implicitWidth, parent.width)
                             text: qsTr("Create Emotion Script"); primary: true
-                            // No tip yet: Create finds it first (0.7), or waits for the automatic search.
+                            // No tip yet: Create finds it (FunGen2); drag is override only.
                             enabled: gen.hasVideo && !gen.running && (!gen.finding || gen.autoFinding)
                             onClicked: page.startCreate()
                         }

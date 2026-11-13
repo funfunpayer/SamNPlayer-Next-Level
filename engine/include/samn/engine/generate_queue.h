@@ -1,14 +1,16 @@
 #pragma once
 // One video of the Generator's queue (0.7 generator.js "Create queue",
-// DeepFunGen-style batch): find the tip on its own (FindTip), then create
-// the script beside the video with the queue's feel settings (Generate).
-// The queue itself, its order and its statuses, lives in the app.
+// DeepFunGen-style batch): ResolveTipForCreate (several start times, then
+// candidates #2..#N when #1 is weak), then create the script beside the
+// video with the queue's feel settings (Generate). The queue itself, its
+// order and its statuses, lives in the app.
 #include <filesystem>
 #include <functional>
 #include <string>
 #include <vector>
 
 #include "samn/engine/generate.h"
+#include "samn/engine/tip_resolve.h"
 
 namespace samn::engine {
 
@@ -31,6 +33,8 @@ struct QueueSettings {
     double contact_vibration_span = 0;
     std::string contact_vibration_curve;
     std::string tip_class;
+    // Per-window FindTip length for ResolveTipForCreate. 0 = the resolver default.
+    double tip_max_seconds = 0;
 };
 
 enum class QueueItemStatus { kDone, kSkipped, kFailed, kCanceled };
@@ -41,11 +45,6 @@ struct QueueItemOutcome {
     std::filesystem::path output;  // the .funscript when done
     cv::Rect box;                  // the tip box Find tip chose
 };
-
-// Below this best candidate score the "rhythm" is compression noise (a still
-// clip scores about 0.002, a clear stroke above 1); such a video fails
-// instead of getting a script from noise.
-constexpr double kWeakTipScore = 0.05;
 
 // 0.7 scriptPathForVideo: <video name>.funscript beside the video.
 std::filesystem::path ScriptPathForVideo(const std::filesystem::path& video);

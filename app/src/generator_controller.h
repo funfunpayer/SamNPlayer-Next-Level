@@ -488,8 +488,9 @@ private:
     QStringList log_;
     QString output_path_;
     QVariantMap review_;
-    // Create without a tip box finds the tip first (0.7 "Finding tip, then creating…").
+    // Create without a tip box finds the tip first (FunGen2 / 0.7 "Finding tip, then creating…").
     bool create_after_find_ = false, create_overwrite_ = false;
+    bool find_resolve_ = false;  // the running search is ResolveTipForCreate
     uint64_t run_id_ = 0;
     QElapsedTimer run_clock_;
     std::unique_ptr<samn::engine::GenerateRunner> runner_;
@@ -507,6 +508,7 @@ private:
     std::thread ai_worker_;
     void refreshAiTipHint();
     void finishAiSuggest(const QVariantList& hits, const QString& forVideo, quint64 seq);
+    bool startTipSearch(bool resolve);
     QVariantList queue_;
     bool queue_running_ = false;
     std::shared_ptr<std::atomic<bool>> queue_cancel_;
