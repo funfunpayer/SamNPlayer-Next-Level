@@ -36,13 +36,17 @@ Item {
 
     GeneratorController {
         id: gen
-        // 0.8 "Optimize after Create" (D-156): the new script is optimized right away.
+        // 0.8 "Optimize after Create" (D-156): fill+heal (and Neo 2 bake when chosen).
+        // 0.7 post-pass: append "(healed N · +N pts | gaps ok)" on the Create status.
         onCreated: (path) => {
             page.library.noteScriptGenerated(path)
             if (!edit.open(path)) return
             const t = page.resolvedOptimizeTarget()
             if (gen.optimizeTarget === "") gen.optimizeTarget = t
-            if (t !== "") edit.optimizeFor(t)
+            let polish = ""
+            if (t !== "") polish = edit.optimizeFor(t)
+            const suf = gen.createPolishSuffix(polish)
+            if (suf !== "") gen.showStatus(gen.status + " " + suf)
             // 0.7 Step 3: a vibrator gets its vibration from the video's sound.
             if (gen.feelKind === "vibrator" && gen.vibSource !== "") edit.vibrationFromSound(gen.vibSource === "sound+contact")
         }

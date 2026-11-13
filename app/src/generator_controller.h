@@ -364,6 +364,8 @@ public:
     Q_INVOKABLE void deleteMark(int index);
     // A line from the page on the status (0.7 "Mark deselected.").
     Q_INVOKABLE void showStatus(const QString& s) { setStatus(s); }
+    // Compact 0.7 Create status suffix from optimizeFor / improveScript text.
+    Q_INVOKABLE static QString createPolishSuffix(const QString& polish);
     // Starts the run. Without overwrite an existing script stops it (the page
     // asks first, 0.7 confirm). false when it cannot start.
     Q_INVOKABLE bool create(bool overwrite = false);

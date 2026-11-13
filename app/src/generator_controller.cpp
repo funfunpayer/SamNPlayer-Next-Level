@@ -9,6 +9,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QPointer>
+#include <QRegularExpression>
 #include <QTimer>
 #include <QUrl>
 #include <algorithm>
@@ -1173,6 +1174,26 @@ void GeneratorController::setOptimizeTarget(const QString& target) {
     optimize_target_ = v;
     saveSetting("generator.optimize_target", v.toStdString());
     emit optionsChanged();
+}
+
+QString GeneratorController::createPolishSuffix(const QString& polish) {
+    if (polish.isEmpty()) return {};
+    if (polish.contains(QLatin1String("no gaps"))) return QObject::tr("(gaps ok)");
+    QStringList bits;
+    static const QRegularExpression kHeal(QStringLiteral(R"(healed (\d+))"));
+    static const QRegularExpression kPtsPlus(QStringLiteral(R"(\+(\d+) pts)"));
+    static const QRegularExpression kPtsParen(QStringLiteral(R"(\(\+(\d+) points\))"));
+    if (const auto m = kHeal.match(polish); m.hasMatch())
+        bits << QObject::tr("healed %1").arg(m.captured(1));
+    if (const auto m = kPtsPlus.match(polish); m.hasMatch())
+        bits << QObject::tr("+%1 pts").arg(m.captured(1));
+    else if (const auto m = kPtsParen.match(polish); m.hasMatch())
+        bits << QObject::tr("+%1 pts").arg(m.captured(1));
+    if (!bits.isEmpty()) return QLatin1Char('(') + bits.join(QStringLiteral(" · ")) + QLatin1Char(')');
+    if (polish.contains(QLatin1String("Ready")) || polish.contains(QLatin1String("Neo 2")) ||
+        polish.contains(QLatin1String("Improved")))
+        return QObject::tr("(gaps ok)");
+    return {};
 }
 
 void GeneratorController::setPosOverlay(bool on) {
