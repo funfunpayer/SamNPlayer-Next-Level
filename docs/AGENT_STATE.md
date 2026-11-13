@@ -3,8 +3,18 @@
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
 
-<<<<<<< HEAD
-**Last update:** 13 Nov 2026, Cursor, branch `cursor/gen-auto-tip-create-635a`: FunGen2 Create never requires a painted tip; rebased onto main after #251 POV. Do not touch feel_heatbands / Speech-Hold / handbook / `.sam`.
+
+**Last update:** 13 Nov 2026, Cursor, branch `cursor/fungen2-use-audio-635a`: Use audio on Review (rebased after #248). Do not touch feel_heatbands / Speech-Hold / handbook / `.sam`.
+
+## Handover: Use audio (13 Nov)
+
+Owner: sound align / sound→vibration existed, but the settings were scattered. One Review **Use audio** block.
+
+- **Improve fill:** `audio_hz` from reliable video tempo when Fill gaps to sound tempo is on. `rhythmic_fill` stays off (D-168).
+- **QML:** Review Improve → Use audio (fill tempo, bake vib from sound / sound+contact). Live Play = Settings → Play. Align-bar From sound removed.
+- **Vibrator default:** unset → `sound+contact`. Saved `""` stays Motion only.
+- **Tests:** improveScriptSpacesFillByAudioHz, vibSourceDefaults…, QML Use audio toggles.
+
 
 ## Handover: FunGen2 Create finds the tip (13 Nov)
 
@@ -18,43 +28,16 @@ Owner: no manual tip required — Create finds it. Live overlay is #247 (on main
 - **Left open:** Use audio (#249), AI assist Show-all tags, 0.7 AI-assist collapsible.
 
 ## Handover: FunGen2 POV-Contact (13 Nov) — merged #251
-=======
-**Last update:** 13 Nov 2026, Cursor, branch `cursor/fungen2-use-audio-635a`: Use audio on Review/Improve; rebased onto main after #251. Do not touch feel_heatbands / Speech-Hold / handbook / `.sam`.
-
-## Handover: Use audio (13 Nov)
-
-Owner: sound align / sound→vibration existed, but the settings were scattered. One Review **Use audio** block. Do not touch feel_heatbands / Speech-Hold / handbook / `.sam`.
-
-- **Improve fill:** `EditorController::improveScript(..., fillToSoundTempo, audioHz)` sets `ImproveOptions::audio_hz` from the video when "Fill gaps to sound tempo" is on. Decode: `AudioLevelDecoder` with onsets (first 10 min), `PickPlaybackAudioBpm`, `GapFillAudioHz` (onset tempo only when `AssessTempo.reliable`; loudness fallback is for Play BPM, not fill). Else 100 ms. Default toggle on. Status bit `N BPM sound` when Hz was used. `rhythmic_fill` stays off (D-168).
-- **QML:** Generator Review Improve → **Use audio**: Fill gaps to sound tempo (`gen-improve-audio-fill`), Bake vibration from sound + contact / Bake vibration from sound (`vibrationFromSound`), one line that live Play audio vibration is Settings → Play (not duplicated). Align-bar "From sound" removed (same actions, one place). Everyday Optimize stays on Review (#250).
-- **Vibrator default:** `generator.feel.vib_source` unset → `sound+contact`. A saved `""` is still Motion only.
-- **Claude:** `claude/samn2-audio-followup` still has unmerged FillGapsRhythmic line-step nits (`e1b1d39`); not folded — rhythmic fill stays off.
-- **Tests:** `improveScriptSpacesFillByAudioHz`, `improveScriptUsesSoundTempoWhenTheBeatIsClear`, `vibSourceDefaultsToSoundAndContactAndKeepsASavedChoice`, QML Use audio toggles, `GapFillAudioHz`.
-
-## Handover: FunGen2 POV-Contact (13 Nov) — merged #251
 
 Owner: POV overlay on contact/feel path. `ClassifyTipPov` from tip path; Feel/Player hint when known; never a second ROI.
 
 ## Handover: Everyday Create surface (13 Nov) — merged #250
->>>>>>> 952ad12 (Generator: one Use audio story on Review/Improve)
-
-Owner: POV overlay on contact/feel path. `ClassifyTipPov` from tip path; Feel/Player hint when known; never a second ROI.
-
-<<<<<<< HEAD
-## Handover: Everyday Create surface (13 Nov) — merged #250
-=======
-- **Create card (pre-Create):** primary is Create Emotion Script plus a short step prompt (`createStepPrompt`). "Optimize after Create" left the Create card.
-- **Feel:** Everyday strip = Style + For device + `feelSummary`. Show all, scene/balance, vibration source, tracking toggles and contact extras sit behind one **More feel / contact…** (`feelMore`, closed by default; still auto-opens when areas or masks exist).
-- **Advanced/Expert:** stay closed. A finished run scrolls to Review and forces `advancedOpen = false`.
-- **Review:** one sibling card after Create (quality + Improve + Adapt). One Everyday Optimize combo. Align bar: axes / Beat bar (Use audio owns vibration-from-sound).
-- **Tests:** `everydayCreateSurfaceStructure`; `optimizeTargetAcceptsOffAndClearsJunk`.
->>>>>>> 952ad12 (Generator: one Use audio story on Review/Improve)
 
 Owner: FunGen2 simplicity — too many settings; Advanced later. Create card is Create-only; Feel strip short; Optimize on Review; Advanced stays closed.
 
 ## Handover: Generator live tip overlay (13 Nov) — merged #247
 
-Owner: the teal tip box stayed on the seed (`gen.box`) while the video played or scrubbed. Create/CSRT could already write a path into the script, but the Generator preview never asked it, so the overlay looked frozen. The Player already centres on `tipAt(playheadMs)` when a trajectory exists. Landed as #247.
+Owner: the teal tip box stayed on the seed (`gen.box`) while the video played or scrubbed. Create/CSRT could already write a path into the script, but the Generator preview never asked it, so the overlay looked frozen. The Player already centres on `tipAt(playheadMs)` when a trajectory exists.
 
 - **Engine:** `CompanionSamn` always stores `trajectory` when tracking produced centres (`BuildTrajectory`), not only when `HasContactAreas`. Tip-only scripts now carry a path so Play's overlay moves too. `BuildTrajectory` is exported from `generate.h`. Funscript metadata still omits the path (Player reads the `.samn`).
 - **App:** `GeneratorController::tipAt` / `hasTipPath` / `tipPathRevision`. After Find tip / paint / Apply AI (`installBox`), a light preview `TrackBox` (8 fps, no camera, cap 400 frames) runs on a worker; Create cancels it and, on success, replaces the path from the new `.samn`. Drag still edits the seed. No 0.7 live steering during Create — last preview path stays until Done.
