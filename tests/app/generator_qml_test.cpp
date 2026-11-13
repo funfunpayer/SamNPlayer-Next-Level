@@ -554,10 +554,11 @@ private slots:
         QMetaObject::invokeMethod(ask, "accepted");
         QTRY_COMPARE(edit->property("undoText").toString(), QStringLiteral("Undo: Invert curve"));
 
-        // Align bar: axes / From sound / beat bar (Everyday Optimize is on Review).
+        // Align bar: axes / beat bar (Optimize + Use audio live on Review).
         QVERIFY(named(root.get(), "alignBar")->isVisible());
         QVERIFY(named(root.get(), "tool_axes")->isVisible());
-        QVERIFY(named(root.get(), "tool_sound")->isVisible());
+        QVERIFY(!named(root.get(), "tool_sound"));
+        QVERIFY(named(root.get(), "useAudioBox")->isVisible());
         QVERIFY(named(root.get(), "softEdges")->isVisible());
         QVERIFY(named(root.get(), "capIntensity"));
         QCOMPARE(page->property("capIntensity").toInt(), 400);
