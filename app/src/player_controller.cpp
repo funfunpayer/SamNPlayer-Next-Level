@@ -43,6 +43,7 @@
 #include "samn/playback.h"
 #include "samn/playback_mapping.h"
 #include "samn/contact_marks.h"
+#include "samn/pov.h"
 #include "samn/sam_file.h"
 #include "samn/samn_file.h"
 #include "samn/script_finder.h"
@@ -624,6 +625,7 @@ bool PlayerController::openScript(const QString& pathIn, const QString& videoIn)
     contactMarks_ = doc.contact_marks && (samn::HasAnyArea(*doc.contact_marks) || !doc.contact_marks->tip_class.empty())
                         ? MarksInfo(*doc.contact_marks, doc.trajectory)
                         : QVariantMap{};
+    refreshPov(doc);
     tipPath_ = doc.trajectory ? samn::SortedTipPath(*doc.trajectory) : std::vector<samn::TrajectoryPoint>{};
     partnerPath_ = doc.trajectory ? samn::SortedPartnerPath(*doc.trajectory) : std::vector<samn::TrajectoryPoint>{};
     extraPaths_.clear();
@@ -974,6 +976,9 @@ void PlayerController::clearScript() {
     strength_.clear();
     activeStrength_.clear();
     contactMarks_.clear();
+    pov_kind_ = QStringLiteral("unknown");
+    pov_confidence_ = 0;
+    pov_has_contact_ = false;
     tipPath_.clear();
     partnerPath_.clear();
     extraPaths_.clear();
@@ -1287,6 +1292,36 @@ QVariantList PathPoints(const std::vector<samn::TrajectoryPoint>& path) {
 }
 
 }  // namespace
+
+void PlayerController::refreshPov(const samn::Document& doc) {
+    samn::PovTipPath path;
+    pov_has_contact_ = doc.contact_marks && samn::HasContactAreas(*doc.contact_marks);
+    if (doc.trajectory && !doc.trajectory->tip.empty() && doc.trajectory->width > 0 && doc.trajectory->height > 0 &&
+        doc.contact_marks && doc.contact_marks->tip && doc.contact_marks->tip->w > 0 && doc.contact_marks->tip->h > 0) {
+        path.width = doc.trajectory->width;
+        path.height = doc.trajectory->height;
+        path.box_w = static_cast<double>(doc.contact_marks->tip->w);
+        path.box_h = static_cast<double>(doc.contact_marks->tip->h);
+        path.tip.reserve(doc.trajectory->tip.size());
+        for (const auto& p : doc.trajectory->tip) path.tip.push_back({p.at_ms, p.x, p.y});
+    }
+    const auto view = samn::ClassifyTipPov(path);
+    pov_kind_ = QString::fromUtf8(samn::PovKindName(view.kind));
+    pov_confidence_ = view.confidence;
+}
+
+QString PlayerController::povHint() const {
+    const auto advice = samn::AdvisePovContact(
+        pov_kind_ == QLatin1String("first_person")
+            ? samn::PovKind::FirstPerson
+            : (pov_kind_ == QLatin1String("third_person") ? samn::PovKind::ThirdPerson : samn::PovKind::Unknown),
+        pov_has_contact_);
+    if (advice == samn::PovContactAdvice::SuggestContact)
+        return tr("Close-up — a contact area may help.");
+    if (advice == samn::PovContactAdvice::CloseUp) return tr("Close-up.");
+    if (advice == samn::PovContactAdvice::WideView) return tr("Wide view.");
+    return {};
+}
 
 QVariantMap PlayerController::tipAt(double scriptMs) const {
     const auto p = samn::PathAt(tipPath_, int64_t(std::llround(scriptMs)));

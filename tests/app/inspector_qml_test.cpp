@@ -477,6 +477,65 @@ private slots:
         qInstallMessageHandler(g_previous);
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
     }
+
+    void viewPovHintWhenKnown() {
+        QTemporaryDir files;
+        samn::Document doc;
+        doc.version = samn::SamnCurrentVersion;
+        doc.kind = samn::SamnKind;
+        doc.general = {{0, 20}, {1000, 30}, {2000, 20}, {3000, 30}};
+        doc.duration_ms = 3000;
+        samn::ContactMarks cm;
+        cm.tip_class = "glans";
+        cm.tip = samn::ContactMarkBox{60, 80, 200, 160, "glans", false};
+        doc.contact_marks = cm;
+        samn::TrajectoryData path;
+        path.width = 320;
+        path.height = 240;
+        for (int t = 0; t <= 3000; t += 500) path.tip.push_back({t, 160, 160});
+        doc.trajectory = path;
+        const QString src = files.filePath("pov.samn");
+        samn::SaveDocument(std::filesystem::u8path(src.toStdString()), doc);
+
+        g_messages.clear();
+        g_previous = qInstallMessageHandler(capture);
+        {
+            QQmlEngine engine;
+            engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
+            engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+            QQmlComponent comp(&engine);
+            comp.setData(R"(
+                import QtQuick
+                import SamN
+                Item {
+                    width: 360; height: 2200
+                    property alias player: pc
+                    DeviceController { id: dev }
+                    PlayerController { id: pc; device: dev }
+                    InspectorPanel { anchors.fill: parent; ctrl: pc; device: dev; tab: 3 }
+                })",
+                         QUrl("qrc:/test/WrapperPov.qml"));
+            QVERIFY2(comp.status() == QQmlComponent::Ready, qPrintable(comp.errorString()));
+            QQuickWindow window;
+            window.resize(360, 900);
+            std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
+            QVERIFY(root);
+            root->setParentItem(window.contentItem());
+            window.show();
+            QVERIFY(QTest::qWaitForWindowExposed(&window));
+            auto* player = root->property("player").value<PlayerController*>();
+            QVERIFY(player);
+            auto* hint = root->findChild<QQuickItem*>("povHint");
+            QVERIFY(hint);
+            QVERIFY(!hint->isVisible());
+            QVERIFY(player->openPath(src));
+            QCOMPARE(player->povKind(), QStringLiteral("first_person"));
+            QTRY_VERIFY(hint->isVisible());
+            QVERIFY(hint->property("text").toString().contains("Close-up"));
+        }
+        qInstallMessageHandler(g_previous);
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join("\n")));
+    }
 };
 
 QTEST_MAIN(InspectorQmlTest)

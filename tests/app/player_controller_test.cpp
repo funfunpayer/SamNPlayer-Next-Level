@@ -1977,6 +1977,61 @@ private slots:
         QVERIFY(c.extraAt(0, 1000).isEmpty());
     }
 
+    void povKindFromStoredTipPath() {
+        QTemporaryDir d;
+        samn::Document doc;
+        doc.version = samn::SamnCurrentVersion;
+        doc.kind = samn::SamnKind;
+        doc.general = {{0, 20}, {1000, 30}, {2000, 20}, {3000, 30}};
+        doc.duration_ms = 3000;
+        samn::ContactMarks cm;
+        cm.tip_class = "glans";
+        cm.tip = samn::ContactMarkBox{60, 80, 200, 160, "glans", false};
+        doc.contact_marks = cm;
+        samn::TrajectoryData path;
+        path.width = 320;
+        path.height = 240;
+        for (int t = 0; t <= 3000; t += 500) path.tip.push_back({t, 160, 160});
+        doc.trajectory = path;
+        const QString file = d.filePath("pov.samn");
+        samn::SaveDocument(std::filesystem::u8path(file.toStdString()), doc);
+
+        PlayerController c;
+        QVERIFY(c.openPath(file));
+        QCOMPARE(c.povKind(), QString("first_person"));
+        QVERIFY(c.povConfidence() > 0);
+        QCOMPARE(c.povHint(), QString("Close-up — a contact area may help."));
+        QVERIFY(!c.contactMarks().contains("primary"));  // no silent partner box
+
+        cm.primary = samn::ContactMarkBox{20, 20, 40, 40, "nipples", false};
+        doc.contact_marks = cm;
+        const QString withContact = d.filePath("pov-contact.samn");
+        samn::SaveDocument(std::filesystem::u8path(withContact.toStdString()), doc);
+        QVERIFY(c.openPath(withContact));
+        QCOMPARE(c.povKind(), QString("first_person"));
+        QCOMPARE(c.povHint(), QString("Close-up."));
+
+        cm.tip = samn::ContactMarkBox{148, 108, 24, 24, "glans", false};
+        cm.primary.reset();
+        doc.contact_marks = cm;
+        for (auto& p : path.tip) {
+            p.x = 160;
+            p.y = 120;
+        }
+        doc.trajectory = path;
+        const QString wide = d.filePath("pov-wide.samn");
+        samn::SaveDocument(std::filesystem::u8path(wide.toStdString()), doc);
+        QVERIFY(c.openPath(wide));
+        QCOMPARE(c.povKind(), QString("third_person"));
+        QCOMPARE(c.povHint(), QString("Wide view."));
+
+        const QString plain = d.filePath("plain.funscript");
+        writeFile(plain, QByteArray(R"({"actions":)") + kRefActions + "}");
+        QVERIFY(c.openPath(plain));
+        QCOMPARE(c.povKind(), QString("unknown"));
+        QVERIFY(c.povHint().isEmpty());
+    }
+
     // 0.7 Settings → Play "Honor inverted flag" (on by default) and the
     // script folders' Remove.
     void honorInvertedAndRemoveScriptFolder() {

@@ -55,7 +55,7 @@ From the after-0.7.0 section and `ROADMAP.md` (b). The ROADMAP rows were not re-
 8. **Next Level capabilities CAP-01 to CAP-12** and the golden benchmark gate (ROADMAP): the gate is partly there (`samn_bench` baseline of 6 Nov, `samn_compare`); Project Recovery, Smart Batch, Quality Compare and the rest are specified only. L.
 9. **Native Handy, follow an external player, session recap, Vorze CSV, VR** (ROADMAP "Later"): not started, no plan yet.
 10. **Windows code signing, Sentry for development builds** (ROADMAP): need the Owner (certificate, DSN).
-11. **Camera POV** (not in 0.7): core `ClassifyPov` (slice 1) is in. Not in this slice: vision `MeasurePovSignals`, UI, `.scene.json` write, scene_roles, ONNX.
+11. **Camera POV** (not in 0.7): core `ClassifyPov` (slice 1) and `ClassifyTipPov` (slice 2: seed box along the tip path → Generator/Player `povKind` / Feel hint). Not in this slice: vision `MeasurePovSignals` (per-frame box w/h or a 3×3 foreground; see `track_box.h`), `.scene.json` write, scene_roles, ONNX.
 
 ## (c) Dropped or replaced on purpose
 

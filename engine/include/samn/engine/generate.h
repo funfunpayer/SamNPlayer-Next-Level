@@ -74,7 +74,9 @@ using GenerateCallback = std::function<void(const GenerateEvent&)>;
 
 // Tip (+ optional partner / extras) path for the companion .samn (0.7
 // buildTrajectoryData): box centres in frame pixels, one point per 50 ms,
-// 0.1 px. Empty tip when the track has no centres.
+// 0.1 px. Empty tip when the track has no centres. Centres only: POV
+// occupancy uses the seed box size (ClassifyTipPov); see track_box.h
+// TODO(MeasurePovSignals).
 TrajectoryData BuildTrajectory(const TrackResult& tr);
 
 // The run itself, on the calling thread. Every event carries run_id.

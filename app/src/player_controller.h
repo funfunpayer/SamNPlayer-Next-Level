@@ -141,6 +141,11 @@ class PlayerController : public QObject {
     // Empty when the script has no marks.
     Q_PROPERTY(QVariantMap contactMarks READ contactMarks NOTIFY scriptChanged)
     Q_PROPERTY(bool showContactMarks READ showContactMarks WRITE setShowContactMarks NOTIFY viewOptionsChanged)
+    // Camera POV from the stored tip path + seed box (ClassifyTipPov).
+    // "unknown" until a path and box size exist. Hint is empty then.
+    Q_PROPERTY(QString povKind READ povKind NOTIFY scriptChanged)
+    Q_PROPERTY(double povConfidence READ povConfidence NOTIFY scriptChanged)
+    Q_PROPERTY(QString povHint READ povHint NOTIFY scriptChanged)
     // MT-Debug trajectory line overlay (0.7 playback.trajectory_overlay): tip +
     // partner polylines when the script recorded a path. Off by default.
     Q_PROPERTY(bool hasTrajectory READ hasTrajectory NOTIFY scriptChanged)
@@ -505,6 +510,9 @@ public:
     bool posOverlay() const;
     void setPosOverlay(bool on);
     QVariantMap contactMarks() const { return contactMarks_; }
+    QString povKind() const { return pov_kind_; }
+    double povConfidence() const { return pov_confidence_; }
+    QString povHint() const;
     bool showContactMarks() const;
     void setShowContactMarks(bool on);
     bool hasTrajectory() const { return !tipPath_.empty() || !partnerPath_.empty(); }
@@ -674,6 +682,10 @@ private:
     std::string profile_;
     bool recipeHasContact_ = false;
     QVariantMap contactMarks_;
+    QString pov_kind_ = QStringLiteral("unknown");
+    double pov_confidence_ = 0;
+    bool pov_has_contact_ = false;
+    void refreshPov(const samn::Document& doc);
     std::vector<samn::TrajectoryPoint> tipPath_;      // sorted by time
     std::vector<samn::TrajectoryPoint> partnerPath_;  // sorted by time (gold contact)
     std::vector<std::vector<samn::TrajectoryPoint>> extraPaths_;  // sorted; index = extras

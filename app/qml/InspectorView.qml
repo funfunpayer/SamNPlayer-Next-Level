@@ -53,6 +53,14 @@ Column {
             text: ctrl.contactMarks.hint !== undefined ? ctrl.contactMarks.hint : ""
             color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 11
         }
+        Text {
+            objectName: "povHint"
+            textFormat: Text.PlainText
+            visible: text !== ""
+            width: parent.width; wrapMode: Text.WordWrap
+            text: ctrl.povHint
+            color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 11
+        }
         Row {
             spacing: 8
             FlowButton {
