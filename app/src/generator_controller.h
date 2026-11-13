@@ -14,6 +14,7 @@
 #include <thread>
 #include <vector>
 
+#include "ai_tip.h"
 #include "samn/engine/generate.h"
 #include "samn/settings.h"
 
@@ -181,6 +182,8 @@ class GeneratorController : public QObject {
     Q_PROPERTY(bool hasAiTipProposal READ hasAiTipProposal NOTIFY aiTipChanged)
     Q_PROPERTY(QVariantMap aiContactProposal READ aiContactProposal NOTIFY aiTipChanged)
     Q_PROPERTY(bool hasAiContactProposal READ hasAiContactProposal NOTIFY aiTipChanged)
+    // 0.7 Suggest Tip+2nd: tip-class + contact-class seeds on this frame.
+    Q_PROPERTY(bool tipAndSecondSeedsAvailable READ tipAndSecondSeedsAvailable NOTIFY aiTipChanged)
     // The queue (0.7 "Create queue"): {path, name, status, message}; status is
     // queued | running | done | skipped | failed | canceled.
     Q_PROPERTY(QVariantList queue READ queue NOTIFY queueChanged)
@@ -384,6 +387,10 @@ public:
     Q_INVOKABLE bool suggestAiTip();
     // Same listing as Suggest, without auto-picking a tip-class box.
     Q_INVOKABLE bool listAiDetections();
+    // 0.7 Suggest Tip+2nd: tip + partner proposals from seeds (Apply required).
+    // Runs detect when the frame has no list yet; false when seeds missing.
+    Q_INVOKABLE bool suggestTipAndSecond();
+    bool tipAndSecondSeedsAvailable() const;
     // Commits the pending AI proposal as the tip box (Apply).
     Q_INVOKABLE bool applyAiTip();
     Q_INVOKABLE void dismissAiTip();
@@ -526,8 +533,10 @@ private:
     quint64 ai_seq_ = 0;
     std::thread ai_worker_;
     void refreshAiTipHint();
-    bool runAiDetect(bool pickExpected);
-    void finishAiSuggest(const QVariantList& hits, const QString& forVideo, quint64 seq, bool pickExpected);
+    // 0 = list only, 1 = pick tip, 2 = pick tip + contact (Tip+2nd).
+    bool runAiDetect(int mode);
+    void finishAiSuggest(const QVariantList& hits, const QString& forVideo, quint64 seq, int mode);
+    bool proposeTipAndSecondFromHits(const std::vector<AiTipHit>& hits);
     bool addContactFromDetection(const QVariantMap& d, const QString& cls);
     bool startTipSearch(bool resolve);
     QVariantList queue_;
