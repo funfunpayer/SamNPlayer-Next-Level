@@ -59,6 +59,12 @@ Item {
         nameFilters: [qsTr("ONNX model (*.onnx)"), qsTr("All files (*)")]
         onAccepted: labelCtl.chooseNudeNet(selectedFile.toString())
     }
+    FileDialog {
+        id: yoloDialog
+        title: qsTr("Choose a YOLO model (.onnx)")
+        nameFilters: [qsTr("ONNX model (*.onnx)"), qsTr("All files (*)")]
+        onAccepted: labelCtl.chooseYolo(selectedFile.toString())
+    }
 
     component Step: GlassCard {
         id: step
@@ -162,7 +168,7 @@ Item {
                         Text {
                             textFormat: Text.PlainText
                             Layout.fillWidth: true; wrapMode: Text.WordWrap
-                            text: qsTr("Teachers propose the boxes, you confirm or correct them, and our own small model learns from what you confirmed. It then finds the tip in the Generator: it only suggests, classic tracking still writes the script. Everything stays on this computer or on a server in your own network.")
+                            text: qsTr("Three ways to better tip recognition — all on this computer:\n1) YOLO .onnx as the Generator detector (Suggest tip / Show all / hybrid) — inference only.\n2) YOLO (or NudeNet / a server) as Ask-the-teacher: boxes become label proposals you confirm.\n3) Train our student on those confirmed labels (RF-DETR); the student then ranks first for Suggest tip.\nClassic tracking still writes the script. AI only suggests.")
                             color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
                         }
                     }
@@ -176,8 +182,8 @@ Item {
                 Step {
                     visible: page.tab === 0
                     number: "2"; title: qsTr("Teachers")
-                    text: qsTr("NudeNet (one click to install) and vision models on Ollama, LM Studio or a server in your network, such as a Mac with larger models, propose boxes. Where several agree, the proposal is offered; you confirm it in the label editor.")
-                    status: qsTr("NudeNet on this computer and vision models on a server: below. In the label editor, Shift+A asks all of them; Teachers through the clip asks them every 2 s. What all see is a plain proposal, what only some see is marked uncertain (N jumps there).")
+                    text: qsTr("YOLO (your .onnx, e.g. a FunGen Discord export), NudeNet (one click), and vision models on Ollama / LM Studio / a LAN server propose boxes. Prefer YOLO on POV/body-part clips when you have weights. Confirm or correct in the label editor — FunGen/YOLO only supplies better start labels than NudeNet.")
+                    status: qsTr("Choose YOLO or NudeNet below. In the label editor: A asks the selected teacher; Shift+A asks all; Teachers through the clip every 2 s. Agreement → plain proposal; partial → uncertain (N jumps there).")
                 }
                 // Which teacher answers "Ask the teacher" (A).
                 RowLayout {
@@ -199,6 +205,14 @@ Item {
                         checked: labelCtl.teacherKind === "student"
                         enabled: labelCtl.localTeacherAvailable
                         onClicked: labelCtl.teacherKind = "student"
+                    }
+                    FlowButton {
+                        objectName: "kindYolo"
+                        visible: labelCtl.yoloPath !== ""
+                        text: qsTr("YOLO here")
+                        checked: labelCtl.teacherKind === "yolo"
+                        enabled: labelCtl.localTeacherAvailable
+                        onClicked: labelCtl.teacherKind = "yolo"
                     }
                     FlowButton {
                         objectName: "kindServer"
@@ -264,6 +278,45 @@ Item {
                                 textFormat: Text.PlainText; elide: Text.ElideMiddle
                                 text: labelCtl.nudenetPath !== "" ? qsTr("Ready") : qsTr("Not fetched yet")
                                 color: labelCtl.nudenetPath !== "" ? Theme.cyan : Theme.textDim
+                                font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                        }
+                    }
+                }
+                // YOLO for Generator Suggest tip + Ask-the-teacher (A).
+                GlassCard {
+                    objectName: "yoloCard"
+                    visible: page.tab === 0
+                    Layout.fillWidth: true
+                    implicitHeight: yoloCol.implicitHeight + 28
+                    ColumnLayout {
+                        id: yoloCol
+                        anchors.fill: parent; anchors.margins: 14; spacing: 8
+                        Text { textFormat: Text.PlainText; text: qsTr("YOLO on this computer"); color: Theme.text; font.family: Theme.font; font.pixelSize: 15 }
+                        Text {
+                            textFormat: Text.PlainText
+                            Layout.fillWidth: true; wrapMode: Text.WordWrap
+                            text: labelCtl.localTeacherAvailable
+                                  ? qsTr("Drop a YOLO .onnx here (not .pt — export with Ultralytics first). Optional classes.json beside it is copied to models/yolo/. Used for: (1) Generator Suggest tip / Show all / hybrid, (2) Ask YOLO (A) → confirm → Add to training set. Priority: student → models/yolo.onnx → NudeNet. Classes map tip (penis/glans) and contact (breast; face→mouth). We do not ship or download YOLO weights.")
+                                  : qsTr("This build cannot run models itself (it has no ONNX Runtime).")
+                            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true; spacing: 8
+                            visible: labelCtl.localTeacherAvailable
+                            FlowButton {
+                                objectName: "yoloChoose"
+                                text: qsTr("Choose YOLO .onnx…")
+                                enabled: !labelCtl.teacherBusy
+                                onClicked: yoloDialog.open()
+                            }
+                            HelpChip { key: "st-ai-yolo"; Layout.alignment: Qt.AlignVCenter }
+                            Text {
+                                objectName: "yoloState"
+                                Layout.fillWidth: true
+                                textFormat: Text.PlainText; elide: Text.ElideMiddle
+                                text: labelCtl.yoloPath !== "" ? qsTr("Ready — models/yolo.onnx") : qsTr("Not chosen yet")
+                                color: labelCtl.yoloPath !== "" ? Theme.cyan : Theme.textDim
                                 font.family: Theme.fontSoft; font.pixelSize: 12
                             }
                         }
@@ -336,9 +389,9 @@ Item {
                 Step {
                     visible: page.tab === 0
                     number: "3"; title: qsTr("Train our model")
-                    text: qsTr("In the label editor, Add to training set turns every N-th frame of the confirmed stretches into samples. RF-DETR learns from them, whole clips held out to check it, and is kept as one ONNX file. Training runs in a Python of the app's own, set up with one click in its AI folder: nothing is installed on the system.")
+                    text: qsTr("Same goal as FunGen body-part recognition, our loop: after YOLO/NudeNet proposals are confirmed, Add to training set exports every N-th frame. Prefer several similar POV/body clips. RF-DETR learns from them (clips held out to check), written as models/student/student.onnx. Training uses the app's own Python — Set up training once; nothing on the system.")
                     status: trainCtl.studentPath !== "" ? qsTr("A student is ready: %1.").arg(trainCtl.studentClasses.join(", "))
-                                                       : qsTr("No student yet.")
+                                                       : qsTr("No student yet — confirm labels, Add to training set, then Train.")
                 }
                 // D-155 step 5: the environment, the training set and the run.
                 GlassCard {
@@ -463,8 +516,8 @@ Item {
                 Step {
                     visible: page.tab === 0
                     number: "4"; title: qsTr("Use it")
-                    text: qsTr("When our model beats the teachers on the benchmark, it becomes the fast teacher and the Generator's Find tip uses it.")
-                    status: qsTr("D-155 steps 5 and 6.")
+                    text: qsTr("Generator Suggest tip / Show all / hybrid prefer student → YOLO → NudeNet. Ask-the-teacher can also use Our student. Classic Create still writes the curve; AI never does.")
+                    status: qsTr("D-155 steps 5 and 6. Benchmark tab compares teachers vs student.")
                 }
 
                 // ---- Benchmark ----

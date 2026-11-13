@@ -19,12 +19,13 @@ Item {
     Image {
         id: top
         source: "assets/bg-top.png"
-        sourceSize.width: 1400
+        sourceSize.width: 3200
+        smooth: true; mipmap: true
         fillMode: Image.PreserveAspectFit
         width: root.width * 1.04; height: root.height * 0.9
         x: root.width * 0.18; y: -root.height * 0.12
         asynchronous: true
-        opacity: 0.62 * root.strength
+        opacity: 0.48 * root.strength
         transformOrigin: Item.Center
         property real dx: 0
         property real dy: 0
@@ -49,12 +50,13 @@ Item {
     Image {
         id: bottom
         source: "assets/bg-bottom.png"
-        sourceSize.width: 1200
+        sourceSize.width: 3200
+        smooth: true; mipmap: true
         fillMode: Image.PreserveAspectFit
         width: root.width * 0.94; height: root.height * 0.85
         x: -root.width * 0.12; y: root.height * 0.3
         asynchronous: true
-        opacity: 0.52 * root.strength
+        opacity: 0.40 * root.strength
         transformOrigin: Item.Center
         property real dx: 0
         property real dy: 0

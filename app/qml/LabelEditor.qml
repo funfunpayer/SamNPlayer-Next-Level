@@ -181,11 +181,18 @@ Item {
                     objectName: "askTeacher"
                     Layout.fillWidth: true
                     readonly property bool local: labels.teacherKind === "nudenet"
+                    readonly property bool yolo: labels.teacherKind === "yolo"
                     readonly property bool student: labels.teacherKind === "student"
                     text: labels.teacherBusy ? qsTr("The teacher is looking…")
-                          : local ? qsTr("Ask NudeNet (A)") : student ? qsTr("Ask our student (A)") : qsTr("Ask the teacher (A)")
+                          : local ? qsTr("Ask NudeNet (A)")
+                          : yolo ? qsTr("Ask YOLO (A)")
+                          : student ? qsTr("Ask our student (A)")
+                          : qsTr("Ask the teacher (A)")
                     enabled: labels.hasVideo && !labels.teacherBusy
-                             && (local ? labels.nudenetPath !== "" : student ? labels.studentPath !== "" : labels.teacherModel !== "")
+                             && (local ? labels.nudenetPath !== ""
+                                 : yolo ? labels.yoloPath !== ""
+                                 : student ? labels.studentPath !== ""
+                                 : labels.teacherModel !== "")
                     onClicked: labels.askTeacher()
                 }
                 FlowButton {

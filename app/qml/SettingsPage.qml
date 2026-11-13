@@ -916,7 +916,7 @@ Item {
                 spacing: 12
                 RowLayout {
                     spacing: 16
-                    Image { source: "assets/logo.png"; Layout.preferredWidth: 72; Layout.preferredHeight: 72; sourceSize: Qt.size(144, 144) }
+                    BrandLogo { Layout.preferredWidth: 72; Layout.preferredHeight: 72; width: 72; height: 72 }
                     ColumnLayout {
                         spacing: 4
                         Text { textFormat: Text.PlainText; text: "SamNPlayer Next"; color: Theme.orange; font.family: Theme.font; font.pixelSize: 26; font.weight: Font.DemiBold }
