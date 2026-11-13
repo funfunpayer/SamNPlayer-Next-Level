@@ -2087,6 +2087,7 @@ Item {
                                 Layout.fillWidth: true; spacing: 8
                                 FlowButton {
                                     objectName: "addExtra"
+                                    Layout.fillWidth: true; Layout.maximumWidth: implicitWidth; Layout.minimumWidth: 0
                                     text: gen.markExtra ? qsTr("Drag the area on the frame…") : qsTr("+ Another contact area")
                                     enabled: gen.hasVideo && !gen.running
                                     onClicked: gen.markExtra = !gen.markExtra
@@ -2131,6 +2132,7 @@ Item {
                                 Layout.fillWidth: true; spacing: 8
                                 FlowButton {
                                     objectName: "addIgnore"
+                                    Layout.fillWidth: true; Layout.maximumWidth: implicitWidth; Layout.minimumWidth: 0
                                     text: gen.markIgnore ? qsTr("Drag the region on the frame…") : qsTr("+ Ignore region")
                                     enabled: gen.hasVideo && !gen.running
                                     onClicked: gen.markIgnore = !gen.markIgnore
@@ -2215,6 +2217,7 @@ Item {
                         spacing: 8
                         FlowButton {
                             objectName: "createButton"
+                            width: Math.min(implicitWidth, parent.width)
                             text: qsTr("Create Emotion Script"); primary: true
                             // No tip yet: Create finds it first (0.7), or waits for the automatic search.
                             enabled: gen.hasVideo && !gen.running && (!gen.finding || gen.autoFinding)
