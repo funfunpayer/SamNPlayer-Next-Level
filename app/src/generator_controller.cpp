@@ -184,7 +184,13 @@ void GeneratorController::loadSettings() {
         gap_handling_ = flag("generator.gap_handling", gap_handling_);
         outlier_rejection_ = flag("generator.outlier_rejection", outlier_rejection_);
         track_cache_ = flag("generator.track_cache", track_cache_);
-        hybrid_reacquire_ = flag("generator.hybrid_reacquire", hybrid_reacquire_);
+        // Unset + local student/NudeNet → on this session (not written). A
+        // saved false stays off so turning the Advanced toggle off sticks.
+        if (const auto v = s.get("generator.hybrid_reacquire"); v.is_boolean()) {
+            hybrid_reacquire_ = v.get<bool>();
+        } else if (FindAiTipModel()) {
+            hybrid_reacquire_ = true;
+        }
         if (const auto v = s.get("generator.max_analysis_fps"); v.is_number()) setMaxAnalysisFps(v.get<int>());
         if (const auto v = s.get("generator.editor_share"); v.is_number()) setEditorShare(v.get<double>());
         contact_vibration_ = flag("generator.contact_vibration", contact_vibration_);

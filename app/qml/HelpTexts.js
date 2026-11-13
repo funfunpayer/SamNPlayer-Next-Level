@@ -44,7 +44,7 @@ const texts = {
     "gen-autoroi": "Auto tip box for Everyday CSRT (not a motion path). Paint/drag only if Find missed. Optional AI when checked.",
     // src/generator.js:315 (Camera motion compensation)
     "gen-camcomp": "Compensates camera pans using background features. Recommended for moving camera. Default on.",
-    "gen-hybrid-reacquire": "Opt-in: after CSRT and appearance memory lose the tip, ask the local student (or NudeNet) for one candidate box — only kept if it still matches the start look. Off by default (Everyday unchanged). Needs a model under Settings → AI.",
+    "gen-hybrid-reacquire": "When CSRT and appearance memory lose the tip, ask the local student (or NudeNet) for one candidate box — only kept if it still matches the start look. Uses AI only when the tip is lost. On by default when a model is present; stays off if you turned it off. Needs a model under Settings → AI.",
     // src/generator.js:93 (Show other spots)
     "gen-candidates": "Shows ranked tip candidates when auto Find is unsure. Click = Tip. Shift-click = optional contact (mouth / nipple-breast) when Contact vibration is on.",
     // src/generator.js:319 (Record tip trajectory (optional feel — not required to Creat)

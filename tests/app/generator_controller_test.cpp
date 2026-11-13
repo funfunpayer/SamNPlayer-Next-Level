@@ -16,6 +16,8 @@
 
 #include <QDir>
 #include <QFile>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <opencv2/core.hpp>
 
 using samn::ui::GeneratorController;
@@ -29,6 +31,26 @@ class GeneratorControllerTest : public QObject {
         const QString p = dir_.filePath(QString::fromLatin1(name));
         if (!QFileInfo::exists(p)) clips::WriteMoving(std::filesystem::path(p.toStdU16String()), seconds, 80.0, 1.0);
         return p;
+    }
+
+    QString installTinyNudeNet() {
+        const QString src = QStringLiteral(SAMN_VISION_TESTDATA) + "/tiny_nudenet.onnx";
+        const QString models = dir_.filePath("config/models");
+        if (!QDir().mkpath(models)) return {};
+        const QString dest = models + "/nudenet.onnx";
+        QFile::remove(dest);
+        return QFile::copy(src, dest) ? dest : QString();
+    }
+
+    void dropHybridReacquireKey() {
+        QFile f(dir_.filePath("config/settings.json"));
+        if (!f.exists()) return;
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        auto o = QJsonDocument::fromJson(f.readAll()).object();
+        f.close();
+        o.remove(QStringLiteral("generator.hybrid_reacquire"));
+        QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        f.write(QJsonDocument(o).toJson());
     }
 
 private slots:
@@ -638,6 +660,41 @@ private slots:
             g.setEditorShare(0.40);
             g.setHybridReacquire(false);
         }
+    }
+
+    // Unset key + local model → on (not written). A saved false stays off.
+    void hybridReacquireDefaultsOnWhenModelAndKeyUnset() {
+        if (!samn::vision::OnnxDetector::Available()) {
+            QSKIP("this build has no ONNX Runtime");
+        }
+        const QString dest = installTinyNudeNet();
+        QVERIFY(!dest.isEmpty());
+        const auto restore = qScopeGuard([&] { QFile::remove(dest); });
+        dropHybridReacquireKey();
+        QVERIFY(samn::ui::FindAiTipModel());
+        {
+            GeneratorController g;
+            QVERIFY(g.hybridReacquire());
+            QVERIFY(samn::Settings().get("generator.hybrid_reacquire").is_null());
+        }
+        {
+            GeneratorController g;
+            QVERIFY(g.hybridReacquire());  // still unset, still on
+        }
+    }
+
+    void hybridReacquireStaysOffWhenSavedFalse() {
+        if (!samn::vision::OnnxDetector::Available()) {
+            QSKIP("this build has no ONNX Runtime");
+        }
+        const QString dest = installTinyNudeNet();
+        QVERIFY(!dest.isEmpty());
+        const auto restore = qScopeGuard([&] { QFile::remove(dest); });
+        QVERIFY(samn::ui::FindAiTipModel());
+        samn::Settings().set("generator.hybrid_reacquire", false);
+        GeneratorController g;
+        QVERIFY(!g.hybridReacquire());
+        QCOMPARE(samn::Settings().get("generator.hybrid_reacquire").get<bool>(), false);
     }
 
     // G3 (0.7 gen_feel.js): the feel follows the device; the Sam Neo 2 feel

@@ -81,8 +81,8 @@ class GeneratorController : public QObject {
     Q_PROPERTY(bool gapHandling READ gapHandling WRITE setGapHandling NOTIFY optionsChanged)
     Q_PROPERTY(bool outlierRejection READ outlierRejection WRITE setOutlierRejection NOTIFY optionsChanged)
     Q_PROPERTY(bool trackCache READ trackCache WRITE setTrackCache NOTIFY optionsChanged)
-    // Opt-in hybrid tip re-acquire: ONNX only after CSRT + appearance miss
-    // (D-139; off = Everyday). Needs a student or NudeNet model on disk.
+    // Hybrid tip re-acquire: ONNX only after CSRT + appearance miss (D-139).
+    // Unset + local model → on; a saved false stays off.
     Q_PROPERTY(bool hybridReacquire READ hybridReacquire WRITE setHybridReacquire NOTIFY optionsChanged)
     // Cap tracking decode rate (0 = every frame). Opt-in CPU saver; same
     // engine knob the compare manifest already had (GENERATOR_SPEC FR-7).
