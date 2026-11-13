@@ -3,7 +3,19 @@
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
 
-**Last update:** 13 Nov 2026, Cursor, branch `cursor/gen-live-tip-635a`: Generator tip overlay follows the playhead. Do not touch feel_heatbands / Speech-Hold / handbook / `.sam`.
+**Last update:** 13 Nov 2026, Cursor, branch `cursor/fungen2-everyday-635a`: Everyday Create surface (progressive disclosure).
+
+## Handover: Everyday Create surface (13 Nov)
+
+Owner: FunGen2 simplicity — too many settings; keep functions but more automatic; Advanced later. Copy: video → Create finds the tip → optional Feel → Advanced later.
+
+- **Create card (pre-Create):** primary is Create Emotion Script plus a short step prompt (`createStepPrompt`). "Optimize after Create" left the Create card.
+- **Feel:** Everyday strip = Style + For device + `feelSummary`. Show all, scene/balance, vibration source, tracking toggles and contact extras sit behind one **More feel / contact…** (`feelMore`, closed by default; still auto-opens when areas or masks exist).
+- **Advanced/Expert:** stay closed. A finished run scrolls to Review and forces `advancedOpen = false` (Everyday scroll does not open Advanced).
+- **Review:** one sibling card after Create (quality + Improve + Adapt). One Everyday Optimize combo (`optimizeAfterCreate`: Off / Any device / Sam Neo 2). Align bar keeps axes / From sound / Beat bar — no second Optimize. Default follows Feel (`""` unset → neo2 if feelKind is neo2 else general; `"off"` keeps as created). First Create persists the resolved target.
+- **Not in this PR:** Use audio group (sibling `cursor/fungen2-use-audio-635a`). No feel_heatbands / Speech-Hold / handbook rewrite / `.sam` format rewrite.
+- **Claude leftovers:** #244 (Adapt Flow wrap) and #246 (`.sam` read-only) are already on `origin/main` — nothing to cherry-pick.
+- **Tests:** `generator_qml_test` `everydayCreateSurfaceStructure`, Review visible when a script exists, Advanced stays closed, single Optimize on Review; `generator_controller_test` `optimizeTargetAcceptsOffAndClearsJunk`.
 
 ## Handover: Generator live tip overlay (13 Nov)
 

@@ -92,6 +92,10 @@ private slots:
         // 0.7's lede and step prompt, verbatim.
         QVERIFY(named(root.get(), "createLede")->isVisible());
         QVERIFY(named(root.get(), "stepPrompt")->property("text").toString().startsWith("Start here: choose a video."));
+        QVERIFY(named(root.get(), "createStepPrompt")->isVisible());
+        QVERIFY(named(root.get(), "createStepPrompt")->property("text").toString().contains(QLatin1String("Create finds the tip")));
+        QVERIFY(!named(root.get(), "reviewCard")->isVisible());
+        QCOMPARE(named(root.get(), "advancedPanel")->property("advancedOpen").toBool(), false);
 
         // "Use Player video" appears with the Player's video and opens it.
         page->setProperty("playerVideoUrl", QUrl::fromLocalFile(video));
@@ -264,8 +268,22 @@ private slots:
         auto* invert = named(root.get(), "toggle_invert");
         QMetaObject::invokeMethod(invert, "toggled", Q_ARG(bool, true));
         QTRY_VERIFY(gen->invert());
+        QVERIFY(advanced->setProperty("advancedOpen", false));
+        QVERIFY(expert->setProperty("expertOpen", false));
+        QTRY_VERIFY(!named(root.get(), "toggle_invert")->isVisible());
 
-        // G3: the feel follows the device. Nothing connected: Sam Neo 2.
+        // Everyday Feel: Style + For device + summary. Scene / Show all / contact behind More.
+        QVERIFY(named(root.get(), "styleCombo")->isVisible());
+        QVERIFY(named(root.get(), "feelDeviceCombo")->isVisible());
+        QVERIFY(named(root.get(), "feelSummary")->isVisible());
+        QVERIFY(!named(root.get(), "feelMore")->isVisible());
+        QVERIFY(!named(root.get(), "neoFeel")->isVisible());
+        QVERIFY(!named(root.get(), "toggle_showAllFeel")->isVisible());
+        QVERIFY(!named(root.get(), "contactMarks")->isVisible());
+        QVERIFY(named(root.get(), "feelMoreToggle")->property("text").toString().startsWith("More"));
+        QMetaObject::invokeMethod(named(root.get(), "feelMoreToggle"), "clicked");
+        QTRY_VERIFY(named(root.get(), "feelMore")->isVisible());
+        QVERIFY(named(root.get(), "toggle_showAllFeel")->isVisible());
         QVERIFY(named(root.get(), "neoFeel")->isVisible());
         QVERIFY(!named(root.get(), "vibSourceRow")->isVisible());
         QMetaObject::invokeMethod(named(root.get(), "feelBalance"), "moved", Q_ARG(double, 42.0));
@@ -278,14 +296,6 @@ private slots:
         QTRY_VERIFY(named(root.get(), "vibSourceRow")->isVisible());
         QVERIFY(!named(root.get(), "neoFeel")->isVisible());
         QVERIFY(named(root.get(), "feelHint")->isVisible());
-        // The Feel card shows the everyday controls; the rest opens on demand.
-        QVERIFY(named(root.get(), "styleCombo")->isVisible());
-        QVERIFY(named(root.get(), "feelDeviceCombo")->isVisible());
-        QVERIFY(!named(root.get(), "feelMore")->isVisible());
-        QVERIFY(!named(root.get(), "contactMarks")->isVisible());
-        QVERIFY(named(root.get(), "feelMoreToggle")->property("text").toString().startsWith("More"));
-        QMetaObject::invokeMethod(named(root.get(), "feelMoreToggle"), "clicked");
-        QTRY_VERIFY(named(root.get(), "feelMore")->isVisible());
         QVERIFY(named(root.get(), "toggle_autoTip")->isVisible());
         QVERIFY(named(root.get(), "feelMoreToggle")->property("text").toString().startsWith("Fewer"));
         // Fold again, then drawn areas open the options and take the toggle away (no dead button).
@@ -456,6 +466,8 @@ private slots:
 
         if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT"); !shot.isEmpty()) window.grabWindow().save(QString::fromLocal8Bit(shot));
 
+        // Curve-edit undo is the check here; Off keeps Create from adding an Optimize step.
+        gen->setOptimizeTarget(QStringLiteral("off"));
         QMetaObject::invokeMethod(named(root.get(), "createButton"), "clicked");
         QTRY_VERIFY(gen->running());
         QVERIFY(named(root.get(), "cancelButton")->isVisible());
@@ -469,7 +481,13 @@ private slots:
         QTRY_VERIFY(named(root.get(), "qualityBox")->isVisible());
         QVERIFY(named(root.get(), "qualityLine")->property("text").toString().startsWith("Signal Quality (Quality Doctor): "));
         QVERIFY(named(root.get(), "reviewLine")->property("text").toString().startsWith("Direction: "));
-        QVERIFY(named(root.get(), "stepPrompt")->property("text").toString().startsWith("Step 5: Improve, then Play"));
+        QVERIFY(named(root.get(), "stepPrompt")->property("text").toString().startsWith("Step 5: Review"));
+        QTRY_VERIFY(named(root.get(), "reviewCard")->isVisible());
+        QVERIFY(named(root.get(), "optimizeAfterCreate")->isVisible());
+        QVERIFY(named(root.get(), "postAdaptOptimize")->isVisible());
+        QCOMPARE(named(root.get(), "advancedPanel")->property("advancedOpen").toBool(), false);
+        QVERIFY(!named(root.get(), "toggle_invert")->isVisible());
+        QVERIFY(!named(root.get(), "tool_optimize"));
         if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT_DONE"); !shot.isEmpty()) window.grabWindow().save(QString::fromLocal8Bit(shot));
         // After Create the seek row gives way to the editor's timeline; the
         // 0–100 gauge shows the stroke at the playhead, its chip switches it.
@@ -527,10 +545,10 @@ private slots:
         QMetaObject::invokeMethod(ask, "accepted");
         QTRY_COMPARE(edit->property("undoText").toString(), QStringLiteral("Undo: Invert curve"));
 
-        // Align bar: Optimize / axes sit on the curves card (not only in Tools…).
+        // Align bar: axes / From sound / beat bar (Everyday Optimize is on Review).
         QVERIFY(named(root.get(), "alignBar")->isVisible());
-        QVERIFY(named(root.get(), "tool_optimize")->isVisible());
         QVERIFY(named(root.get(), "tool_axes")->isVisible());
+        QVERIFY(named(root.get(), "tool_sound")->isVisible());
         QVERIFY(named(root.get(), "softEdges")->isVisible());
         QVERIFY(named(root.get(), "capIntensity"));
         QCOMPARE(page->property("capIntensity").toInt(), 400);
@@ -669,8 +687,68 @@ private slots:
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
     }
 
-    // Align-bar and post-create Optimize combos remember gen.optimizeTarget.
-    // An empty choice shows "Any device" (general) on both, not Sam Neo 2.
+
+    // Everyday Create: Advanced closed, Review only when a script exists,
+    // one Optimize combo on Review, Feel extras behind More.
+    void everydayCreateSurfaceStructure() {
+        g_messages.clear();
+        QTemporaryDir scripts;
+        QVERIFY(scripts.isValid());
+        const QString script = scripts.filePath(QStringLiteral("clip.funscript"));
+        {
+            QFile f(script);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(R"({"actions":[{"at":0,"pos":10},{"at":1000,"pos":90}]})");
+        }
+        QQmlEngine engine;
+        engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
+        engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+        engine.addImageProvider(QStringLiteral("frames"), new samn::ui::FrameProvider);
+        QQmlComponent comp(&engine);
+        comp.setData(R"(
+            import QtQuick
+            import SamN
+            Rectangle {
+                width: 1400; height: 820; color: "#021024"
+                property alias page: gp
+                GeneratorPage { id: gp; anchors.fill: parent; anchors.margins: 20 }
+            })",
+                     QUrl("qrc:/test/EverydaySurface.qml"));
+        QVERIFY2(comp.status() == QQmlComponent::Ready, qPrintable(comp.errorString()));
+        QQuickWindow window;
+        window.resize(1400, 820);
+        std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
+        QVERIFY(root);
+        root->setParentItem(window.contentItem());
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto* page = root->property("page").value<QQuickItem*>();
+        auto* edit = page->property("editor").value<QObject*>();
+        QVERIFY(page && edit);
+        QCOMPARE(named(root.get(), "advancedPanel")->property("advancedOpen").toBool(), false);
+        QVERIFY(!named(root.get(), "toggle_invert")->isVisible());
+        QVERIFY(named(root.get(), "createStepPrompt")->isVisible());
+        QVERIFY(!named(root.get(), "reviewCard")->isVisible());
+        QVERIFY(!named(root.get(), "feelMore")->isVisible());
+        QVERIFY(named(root.get(), "styleCombo")->isVisible());
+        QVERIFY(named(root.get(), "feelDeviceCombo")->isVisible());
+        QVERIFY(named(root.get(), "feelSummary")->isVisible());
+        QVERIFY(!named(root.get(), "tool_optimize"));
+        bool opened = false;
+        QVERIFY(QMetaObject::invokeMethod(edit, "open", Q_RETURN_ARG(bool, opened), Q_ARG(QString, script)));
+        QVERIFY(opened);
+        QTRY_VERIFY(named(root.get(), "reviewCard")->isVisible());
+        QVERIFY(named(root.get(), "improvePanel")->isVisible());
+        QVERIFY(named(root.get(), "optimizeAfterCreate")->isVisible());
+        QVERIFY(named(root.get(), "postAdaptOptimize")->isVisible());
+        QCOMPARE(named(root.get(), "advancedPanel")->property("advancedOpen").toBool(), false);
+        QVERIFY(!named(root.get(), "toggle_invert")->isVisible());
+        QVERIFY(!named(root.get(), "tool_optimize"));
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
+    }
+
+    // Review holds the one Everyday Optimize combo. Unset follows feelKind
+    // (nothing connected → Sam Neo 2). Off is explicit "off".
     void optimizeTargetCombosSaveTheChoice() {
         g_messages.clear();
         QTemporaryDir scripts;
@@ -713,22 +791,26 @@ private slots:
         QVERIFY(QMetaObject::invokeMethod(edit, "open", Q_RETURN_ARG(bool, opened), Q_ARG(QString, script)));
         QVERIFY(opened);
         QTRY_VERIFY(named(root.get(), "alignBar")->isVisible());
+        QTRY_VERIFY(named(root.get(), "reviewCard")->isVisible());
         QTRY_VERIFY(named(root.get(), "postCreateAdapt")->isVisible());
-        auto* align = named(root.get(), "optimizeTarget");
-        auto* post = named(root.get(), "postAdaptTarget");
-        QVERIFY(align && post);
-        QCOMPARE(align->property("currentIndex").toInt(), 0);
-        QCOMPARE(post->property("currentIndex").toInt(), 0);
+        QVERIFY(!named(root.get(), "tool_optimize"));
+        QVERIFY(!named(root.get(), "optimizeTarget"));
+        auto* combo = named(root.get(), "optimizeAfterCreate");
+        QVERIFY(combo);
+        // Unset + auto feel (Sam Neo 2) → combo shows Sam Neo 2.
+        QCOMPARE(combo->property("currentIndex").toInt(), 2);
 
-        QVERIFY(QMetaObject::invokeMethod(align, "activated", Q_ARG(int, 1)));
-        QCOMPARE(gen->optimizeTarget(), QStringLiteral("neo2"));
-        QTRY_COMPARE(align->property("currentIndex").toInt(), 1);
-        QTRY_COMPARE(post->property("currentIndex").toInt(), 1);
+        QVERIFY(QMetaObject::invokeMethod(combo, "activated", Q_ARG(int, 0)));
+        QCOMPARE(gen->optimizeTarget(), QStringLiteral("off"));
+        QTRY_COMPARE(combo->property("currentIndex").toInt(), 0);
 
-        QVERIFY(QMetaObject::invokeMethod(post, "activated", Q_ARG(int, 0)));
+        QVERIFY(QMetaObject::invokeMethod(combo, "activated", Q_ARG(int, 1)));
         QCOMPARE(gen->optimizeTarget(), QStringLiteral("general"));
-        QTRY_COMPARE(align->property("currentIndex").toInt(), 0);
-        QTRY_COMPARE(post->property("currentIndex").toInt(), 0);
+        QTRY_COMPARE(combo->property("currentIndex").toInt(), 1);
+
+        QVERIFY(QMetaObject::invokeMethod(combo, "activated", Q_ARG(int, 2)));
+        QCOMPARE(gen->optimizeTarget(), QStringLiteral("neo2"));
+        QTRY_COMPARE(combo->property("currentIndex").toInt(), 2);
         gen->setOptimizeTarget(QString());
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
     }
@@ -830,6 +912,7 @@ private slots:
         bool opened = false;
         QVERIFY(QMetaObject::invokeMethod(edit, "open", Q_RETURN_ARG(bool, opened), Q_ARG(QString, script)));
         QVERIFY(opened);
+        QTRY_VERIFY(named(root.get(), "reviewCard")->isVisible());
         QTRY_VERIFY(named(root.get(), "improvePanel")->isVisible());
         QVERIFY(named(root.get(), "improveStart"));
         QVERIFY(named(root.get(), "improveEnd"));
@@ -1110,8 +1193,23 @@ private slots:
                 QVERIFY2(content > view, qPrintable(QString("content %1 view %2").arg(content).arg(view)));
                 QVERIFY(!inView("createButton"));
             }
-            scroll->setProperty("contentY", qMax<qreal>(0, content - view));
-            QTRY_VERIFY(inView("createButton"));
+            QCOMPARE(named(root.get(), "advancedPanel")->property("advancedOpen").toBool(), false);
+            QVERIFY(!named(root.get(), "toggle_invert")->isVisible());
+            QTRY_VERIFY(named(root.get(), "reviewCard")->isVisible());
+            QTRY_VERIFY(named(root.get(), "reviewCard")->height() > 40);
+            QTRY_VERIFY(named(root.get(), "reviewButton")->isVisible());
+            const qreal contentNow = scroll->property("contentHeight").toReal();
+            auto* reviewBtn = named(root.get(), "reviewButton");
+            const qreal reviewY = reviewBtn->mapToItem(scroll->property("contentItem").value<QQuickItem*>(), QPointF(0, 0)).y();
+            scroll->setProperty("contentY", qBound<qreal>(0, reviewY - 20, qMax<qreal>(0, contentNow - view)));
+            QTRY_VERIFY2(inView("reviewButton"),
+                         qPrintable(QString("review y=%1 h=%2 content=%3 view=%4 cardH=%5")
+                                        .arg(reviewY)
+                                        .arg(reviewBtn->height())
+                                        .arg(contentNow)
+                                        .arg(view)
+                                        .arg(named(root.get(), "reviewCard")->height())));
+            QCOMPARE(named(root.get(), "advancedPanel")->property("advancedOpen").toBool(), false);
             if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT_SCROLL"); !shot.isEmpty())
                 window.grabWindow().save(QString::fromLocal8Bit(shot + "_" + tag + "_bottom.png"));
             // Nothing in the Create side sticks out sideways (a chip or label that widens a
@@ -1173,14 +1271,24 @@ private slots:
                 }
             }
             // Every control of the side can be reached: walk the content in steps.
+            QCOMPARE(named(root.get(), "advancedPanel")->property("advancedOpen").toBool(), false);
             for (const char* name : {"styleCombo", "feelDeviceCombo", "toggle_contactVibration", "tipClassCombo",
-                                     "contactClassCombo", "contactCurveCombo", "createButton"}) {
+                                     "contactClassCombo", "contactCurveCombo", "createButton", "reviewButton"}) {
                 auto* item = named(root.get(), name);
                 QVERIFY2(item, name);
                 QVERIFY2(item->isVisible(), name);
                 const qreal y = item->mapToItem(scroll->property("contentItem").value<QQuickItem*>(), QPointF(0, 0)).y();
-                scroll->setProperty("contentY", qBound<qreal>(0, y - 20, qMax<qreal>(0, content - view)));
-                QTRY_VERIFY2(inView(name), name);
+                const qreal maxY = qMax<qreal>(0, scroll->property("contentHeight").toReal() - view);
+                scroll->setProperty("contentY", qBound<qreal>(0, y - 20, maxY));
+                QTRY_VERIFY2(inView(name),
+                             qPrintable(QString("%1 y=%2 h=%3 maxY=%4 view=%5 cy=%6 ch=%7")
+                                            .arg(name)
+                                            .arg(y)
+                                            .arg(item->height())
+                                            .arg(maxY)
+                                            .arg(view)
+                                            .arg(scroll->property("contentY").toReal())
+                                            .arg(scroll->property("contentHeight").toReal())));
             }
         }
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));

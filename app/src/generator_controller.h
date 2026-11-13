@@ -95,7 +95,8 @@ class GeneratorController : public QObject {
     Q_PROPERTY(double contactSpan READ contactSpan WRITE setContactSpan NOTIFY optionsChanged)
     Q_PROPERTY(QString contactCurve READ contactCurve WRITE setContactCurve NOTIFY optionsChanged)
     Q_PROPERTY(QVariantMap contactFeelProbe READ contactFeelProbe NOTIFY optionsChanged)
-    // 0.8 "Optimize after Create": "" (off), "general" or "neo2" (D-156).
+    // 0.8 "Optimize after Create" (D-156): "" unset → Feel default, "off" keep
+    // as created, "general" or "neo2".
     Q_PROPERTY(QString optimizeTarget READ optimizeTarget WRITE setOptimizeTarget NOTIFY optionsChanged)
     // 0.7 "0–100 on video" over the preview (default on; generator.pos_overlay).
     Q_PROPERTY(bool posOverlay READ posOverlay WRITE setPosOverlay NOTIFY optionsChanged)

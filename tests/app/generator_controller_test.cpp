@@ -35,6 +35,21 @@ private slots:
     // The controller reads and writes settings: never the user's own file.
     void initTestCase() { qputenv("SAMN_CONFIG_DIR", dir_.filePath("config").toUtf8()); }
 
+    void optimizeTargetAcceptsOffAndClearsJunk() {
+        GeneratorController g;
+        QCOMPARE(g.optimizeTarget(), QString());
+        g.setOptimizeTarget(QStringLiteral("neo2"));
+        QCOMPARE(g.optimizeTarget(), QStringLiteral("neo2"));
+        g.setOptimizeTarget(QStringLiteral("off"));
+        QCOMPARE(g.optimizeTarget(), QStringLiteral("off"));
+        g.setOptimizeTarget(QStringLiteral("nope"));
+        QCOMPARE(g.optimizeTarget(), QString());
+        g.setOptimizeTarget(QStringLiteral("general"));
+        QCOMPARE(g.optimizeTarget(), QStringLiteral("general"));
+        g.setOptimizeTarget(QString());
+        QCOMPARE(g.optimizeTarget(), QString());
+    }
+
     void openingAVideoShowsItsFrameAndInfo() {
         GeneratorController g;
         QCOMPARE(g.step(), 1);

@@ -974,7 +974,10 @@ QVariantMap GeneratorController::contactFeelProbe() const {
 }
 
 void GeneratorController::setOptimizeTarget(const QString& target) {
-    const QString v = target == QLatin1String("general") || target == QLatin1String("neo2") ? target : QString();
+    const QString v = target == QLatin1String("general") || target == QLatin1String("neo2") ||
+                             target == QLatin1String("off")
+                         ? target
+                         : QString();
     if (v == optimize_target_) return;
     optimize_target_ = v;
     saveSetting("generator.optimize_target", v.toStdString());
