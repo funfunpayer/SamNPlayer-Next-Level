@@ -640,6 +640,8 @@ private slots:
         QMetaObject::invokeMethod(named(root.get(), "reviewButton"), "clicked");
         QCOMPARE(root->property("reviewed").toString(), dir_.filePath("clip.samn"));
         if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT_EDIT"); !shot.isEmpty()) window.grabWindow().save(QString::fromLocal8Bit(shot));
+        // Off was only for this Create; clear so later slots load Everyday default.
+        gen->setOptimizeTarget(QString());
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
     }
 
@@ -674,6 +676,9 @@ private slots:
         auto* page = root->property("page").value<QQuickItem*>();
         auto* gen = page->property("controller").value<GeneratorController*>();
         QVERIFY(gen);
+        // dragCreateAndReview may have left Optimize=Off in SAMN_CONFIG_DIR;
+        // Everyday default (unset → Any device / Neo 2) must polish after Create.
+        gen->setOptimizeTarget(QString());
         QVariant ok;
         QVERIFY(QMetaObject::invokeMethod(page, "createFor", Q_RETURN_ARG(QVariant, ok),
                                           Q_ARG(QVariant, QUrl::fromLocalFile(video)), Q_ARG(QVariant, true)));
@@ -683,7 +688,12 @@ private slots:
         QTRY_VERIFY_WITH_TIMEOUT(gen->hasBox() && !gen->finding(), 30000);
         QTRY_VERIFY_WITH_TIMEOUT(QFile::exists(out.filePath("auto.funscript")) && !gen->running(), 60000);
         // 0.7's done line and review (quality, direction, O-zone).
+        // Default Optimize after Create (Any device) appends "(gaps ok)" / heal·fill.
         QVERIFY2(gen->status().startsWith("Done — Emotion Script ready in Play."), qPrintable(gen->status()));
+        QVERIFY2(gen->status().contains(QLatin1String("(gaps ok)")) ||
+                     gen->status().contains(QLatin1String("healed")) ||
+                     gen->status().contains(QLatin1String("+")),
+                 qPrintable(gen->status()));
         const QVariantMap review = gen->review();
         QVERIFY(review.contains("quality"));
         QVERIFY(review.value("quality").toInt() >= 0 && review.value("quality").toInt() <= 100);

@@ -50,6 +50,19 @@ private slots:
         QCOMPARE(g.optimizeTarget(), QString());
     }
 
+    void createPolishSuffixFromOptimizeText() {
+        QCOMPARE(GeneratorController::createPolishSuffix(QString()), QString());
+        QCOMPARE(GeneratorController::createPolishSuffix(QStringLiteral("Ready for any device · no gaps to fill")),
+                 QStringLiteral("(gaps ok)"));
+        QCOMPARE(GeneratorController::createPolishSuffix(
+                     QStringLiteral("Ready for any device · healed 2 tracking gap(s) · filled 1 gap(s) (+4 points)")),
+                 QStringLiteral("(healed 2 · +4 pts)"));
+        QCOMPARE(GeneratorController::createPolishSuffix(QStringLiteral("Improved: 12 points (healed 1 · +3 pts)")),
+                 QStringLiteral("(healed 1 · +3 pts)"));
+        QCOMPARE(GeneratorController::createPolishSuffix(QStringLiteral("Neo 2 ready · contact on")),
+                 QStringLiteral("(gaps ok)"));
+    }
+
     void openingAVideoShowsItsFrameAndInfo() {
         GeneratorController g;
         QCOMPARE(g.step(), 1);
