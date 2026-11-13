@@ -2659,7 +2659,10 @@ Item {
                 Layout.fillWidth: true; implicitHeight: reviewCol.implicitHeight + 28
                 ColumnLayout {
                     id: reviewCol
-                    anchors.fill: parent; anchors.margins: 14; spacing: 8
+                    // Top/sides only: implicitHeight is the children, so the card
+                    // grows with Review (anchors.fill would collapse it to 0).
+                    anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                    anchors.margins: 14; spacing: 8
                     Text {
                         textFormat: Text.PlainText
                         text: qsTr("5 · Review"); color: Theme.text; font.family: Theme.font; font.pixelSize: 15

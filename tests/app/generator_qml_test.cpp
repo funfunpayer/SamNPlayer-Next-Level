@@ -1196,9 +1196,19 @@ private slots:
             QCOMPARE(named(root.get(), "advancedPanel")->property("advancedOpen").toBool(), false);
             QVERIFY(!named(root.get(), "toggle_invert")->isVisible());
             QTRY_VERIFY(named(root.get(), "reviewCard")->isVisible());
+            QTRY_VERIFY(named(root.get(), "reviewCard")->height() > 40);
+            QTRY_VERIFY(named(root.get(), "reviewButton")->isVisible());
             const qreal contentNow = scroll->property("contentHeight").toReal();
-            scroll->setProperty("contentY", qMax<qreal>(0, contentNow - view));
-            QTRY_VERIFY(inView("reviewButton"));
+            auto* reviewBtn = named(root.get(), "reviewButton");
+            const qreal reviewY = reviewBtn->mapToItem(scroll->property("contentItem").value<QQuickItem*>(), QPointF(0, 0)).y();
+            scroll->setProperty("contentY", qBound<qreal>(0, reviewY - 20, qMax<qreal>(0, contentNow - view)));
+            QTRY_VERIFY2(inView("reviewButton"),
+                         qPrintable(QString("review y=%1 h=%2 content=%3 view=%4 cardH=%5")
+                                        .arg(reviewY)
+                                        .arg(reviewBtn->height())
+                                        .arg(contentNow)
+                                        .arg(view)
+                                        .arg(named(root.get(), "reviewCard")->height())));
             QCOMPARE(named(root.get(), "advancedPanel")->property("advancedOpen").toBool(), false);
             if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT_SCROLL"); !shot.isEmpty())
                 window.grabWindow().save(QString::fromLocal8Bit(shot + "_" + tag + "_bottom.png"));
