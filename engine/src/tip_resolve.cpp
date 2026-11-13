@@ -21,6 +21,7 @@ std::vector<int64_t> TipResolveStartMs(int64_t duration_ms, int64_t preview_ms) 
         add(int64_t(duration_ms * 0.10));
         add(int64_t(duration_ms * 0.25));
         add(int64_t(duration_ms * 0.50));
+        add(int64_t(duration_ms * 0.75));
     }
     if (preview_ms >= 0) add(preview_ms);
     return out;
@@ -64,6 +65,7 @@ std::optional<TipResolveResult> ResolveTipForCreate(const std::filesystem::path&
     const int max_n = o.max_candidates > 0 ? o.max_candidates : kTipResolveMaxCandidates;
     const int64_t window_ms = int64_t(std::max(0.0, o.max_seconds) * 1000.0);
     int64_t covered_to = 0;
+    std::optional<TipResolveResult> best;
 
     for (int wi = 0; wi < static_cast<int>(starts.size()); ++wi) {
         if (o.cancel && o.cancel()) return fail(kCanceled);
@@ -93,8 +95,16 @@ std::optional<TipResolveResult> ResolveTipForCreate(const std::filesystem::path&
         res.candidate_index = i;
         res.reason = "window " + std::to_string(res.start_ms) + " ms, candidate " + std::to_string(i + 1);
         res.candidates = tip->candidates;
+
+        if (!best || res.score > best->score) best = res;
+        if (res.score >= kStrongTipScore) {
+            if (o.progress) o.progress(99);
+            return best;
+        }
+    }
+    if (best) {
         if (o.progress) o.progress(99);
-        return res;
+        return best;
     }
     return fail("only weak motion found");
 }

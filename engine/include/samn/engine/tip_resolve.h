@@ -3,8 +3,10 @@
 // paint one (FunGen2: Create finds the tip). FindTip at several start times,
 // and when the top candidate is below kWeakTipScore the rest of that window
 // (up to kTipResolveMaxCandidates) are tried, as repair.cpp tries several
-// Find tip proposals rather than failing on #1. Fail closed only when no
-// window has usable motion.
+// Find tip proposals rather than failing on #1. Across windows, keep the
+// strongest usable pick and only early-exit when the score is clearly strong
+// (kStrongTipScore) so a marginal intro does not beat a later clear stroke.
+// Fail closed only when no window has usable motion.
 #include <cstdint>
 #include <filesystem>
 #include <functional>
@@ -20,6 +22,9 @@ namespace samn::engine {
 // clip scores about 0.002, a clear stroke above 1). Shared by Create and the
 // queue.
 constexpr double kWeakTipScore = 0.05;
+// At or above this, ResolveTipForCreate stops searching further windows.
+// Between weak and strong it keeps looking for a clearer stroke.
+constexpr double kStrongTipScore = 0.5;
 constexpr int kTipResolveMaxCandidates = 6;
 
 struct TipResolveOptions {
@@ -39,7 +44,7 @@ struct TipResolveResult {
     std::vector<TipCandidate> candidates;  // that window, strongest first
 };
 
-// 0, ~10 %, ~25 %, ~50 % of duration, then preview_ms if it is new.
+// 0, ~10 %, ~25 %, ~50 %, ~75 % of duration, then preview_ms if it is new.
 // duration_ms <= 0 → {0} (and preview if given). Starts are unique, in that
 // order, and inside [0, duration).
 std::vector<int64_t> TipResolveStartMs(int64_t duration_ms, int64_t preview_ms = -1);
@@ -51,9 +56,9 @@ std::optional<int> BestUsableTipIndex(const std::vector<TipCandidate>& candidate
                                       int max_n = kTipResolveMaxCandidates);
 
 // nullopt with *error when the video cannot be read, the run was canceled
-// ("canceled"), or no window produced a usable candidate. Early-exits on the
-// first usable pick so Create stays as snappy as a single FindTip when t=0
-// already has motion.
+// ("canceled"), or no window produced a usable candidate. Early-exits when a
+// window's best usable score is at or above kStrongTipScore; otherwise keeps
+// the strongest usable pick across the remaining windows.
 std::optional<TipResolveResult> ResolveTipForCreate(const std::filesystem::path& video,
                                                     const TipResolveOptions& options, std::string* error);
 

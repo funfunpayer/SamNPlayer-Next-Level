@@ -89,6 +89,29 @@ inline bool WriteStillThenMoving(const std::filesystem::path& p, int still_secon
     return true;
 }
 
+// Quiet 1 Hz stroke (small amp), then a clear stroke (large amp). With a short
+// max_seconds the first ResolveTip window is usable but below kStrongTipScore;
+// a later window should win when the resolver keeps searching for the best.
+inline bool WriteQuietThenStrong(const std::filesystem::path& p, int quiet_seconds, int strong_seconds, double quiet_amp,
+                                 double strong_amp) {
+    auto w = Writer(p);
+    if (!w.isOpened()) return false;
+    const cv::Mat bg = Texture(kW, kH, 11, 140);
+    const int quiet_n = int(kFps * quiet_seconds);
+    const int strong_n = int(kFps * strong_seconds);
+    for (int i = 0; i < quiet_n; ++i) {
+        cv::Mat f = bg.clone();
+        Disc(f, 160, int(120 + quiet_amp / 2 * std::sin(2 * kPi * 1.0 * i / kFps)));
+        w.write(f);
+    }
+    for (int i = 0; i < strong_n; ++i) {
+        cv::Mat f = bg.clone();
+        Disc(f, 160, int(120 + strong_amp / 2 * std::sin(2 * kPi * 1.0 * i / kFps)));
+        w.write(f);
+    }
+    return true;
+}
+
 // The camera window pans over a larger world while the disc moves 1 Hz.
 inline bool WritePanning(const std::filesystem::path& p, int seconds, double amp) {
     auto w = Writer(p);
