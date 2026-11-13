@@ -1052,7 +1052,8 @@ void GeneratorController::setContactVibration(bool v) {
 }
 
 void GeneratorController::setMaxAnalysisFps(int v) {
-    // 0 = every frame; otherwise 5..60 in steps of 5 (FR-7 analysis rate cap).
+    // 0 = every frame; otherwise 5..60 in steps of 5. Everyday default is 15
+    // (FunGen2-faster Create); Expert can restore every frame.
     int n = std::clamp(v, 0, 60);
     if (n > 0) n = std::max(5, (n / 5) * 5);
     if (n == max_analysis_fps_) return;

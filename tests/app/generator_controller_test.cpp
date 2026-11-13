@@ -586,7 +586,7 @@ private slots:
             QCOMPARE(g.peakProminence(), 0.0);
             QCOMPARE(g.rdpTolerance(), 0.0);
             QCOMPARE(g.maxSpeed(), 0);
-            QCOMPARE(g.maxAnalysisFps(), 0);
+            QCOMPARE(g.maxAnalysisFps(), 15);  // Everyday FunGen2-faster Create
             QCOMPARE(g.editorShare(), 0.40);
             QCOMPARE(g.hybridReacquire(), false);
             g.setSmoothWindow(20);  // even → 19
@@ -600,8 +600,8 @@ private slots:
             QCOMPARE(g.rdpTolerance(), 1.0);
             g.setMaxSpeed(175);  // → 150
             QCOMPARE(g.maxSpeed(), 150);
-            g.setMaxAnalysisFps(17);  // → 15
-            QCOMPARE(g.maxAnalysisFps(), 15);
+            g.setMaxAnalysisFps(22);  // → 20 (must differ from Everyday 15 so it saves)
+            QCOMPARE(g.maxAnalysisFps(), 20);
             g.setEditorShare(0.55);
             QCOMPARE(g.editorShare(), 0.55);
             g.setEditorShare(0.9);  // clamp
@@ -615,7 +615,7 @@ private slots:
         QCOMPARE(s.get("generator.peak_prominence").get<double>(), 0.35);
         QCOMPARE(s.get("generator.rdp_tolerance").get<double>(), 1.0);
         QCOMPARE(s.get("generator.max_speed").get<int>(), 150);
-        QCOMPARE(s.get("generator.max_analysis_fps").get<int>(), 15);
+        QCOMPARE(s.get("generator.max_analysis_fps").get<int>(), 20);
         QCOMPARE(s.get("generator.editor_share").get<double>(), 0.65);
         QCOMPARE(s.get("generator.hybrid_reacquire").get<bool>(), true);
         {
@@ -625,7 +625,7 @@ private slots:
             QCOMPARE(g.peakProminence(), 0.35);
             QCOMPARE(g.rdpTolerance(), 1.0);
             QCOMPARE(g.maxSpeed(), 150);
-            QCOMPARE(g.maxAnalysisFps(), 15);
+            QCOMPARE(g.maxAnalysisFps(), 20);
             QCOMPARE(g.editorShare(), 0.65);
             QVERIFY(g.hybridReacquire());
             // Restore Everyday defaults for later tests.
@@ -634,7 +634,7 @@ private slots:
             g.setPeakProminence(0);
             g.setRdpTolerance(0);
             g.setMaxSpeed(0);
-            g.setMaxAnalysisFps(0);
+            g.setMaxAnalysisFps(15);
             g.setEditorShare(0.40);
             // Unset — do not write false (that means user Off and blocks
             // FunGen2 auto-on in later tip/Apply tests that share settings).
