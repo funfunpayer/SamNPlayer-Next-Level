@@ -640,6 +640,8 @@ private slots:
         QMetaObject::invokeMethod(named(root.get(), "reviewButton"), "clicked");
         QCOMPARE(root->property("reviewed").toString(), dir_.filePath("clip.samn"));
         if (const QByteArray shot = qgetenv("SAMN_TEST_SHOT_EDIT"); !shot.isEmpty()) window.grabWindow().save(QString::fromLocal8Bit(shot));
+        // Off was only for this Create; clear so later slots load Everyday default.
+        gen->setOptimizeTarget(QString());
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
     }
 
@@ -674,6 +676,9 @@ private slots:
         auto* page = root->property("page").value<QQuickItem*>();
         auto* gen = page->property("controller").value<GeneratorController*>();
         QVERIFY(gen);
+        // dragCreateAndReview may have left Optimize=Off in SAMN_CONFIG_DIR;
+        // Everyday default (unset → Any device / Neo 2) must polish after Create.
+        gen->setOptimizeTarget(QString());
         QVariant ok;
         QVERIFY(QMetaObject::invokeMethod(page, "createFor", Q_RETURN_ARG(QVariant, ok),
                                           Q_ARG(QVariant, QUrl::fromLocalFile(video)), Q_ARG(QVariant, true)));
