@@ -45,9 +45,10 @@ struct GenerateRequest {
     bool overwrite = false;                 // overwrite guard: off = never replace a file
     bool auto_ozone = true;                 // primary + up to two secondary O-markers (0.7)
     // Contact vibration and the marked areas (0.7 Options.ContactVibration,
-    // RegionClass, ROI2, ExtraTargets); boxes in video pixels. With a contact
-    // area the tip's path is stored too, so the Player vibrates when the tip
-    // reaches an area.
+    // RegionClass, ROI2, ExtraTargets); boxes in video pixels. The tip path
+    // is always written into the companion .samn when tracking produced
+    // centres (tip-only scripts included), so Play and the Generator overlay
+    // can follow the tip; contact areas still drive spatial vibration.
     bool contact_vibration = false;
     double contact_vibration_span = 0;  // 0 = default
     std::string contact_vibration_curve;
@@ -70,6 +71,11 @@ struct GenerateEvent {
 };
 
 using GenerateCallback = std::function<void(const GenerateEvent&)>;
+
+// Tip (+ optional partner / extras) path for the companion .samn (0.7
+// buildTrajectoryData): box centres in frame pixels, one point per 50 ms,
+// 0.1 px. Empty tip when the track has no centres.
+TrajectoryData BuildTrajectory(const TrackResult& tr);
 
 // The run itself, on the calling thread. Every event carries run_id.
 void Generate(const GenerateRequest& request, uint64_t run_id, const std::function<bool()>& cancel,

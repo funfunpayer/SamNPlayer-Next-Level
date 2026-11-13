@@ -9,6 +9,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QPointer>
+#include <QTimer>
 #include <QUrl>
 #include <algorithm>
 #include <utility>
@@ -20,6 +21,7 @@
 #include "samn/vision/canceled.h"
 #include "samn/video_info.h"
 #include "samn/engine/generate_queue.h"
+#include "samn/engine/track_box.h"
 #include "samn/engine/tip_find.h"
 #include "samn/contact_marks.h"
 #include "samn/contact_preview.h"
@@ -201,9 +203,11 @@ void GeneratorController::saveSetting(const char* key, const nlohmann::json& val
 // The runner cancels and joins first (GD-25: nothing outlives the app).
 GeneratorController::~GeneratorController() {
     cancelFind();
+    cancelTipPreview();
     ++ai_seq_;  // drop a late suggest result
     if (queue_cancel_) *queue_cancel_ = true;
     if (finder_.joinable()) finder_.join();
+    if (preview_.joinable()) preview_.join();
     if (ai_worker_.joinable()) ai_worker_.join();
     if (queue_worker_.joinable()) queue_worker_.join();
     runner_.reset();
@@ -312,8 +316,7 @@ bool GeneratorController::findTip() {
                                     : tr("Not sure where the tip is: click a dashed box, or drag one by hand."));
                 return;
             }
-            self->setBox(QRect(r->box.x, r->box.y, r->box.width, r->box.height));
-            self->box_ms_ = double(startMs);  // found from there, whatever is shown now
+            self->installBox(QRect(r->box.x, r->box.y, r->box.width, r->box.height), double(startMs));
             if (thenCreate) {
                 // Create goes on only with a real find; a weak one waits for the user.
                 if (weak) {
@@ -699,6 +702,9 @@ bool GeneratorController::openVideo(const QString& pathOrUrl, bool lookForTip) {
                       .arg(std::round(reader->fps() * 100) / 100)
                       .arg(codec.empty() ? tr("codec unknown") : QString::fromStdString(codec));
     box_ = QRect();
+    box_ms_ = 0;
+    cancelTipPreview();
+    clearTipPath();
     contact_areas_.clear();  // drawn on the old video
     mask_rois_.clear();
     mark_contact_ = mark_extra_ = mark_ignore_ = false;
@@ -718,6 +724,7 @@ bool GeneratorController::openVideo(const QString& pathOrUrl, bool lookForTip) {
     progress_text_.clear();
     emit videoChanged();
     emit boxChanged();
+    emit boxLabelChanged();
     emit outputChanged();
     emit logChanged();
     emit progressChanged();
@@ -745,29 +752,35 @@ void GeneratorController::seekPreview(double ms) {
     emit previewChanged();
 }
 
-void GeneratorController::setBox(const QRect& box) {
+void GeneratorController::setBox(const QRect& box) { installBox(box, preview_ms_); }
+
+void GeneratorController::installBox(const QRect& box, double atMs) {
     // Inside the frame; 0.7 treats boxes under 8 px as a click, not a box.
     const QRect r = box.normalized().intersected(QRect(QPoint(0, 0), video_size_));
     const QRect next = r.width() >= 8 && r.height() >= 8 ? r : QRect();
     // The box belongs to the frame it was drawn on: tracking starts there
     // (0.7 startTimeSec), not at 0 where the tip is somewhere else.
-    if (next == box_ && box_ms_ == preview_ms_) return;
+    if (next == box_ && box_ms_ == atMs) return;
     box_ = next;
-    box_ms_ = preview_ms_;
+    box_ms_ = atMs;
     ++box_edits_;
     emit boxChanged();
+    emit boxLabelChanged();
     emit stepChanged();
+    scheduleTipPreview();
 }
 
 void GeneratorController::clearBox() { setBox(QRect()); }
 
 QString GeneratorController::boxLabel() const {
     if (!hasBox()) return tr("No tip box yet — drag one on the frame.");
-    return tr("Tip (stroke tracker): x=%1 y=%2 w=%3 h=%4 — CSRT follows this box only.")
-        .arg(box_.x())
-        .arg(box_.y())
-        .arg(box_.width())
-        .arg(box_.height());
+    const QString coords = tr("Tip (stroke tracker): x=%1 y=%2 w=%3 h=%4")
+                               .arg(box_.x())
+                               .arg(box_.y())
+                               .arg(box_.width())
+                               .arg(box_.height());
+    return hasTipPath() ? tr("%1 — follows motion; drag still edits the seed.").arg(coords)
+                        : tr("%1 — CSRT follows this box only.").arg(coords);
 }
 
 void GeneratorController::setProfile(const QString& p) {
@@ -1320,6 +1333,7 @@ bool GeneratorController::create(bool overwrite) {
         setStatus(tr("Finding tip, then creating…"));
         return true;
     }
+    cancelTipPreview();  // keep the last preview path; Create will replace it
     engine::GenerateRequest req;
     req.video = std::filesystem::path(video_path_.toStdU16String());
     req.box = cv::Rect(box_.x(), box_.y(), box_.width(), box_.height());
@@ -1439,6 +1453,7 @@ void GeneratorController::onEvent(const engine::GenerateEvent& e) {
     emit stepChanged();
     if (e.kind == engine::GenerateEventKind::kDone) {
         applyFeel(output_path_);  // 0.7: the feel goes in right after Create
+        loadTipPathFromSamn(output_path_);
         emit created(output_path_);
     }
 }
@@ -1498,6 +1513,104 @@ void GeneratorController::setStatus(const QString& s) {
 void GeneratorController::appendLog(const QString& line) {
     log_.append(line);
     emit logChanged();
+}
+
+QVariantMap GeneratorController::tipAt(double scriptMs) const {
+    const auto p = samn::PathAt(tipPath_, int64_t(std::llround(scriptMs)));
+    if (!p) return {};
+    return {{"x", p->x}, {"y", p->y}};
+}
+
+void GeneratorController::setTipPathForTest(const QVariantList& points) {
+    cancelTipPreview();
+    std::vector<samn::TrajectoryPoint> path;
+    path.reserve(size_t(points.size()));
+    for (const QVariant& v : points) {
+        const QVariantMap m = v.toMap();
+        path.push_back({int64_t(std::llround(m.value(QStringLiteral("at")).toDouble())),
+                        m.value(QStringLiteral("x")).toDouble(), m.value(QStringLiteral("y")).toDouble()});
+    }
+    applyTipPath(std::move(path));
+}
+
+void GeneratorController::applyTipPath(std::vector<samn::TrajectoryPoint> path) {
+    samn::TrajectoryData data;
+    data.tip = std::move(path);
+    tipPath_ = samn::SortedTipPath(data);
+    ++tip_path_revision_;
+    emit tipPathChanged();
+    emit boxLabelChanged();
+}
+
+void GeneratorController::clearTipPath() {
+    if (tipPath_.empty()) return;
+    tipPath_.clear();
+    ++tip_path_revision_;
+    emit tipPathChanged();
+    emit boxLabelChanged();
+}
+
+void GeneratorController::loadTipPathFromSamn(const QString& samnPath) {
+    if (samnPath.isEmpty()) return;
+    try {
+        const samn::Document doc = samn::LoadDocument(std::filesystem::path(samnPath.toStdU16String()));
+        if (!doc.trajectory || doc.trajectory->tip.empty()) return;
+        applyTipPath(samn::SortedTipPath(*doc.trajectory));
+    } catch (const std::exception&) {
+    }
+}
+
+void GeneratorController::cancelTipPreview() {
+    ++preview_seq_;
+    if (preview_cancel_) *preview_cancel_ = true;
+}
+
+void GeneratorController::scheduleTipPreview() {
+    cancelTipPreview();
+    if (!hasBox() || video_path_.isEmpty()) {
+        clearTipPath();
+        return;
+    }
+    if (running_ || queue_running_) return;
+    const quint64 seq = preview_seq_;
+    QTimer::singleShot(0, this, [this, seq] { startTipPreview(seq); });
+}
+
+void GeneratorController::startTipPreview(quint64 seq) {
+    if (seq != preview_seq_) return;
+    if (!hasBox() || video_path_.isEmpty() || running_ || queue_running_) return;
+    if (preview_.joinable()) preview_.join();
+    preview_cancel_ = std::make_shared<std::atomic<bool>>(false);
+    const QRect box = box_;
+    const double at = box_ms_;
+    const QString video = video_path_;
+    const bool cuts = scene_cuts_;
+    const engine::TrackAxis axis = trackAxis();
+    QPointer<GeneratorController> self(this);
+    preview_ = std::thread([self, seq, box, at, video, cuts, axis, cancel = preview_cancel_] {
+        engine::TrackOptions to;
+        to.start_ms = int64_t(std::floor(at));
+        to.max_analysis_fps = 8;  // lighter than Create; overlay only
+        to.max_frames = 400;
+        to.camera_compensation = false;
+        to.scene_cuts = cuts;
+        to.appearance_memory = false;
+        to.axis = axis;
+        to.cancel = [cancel] { return cancel->load(); };
+        std::string error;
+        auto tr = engine::TrackBox(std::filesystem::path(video.toStdU16String()),
+                                   cv::Rect(box.x(), box.y(), box.width(), box.height()), to, &error);
+        QMetaObject::invokeMethod(
+            qApp,
+            [self, seq, tr = std::move(tr)] {
+                if (!self || seq != self->preview_seq_) return;
+                if (!tr || tr->canceled || tr->frame_xs.empty()) return;
+                const auto data = engine::BuildTrajectory(*tr);
+                if (data.tip.empty()) return;
+                self->applyTipPath(samn::SortedTipPath(data));
+            },
+            Qt::QueuedConnection);
+    });
 }
 
 }  // namespace samn::ui
