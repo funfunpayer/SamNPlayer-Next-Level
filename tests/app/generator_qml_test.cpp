@@ -424,12 +424,15 @@ private slots:
         // (3) under ctest the first Shift-drag can be a no-op — retry once.
         QTRY_VERIFY(!frame->property("imageRect").toRectF().isEmpty());
         QTest::qWait(200);
-        ir = frame->property("imageRect").toRectF();
-        QVERIFY(ir.width() > 100);
-        const double sShift = ir.width() / 320.0;
+        // Match GeneratorPage scaleX/scaleY (width/320 and height/240) — a single
+        // width scale skews y when the letterboxed imageRect is not exact 4:3.
         auto shiftDragPrimary = [&] {
-            const QPointF a = frame->mapToScene(QPointF(ir.x() + 20 * sShift, ir.y() + 150 * sShift));
-            const QPointF b = frame->mapToScene(QPointF(ir.x() + 100 * sShift, ir.y() + 210 * sShift));
+            ir = frame->property("imageRect").toRectF();
+            QVERIFY(ir.width() > 100 && ir.height() > 100);
+            const double sx = ir.width() / 320.0;
+            const double sy = ir.height() / 240.0;
+            const QPointF a = frame->mapToScene(QPointF(ir.x() + 20 * sx, ir.y() + 150 * sy));
+            const QPointF b = frame->mapToScene(QPointF(ir.x() + 100 * sx, ir.y() + 210 * sy));
             QTest::keyPress(&window, Qt::Key_Shift);
             QCoreApplication::processEvents();
             QTest::mousePress(&window, Qt::LeftButton, Qt::ShiftModifier, a.toPoint());
