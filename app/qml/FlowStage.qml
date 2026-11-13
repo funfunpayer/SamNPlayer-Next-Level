@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Shapes
+import QtQuick.Window
 import SamN
 
 // The Flow idle graphic for "Feel without film" (0.7 flow_fx / D-138): a
@@ -71,9 +72,11 @@ Item {
             id: trailA
             anchors.fill: parent
             source: "assets/flow-ribbons.svg"
-            sourceSize: Qt.size(Math.max(1, width * 2), Math.max(1, height * 2))
+            sourceSize: Qt.size(Math.max(1, Math.ceil(width * Screen.devicePixelRatio)),
+                                Math.max(1, Math.ceil(height * Screen.devicePixelRatio)))
+            smooth: true
             fillMode: Image.PreserveAspectFit
-            opacity: 0.78
+            opacity: 0.62
             property real dx: 0
             transform: Translate { x: trailA.dx }
             SequentialAnimation on opacity {
@@ -94,9 +97,11 @@ Item {
             id: trailB
             anchors.fill: parent
             source: "assets/flow-ribbons.svg"
-            sourceSize: Qt.size(Math.max(1, width * 2), Math.max(1, height * 2))
+            sourceSize: Qt.size(Math.max(1, Math.ceil(width * Screen.devicePixelRatio)),
+                                Math.max(1, Math.ceil(height * Screen.devicePixelRatio)))
+            smooth: true
             fillMode: Image.PreserveAspectFit
-            opacity: 0.35
+            opacity: 0.28
             property real dx: 0
             transform: Translate { x: trailB.dx }
             SequentialAnimation on opacity {
@@ -122,7 +127,9 @@ Item {
         x: parent.width / 2 - width * 80 / 180
         y: parent.height * 0.49 - height / 2
         source: "assets/flow-mark.svg"
-        sourceSize: Qt.size(Math.max(1, width * 2), Math.max(1, height * 2))
+        sourceSize: Qt.size(Math.max(1, Math.ceil(width * Screen.devicePixelRatio)),
+                            Math.max(1, Math.ceil(height * Screen.devicePixelRatio)))
+        smooth: true
         transform: Translate { id: lift; y: 0 }
         SequentialAnimation {
             running: root.moving

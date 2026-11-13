@@ -29,12 +29,7 @@ Item {
         anchors.left: parent.left; anchors.leftMargin: 20
         anchors.verticalCenter: parent.verticalCenter
         spacing: 6
-        Image {
-            source: "assets/logo.png"
-            width: 58; height: 58
-            sourceSize: Qt.size(116, 116)
-            smooth: true; mipmap: true
-        }
+        BrandLogo { width: 58; height: 58 }
         Column {
             anchors.verticalCenter: parent.verticalCenter
             // The wordmark keeps room for its glow; pull the tagline under the letters.
