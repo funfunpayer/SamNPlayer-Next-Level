@@ -571,6 +571,11 @@ private slots:
         const QString classDest =
             QString::fromStdU16String((samn::config_dir() / "models" / "yolo" / "classes.json").u16string());
         QVERIFY(QFileInfo::exists(classDest));
+        // Drop YOLO so later vote tests stay server+NudeNet(+student) only.
+        QFile::remove(c.yoloPath());
+        QDir(QString::fromStdU16String((samn::config_dir() / "models" / "yolo").u16string())).removeRecursively();
+        samn::Settings().set("generator.ai_yolo_path", "");
+        samn::Settings().set("aitrain.teacher.kind", "server");
     }
 
     // Votes (D-155 step 4, Owner 20 Oct): what both teachers see is plain, what
@@ -578,6 +583,7 @@ private slots:
     // same through the clip in one undo step.
     void teachersVoteOnAFrameAndThroughTheClip() {
         if (!samn::vision::OnnxDetector::Available()) return;  // one teacher only: nothing to vote
+        QFile::remove(QString::fromStdU16String((samn::config_dir() / "models" / "yolo.onnx").u16string()));
         FakeModelServer fake;
         const QString path = dir_.filePath("votes.mp4");
         QVERIFY(QFile::copy(clip_, path));
@@ -651,6 +657,8 @@ private slots:
     // its query 0 is class 1, which classes.json names "face".
     void theStudentIsATeacher() {
         if (!samn::vision::OnnxDetector::Available()) return;
+        QFile::remove(QString::fromStdU16String((samn::config_dir() / "models" / "yolo.onnx").u16string()));
+        samn::Settings().set("generator.ai_yolo_path", "");
         const QString models = dir_.filePath("config/models/student");
         QVERIFY(QDir().mkpath(models));
         QFile::remove(models + "/student.onnx");
