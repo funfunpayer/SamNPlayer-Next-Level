@@ -20,16 +20,18 @@ Item {
     readonly property bool vibPulsing: running && vibration > 0
     readonly property bool sucPulsing: running && suction > 0
     readonly property bool live: vibPulsing || sucPulsing
+    // Drawn at 128 px, then scaled so the ring fits a short or narrow stage.
+    property real size: 128
     readonly property real r: 52
-    implicitWidth: 128 + legend.implicitWidth + 18
-    implicitHeight: 128
+    implicitWidth: size + legend.implicitWidth + 18
+    implicitHeight: size
 
     function trackOpacity(level) { return level > 0.01 ? 0.45 + 0.55 * Math.min(1, level) : 0.28 }
 
     Item {
         id: wrap
         objectName: "dualRingWrap"
-        width: 128; height: 128
+        width: root.size; height: root.size
         anchors.verticalCenter: parent.verticalCenter
         // Suction breathes the whole ring: together, then apart.
         property real sucAmp: Math.min(1, Math.max(0, root.suction)) * 0.18
@@ -41,6 +43,11 @@ Item {
             NumberAnimation { to: 1 + wrap.sucAmp * 0.6; duration: 1050 * 0.35; easing.type: Easing.InOutSine }
             NumberAnimation { to: 1; duration: 1050 * 0.30; easing.type: Easing.InOutSine }
         }
+
+        Item {
+            width: 128; height: 128
+            scale: root.size / 128
+            transformOrigin: Item.TopLeft
 
         Rectangle {
             id: halo
@@ -155,6 +162,7 @@ Item {
                 text: Math.round(Math.min(1, Math.max(0, root.suction)) * 100) + "%"
                 color: Theme.trainSuction; font.family: Theme.font; font.pixelSize: 15; font.bold: true
             }
+        }
         }
     }
 

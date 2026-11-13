@@ -66,14 +66,22 @@ Item {
 
         // ------------------------------------------------------------ left: programs
         GlassCard {
-            Layout.preferredWidth: 232; Layout.fillHeight: true
+            id: leftPanel
+            objectName: "leftPanel"
+            Layout.preferredWidth: 232; Layout.minimumWidth: 0; Layout.maximumWidth: 232
+            Layout.fillHeight: true
+            clip: true
             ColumnLayout {
                 anchors.fill: parent; anchors.margins: 14
                 spacing: 8
-                Text { textFormat: Text.PlainText; text: qsTr("Training"); color: Theme.text; font.family: Theme.font; font.pixelSize: 17; font.weight: Font.DemiBold }
+                Text {
+                    textFormat: Text.PlainText; text: qsTr("Training")
+                    color: Theme.text; font.family: Theme.font; font.pixelSize: 17; font.weight: Font.DemiBold
+                    Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight
+                }
                 Text { textFormat: Text.PlainText; text: qsTr("Category"); color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 11 }
                 Flow {
-                    Layout.fillWidth: true; spacing: 4
+                    Layout.fillWidth: true; Layout.minimumWidth: 0; spacing: 4
                     Repeater {
                         model: [["", qsTr("All")], ["control", qsTr("Control")], ["endurance", qsTr("Endurance")], ["edge", qsTr("Edge Play")], ["body", qsTr("Body")]]
                         delegate: Rectangle {
@@ -117,8 +125,11 @@ Item {
                     }
                 }
                 RowLayout {
-                    Layout.fillWidth: true
-                    Text { textFormat: Text.PlainText; text: qsTr("My programs"); color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 11; Layout.fillWidth: true }
+                    Layout.fillWidth: true; Layout.minimumWidth: 0
+                    Text {
+                        textFormat: Text.PlainText; text: qsTr("My programs"); color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 11
+                        Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight
+                    }
                     IconButton { icon: "plus"; width: 28; height: 28; tip: qsTr("New program"); onClicked: editor.show("") }
                 }
                 Text {
@@ -144,25 +155,49 @@ Item {
         }
 
         // ------------------------------------------------------------ centre
-        ColumnLayout {
-            Layout.fillWidth: true; Layout.fillHeight: true
-            spacing: 10
+        Flickable {
+            id: centerScroll
+            objectName: "centerScroll"
+            Layout.fillWidth: true; Layout.fillHeight: true; Layout.minimumWidth: 0
+            clip: true
+            contentWidth: width
+            contentHeight: Math.max(height, centerCol.implicitHeight)
+            boundsBehavior: Flickable.StopAtBounds
+            flickableDirection: Flickable.VerticalFlick
+            ScrollBar.vertical: ScrollBar { policy: centerScroll.contentHeight > centerScroll.height + 1 ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded }
 
-            // Program and phase stepper.
+            ColumnLayout {
+                id: centerCol
+                objectName: "centerColumn"
+                width: centerScroll.width
+                spacing: 10
+
+            // Program and phase stepper. Height follows content so large fonts
+            // grow the card instead of painting past it; a short window scrolls.
             GlassCard {
-                Layout.fillWidth: true; Layout.preferredHeight: 104
-                RowLayout {
-                    anchors.fill: parent; anchors.margins: 14
-                    spacing: 18
+                id: programCard
+                objectName: "programCard"
+                Layout.fillWidth: true; Layout.minimumWidth: 0
+                Layout.preferredHeight: programBody.implicitHeight + 28
+                clip: true
+                Flow {
+                    id: programBody
+                    x: 14; y: 14; width: parent.width - 28
+                    spacing: 16
                     ColumnLayout {
-                        Layout.preferredWidth: 300; Layout.fillHeight: true
+                        id: programPick
+                        width: programBody.width >= 520 ? Math.min(300, programBody.width * 0.46) : programBody.width
                         spacing: 6
-                        Text { textFormat: Text.PlainText; text: qsTr("Training Program"); color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 14; font.weight: Font.Medium }
+                        Text {
+                            textFormat: Text.PlainText; text: qsTr("Training Program")
+                            color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 14; font.weight: Font.Medium
+                            Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight
+                        }
                         RowLayout {
-                            spacing: 8
+                            Layout.fillWidth: true; Layout.minimumWidth: 0; spacing: 8
                             FlowCombo {
                                 id: programBox
-                                Layout.fillWidth: true
+                                Layout.fillWidth: true; Layout.minimumWidth: 0
                                 enabled: ctl.state === "idle"
                                 textRole: "text"
                                 model: [{ name: "", text: qsTr("Custom (Stop-Start / Plateau + timings)") }].concat(ctl.programs, ctl.myPrograms)
@@ -174,7 +209,7 @@ Item {
                         }
                         Text {
                             textFormat: Text.PlainText
-                            Layout.fillWidth: true; Layout.fillHeight: true
+                            Layout.fillWidth: true; Layout.minimumWidth: 0
                             text: page.custom
                                   ? qsTr("Stop-Start (fully to 0 between cycles) or Plateau (high floor / edging). Stay at feedback 5–7; Interrupt at 8.")
                                   : ctl.scriptDescription
@@ -182,13 +217,16 @@ Item {
                             wrapMode: Text.WordWrap; elide: Text.ElideRight; maximumLineCount: 5
                         }
                     }
-                    Rectangle { Layout.preferredWidth: 1; Layout.fillHeight: true; Layout.topMargin: 4; Layout.bottomMargin: 4; color: Theme.cardBorder }
                     ColumnLayout {
-                        Layout.fillWidth: true; Layout.fillHeight: true
+                        width: programBody.width >= 520 ? Math.max(180, programBody.width - programPick.width - 16) : programBody.width
                         spacing: 8
-                        Text { textFormat: Text.PlainText; text: qsTr("Training Phase"); color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 14; font.weight: Font.Medium }
+                        Text {
+                            textFormat: Text.PlainText; text: qsTr("Training Phase")
+                            color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 14; font.weight: Font.Medium
+                            Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight
+                        }
                         Item {
-                            Layout.fillWidth: true; Layout.fillHeight: true
+                            Layout.fillWidth: true; Layout.preferredHeight: 52; Layout.minimumWidth: 0
                             readonly property int count: ctl.planPhases.length
                             readonly property real slot: count > 0 ? width / count : width
                             // The line behind the steps.
@@ -226,7 +264,11 @@ Item {
             // The rings stage.
             GlassCard {
                 id: stage
-                Layout.fillWidth: true; Layout.fillHeight: true; Layout.minimumHeight: 200
+                objectName: "stage"
+                Layout.fillWidth: true; Layout.minimumWidth: 0; Layout.minimumHeight: 200
+                Layout.preferredHeight: Math.max(200, centerScroll.height
+                    - programCard.implicitHeight - sessionBar.implicitHeight
+                    - curvesCard.implicitHeight - timelineCard.implicitHeight - 40)
                 clip: true
                 // 0.8 #550 rings stage: calm dark navy with the silk "infinity
                 // bridge" (stage-ribbons) drifting behind the two gauges; the
@@ -282,11 +324,66 @@ Item {
                         NumberAnimation { to: 1.0; duration: 28000; easing.type: Easing.InOutSine }
                     }
                 }
-                Text {
-                    textFormat: Text.PlainText
-                    x: 16; y: 12
-                    text: qsTr("LIVE TRAINING") + (ctl.active ? "  ·  " + ctl.phaseName : "")
-                    color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11; font.letterSpacing: 2
+                Flow {
+                    id: stageChrome
+                    objectName: "stageChrome"
+                    z: 2
+                    anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                    anchors.leftMargin: 12; anchors.rightMargin: 12; anchors.topMargin: 6
+                    spacing: 8
+                    Text {
+                        textFormat: Text.PlainText
+                        width: Math.min(implicitWidth, Math.max(80, stageChrome.width - 8))
+                        elide: Text.ElideRight
+                        text: qsTr("LIVE TRAINING") + (ctl.active ? "  ·  " + ctl.phaseName : "")
+                        color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11; font.letterSpacing: 2
+                    }
+                    HelpChip { key: "training.stage" }
+                    FlowTabs {
+                        objectName: "stageSwitch"
+                        readonly property var modes: ["rings", "figure", "video"]
+                        model: [qsTr("Rings"), qsTr("Figure"), qsTr("Video")]
+                        current: Math.max(0, modes.indexOf(ctl.stage))
+                        onPicked: (i) => ctl.stage = modes[i]
+                    }
+                    FlowButton {
+                        objectName: "stageVideoChoose"
+                        visible: stage.videoStage
+                        height: 30
+                        text: qsTr("Choose video…")
+                        onClicked: stageVideoDialog.open()
+                    }
+                    FlowCombo {
+                        objectName: "stageClimaxAction"
+                        visible: stage.videoStage && ctl.videoPhases.length > 0
+                        width: Math.min(190, stageChrome.width); height: 30
+                        readonly property var actions: ["none", "pause", "cooldown"]
+                        model: [qsTr("Climax: carry on"), qsTr("Climax: pause"), qsTr("Climax: cool-down")]
+                        currentIndex: actions.indexOf(ctl.climaxAction)
+                        onActivated: (i) => ctl.climaxAction = actions[i]
+                    }
+                    FlowCombo {
+                        objectName: "stageVideoRecent"
+                        visible: stage.videoStage
+                        width: Math.min(200, stageChrome.width); height: 30
+                        enabled: ctl.recentVideos.length > 0
+                        model: ctl.recentVideos.map((p) => p.split(/[\/]/).pop())
+                        displayText: ctl.videoName !== "" ? ctl.videoName : qsTr("Recent videos")
+                        onActivated: (i) => ctl.chooseVideo(ctl.recentVideos[i])
+                    }
+                    Row {
+                        visible: stage.videoStage
+                        objectName: "stageVideoControls"
+                        spacing: 6
+                        FlowToggle { objectName: "stageVideoLoop"; anchors.verticalCenter: parent.verticalCenter; checked: ctl.videoLoop; onToggled: (on) => ctl.videoLoop = on }
+                        Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; text: qsTr("Loop"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
+                    }
+                    Row {
+                        visible: stage.videoStage
+                        spacing: 6
+                        FlowToggle { objectName: "stageVideoMuted"; anchors.verticalCenter: parent.verticalCenter; checked: ctl.videoMuted; onToggled: (on) => ctl.videoMuted = on }
+                        Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; text: qsTr("Muted"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
+                    }
                 }
                 // Video stage (0.8 training_video.js): the user's film plays
                 // along while the training runs and pauses when it stops; the
@@ -312,7 +409,7 @@ Item {
                     id: stageVideo
                     visible: stage.videoStage && ctl.videoPath !== ""
                     anchors.fill: parent; anchors.margins: 1
-                    anchors.topMargin: 52
+                    anchors.topMargin: stageChrome.height + 8
                 }
                 Text {
                     objectName: "stageVideoHint"
@@ -324,46 +421,6 @@ Item {
                     text: qsTr("Choose a video — it plays along while the training runs. The device follows the training, not the film.")
                     color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 14
                 }
-                Row {
-                    objectName: "stageVideoControls"
-                    visible: stage.videoStage
-                    anchors.left: parent.left; anchors.leftMargin: 16
-                    anchors.top: parent.top; anchors.topMargin: 36
-                    spacing: 12
-                    FlowButton {
-                        objectName: "stageVideoChoose"
-                        height: 30
-                        text: qsTr("Choose video…")
-                        onClicked: stageVideoDialog.open()
-                    }
-                    FlowCombo {
-                        objectName: "stageClimaxAction"
-                        visible: ctl.videoPhases.length > 0
-                        width: 190; height: 30
-                        readonly property var actions: ["none", "pause", "cooldown"]
-                        model: [qsTr("Climax: carry on"), qsTr("Climax: pause"), qsTr("Climax: cool-down")]
-                        currentIndex: actions.indexOf(ctl.climaxAction)
-                        onActivated: (i) => ctl.climaxAction = actions[i]
-                    }
-                    FlowCombo {
-                        objectName: "stageVideoRecent"
-                        width: 200; height: 30
-                        enabled: ctl.recentVideos.length > 0
-                        model: ctl.recentVideos.map((p) => p.split(/[\\/]/).pop())
-                        displayText: ctl.videoName !== "" ? ctl.videoName : qsTr("Recent videos")
-                        onActivated: (i) => ctl.chooseVideo(ctl.recentVideos[i])
-                    }
-                    Row {
-                        anchors.verticalCenter: parent.verticalCenter; spacing: 6
-                        FlowToggle { objectName: "stageVideoLoop"; anchors.verticalCenter: parent.verticalCenter; checked: ctl.videoLoop; onToggled: (on) => ctl.videoLoop = on }
-                        Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; text: qsTr("Loop"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
-                    }
-                    Row {
-                        anchors.verticalCenter: parent.verticalCenter; spacing: 6
-                        FlowToggle { objectName: "stageVideoMuted"; anchors.verticalCenter: parent.verticalCenter; checked: ctl.videoMuted; onToggled: (on) => ctl.videoMuted = on }
-                        Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; text: qsTr("Muted"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12 }
-                    }
-                }
                 // The Flow figure (D-152, in place of 0.7's pixel clip): it follows
                 // the live level; while no session runs it shows the technique's
                 // shape (0.7 pixel_figure.js: stop-start 1600 ms ramp 45 % · hold
@@ -372,7 +429,7 @@ Item {
                     id: figureStage
                     objectName: "figureStage"
                     visible: ctl.stage === "figure"
-                    anchors.fill: parent; anchors.topMargin: 44; anchors.bottomMargin: 56
+                    anchors.fill: parent; anchors.topMargin: stageChrome.height + 8; anchors.bottomMargin: 56
                     readonly property bool live: ctl.state === "running"
                     readonly property real liveLevel: Math.max(ctl.vibrationAvailable ? ctl.vibration : 0, ctl.suctionAvailable ? ctl.suction : 0)
                     property real demo: 0
@@ -404,8 +461,9 @@ Item {
                 DualRing {
                     objectName: "dualRing"
                     visible: figureStage.visible
-                    anchors.left: parent.left; anchors.leftMargin: 18
-                    anchors.bottom: parent.bottom; anchors.bottomMargin: 14
+                    anchors.left: parent.left; anchors.leftMargin: 12
+                    anchors.bottom: parent.bottom; anchors.bottomMargin: 12
+                    size: Math.min(128, Math.max(72, Math.min(stage.width * 0.38, stage.height - stageChrome.height - 36)))
                     vibration: ctl.vibrationAvailable ? ctl.vibration : 0
                     suction: ctl.suctionAvailable ? ctl.suction : 0
                     running: ctl.state === "running"
@@ -419,6 +477,8 @@ Item {
                         objectName: "figureReadout"
                         textFormat: Text.PlainText
                         anchors.horizontalCenter: parent.horizontalCenter
+                        width: Math.min(implicitWidth, stage.width - 24)
+                        elide: Text.ElideRight
                         text: (ctl.technique === "plateau" ? qsTr("Plateau (edge)") : qsTr("Stop-start")) + "  ·  " +
                               (figureStage.live ? Math.round(figureStage.level * 100) + "% · " + (figureStage.rising ? qsTr("up") : qsTr("down"))
                                                 : qsTr("Idle"))
@@ -431,39 +491,39 @@ Item {
                         color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                     }
                 }
-                // The stage switch (0.8 Clip · Rings · Waves · Video; the waves
-                // have their own card here, D-152).
-                Row {
-                    anchors.right: parent.right; anchors.rightMargin: 12
-                    anchors.top: parent.top; anchors.topMargin: 6
-                    spacing: 6
-                    HelpChip { key: "training.stage"; anchors.verticalCenter: parent.verticalCenter }
-                    FlowTabs {
-                        objectName: "stageSwitch"
-                        readonly property var modes: ["rings", "figure", "video"]
-                        model: [qsTr("Rings"), qsTr("Figure"), qsTr("Video")]
-                        current: Math.max(0, modes.indexOf(ctl.stage))
-                        onPicked: (i) => ctl.stage = modes[i]
-                    }
-                }
-                Row {
-                    id: rings
+                Item {
+                    id: ringsHost
+                    objectName: "ringsHost"
                     visible: opacity > 0.01
                     opacity: ctl.stage === "rings" ? 1 : 0
                     Behavior on opacity { NumberAnimation { duration: Theme.animSlow; easing.type: Easing.OutCubic } }
-                    anchors.centerIn: parent
-                    spacing: Math.max(30, stage.width * 0.12)
-                    scale: ctl.stage === "rings" ? 1 : 0.96
-                    Behavior on scale { NumberAnimation { duration: Theme.animSlow; easing.type: Easing.OutCubic } }
-                    TrainingRing {
-                        visible: ctl.vibrationAvailable
-                        width: Math.min(236, stage.height - 64); height: width
-                        label: qsTr("Vibration"); level: ctl.vibration; tint: Theme.trainVibration; live: ctl.state === "running"
-                    }
-                    TrainingRing {
-                        visible: ctl.suctionAvailable
-                        width: Math.min(236, stage.height - 64); height: width
-                        label: qsTr("Suction"); level: ctl.suction; tint: Theme.trainSuction; live: ctl.state === "running"
+                    anchors.fill: parent
+                    anchors.topMargin: stageChrome.height + 4
+                    anchors.leftMargin: 8; anchors.rightMargin: 8; anchors.bottomMargin: 8
+                    Row {
+                        id: rings
+                        objectName: "trainingRings"
+                        anchors.centerIn: parent
+                        readonly property int n: (ctl.vibrationAvailable ? 1 : 0) + (ctl.suctionAvailable ? 1 : 0)
+                        readonly property real gap: Math.max(12, Math.min(40, ringsHost.width * 0.08))
+                        spacing: gap
+                        scale: ctl.stage === "rings" ? 1 : 0.96
+                        Behavior on scale { NumberAnimation { duration: Theme.animSlow; easing.type: Easing.OutCubic } }
+                        readonly property real ringSize: {
+                            const h = Math.max(72, ringsHost.height)
+                            const w = Math.max(72, (ringsHost.width - gap * Math.max(0, n - 1)) / Math.max(1, n))
+                            return Math.min(236, h, w)
+                        }
+                        TrainingRing {
+                            visible: ctl.vibrationAvailable
+                            width: rings.ringSize; height: width
+                            label: qsTr("Vibration"); level: ctl.vibration; tint: Theme.trainVibration; live: ctl.state === "running"
+                        }
+                        TrainingRing {
+                            visible: ctl.suctionAvailable
+                            width: rings.ringSize; height: width
+                            label: qsTr("Suction"); level: ctl.suction; tint: Theme.trainSuction; live: ctl.state === "running"
+                        }
                     }
                 }
                 // Why Start does nothing, or what the device lacks (flashes when Start is refused).
@@ -483,20 +543,30 @@ Item {
                 Connections { target: ctl; function onStartBlocked() { if (!Theme.reducedMotion) flash.restart() } }
             }
 
-            // Session bar: time, transport, phase.
+            // Session bar: time, transport, phase. A Flow, not a RowLayout: the
+            // three blocks have a large preferred width, and a row keeps that
+            // sum as its minimum (same lesson as Generator #239 / #244).
             GlassCard {
-                Layout.fillWidth: true; Layout.preferredHeight: 92
-                RowLayout {
-                    anchors.fill: parent; anchors.leftMargin: 16; anchors.rightMargin: 16; anchors.topMargin: 10; anchors.bottomMargin: 10
-                    spacing: 16
+                id: sessionBar
+                objectName: "sessionBar"
+                Layout.fillWidth: true; Layout.minimumWidth: 0
+                Layout.preferredHeight: sessionBody.implicitHeight + 20
+                clip: true
+                Flow {
+                    id: sessionBody
+                    x: 16; y: 10; width: parent.width - 32
+                    spacing: 12
+                    readonly property bool wide: width >= 680
                     RowLayout {
-                        Layout.preferredWidth: 250; spacing: 12
+                        width: sessionBody.wide ? 220 : sessionBody.width
+                        spacing: 12
                         Icon { name: "clock"; width: 26; height: 26; color: Theme.textDim }
                         ColumnLayout {
-                            Layout.fillWidth: true; spacing: 3
-                            Text { textFormat: Text.PlainText; text: qsTr("Session Time"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11 }
+                            Layout.fillWidth: true; Layout.minimumWidth: 0; spacing: 3
+                            Text { textFormat: Text.PlainText; text: qsTr("Session Time"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11; Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight }
                             Text {
                                 textFormat: Text.PlainText
+                                Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight
                                 text: page.clock(ctl.elapsedSec) + " / " + page.clock(Math.round(page.total / 1000))
                                 color: Theme.text; font.family: Theme.font; font.pixelSize: 18; font.weight: Font.DemiBold
                             }
@@ -507,9 +577,9 @@ Item {
                         }
                     }
                     RowLayout {
-                        Layout.fillWidth: true; Layout.alignment: Qt.AlignHCenter
+                        width: sessionBody.wide ? Math.max(180, sessionBody.width - 472) : sessionBody.width
                         spacing: 16
-                        Item { Layout.fillWidth: true }
+                        Item { Layout.fillWidth: true; Layout.minimumWidth: 0 }
                         IconButton {
                             icon: "stop"; width: 46; height: 46; enabled: ctl.active
                             tip: qsTr("End session"); onClicked: ctl.stop()
@@ -523,17 +593,18 @@ Item {
                             icon: "skipForward"; width: 46; height: 46; enabled: ctl.state === "running"
                             tip: qsTr("Interrupt now (Esc)"); onClicked: ctl.interrupt()
                         }
-                        Item { Layout.fillWidth: true }
+                        Item { Layout.fillWidth: true; Layout.minimumWidth: 0 }
                     }
                     RowLayout {
-                        Layout.preferredWidth: 250; spacing: 16
+                        width: sessionBody.wide ? 220 : sessionBody.width
+                        spacing: 12
                         ColumnLayout {
-                            Layout.fillWidth: true; spacing: 2
+                            Layout.fillWidth: true; Layout.minimumWidth: 0; spacing: 2
                             Text { textFormat: Text.PlainText; text: qsTr("Phase"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11 }
-                            Text { textFormat: Text.PlainText; Layout.fillWidth: true; elide: Text.ElideRight; text: ctl.phaseName; color: Theme.text; font.family: Theme.font; font.pixelSize: 17; font.weight: Font.DemiBold }
+                            Text { textFormat: Text.PlainText; Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight; text: ctl.phaseName; color: Theme.text; font.family: Theme.font; font.pixelSize: 17; font.weight: Font.DemiBold }
                             Text {
                                 textFormat: Text.PlainText
-                                Layout.fillWidth: true; elide: Text.ElideRight
+                                Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight
                                 text: ctl.state === "paused" ? qsTr("Paused · step %1 of %2").arg(ctl.phaseIndex + 1).arg(ctl.phaseCount)
                                     : ctl.state === "connecting" ? qsTr("Connecting...")
                                     : qsTr("Step %1 of %2").arg(ctl.phaseIndex + 1).arg(ctl.phaseCount)
@@ -541,9 +612,9 @@ Item {
                             }
                         }
                         ColumnLayout {
-                            Layout.preferredWidth: 78; spacing: 3
-                            Text { textFormat: Text.PlainText; text: qsTr("Time Left"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11 }
-                            Text { textFormat: Text.PlainText; text: page.clock(ctl.remainingSec); color: Theme.text; font.family: Theme.font; font.pixelSize: 15; font.weight: Font.DemiBold }
+                            Layout.preferredWidth: 78; Layout.minimumWidth: 0; spacing: 3
+                            Text { textFormat: Text.PlainText; text: qsTr("Time Left"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11; Layout.fillWidth: true; elide: Text.ElideRight }
+                            Text { textFormat: Text.PlainText; text: page.clock(ctl.remainingSec); color: Theme.text; font.family: Theme.font; font.pixelSize: 15; font.weight: Font.DemiBold; Layout.fillWidth: true; elide: Text.ElideRight }
                             Rectangle {
                                 Layout.fillWidth: true; Layout.preferredHeight: 5; radius: 2.5; color: Qt.rgba(1, 1, 1, 0.10)
                                 Rectangle { width: parent.width * (1 - page.progress); height: parent.height; radius: 2.5; color: Theme.orange }
@@ -555,19 +626,22 @@ Item {
 
             // Live curves.
             GlassCard {
-                Layout.fillWidth: true; Layout.preferredHeight: 150
+                id: curvesCard
+                objectName: "curvesCard"
+                Layout.fillWidth: true; Layout.minimumWidth: 0; Layout.preferredHeight: 150
+                clip: true
                 ColumnLayout {
                     anchors.fill: parent; anchors.margins: 12
                     spacing: 4
-                    RowLayout {
-                        Layout.fillWidth: true; spacing: 14
-                        Text { textFormat: Text.PlainText; text: qsTr("Live Training Curves"); color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 14; font.weight: Font.Medium; Layout.fillWidth: true }
-                        Row {
-                            spacing: 14
-                            Row { spacing: 6; Rectangle { y: 3; width: 9; height: 9; radius: 5; color: Theme.trainVibration } Text { textFormat: Text.PlainText; text: qsTr("Vibration"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11 } }
-                            Row { spacing: 6; Rectangle { y: 3; width: 9; height: 9; radius: 5; color: Theme.trainSuction } Text { textFormat: Text.PlainText; text: qsTr("Suction"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11 } }
-                            Text { textFormat: Text.PlainText; text: "– – " + qsTr("Target"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11 }
+                    Flow {
+                        Layout.fillWidth: true; Layout.minimumWidth: 0; spacing: 14
+                        Text {
+                            textFormat: Text.PlainText; text: qsTr("Live Training Curves")
+                            color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 14; font.weight: Font.Medium
                         }
+                        Row { spacing: 6; Rectangle { y: 3; width: 9; height: 9; radius: 5; color: Theme.trainVibration } Text { textFormat: Text.PlainText; text: qsTr("Vibration"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11 } }
+                        Row { spacing: 6; Rectangle { y: 3; width: 9; height: 9; radius: 5; color: Theme.trainSuction } Text { textFormat: Text.PlainText; text: qsTr("Suction"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11 } }
+                        Text { textFormat: Text.PlainText; text: "– – " + qsTr("Target"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11 }
                     }
                     TrainingCurveItem {
                         Layout.fillWidth: true; Layout.fillHeight: true
@@ -578,13 +652,20 @@ Item {
 
             // Timeline.
             GlassCard {
-                Layout.fillWidth: true; Layout.preferredHeight: 116
+                id: timelineCard
+                objectName: "timelineCard"
+                Layout.fillWidth: true; Layout.minimumWidth: 0; Layout.preferredHeight: 116
+                clip: true
                 ColumnLayout {
                     anchors.fill: parent; anchors.margins: 12
                     spacing: 6
                     RowLayout {
-                        Layout.fillWidth: true
-                        Text { textFormat: Text.PlainText; text: qsTr("Session Timeline"); color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 14; font.weight: Font.Medium; Layout.fillWidth: true }
+                        Layout.fillWidth: true; Layout.minimumWidth: 0
+                        Text {
+                            textFormat: Text.PlainText; text: qsTr("Session Timeline")
+                            color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 14; font.weight: Font.Medium
+                            Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight
+                        }
                         Text { textFormat: Text.PlainText; text: qsTr("Total  %1").arg(page.clock(Math.round(page.total / 1000))); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11 }
                     }
                     // One band, tinted by the planned strength of each phase, with the head on it.
@@ -642,11 +723,15 @@ Item {
                     }
                 }
             }
+            } // centerCol
         }
 
         // ------------------------------------------------------------ right
         Flickable {
-            Layout.preferredWidth: 380; Layout.fillHeight: true
+            id: rightPanel
+            objectName: "rightPanel"
+            Layout.preferredWidth: 380; Layout.minimumWidth: 0; Layout.maximumWidth: 380
+            Layout.fillHeight: true
             contentWidth: width; contentHeight: side.implicitHeight
             clip: true
             boundsBehavior: Flickable.StopAtBounds
@@ -658,16 +743,24 @@ Item {
 
                 // Session settings.
                 GlassCard {
-                    Layout.fillWidth: true; Layout.preferredHeight: settings.implicitHeight + 28
+                    Layout.fillWidth: true; Layout.minimumWidth: 0; clip: true
+                    Layout.preferredHeight: settings.implicitHeight + 28
                     ColumnLayout {
                         id: settings
                         x: 14; y: 14; width: parent.width - 28
                         spacing: 8
-                        RowLayout {
-                            Layout.fillWidth: true
-                            Text { textFormat: Text.PlainText; text: qsTr("Session Settings"); color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 15; font.weight: Font.Medium; Layout.fillWidth: true }
-                            Text { textFormat: Text.PlainText; text: qsTr("Mock (test without device)"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11 }
-                            HelpChip { key: "training.mock"; Layout.alignment: Qt.AlignVCenter }
+                        Flow {
+                            Layout.fillWidth: true; Layout.minimumWidth: 0; spacing: 8
+                            Text {
+                                textFormat: Text.PlainText; text: qsTr("Session Settings")
+                                color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 15; font.weight: Font.Medium
+                            }
+                            Text {
+                                textFormat: Text.PlainText; text: qsTr("Mock (test without device)")
+                                color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11
+                                elide: Text.ElideRight
+                            }
+                            HelpChip { key: "training.mock" }
                             FlowToggle { checked: ctl.mock; enabled: ctl.state === "idle"; onToggled: (on) => ctl.mock = on }
                         }
                         // Soft ceilings on what leaves for the device (1 = no cap).
@@ -697,15 +790,14 @@ Item {
                         ColumnLayout {
                             visible: !page.custom
                             Layout.fillWidth: true; spacing: 8
-                            RowLayout {
-                                Layout.fillWidth: true; spacing: 6
-                                Text { textFormat: Text.PlainText; text: qsTr("Intensity"); color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 13; Layout.preferredWidth: 90 }
-                                HelpChip { key: "training.tier"; Layout.alignment: Qt.AlignVCenter }
+                            Flow {
+                                Layout.fillWidth: true; Layout.minimumWidth: 0; spacing: 6
+                                Text { textFormat: Text.PlainText; text: qsTr("Intensity"); color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 13 }
+                                HelpChip { key: "training.tier" }
                                 Repeater {
                                     model: [[0.8, qsTr("Gentle")], [1, qsTr("Standard")], [1.2, qsTr("Intense")]]
                                     delegate: FlowButton {
                                         required property var modelData
-                                        Layout.fillWidth: true
                                         text: modelData[1]; checked: ctl.tier === modelData[0]; enabled: ctl.state === "idle"
                                         onClicked: ctl.tier = modelData[0]
                                     }
@@ -739,7 +831,8 @@ Item {
                 // Session mode (Custom only).
                 GlassCard {
                     visible: page.custom
-                    Layout.fillWidth: true; Layout.preferredHeight: mode.implicitHeight + 28
+                    Layout.fillWidth: true; Layout.minimumWidth: 0; clip: true
+                    Layout.preferredHeight: mode.implicitHeight + 28
                     ColumnLayout {
                         id: mode
                         x: 14; y: 14; width: parent.width - 28
@@ -771,10 +864,10 @@ Item {
                             }
                         }
                         RowLayout {
-                            Layout.fillWidth: true; spacing: 10
-                            Text { textFormat: Text.PlainText; text: qsTr("Channel"); color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 13; Layout.preferredWidth: 90 }
+                            Layout.fillWidth: true; Layout.minimumWidth: 0; spacing: 10
+                            Text { textFormat: Text.PlainText; text: qsTr("Channel"); color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 13; Layout.preferredWidth: 90; Layout.minimumWidth: 0; elide: Text.ElideRight }
                             FlowCombo {
-                                Layout.fillWidth: true
+                                Layout.fillWidth: true; Layout.minimumWidth: 0
                                 enabled: ctl.state === "idle" && ctl.channelOptions.length > 1
                                 textRole: "text"
                                 model: ctl.channelOptions.map(c => ({ value: c, text: c === "vibration" ? qsTr("Vibration only") : c === "suction" ? qsTr("Suction only") : qsTr("Both") }))
@@ -787,7 +880,8 @@ Item {
 
                 // Safety.
                 GlassCard {
-                    Layout.fillWidth: true; Layout.preferredHeight: safety.implicitHeight + 28
+                    Layout.fillWidth: true; Layout.minimumWidth: 0; clip: true
+                    Layout.preferredHeight: safety.implicitHeight + 28
                     ColumnLayout {
                         id: safety
                         x: 14; y: 14; width: parent.width - 28
@@ -797,10 +891,11 @@ Item {
                             Icon { name: "shield"; width: 20; height: 20; color: Theme.cyanSoft }
                             Text { textFormat: Text.PlainText; text: qsTr("Safety Controls"); color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 15; font.weight: Font.Medium }
                         }
-                        RowLayout {
-                            Layout.fillWidth: true; spacing: 10
+                        Flow {
+                            Layout.fillWidth: true; Layout.minimumWidth: 0; spacing: 10
                             Text {
-                                textFormat: Text.PlainText; Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                textFormat: Text.PlainText; wrapMode: Text.WordWrap
+                                width: Math.min(implicitWidth, parent.width)
                                 text: qsTr("Esc interrupts the current cycle. Stop the session on pain, numbness, skin irritation, or after alcohol.")
                                 color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                             }
@@ -811,7 +906,7 @@ Item {
 
                 // Feedback.
                 GlassCard {
-                    Layout.fillWidth: true; Layout.preferredHeight: feedback.implicitHeight + 28
+                    Layout.fillWidth: true; Layout.minimumWidth: 0; clip: true; Layout.preferredHeight: feedback.implicitHeight + 28
                     ColumnLayout {
                         id: feedback
                         x: 14; y: 14; width: parent.width - 28
@@ -826,7 +921,8 @@ Item {
                             text: qsTr("Arousal 1–10. Stay mostly at 5–7. At 8: Interrupt (or lower intensity) and lengthen the out-breath. 9–10 interrupt the cycle for you and soften the next one. Target is 7.")
                             color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 11
                         }
-                        Row {
+                        Flow {
+                            Layout.fillWidth: true; Layout.minimumWidth: 0
                             spacing: 5
                             Repeater {
                                 model: 10
@@ -854,7 +950,7 @@ Item {
 
                 // Last session.
                 GlassCard {
-                    Layout.fillWidth: true; Layout.preferredHeight: recap.implicitHeight + 28
+                    Layout.fillWidth: true; Layout.minimumWidth: 0; clip: true; Layout.preferredHeight: recap.implicitHeight + 28
                     ColumnLayout {
                         id: recap
                         x: 14; y: 14; width: parent.width - 28
@@ -874,7 +970,7 @@ Item {
 
                 // Recent sessions.
                 GlassCard {
-                    Layout.fillWidth: true; Layout.preferredHeight: recent.implicitHeight + 28
+                    Layout.fillWidth: true; Layout.minimumWidth: 0; clip: true; Layout.preferredHeight: recent.implicitHeight + 28
                     ColumnLayout {
                         id: recent
                         x: 14; y: 14; width: parent.width - 28
@@ -906,7 +1002,7 @@ Item {
 
                 // Session log (collapsible).
                 GlassCard {
-                    Layout.fillWidth: true; Layout.preferredHeight: logBox.implicitHeight + 28
+                    Layout.fillWidth: true; Layout.minimumWidth: 0; clip: true; Layout.preferredHeight: logBox.implicitHeight + 28
                     ColumnLayout {
                         id: logBox
                         x: 14; y: 14; width: parent.width - 28
@@ -930,7 +1026,7 @@ Item {
 
                 // About.
                 GlassCard {
-                    Layout.fillWidth: true; Layout.preferredHeight: about.implicitHeight + 28
+                    Layout.fillWidth: true; Layout.minimumWidth: 0; clip: true; Layout.preferredHeight: about.implicitHeight + 28
                     Text {
                         textFormat: Text.PlainText
                         id: about
