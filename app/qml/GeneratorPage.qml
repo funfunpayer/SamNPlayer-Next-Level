@@ -219,7 +219,7 @@ Item {
         if (!gen.hasVideo) return qsTr("Guest path: choose a video, then Create. Create finds the tip — no options to set.")
         if (gen.running || (gen.finding && gen.status.startsWith(qsTr("Finding tip, then creating"))))
             return qsTr("Creating… Cancel if needed.")
-        if (gen.outputPath !== "") return qsTr("Review — Improve / Use audio / Optimize, then Play.")
+        if (gen.outputPath !== "") return qsTr("Step 5: Review — Improve / Use audio / Optimize, then Play.")
         if (!gen.hasBox) return qsTr("Create finds the tip — press Create. Find tip or drag only if it missed.")
         if (gen.contactVibration && gen.contactAreas.length === 0)
             return qsTr("Optional: mark contact for vibe, or just Create.")
