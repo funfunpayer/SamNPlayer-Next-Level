@@ -1278,8 +1278,17 @@ private slots:
                 QVERIFY2(item, name);
                 QVERIFY2(item->isVisible(), name);
                 const qreal y = item->mapToItem(scroll->property("contentItem").value<QQuickItem*>(), QPointF(0, 0)).y();
-                scroll->setProperty("contentY", qBound<qreal>(0, y - 20, qMax<qreal>(0, contentNow - view)));
-                QTRY_VERIFY2(inView(name), name);
+                const qreal maxY = qMax<qreal>(0, scroll->property("contentHeight").toReal() - view);
+                scroll->setProperty("contentY", qBound<qreal>(0, y - 20, maxY));
+                QTRY_VERIFY2(inView(name),
+                             qPrintable(QString("%1 y=%2 h=%3 maxY=%4 view=%5 cy=%6 ch=%7")
+                                            .arg(name)
+                                            .arg(y)
+                                            .arg(item->height())
+                                            .arg(maxY)
+                                            .arg(view)
+                                            .arg(scroll->property("contentY").toReal())
+                                            .arg(scroll->property("contentHeight").toReal())));
             }
         }
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
