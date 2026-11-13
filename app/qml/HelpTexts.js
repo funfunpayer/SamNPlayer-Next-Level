@@ -160,7 +160,7 @@ const texts = {
     // src/generator.js:191 (+ Another contact area)
     "gen-target-add": "Add another touch point (magenta) — e.g. second nipple or mouth. Same contact-vibe set. With tip trajectory on, extras can follow unless Stay fixed is checked.",
     "gen-track-cache": "Opt-in: keeps the raw tracking of a video in the settings folder (cache/track), so a second Create with another feel skips the tracking. Safe to delete at any time.",
-    "gen-analysis-fps": "Caps how many video frames Create analyses per second (0 = every frame). Lower values cut CPU on long/high-fps clips; stroke aliasing can appear if motion is faster than about 0.4× this rate. Default every frame for byte-identical Everyday.",
+    "gen-analysis-fps": "Caps how many video frames Create analyses per second (0 = every frame). Lower values cut CPU on long/high-fps clips; stroke aliasing can appear if motion is faster than about 0.4× this rate. Everyday default 15 fps for FunGen2-faster Create; set 0 for every frame.",
     // src/generator.js:58 (Use Player video)
     "gen-use-player-video": "Use the video that is linked in Play, so Create and Play work on the same clip.",
     // src/gen_feel.js:92 (Vibration follows suction)

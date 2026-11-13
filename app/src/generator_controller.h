@@ -84,8 +84,8 @@ class GeneratorController : public QObject {
     // Opt-in hybrid tip re-acquire: ONNX only after CSRT + appearance miss
     // (D-139; off = Everyday). Needs a student or NudeNet model on disk.
     Q_PROPERTY(bool hybridReacquire READ hybridReacquire WRITE setHybridReacquire NOTIFY optionsChanged)
-    // Cap tracking decode rate (0 = every frame). Opt-in CPU saver; same
-    // engine knob the compare manifest already had (GENERATOR_SPEC FR-7).
+    // Cap tracking analysis rate (0 = every frame). Everyday default 15 —
+    // FunGen2-snappy Create; Expert can set every frame (GENERATOR_SPEC FR-7).
     Q_PROPERTY(int maxAnalysisFps READ maxAnalysisFps WRITE setMaxAnalysisFps NOTIFY optionsChanged)
     // Share of the Generator stage height kept for the curve editor (0.18–0.65).
     // Remembered so the video/curves SplitView stays where the user left it.
@@ -460,7 +460,7 @@ private:
     int max_speed_ = 0;
     bool gap_handling_ = true, outlier_rejection_ = true, track_cache_ = false;
     bool hybrid_reacquire_ = false;
-    int max_analysis_fps_ = 0;  // 0 = every frame (byte-identical default)
+    int max_analysis_fps_ = 15;  // Everyday: FunGen2-faster Create (0 = every frame)
     double editor_share_ = 0.40;
     bool auto_tip_ = true;
     bool find_auto_ = false;     // the running search was started by openVideo
