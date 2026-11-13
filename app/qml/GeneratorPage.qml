@@ -40,7 +40,9 @@ Item {
         onCreated: (path) => {
             page.library.noteScriptGenerated(path)
             if (!edit.open(path)) return
-            if (gen.optimizeTarget !== "") edit.optimizeFor(gen.optimizeTarget)
+            const t = page.resolvedOptimizeTarget()
+            if (gen.optimizeTarget === "") gen.optimizeTarget = t
+            if (t !== "") edit.optimizeFor(t)
             // 0.7 Step 3: a vibrator gets its vibration from the video's sound.
             if (gen.feelKind === "vibrator" && gen.vibSource !== "") edit.vibrationFromSound(gen.vibSource === "sound+contact")
         }
@@ -217,11 +219,33 @@ Item {
         if (!gen.hasVideo) return qsTr("Start here: choose a video. Like FunGen2 — no motion path to paint; we find the tip.")
         if (gen.running || (gen.finding && gen.status.startsWith(qsTr("Finding tip, then creating"))))
             return qsTr("Step 4: creating… you can Cancel if needed.")
-        if (gen.outputPath !== "") return qsTr("Step 5: Improve, then Play — edit dots on the soft curve.")
+        if (gen.outputPath !== "") return qsTr("Step 5: Review — Improve, Adapt, then Play.")
         if (!gen.hasBox) return qsTr("Snack 1: Find tip (auto) — or mark only if Find missed. Tip = stroke box, not whole-scene tracking.")
         if (gen.contactVibration && gen.contactAreas.length === 0)
             return qsTr("Snack 2–3 optional: partner touch for Contact vibe, then Feel. Create unlocks when tip is ready.")
         return qsTr("Step 4: Create Emotion Script — Advanced stays closed for Everyday; open only if needed.")
+    }
+    // Short line on the Create card (FunGen2: video → Create finds the tip).
+    function createCardPrompt() {
+        if (!gen.hasVideo)
+            return qsTr("Choose a video. Create finds the tip — like FunGen2. Feel is optional; Advanced stays closed.")
+        if (gen.running || (gen.finding && gen.status.startsWith(qsTr("Finding tip, then creating"))))
+            return qsTr("Creating… you can Cancel if needed.")
+        if (!gen.hasBox)
+            return qsTr("Create finds the tip, or mark it if Find missed.")
+        return qsTr("Create Emotion Script. Advanced stays closed — open only if needed.")
+    }
+    // Unset ("") follows Feel; "off" keeps the script as created; else general/neo2.
+    function resolvedOptimizeTarget() {
+        if (gen.optimizeTarget === "off") return ""
+        if (gen.optimizeTarget === "general" || gen.optimizeTarget === "neo2") return gen.optimizeTarget
+        return gen.feelKind === "neo2" ? "neo2" : "general"
+    }
+    function everydayOptimizeIndex() {
+        if (gen.optimizeTarget === "off") return 0
+        if (gen.optimizeTarget === "general") return 1
+        if (gen.optimizeTarget === "neo2") return 2
+        return gen.feelKind === "neo2" ? 2 : 1
     }
     // 0.7 roi_help.js coachText: the tip box and the first contact mark.
     function coachText() {
@@ -1154,8 +1178,7 @@ Item {
                             onClicked: scriptDialog.open()
                         }
                     }
-                    // Align & lanes: Optimize / axes / sound / beat bar without opening Tools…
-                    // (post-Create Adapt row still on the Create card for the handoff).
+                    // Align & lanes: axes / From sound / beat bar. Everyday Optimize lives on Review.
                     ScrollRow {
                         id: alignBar
                         objectName: "alignBar"
@@ -1163,20 +1186,6 @@ Item {
                         spacing: 6
                         visible: edit.hasScript
                         enabled: !edit.busy && !gen.running
-                        FlowCombo {
-                            id: optimizeTarget
-                            objectName: "optimizeTarget"
-                            Layout.preferredWidth: 130; Layout.preferredHeight: 34
-                            readonly property var targets: ["general", "neo2"]
-                            model: [qsTr("Any device"), qsTr("Sam Neo 2")]
-                            currentIndex: Math.max(0, targets.indexOf(gen.optimizeTarget !== "" ? gen.optimizeTarget : "general"))
-                            onActivated: (i) => gen.optimizeTarget = targets[i]
-                        }
-                        FlowButton {
-                            objectName: "tool_optimize"
-                            text: qsTr("Optimize"); icon: "sliders"
-                            onClicked: edit.optimizeFor(optimizeTarget.targets[optimizeTarget.currentIndex])
-                        }
                         FlowButton {
                             objectName: "tool_axes"
                             text: qsTr("Axes from stroke"); icon: "effects"
@@ -1713,8 +1722,9 @@ Item {
                         }
                         HelpChip { key: "generator.style"; Layout.alignment: Qt.AlignVCenter }
                     }
-                    // 0.7 gen_feel.js: the feel follows the device. Only what the
-                    // chosen device can use shows, unless "Show all".
+                    // Everyday strip: Style (above) + For device + short summary.
+                    // Show all, scene/balance, contact extras and tracking toggles
+                    // sit behind one "More feel / contact…" (feelMore, closed).
                     RowLayout {
                         Layout.fillWidth: true; spacing: 8
                         Text {
@@ -1735,135 +1745,136 @@ Item {
                             currentIndex: Math.max(0, indexOfValue(gen.feelDevice))
                             onActivated: gen.feelDevice = currentValue
                         }
-                        Text {
-                            textFormat: Text.PlainText
-                            Layout.fillWidth: true; Layout.maximumWidth: implicitWidth; Layout.minimumWidth: 0; elide: Text.ElideRight
-                            text: qsTr("Show all"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
-                        }
-                        FlowToggle {
-                            objectName: "toggle_showAllFeel"
-                            checked: gen.showAllFeel
-                            onToggled: (c) => gen.showAllFeel = c
-                        }
                     }
                     Text {
-                        objectName: "feelHint"
+                        objectName: "feelSummary"
                         textFormat: Text.PlainText
-                        visible: text !== ""
                         Layout.fillWidth: true; wrapMode: Text.WordWrap
-                        text: gen.feelHint; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                        text: gen.feelSummary; color: Theme.cyan; font.family: Theme.fontSoft; font.pixelSize: 12
                     }
-                    ColumnLayout {
-                        objectName: "neoFeel"
-                        visible: gen.feelKind === "neo2" || gen.showAllFeel
-                        Layout.fillWidth: true; spacing: 6
-                        RowLayout {
-                            Layout.fillWidth: true; spacing: 8
-                            Text {
-                                textFormat: Text.PlainText
-                                Layout.fillWidth: true; Layout.maximumWidth: implicitWidth; Layout.minimumWidth: 0; elide: Text.ElideRight
-                                text: qsTr("Scene"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
-                            }
-                            HelpChip { key: "gen-scene-feel"; Layout.alignment: Qt.AlignVCenter }
-                            FlowCombo {
-                                objectName: "sceneFeelCombo"
-                                Layout.minimumWidth: 0
-                                Layout.fillWidth: true
-                                enabled: !gen.running
-                                textRole: "label"; valueRole: "value"
-                                model: [{ label: qsTr("Auto (from the contact area)"), value: "auto" },
-                                        { label: qsTr("Classic"), value: "" },
-                                        { label: qsTr("Oral"), value: "oral" },
-                                        { label: qsTr("Intercourse"), value: "intercourse" },
-                                        { label: qsTr("Breast"), value: "breast" },
-                                        { label: qsTr("Hand"), value: "hand" }]
-                                currentIndex: Math.max(0, indexOfValue(gen.sceneFeel))
-                                onActivated: gen.sceneFeel = currentValue
-                            }
-                        }
-                        RowLayout {
-                            Layout.fillWidth: true; spacing: 8
-                            Text {
-                                textFormat: Text.PlainText
-                                Layout.fillWidth: true; Layout.maximumWidth: implicitWidth; Layout.minimumWidth: 0; elide: Text.ElideRight
-                                text: qsTr("Vibration"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
-                            }
-                            FlowSlider {
-                                objectName: "feelBalance"
-                                Layout.minimumWidth: 0
-                                Layout.fillWidth: true
-                                enabled: !gen.running
-                                from: -100; to: 100; value: gen.feelBalance
-                                onMoved: (v) => gen.feelBalance = Math.round(v)
-                            }
-                            Text {
-                                textFormat: Text.PlainText
-                                Layout.fillWidth: true; Layout.maximumWidth: implicitWidth; Layout.minimumWidth: 0; elide: Text.ElideRight
-                                text: qsTr("Suction"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
-                            }
-                            HelpChip { key: "gen-feel-balance"; Layout.alignment: Qt.AlignVCenter }
-                        }
-                        RowLayout {
-                            Layout.fillWidth: true
-                            Text {
-                                textFormat: Text.PlainText
-                                Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight
-                                text: qsTr("Vibration follows suction"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
-                            }
-                            HelpChip { key: "gen-vib-follow"; Layout.alignment: Qt.AlignVCenter }
-                            FlowToggle {
-                                objectName: "toggle_vibFollow"
-                                enabled: !gen.running
-                                checked: gen.vibFollow
-                                onToggled: (c) => gen.vibFollow = c
-                            }
-                        }
-                        Text {
-                            objectName: "feelSummary"
-                            textFormat: Text.PlainText
-                            Layout.fillWidth: true; wrapMode: Text.WordWrap
-                            text: gen.feelSummary; color: Theme.cyan; font.family: Theme.fontSoft; font.pixelSize: 12
-                        }
-                    }
-                    RowLayout {
-                        objectName: "vibSourceRow"
-                        visible: gen.feelKind === "vibrator" || gen.showAllFeel
-                        Layout.fillWidth: true; spacing: 8
-                        Text {
-                            textFormat: Text.PlainText
-                            Layout.fillWidth: true; Layout.maximumWidth: implicitWidth; Layout.minimumWidth: 0; elide: Text.ElideRight
-                            text: qsTr("Vibration from"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
-                        }
-                        HelpChip { key: "gen-vib-source"; Layout.alignment: Qt.AlignVCenter }
-                        FlowCombo {
-                            objectName: "vibSourceCombo"
-                            Layout.minimumWidth: 0
-                            Layout.fillWidth: true
-                            enabled: !gen.running
-                            textRole: "label"; valueRole: "value"
-                            model: [{ label: qsTr("Motion only"), value: "" },
-                                    { label: qsTr("Sound + contact"), value: "sound+contact" },
-                                    { label: qsTr("Sound only"), value: "sound" }]
-                            currentIndex: Math.max(0, indexOfValue(gen.vibSource))
-                            onActivated: gen.vibSource = currentValue
-                        }
-                    }
-                    // Everyday feel is the four controls above; the rest (what the tracking
-                    // does, contact vibration with its areas) opens on demand, and by itself
-                    // once the script has areas or masks drawn.
                     FlowButton {
                         objectName: "feelMoreToggle"
                         visible: !page.feelMoreForced
                         Layout.fillWidth: true
                         icon: "chevronDown"
-                        text: page.feelMoreShown ? qsTr("Fewer feel options") : qsTr("More feel options")
+                        text: page.feelMoreShown ? qsTr("Fewer feel / contact") : qsTr("More feel / contact…")
                         onClicked: page.feelMore = !page.feelMoreShown
                     }
                     ColumnLayout {
                         objectName: "feelMore"
                         visible: page.feelMoreShown
                         Layout.fillWidth: true; spacing: 8
+                        RowLayout {
+                            Layout.fillWidth: true; spacing: 8
+                            Text {
+                                textFormat: Text.PlainText
+                                Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight
+                                text: qsTr("Show all"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                            FlowToggle {
+                                objectName: "toggle_showAllFeel"
+                                checked: gen.showAllFeel
+                                onToggled: (c) => gen.showAllFeel = c
+                            }
+                        }
+                        Text {
+                            objectName: "feelHint"
+                            textFormat: Text.PlainText
+                            visible: text !== ""
+                            Layout.fillWidth: true; wrapMode: Text.WordWrap
+                            text: gen.feelHint; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                        }
+                        ColumnLayout {
+                            objectName: "neoFeel"
+                            visible: gen.feelKind === "neo2" || gen.showAllFeel
+                            Layout.fillWidth: true; spacing: 6
+                            RowLayout {
+                                Layout.fillWidth: true; spacing: 8
+                                Text {
+                                    textFormat: Text.PlainText
+                                    Layout.fillWidth: true; Layout.maximumWidth: implicitWidth; Layout.minimumWidth: 0; elide: Text.ElideRight
+                                    text: qsTr("Scene"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                                }
+                                HelpChip { key: "gen-scene-feel"; Layout.alignment: Qt.AlignVCenter }
+                                FlowCombo {
+                                    objectName: "sceneFeelCombo"
+                                    Layout.minimumWidth: 0
+                                    Layout.fillWidth: true
+                                    enabled: !gen.running
+                                    textRole: "label"; valueRole: "value"
+                                    model: [{ label: qsTr("Auto (from the contact area)"), value: "auto" },
+                                            { label: qsTr("Classic"), value: "" },
+                                            { label: qsTr("Oral"), value: "oral" },
+                                            { label: qsTr("Intercourse"), value: "intercourse" },
+                                            { label: qsTr("Breast"), value: "breast" },
+                                            { label: qsTr("Hand"), value: "hand" }]
+                                    currentIndex: Math.max(0, indexOfValue(gen.sceneFeel))
+                                    onActivated: gen.sceneFeel = currentValue
+                                }
+                            }
+                            RowLayout {
+                                Layout.fillWidth: true; spacing: 8
+                                Text {
+                                    textFormat: Text.PlainText
+                                    Layout.fillWidth: true; Layout.maximumWidth: implicitWidth; Layout.minimumWidth: 0; elide: Text.ElideRight
+                                    text: qsTr("Vibration"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                                }
+                                FlowSlider {
+                                    objectName: "feelBalance"
+                                    Layout.minimumWidth: 0
+                                    Layout.fillWidth: true
+                                    enabled: !gen.running
+                                    from: -100; to: 100; value: gen.feelBalance
+                                    onMoved: (v) => gen.feelBalance = Math.round(v)
+                                }
+                                Text {
+                                    textFormat: Text.PlainText
+                                    Layout.fillWidth: true; Layout.maximumWidth: implicitWidth; Layout.minimumWidth: 0; elide: Text.ElideRight
+                                    text: qsTr("Suction"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                                }
+                                HelpChip { key: "gen-feel-balance"; Layout.alignment: Qt.AlignVCenter }
+                            }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Text {
+                                    textFormat: Text.PlainText
+                                    Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight
+                                    text: qsTr("Vibration follows suction"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13
+                                }
+                                HelpChip { key: "gen-vib-follow"; Layout.alignment: Qt.AlignVCenter }
+                                FlowToggle {
+                                    objectName: "toggle_vibFollow"
+                                    enabled: !gen.running
+                                    checked: gen.vibFollow
+                                    onToggled: (c) => gen.vibFollow = c
+                                }
+                            }
+                        }
+                        RowLayout {
+                            objectName: "vibSourceRow"
+                            visible: gen.feelKind === "vibrator" || gen.showAllFeel
+                            Layout.fillWidth: true; spacing: 8
+                            Text {
+                                textFormat: Text.PlainText
+                                Layout.fillWidth: true; Layout.maximumWidth: implicitWidth; Layout.minimumWidth: 0; elide: Text.ElideRight
+                                text: qsTr("Vibration from"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                            }
+                            HelpChip { key: "gen-vib-source"; Layout.alignment: Qt.AlignVCenter }
+                            FlowCombo {
+                                objectName: "vibSourceCombo"
+                                Layout.minimumWidth: 0
+                                Layout.fillWidth: true
+                                enabled: !gen.running
+                                textRole: "label"; valueRole: "value"
+                                model: [{ label: qsTr("Motion only"), value: "" },
+                                        { label: qsTr("Sound + contact"), value: "sound+contact" },
+                                        { label: qsTr("Sound only"), value: "sound" }]
+                                currentIndex: Math.max(0, indexOfValue(gen.vibSource))
+                                onActivated: gen.vibSource = currentValue
+                            }
+                        }
                         // Invert / camera / scene-cuts live under Create → Advanced (G4a).
+                    // Invert / camera / scene-cuts live under Create → Advanced (G4a).
                         Repeater {
                             model: [{ text: qsTr("Find the tip by itself"), key: "autoTip", help: "gen-auto-tip" },
                                     { text: qsTr("Suggest O-zone automatically"), key: "autoOZone", help: "gen-auto-ozone" },
@@ -2213,12 +2224,14 @@ Item {
                     clip: true
                     contentHeight: createCol.implicitHeight
                     boundsBehavior: Flickable.StopAtBounds
-                    // A finished run brings its quality box into view.
+                    // A finished run brings Review into view; Advanced stays closed.
                     Connections {
                         target: gen
                         function onCreated() {
+                            advancedBox.advancedOpen = false
                             Qt.callLater(() => {
-                                const bottom = qualityBox.mapToItem(createSide, 0, qualityBox.height).y
+                                if (!reviewCard.visible) return
+                                const bottom = reviewCard.mapToItem(createSide, 0, reviewCard.height).y
                                 if (bottom > createScroll.contentY + createScroll.height)
                                     createScroll.contentY = Math.max(0, Math.min(createScroll.contentHeight - createScroll.height, bottom - createScroll.height))
                             })
@@ -2230,6 +2243,14 @@ Item {
                     Text {
                         textFormat: Text.PlainText
                         text: qsTr("4 · Create"); color: Theme.text; font.family: Theme.font; font.pixelSize: 15
+                    }
+                    Text {
+                        objectName: "createStepPrompt"
+                        visible: !gen.running && gen.outputPath === ""
+                        Layout.fillWidth: true; wrapMode: Text.WordWrap
+                        textFormat: Text.PlainText
+                        text: page.createCardPrompt()
+                        color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
                     }
                     Flow {
                         Layout.fillWidth: true
@@ -2247,23 +2268,6 @@ Item {
                             text: qsTr("Cancel"); visible: gen.running || gen.queueRunning || gen.finding
                             onClicked: gen.cancel()
                         }
-                    }
-                    RowLayout {
-                        Layout.fillWidth: true; spacing: 8
-                        Text {
-                            textFormat: Text.PlainText
-                            text: qsTr("Optimize after Create")
-                            color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
-                        }
-                        FlowCombo {
-                            objectName: "optimizeAfterCreate"
-                            Layout.fillWidth: true
-                            readonly property var targets: ["", "general", "neo2"]
-                            model: [qsTr("Off — keep as created"), qsTr("Any device"), qsTr("Sam Neo 2")]
-                            currentIndex: Math.max(0, targets.indexOf(gen.optimizeTarget))
-                            onActivated: (i) => gen.optimizeTarget = targets[i]
-                        }
-                        HelpChip { key: "gen-optimize-target"; Layout.alignment: Qt.AlignVCenter }
                     }
                     // G4a Advanced shell (closed by default): Tracking, Sliding,
                     // Adaptive Keyframes, motion axis. Expert sliders = G4b.
@@ -2566,6 +2570,100 @@ Item {
                         Layout.fillWidth: true; wrapMode: Text.WordWrap
                         text: gen.status; color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 13
                     }
+                    // The queue (0.7 "Create queue"): each video gets its tip
+                    // found and its script created with the settings above.
+                    Flow {
+                        Layout.fillWidth: true; spacing: 6
+                        FlowButton {
+                            objectName: "addToQueue"
+                            text: qsTr("Add to queue…"); icon: "playlist"
+                            enabled: !gen.queueRunning
+                            onClicked: queueDialog.open()
+                        }
+                        FlowButton {
+                            objectName: "runQueue"
+                            visible: gen.queue.length > 0
+                            text: qsTr("Create queue")
+                            enabled: !gen.queueRunning && !gen.running && gen.queue.some((q) => q.status === "queued")
+                            onClicked: gen.runQueue(false)
+                        }
+                        HelpChip { key: "gen-queue-run"; visible: gen.queue.length > 0; Layout.alignment: Qt.AlignVCenter }
+                        FlowButton {
+                            objectName: "clearQueue"
+                            visible: gen.queue.length > 0 && !gen.queueRunning
+                            text: qsTr("Clear")
+                            onClicked: gen.clearQueue()
+                        }
+                        HelpChip { key: "gen-queue-clear"; visible: gen.queue.length > 0 && !gen.queueRunning; Layout.alignment: Qt.AlignVCenter }
+                    }
+                    Text {
+                        objectName: "queueSummary"
+                        textFormat: Text.PlainText
+                        visible: gen.queueSummary !== ""
+                        text: gen.queueSummary; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
+                    }
+                    Column {
+                        objectName: "queueList"
+                        Layout.fillWidth: true; spacing: 2
+                        Repeater {
+                            model: gen.queue
+                            delegate: RowLayout {
+                                required property int index
+                                required property var modelData
+                                width: parent.width; spacing: 6
+                                Text {
+                                    textFormat: Text.PlainText
+                                    Layout.preferredWidth: 18
+                                    text: modelData.status === "done" ? "✓" : modelData.status === "running" ? "…"
+                                        : modelData.status === "failed" ? "✗" : modelData.status === "queued" ? String(index + 1) : "–"
+                                    color: modelData.status === "done" ? Theme.cyan : modelData.status === "failed" ? Theme.orange : Theme.textDim
+                                    font.family: Theme.fontSoft; font.pixelSize: 12
+                                }
+                                Text {
+                                    textFormat: Text.PlainText
+                                    Layout.fillWidth: true; elide: Text.ElideMiddle
+                                    text: modelData.name + (modelData.message !== "" && modelData.status !== "done" ? " · " + modelData.message : "")
+                                    color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 12
+                                }
+                                // One clip out of the queue (not while it runs).
+                                IconButton {
+                                    objectName: "removeQueued_" + index
+                                    width: 22; height: 22
+                                    icon: "close"; tip: qsTr("Remove from the queue")
+                                    visible: !gen.queueRunning
+                                    onClicked: gen.removeFromQueue(index)
+                                }
+                            }
+                        }
+                    }
+                    ListView {
+                        objectName: "runLog"
+                        Layout.fillWidth: true; Layout.fillHeight: true
+                        clip: true; spacing: 2
+                        model: gen.log
+                        delegate: Text {
+                            required property string modelData
+                            textFormat: Text.PlainText
+                            width: ListView.view.width; wrapMode: Text.WordWrap
+                            text: modelData; color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
+                        }
+                    }
+                }
+                }
+            }
+            // 5 Review: quality + Improve + Adapt. One Everyday Optimize.
+            GlassCard {
+                id: reviewCard
+                objectName: "reviewCard"
+                visible: page.sidePanel === 0 && (edit.hasScript || gen.outputPath !== "")
+                Layout.fillWidth: true; implicitHeight: reviewCol.implicitHeight + 28
+                ColumnLayout {
+                    id: reviewCol
+                    anchors.fill: parent; anchors.margins: 14; spacing: 8
+                    Text {
+                        textFormat: Text.PlainText
+                        text: qsTr("5 · Review"); color: Theme.text; font.family: Theme.font; font.pixelSize: 15
+                    }
                     // 0.7's quality box and post-generate review after a run.
                     Rectangle {
                         id: qualityBox
@@ -2761,14 +2859,14 @@ Item {
                         Text {
                             textFormat: Text.PlainText
                             Layout.fillWidth: true
-                            text: qsTr("Adapt for device")
+                            text: qsTr("Optimize / Adapt")
                             color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold
                         }
                         Text {
                             textFormat: Text.PlainText
                             Layout.fillWidth: true
                             wrapMode: Text.WordWrap
-                            text: qsTr("Turn the finished script into a clean any-device stroke, or bake Sam Neo 2 vibration and suction.")
+                            text: qsTr("After Create, and for this script. Default follows the Feel device.")
                             color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
                         }
                         // A Flow, not a RowLayout: the combo and two buttons have a fixed
@@ -2780,17 +2878,21 @@ Item {
                             enabled: !edit.busy
                             FlowCombo {
                                 id: postAdaptTarget
-                                objectName: "postAdaptTarget"
-                                width: 140; height: 36
-                                readonly property var targets: ["general", "neo2"]
-                                model: [qsTr("Any device"), qsTr("Sam Neo 2")]
-                                currentIndex: Math.max(0, targets.indexOf(gen.optimizeTarget !== "" ? gen.optimizeTarget : "general"))
+                                objectName: "optimizeAfterCreate"
+                                width: 220; height: 36
+                                readonly property var targets: ["off", "general", "neo2"]
+                                model: [qsTr("Off — keep as created"), qsTr("Any device"), qsTr("Sam Neo 2")]
+                                currentIndex: page.everydayOptimizeIndex()
                                 onActivated: (i) => gen.optimizeTarget = targets[i]
                             }
+                            HelpChip { key: "gen-optimize-target" }
                             FlowButton {
                                 objectName: "postAdaptOptimize"
                                 text: qsTr("Optimize"); icon: "sliders"
-                                onClicked: edit.optimizeFor(postAdaptTarget.targets[postAdaptTarget.currentIndex])
+                                onClicked: {
+                                    const t = page.resolvedOptimizeTarget()
+                                    if (t !== "") edit.optimizeFor(t)
+                                }
                             }
                             FlowButton {
                                 objectName: "postAdaptAxes"
@@ -2806,85 +2908,7 @@ Item {
                         icon: "play"
                         onClicked: page.reviewRequested(edit.hasScript ? edit.playPath : gen.outputPath)
                     }
-                    // The queue (0.7 "Create queue"): each video gets its tip
-                    // found and its script created with the settings above.
-                    Flow {
-                        Layout.fillWidth: true; spacing: 6
-                        FlowButton {
-                            objectName: "addToQueue"
-                            text: qsTr("Add to queue…"); icon: "playlist"
-                            enabled: !gen.queueRunning
-                            onClicked: queueDialog.open()
-                        }
-                        FlowButton {
-                            objectName: "runQueue"
-                            visible: gen.queue.length > 0
-                            text: qsTr("Create queue")
-                            enabled: !gen.queueRunning && !gen.running && gen.queue.some((q) => q.status === "queued")
-                            onClicked: gen.runQueue(false)
-                        }
-                        HelpChip { key: "gen-queue-run"; visible: gen.queue.length > 0; Layout.alignment: Qt.AlignVCenter }
-                        FlowButton {
-                            objectName: "clearQueue"
-                            visible: gen.queue.length > 0 && !gen.queueRunning
-                            text: qsTr("Clear")
-                            onClicked: gen.clearQueue()
-                        }
-                        HelpChip { key: "gen-queue-clear"; visible: gen.queue.length > 0 && !gen.queueRunning; Layout.alignment: Qt.AlignVCenter }
-                    }
-                    Text {
-                        objectName: "queueSummary"
-                        textFormat: Text.PlainText
-                        visible: gen.queueSummary !== ""
-                        text: gen.queueSummary; color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
-                    }
-                    Column {
-                        objectName: "queueList"
-                        Layout.fillWidth: true; spacing: 2
-                        Repeater {
-                            model: gen.queue
-                            delegate: RowLayout {
-                                required property int index
-                                required property var modelData
-                                width: parent.width; spacing: 6
-                                Text {
-                                    textFormat: Text.PlainText
-                                    Layout.preferredWidth: 18
-                                    text: modelData.status === "done" ? "✓" : modelData.status === "running" ? "…"
-                                        : modelData.status === "failed" ? "✗" : modelData.status === "queued" ? String(index + 1) : "–"
-                                    color: modelData.status === "done" ? Theme.cyan : modelData.status === "failed" ? Theme.orange : Theme.textDim
-                                    font.family: Theme.fontSoft; font.pixelSize: 12
-                                }
-                                Text {
-                                    textFormat: Text.PlainText
-                                    Layout.fillWidth: true; elide: Text.ElideMiddle
-                                    text: modelData.name + (modelData.message !== "" && modelData.status !== "done" ? " · " + modelData.message : "")
-                                    color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 12
-                                }
-                                // One clip out of the queue (not while it runs).
-                                IconButton {
-                                    objectName: "removeQueued_" + index
-                                    width: 22; height: 22
-                                    icon: "close"; tip: qsTr("Remove from the queue")
-                                    visible: !gen.queueRunning
-                                    onClicked: gen.removeFromQueue(index)
-                                }
-                            }
-                        }
-                    }
-                    ListView {
-                        objectName: "runLog"
-                        Layout.fillWidth: true; Layout.fillHeight: true
-                        clip: true; spacing: 2
-                        model: gen.log
-                        delegate: Text {
-                            required property string modelData
-                            textFormat: Text.PlainText
-                            width: ListView.view.width; wrapMode: Text.WordWrap
-                            text: modelData; color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
-                        }
-                    }
-                }
+
                 }
             }
             }  // createSide
