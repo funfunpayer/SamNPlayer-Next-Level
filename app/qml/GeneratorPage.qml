@@ -966,6 +966,19 @@ Item {
                         }
                         HelpChip { key: "gen-ai-tip"; Layout.alignment: Qt.AlignVCenter }
                         FlowButton {
+                            objectName: "suggestTipAndSecond"
+                            visible: gen.tipAndSecondSeedsAvailable || (gen.aiTipAvailable && gen.aiDetections.length === 0)
+                            text: gen.suggestingAiTip ? qsTr("Looking…") : qsTr("Suggest Tip+2nd")
+                            enabled: !gen.running && gen.aiTipAvailable && !gen.suggestingAiTip &&
+                                     (gen.tipAndSecondSeedsAvailable || gen.aiDetections.length === 0)
+                            onClicked: gen.suggestTipAndSecond()
+                        }
+                        HelpChip {
+                            key: "gen-seed-suggest"
+                            visible: gen.tipAndSecondSeedsAvailable || (gen.aiTipAvailable && gen.aiDetections.length === 0)
+                            Layout.alignment: Qt.AlignVCenter
+                        }
+                        FlowButton {
                             objectName: "showAllAiTags"
                             text: gen.suggestingAiTip ? qsTr("Looking…") : qsTr("Show all AI tags")
                             enabled: !gen.running && gen.aiTipAvailable && !gen.suggestingAiTip
@@ -2500,6 +2513,14 @@ Item {
                                             text: gen.suggestingAiTip ? qsTr("Looking…") : qsTr("Suggest tip (AI)")
                                             enabled: !gen.running && gen.aiTipAvailable && !gen.suggestingAiTip
                                             onClicked: gen.suggestAiTip()
+                                        }
+                                        FlowButton {
+                                            objectName: "aiAssistSuggestTipAndSecond"
+                                            visible: gen.tipAndSecondSeedsAvailable || (gen.aiTipAvailable && gen.aiDetections.length === 0)
+                                            text: gen.suggestingAiTip ? qsTr("Looking…") : qsTr("Suggest Tip+2nd")
+                                            enabled: !gen.running && gen.aiTipAvailable && !gen.suggestingAiTip &&
+                                                     (gen.tipAndSecondSeedsAvailable || gen.aiDetections.length === 0)
+                                            onClicked: gen.suggestTipAndSecond()
                                         }
                                         FlowButton {
                                             objectName: "aiAssistApplyTip"

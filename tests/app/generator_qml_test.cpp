@@ -985,6 +985,12 @@ private slots:
         QTRY_VERIFY(named(root.get(), "aiAssistShowAll")->isVisible());
         QVERIFY(named(root.get(), "aiAssistTipClass")->isVisible());
         QVERIFY(named(root.get(), "aiAssistSuggestTip"));
+        QTRY_VERIFY(named(root.get(), "suggestTipAndSecond")->isVisible());
+        QMetaObject::invokeMethod(named(root.get(), "suggestTipAndSecond"), "clicked");
+        QTRY_VERIFY(gen->hasAiTipProposal());
+        QTRY_VERIFY(gen->hasAiContactProposal());
+        QCOMPARE(gen->box(), QRect(40, 50, 48, 36));       // Tip+2nd does not rewrite the tip
+        QCOMPARE(gen->contactAreas().size(), 1);           // nor add contact until Apply
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
     }
 

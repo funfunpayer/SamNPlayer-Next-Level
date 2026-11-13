@@ -126,6 +126,24 @@ std::optional<AiTipHit> PickExpectedTip(const std::vector<AiTipHit>& hits, std::
     return std::nullopt;
 }
 
+std::optional<AiTipHit> PickBestContact(const std::vector<AiTipHit>& hits, std::string_view tipWant,
+                                       std::string_view preferContact) {
+    const AiTipHit* best = nullptr;
+    const AiTipHit* preferred = nullptr;
+    for (const auto& h : hits) {
+        if (LabelsMatchTip(h.label, tipWant)) continue;
+        const auto mapped = ContactClassForLabel(h.label);
+        if (!mapped) continue;
+        if (!best || h.score > best->score) best = &h;
+        if (!preferContact.empty() && *mapped == preferContact) {
+            if (!preferred || h.score > preferred->score) preferred = &h;
+        }
+    }
+    if (preferred) return *preferred;
+    if (best) return *best;
+    return std::nullopt;
+}
+
 std::optional<std::string> ContactClassForLabel(std::string_view label) {
     if (label == "breasts" || label == "breast") return std::string("breasts");
     if (label == "nipples" || label == "nipple") return std::string("nipples");
