@@ -93,7 +93,7 @@ private slots:
         QCOMPARE(gen->editorShare(), 0.40);
         // 0.7's lede and step prompt, verbatim.
         QVERIFY(named(root.get(), "createLede")->isVisible());
-        QVERIFY(named(root.get(), "stepPrompt")->property("text").toString().startsWith("Start here: choose a video."));
+        QVERIFY(named(root.get(), "stepPrompt")->property("text").toString().startsWith("Guest path: choose a video"));
         QVERIFY(named(root.get(), "createStepPrompt")->isVisible());
         QVERIFY(named(root.get(), "createStepPrompt")->property("text").toString().contains(QLatin1String("Create finds the tip")));
         QVERIFY(!named(root.get(), "reviewCard")->isVisible());

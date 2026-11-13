@@ -216,24 +216,24 @@ Item {
     }
     // 0.7 syncWorkflowSteps: one line on what to do next, verbatim.
     function stepPrompt() {
-        if (!gen.hasVideo) return qsTr("Start here: choose a video. Like FunGen2 — no motion path to paint; we find the tip.")
+        if (!gen.hasVideo) return qsTr("Guest path: choose a video, then Create. Create finds the tip — no options to set.")
         if (gen.running || (gen.finding && gen.status.startsWith(qsTr("Finding tip, then creating"))))
-            return qsTr("Step 4: creating… you can Cancel if needed.")
-        if (gen.outputPath !== "") return qsTr("Step 5: Review — Improve, Adapt, then Play.")
-        if (!gen.hasBox) return qsTr("Create finds the tip — no box to paint. Drag is override only.")
+            return qsTr("Creating… Cancel if needed.")
+        if (gen.outputPath !== "") return qsTr("Review — Improve / Use audio / Optimize, then Play.")
+        if (!gen.hasBox) return qsTr("Create finds the tip — press Create. Find tip or drag only if it missed.")
         if (gen.contactVibration && gen.contactAreas.length === 0)
-            return qsTr("Snack 2–3 optional: partner touch for Contact vibe, then Feel. Create finds the tip.")
-        return qsTr("Step 4: Create Emotion Script — Advanced stays closed for Everyday; open only if needed.")
+            return qsTr("Optional: mark contact for vibe, or just Create.")
+        return qsTr("Create Emotion Script. Leave Advanced closed — it helps the tip path by itself when a model is present.")
     }
     // Short line on the Create card (FunGen2: video → Create finds the tip).
     function createCardPrompt() {
         if (!gen.hasVideo)
-            return qsTr("Choose a video. Create finds the tip — like FunGen2. Feel is optional; Advanced stays closed.")
+            return qsTr("Choose a video. Create finds the tip — guest 2D path. Feel optional; Advanced stays closed.")
         if (gen.running || (gen.finding && gen.status.startsWith(qsTr("Finding tip, then creating"))))
             return qsTr("Creating… you can Cancel if needed.")
         if (!gen.hasBox)
-            return qsTr("Create finds the tip, or mark it if Find missed.")
-        return qsTr("Create Emotion Script. Advanced stays closed — open only if needed.")
+            return qsTr("Create finds the tip from this frame first — fast guest path.")
+        return qsTr("Create Emotion Script. Advanced stays closed.")
     }
     // Unset ("") follows Feel; "off" keeps the script as created; else general/neo2.
     function resolvedOptimizeTarget() {

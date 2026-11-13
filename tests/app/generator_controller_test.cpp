@@ -1150,6 +1150,10 @@ private slots:
         QCOMPARE(g.box(), QRect(20, 30, 40, 50));
         QVERIFY(!g.hasAiTipProposal());
         QCOMPARE(g.status(), QStringLiteral("Tip box applied from AI proposal."));
+        // FunGen2-like: setting a tip path turns AI re-acquire on when a model
+        // is present and the user never saved Off (Advanced stays closed).
+        QVERIFY(g.hybridReacquire());
+        g.setHybridReacquire(false);  // restore for later tests
     }
 
     void dismissAndPickAiDetectionStillNeedApply() {
