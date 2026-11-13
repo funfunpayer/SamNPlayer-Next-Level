@@ -131,7 +131,9 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             text: root.label.toUpperCase()
             color: root.tinted(0.85)
-            font.family: Theme.fontSoft; font.pixelSize: 12; font.letterSpacing: 1.8
+            font.family: Theme.fontSoft
+            font.pixelSize: Math.max(8, Math.min(12, root.radius_ * 0.18))
+            font.letterSpacing: Math.max(0.4, Math.min(1.8, root.radius_ * 0.02))
             font.weight: Font.DemiBold
         }
         Text {
@@ -141,13 +143,14 @@ Item {
             text: Math.round(root.shown * 100) + "%"
             color: "#f4fbff"
             font.family: Theme.font
-            font.pixelSize: Math.max(30, root.radius_ * 0.55)
+            font.pixelSize: Math.max(12, Math.min(root.radius_ * 0.55, root.radius_ * 0.9))
             font.weight: Font.Bold
         }
         // Soft stand-in for CSS text-shadow on the % (mockup glow).
         Icon {
             anchors.horizontalCenter: parent.horizontalCenter
-            name: "waveform"; color: root.tint; width: 36; height: 18
+            name: "waveform"; color: root.tint
+            width: Math.min(36, Math.max(14, root.radius_ * 0.45)); height: width / 2
             opacity: root.live ? 0.95 : 0.70
         }
     }

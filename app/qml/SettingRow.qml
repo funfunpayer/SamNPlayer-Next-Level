@@ -16,9 +16,14 @@ RowLayout {
     property string help
     signal moved(real value)
     spacing: 10
+    Layout.minimumWidth: 0
     Text {
         textFormat: Text.PlainText
-        Layout.preferredWidth: 118
+        // fillWidth + min 0: a Text without fillWidth keeps its full glyph width as
+        // the row's minimum (Windows CI, Generator #239). Cap at 118 so the slider
+        // takes the leftover; elide when the row is tighter than the label.
+        Layout.fillWidth: true; Layout.minimumWidth: 0
+        Layout.preferredWidth: 118; Layout.maximumWidth: 118
         text: root.label
         color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 13
         elide: Text.ElideRight
@@ -26,14 +31,20 @@ RowLayout {
         ToolTipText { text: root.tip; shown: hover.containsMouse }
     }
     FlowSlider {
-        Layout.fillWidth: true
+        Layout.fillWidth: true; Layout.minimumWidth: 0
         from: root.from; to: root.to; value: root.value
         onMoved: (v) => root.moved(Math.round(v / root.step) * root.step)
     }
     Rectangle {
-        Layout.preferredWidth: 64; Layout.preferredHeight: 26
+        Layout.preferredWidth: 64; Layout.preferredHeight: 26; Layout.minimumWidth: 0
         radius: 8; color: Qt.rgba(1, 1, 1, 0.04); border.color: Theme.cardBorder
-        Text { textFormat: Text.PlainText; anchors.centerIn: parent; text: root.display; color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 12 }
+        Text {
+            textFormat: Text.PlainText
+            anchors.fill: parent; anchors.margins: 2
+            horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
+            text: root.display; color: Theme.text; font.family: Theme.fontSoft; font.pixelSize: 12
+        }
     }
     HelpChip { key: root.help; visible: key !== "" && text !== "" }
 }

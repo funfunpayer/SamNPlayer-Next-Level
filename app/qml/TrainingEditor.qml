@@ -59,14 +59,20 @@ Item {
     }
     GlassCard {
         id: card
+        objectName: "editorCard"
         anchors.centerIn: parent
-        width: Math.min(parent.width - 60, 860); height: Math.min(parent.height - 40, 700)
+        width: Math.min(parent.width - 40, 860); height: Math.min(parent.height - 24, 700)
+        clip: true
         ColumnLayout {
             anchors.fill: parent; anchors.margins: 18
             spacing: 10
             RowLayout {
-                Layout.fillWidth: true
-                Text { textFormat: Text.PlainText; text: qsTr("Script editor"); color: Theme.text; font.family: Theme.font; font.pixelSize: 18; font.weight: Font.DemiBold; Layout.fillWidth: true }
+                Layout.fillWidth: true; Layout.minimumWidth: 0
+                Text {
+                    textFormat: Text.PlainText; text: qsTr("Script editor")
+                    color: Theme.text; font.family: Theme.font; font.pixelSize: 18; font.weight: Font.DemiBold
+                    Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight
+                }
                 IconButton { icon: "close"; width: 34; height: 34; tip: qsTr("Close"); onClicked: root.open = false }
             }
             Text {
@@ -75,25 +81,25 @@ Item {
                 text: qsTr("A script is a list of phases. Each phase has two independent axes, Vibration and Suction, that can ramp up, hold and ramp down on their own timing. Switch an axis off to keep that channel untouched (it stays at whatever level the previous phase left it).")
                 color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 12
             }
-            RowLayout {
-                Layout.fillWidth: true; spacing: 10
+            Flow {
+                Layout.fillWidth: true; Layout.minimumWidth: 0; spacing: 10
                 Text { textFormat: Text.PlainText; text: qsTr("Load existing"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13 }
                 FlowCombo {
-                    Layout.preferredWidth: 220
+                    width: Math.min(220, Math.max(140, parent.width - 120)); height: 34
                     model: [qsTr("-- new script --")].concat(root.controller.myPrograms.map(p => p.name))
                     currentIndex: Math.max(0, root.controller.myPrograms.findIndex(p => p.name === root.original) + 1)
                     onActivated: (i) => root.show(i === 0 ? "" : currentText)
                 }
             }
             RowLayout {
-                Layout.fillWidth: true; spacing: 10
-                Text { textFormat: Text.PlainText; text: qsTr("Name"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13; Layout.preferredWidth: 80 }
-                FlowTextField { Layout.fillWidth: true; text: root.draft.name; onTextChanged: if (text !== root.draft.name) root.edit(d => d.name = text) }
+                Layout.fillWidth: true; Layout.minimumWidth: 0; spacing: 10
+                Text { textFormat: Text.PlainText; text: qsTr("Name"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13; Layout.preferredWidth: 80; Layout.minimumWidth: 0; elide: Text.ElideRight }
+                FlowTextField { Layout.fillWidth: true; Layout.minimumWidth: 0; text: root.draft.name; onTextChanged: if (text !== root.draft.name) root.edit(d => d.name = text) }
             }
             RowLayout {
-                Layout.fillWidth: true; spacing: 10
-                Text { textFormat: Text.PlainText; text: qsTr("Description"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13; Layout.preferredWidth: 80 }
-                FlowTextField { Layout.fillWidth: true; maxLength: 200; text: root.draft.description; onTextChanged: if (text !== root.draft.description) root.edit(d => d.description = text) }
+                Layout.fillWidth: true; Layout.minimumWidth: 0; spacing: 10
+                Text { textFormat: Text.PlainText; text: qsTr("Description"); color: Theme.textDim; font.family: Theme.fontSoft; font.pixelSize: 13; Layout.preferredWidth: 80; Layout.minimumWidth: 0; elide: Text.ElideRight }
+                FlowTextField { Layout.fillWidth: true; Layout.minimumWidth: 0; maxLength: 200; text: root.draft.description; onTextChanged: if (text !== root.draft.description) root.edit(d => d.description = text) }
             }
             Flickable {
                 Layout.fillWidth: true; Layout.fillHeight: true
@@ -116,20 +122,26 @@ Item {
                             Column {
                                 id: body
                                 x: 10; y: 10; width: parent.width - 20; spacing: 8
-                                RowLayout {
+                                Flow {
                                     width: parent.width; spacing: 8
-                                    Text { textFormat: Text.PlainText; text: card.index + 1; color: Theme.cyan; font.family: Theme.font; font.pixelSize: 14; Layout.preferredWidth: 18 }
-                                    FlowTextField { Layout.fillWidth: true; text: card.ph.name; onTextChanged: if (text !== card.ph.name) root.edit(d => d.phases[card.index].name = text) }
+                                    RowLayout {
+                                        width: Math.min(parent.width, 260); height: 34; spacing: 8
+                                        Text { textFormat: Text.PlainText; text: card.index + 1; color: Theme.cyan; font.family: Theme.font; font.pixelSize: 14; Layout.preferredWidth: 18 }
+                                        FlowTextField { Layout.fillWidth: true; Layout.minimumWidth: 0; text: card.ph.name; onTextChanged: if (text !== card.ph.name) root.edit(d => d.phases[card.index].name = text) }
+                                    }
                                     NumField { label: qsTr("Repeats"); value: card.ph.repeatCycles; from: 1; to: 99; decimals: 0; onEdited: (v) => root.edit(d => d.phases[card.index].repeatCycles = Math.round(v)) }
                                     NumField { label: qsTr("Rest ms"); value: card.ph.restMs; from: 0; to: 60000; decimals: 0; onEdited: (v) => root.edit(d => d.phases[card.index].restMs = Math.round(v)) }
-                                    IconButton { icon: "chevronDown"; rotation: 180; width: 28; height: 28; enabled: card.index > 0; tip: qsTr("Move up"); onClicked: root.move(card.index, -1) }
-                                    IconButton { icon: "chevronDown"; width: 28; height: 28; enabled: card.index < root.draft.phases.length - 1; tip: qsTr("Move down"); onClicked: root.move(card.index, 1) }
-                                    IconButton { icon: "layers"; width: 28; height: 28; tip: qsTr("Duplicate"); onClicked: root.edit(d => { const c = JSON.parse(JSON.stringify(d.phases[card.index])); c.name += qsTr(" copy"); d.phases.splice(card.index + 1, 0, c) }) }
-                                    IconButton { icon: "trash"; width: 28; height: 28; enabled: root.draft.phases.length > 1; tip: qsTr("Delete phase"); onClicked: root.edit(d => d.phases.splice(card.index, 1)) }
+                                    Row {
+                                        spacing: 4
+                                        IconButton { icon: "chevronDown"; rotation: 180; width: 28; height: 28; enabled: card.index > 0; tip: qsTr("Move up"); onClicked: root.move(card.index, -1) }
+                                        IconButton { icon: "chevronDown"; width: 28; height: 28; enabled: card.index < root.draft.phases.length - 1; tip: qsTr("Move down"); onClicked: root.move(card.index, 1) }
+                                        IconButton { icon: "layers"; width: 28; height: 28; tip: qsTr("Duplicate"); onClicked: root.edit(d => { const c = JSON.parse(JSON.stringify(d.phases[card.index])); c.name += qsTr(" copy"); d.phases.splice(card.index + 1, 0, c) }) }
+                                        IconButton { icon: "trash"; width: 28; height: 28; enabled: root.draft.phases.length > 1; tip: qsTr("Delete phase"); onClicked: root.edit(d => d.phases.splice(card.index, 1)) }
+                                    }
                                 }
                                 Repeater {
                                     model: ["vibration", "suction"]
-                                    delegate: Row {
+                                    delegate: Flow {
                                         id: axis
                                         required property string modelData
                                         readonly property var c: card.ph[modelData]
@@ -165,10 +177,9 @@ Item {
                 text: root.status
                 color: root.statusOk ? Theme.good : Theme.orange; font.family: Theme.fontSoft; font.pixelSize: 12
             }
-            RowLayout {
-                spacing: 8
+            Flow {
+                Layout.fillWidth: true; Layout.minimumWidth: 0; spacing: 8
                 FlowButton { text: qsTr("+ Add phase"); onClicked: root.edit(d => d.phases.push(root.phase())) }
-                Item { Layout.fillWidth: true }
                 FlowButton { text: qsTr("New"); onClicked: root.show("") }
                 FlowButton { text: qsTr("Delete"); danger: true; enabled: root.original !== ""
                     onClicked: { const e = root.controller.deleteScript(root.original); if (e) { root.status = e; root.statusOk = false } else root.show("") } }

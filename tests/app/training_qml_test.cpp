@@ -11,6 +11,8 @@
 #include <QtQml/QQmlExtensionPlugin>
 #include <QtTest>
 
+#include <functional>
+
 #include "device_controller.h"
 #include "fake_servers.h"
 #include "icon_provider.h"
@@ -57,6 +59,39 @@ QQuickItem* visibleHelpChip(QQuickItem* root, const char* key) {
         return item;
     }
     return nullptr;
+}
+
+// Repeater delegates are visual children only, so walk childItems() as well.
+QQuickItem* named(QQuickItem* root, const char* name) {
+    if (auto* hit = root->findChild<QQuickItem*>(QLatin1String(name))) return hit;
+    for (QQuickItem* child : root->childItems()) {
+        if (child->objectName() == QLatin1String(name)) return child;
+        if (auto* hit = named(child, name)) return hit;
+    }
+    return nullptr;
+}
+
+QStringList controlsPast(QQuickItem* box, qreal slack = 0.5) {
+    QStringList bad;
+    std::function<void(QQuickItem*)> walk = [&](QQuickItem* it) {
+        for (QQuickItem* c : it->childItems()) {
+            if (!c->isVisible() || c->width() <= 0 || c->height() <= 0) continue;
+            const QByteArray cls = c->metaObject()->className();
+            const qreal right = c->mapToItem(box, QPointF(c->width(), 0)).x();
+            if (right > box->width() + slack &&
+                (cls.contains("FlowButton") || cls.contains("FlowCombo") || cls.contains("HelpChip") ||
+                 cls.contains("FlowToggle") || cls.contains("FlowSlider") || cls.contains("FlowTextField") ||
+                 cls.contains("IconButton") || cls.contains("FlowTabs") || cls.contains("PlayButton") ||
+                 cls.contains("TrainingRing") || cls.contains("DualRing") || cls.contains("NumField")))
+                bad << QString("%1 %2 ends at %3 of %4")
+                           .arg(QString::fromLatin1(cls), c->objectName())
+                           .arg(right)
+                           .arg(box->width());
+            walk(c);
+        }
+    };
+    walk(box);
+    return bad;
 }
 }  // namespace
 
@@ -343,6 +378,121 @@ private slots:
         QVERIFY(ctl->scriptName() != QString());
         QTRY_VERIFY(visibleHelpChip(page, "training.tier"));
         QVERIFY(visibleHelpChip(page, "training.tier")->property("text").toString().contains(QLatin1String("Gentle")));
+    }
+
+    // 960 px is the Windows-wide-font stand-in (Generator #239 / #244): a Text
+    // in a RowLayout without fillWidth keeps its glyph width as the row's
+    // minimum, so the centre cards and stage chrome used to paint past the
+    // page. Short windows must scroll rather than overflow.
+    void pageFitsAt960AndRingsScale() {
+        g_messages.clear();
+        g_previous = qInstallMessageHandler(capture);
+        for (const QSize size : {QSize(960, 600), QSize(1440, 860)}) {
+            QQmlEngine engine;
+            engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
+            engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+            QQmlComponent comp(&engine);
+            comp.setData(R"(
+                import QtQuick
+                import SamN
+                Item {
+                    property alias page: tp
+                    DeviceController { id: dev }
+                    TrainingPage { id: tp; objectName: "page"; anchors.fill: parent; device: dev }
+                })",
+                         QUrl("qrc:/test/TrainingFit.qml"));
+            QVERIFY2(comp.status() == QQmlComponent::Ready, qPrintable(comp.errorString()));
+            QQuickWindow window;
+            window.resize(size);
+            std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
+            QVERIFY(root);
+            root->setParentItem(window.contentItem());
+            root->setSize(size);
+            window.show();
+            QVERIFY(QTest::qWaitForWindowExposed(&window));
+            QTest::qWait(200);
+            auto* page = root->property("page").value<QQuickItem*>();
+            QVERIFY(page);
+            auto* ctl = page->property("controller").value<TrainingController*>();
+            QVERIFY(ctl);
+
+            auto* left = named(page, "leftPanel");
+            auto* center = named(page, "centerScroll");
+            auto* right = named(page, "rightPanel");
+            auto* stage = named(page, "stage");
+            auto* rings = named(page, "trainingRings");
+            QVERIFY(left && center && right && stage && rings);
+            QVERIFY2(left->mapToItem(page, QPointF(left->width(), 0)).x() <= page->width() + 0.5,
+                     qPrintable(QString("left ends at %1 of %2").arg(left->mapToItem(page, QPointF(left->width(), 0)).x()).arg(page->width())));
+            QVERIFY2(right->mapToItem(page, QPointF(right->width(), 0)).x() <= page->width() + 0.5,
+                     qPrintable(QString("right ends at %1 of %2").arg(right->mapToItem(page, QPointF(right->width(), 0)).x()).arg(page->width())));
+            QVERIFY2(center->mapToItem(page, QPointF(center->width(), 0)).x() <= page->width() + 0.5,
+                     qPrintable(QString("center ends at %1 of %2").arg(center->mapToItem(page, QPointF(center->width(), 0)).x()).arg(page->width())));
+
+            const QStringList stuck = controlsPast(page);
+            QVERIFY2(stuck.isEmpty(),
+                     qPrintable(QString("%1 control(s) stick out at %2x%3: %4")
+                                    .arg(stuck.size())
+                                    .arg(size.width())
+                                    .arg(size.height())
+                                    .arg(stuck.join("; "))));
+
+            QCOMPARE(ctl->stage(), QString("rings"));
+            QTRY_VERIFY(rings->isVisible());
+            QVERIFY2(rings->mapToItem(stage, QPointF(rings->width(), 0)).x() <= stage->width() + 1.0,
+                     qPrintable(QString("rings end at %1 of stage %2")
+                                    .arg(rings->mapToItem(stage, QPointF(rings->width(), 0)).x())
+                                    .arg(stage->width())));
+            QVERIFY2(rings->height() <= stage->height() + 1.0,
+                     qPrintable(QString("rings h %1 stage %2").arg(rings->height()).arg(stage->height())));
+
+            ctl->setStage(QStringLiteral("figure"));
+            auto* dual = named(page, "dualRing");
+            QVERIFY(dual);
+            QTRY_VERIFY(dual->isVisible());
+            QVERIFY2(dual->mapToItem(stage, QPointF(dual->width(), 0)).x() <= stage->width() + 1.0,
+                     qPrintable(QString("dualRing ends at %1 of stage %2")
+                                    .arg(dual->mapToItem(stage, QPointF(dual->width(), 0)).x())
+                                    .arg(stage->width())));
+            QVERIFY2(dual->property("size").toReal() <= 128.0 + 0.5, "dualRing size above the 128 px draw box");
+            QVERIFY2(dual->property("size").toReal() >= 72.0 - 0.5, "dualRing size collapsed");
+
+            ctl->setStage(QStringLiteral("video"));
+            QTRY_VERIFY(named(page, "stageVideoChoose")->isVisible());
+            const QStringList videoStuck = controlsPast(stage);
+            QVERIFY2(videoStuck.isEmpty(),
+                     qPrintable(QString("video chrome sticks out at %1: %2").arg(size.width()).arg(videoStuck.join("; "))));
+            ctl->setStage(QStringLiteral("rings"));
+
+            auto* editor = named(page, "editor");
+            QVERIFY(editor);
+            QVERIFY(QMetaObject::invokeMethod(editor, "show", Q_ARG(QVariant, QString())));
+            QVERIFY(editor->isVisible());
+            auto* editorCard = named(page, "editorCard");
+            QVERIFY(editorCard);
+            QTRY_VERIFY(editorCard->width() > 0);
+            QVERIFY2(editorCard->width() <= page->width() + 0.5,
+                     qPrintable(QString("editor %1 of page %2").arg(editorCard->width()).arg(page->width())));
+            const QStringList editorStuck = controlsPast(editorCard, 1.0);
+            QVERIFY2(editorStuck.isEmpty(),
+                     qPrintable(QString("editor controls stick out at %1: %2").arg(size.width()).arg(editorStuck.join("; "))));
+            editor->setProperty("open", false);
+
+            if (size.height() <= 600) {
+                const qreal view = center->height();
+                const qreal content = center->property("contentHeight").toReal();
+                QVERIFY2(content + 0.5 >= view, qPrintable(QString("content %1 view %2").arg(content).arg(view)));
+            }
+        }
+        qInstallMessageHandler(g_previous);
+        QStringList loops;
+        for (const QString& m : g_messages) {
+            if (m.contains(QLatin1String("binding loop")) || m.contains(QLatin1String("layout loop")) ||
+                m.contains(QLatin1String("QQuickLayout")))
+                loops << m;
+        }
+        QVERIFY2(loops.isEmpty(), qPrintable(loops.join('\n')));
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
     }
 };
 
