@@ -206,10 +206,12 @@ std::vector<Action> FillGapsRhythmic(std::vector<Action> a, int64_t max_gap_ms, 
             const Action prev = out.back();
             const Action& next = a[i];
             const int64_t dt = next.at - prev.at;
-            if (dt <= max_gap_ms || dt <= 2 * int64_t(kMinHalfPeriodMs)) {
+            if (dt <= max_gap_ms) {
                 PushOrReplace(out, next);
                 continue;
             }
+            // Too short for a stroke: a straight line, as FillGaps.
+            const bool too_short = dt <= 2 * int64_t(kMinHalfPeriodMs);
             // Strokes near the gap, each side on its own (never across it).
             StrokeStats near;
             size_t lo = i - 1;
@@ -219,17 +221,27 @@ std::vector<Action> FillGapsRhythmic(std::vector<Action> a, int64_t max_gap_ms, 
             while (hi + 1 < a.size() && a[hi + 1].at <= next.at + kStrokeContextMs) ++hi;
             AddTurns(a, i, hi, near);
             double half = 0, amp = global_amp;
-            bool holding = false;
-            if (near.halves.size() >= 3) {
+            bool holding = too_short;
+            if (!too_short && near.halves.size() >= 3) {
                 const double h = Median(near.halves);
                 amp = Median(near.amps);
                 holding = amp < kRhythmicFillMinAmplitude;
                 if (h >= kMinHalfPeriodMs && h <= kMaxHalfPeriodMs) half = h;
             }
             if (!holding && !(near.halves.size() >= 3) && global_amp < kRhythmicFillMinAmplitude) holding = true;
+            // FillGaps' rule for its straight line: a gap no longer than the
+            // step is left as it is. Strokes do not depend on the line step.
+            if (holding && dt <= line_step) {
+                PushOrReplace(out, next);
+                continue;
+            }
             ++gaps;
             if (holding) {
-                for (int64_t t = prev.at + line_step; t < next.at; t += line_step) {
+                // The same points as FillGaps: k = 1 .. dt / step - 1.
+                const int64_t n = dt / line_step;
+                for (int64_t k = 1; k < n; ++k) {
+                    const int64_t t = prev.at + k * line_step;
+                    if (t >= next.at) break;
                     const double f = double(t - prev.at) / double(dt);
                     out.push_back({t, ClampPos(std::lround(prev.pos + f * (next.pos - prev.pos)))});
                     ++added;

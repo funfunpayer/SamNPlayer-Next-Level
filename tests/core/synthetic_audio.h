@@ -52,6 +52,8 @@ struct Spec {
     double syncopation = 0;     // chance per beat of an extra hit at 3/4 of the beat (not a beat)
     bool click_kick = false;    // the hit is a short broadband click instead of a falling sine
     double hat_decay_ms = 12;   // decay of the noise hat
+    double layer_ratio = 0;     // > 0: a second layer of tom hits at this x the tempo (polymetric; not beats)
+    double layer_level = 0.7;   // its level relative to the drum hit
     double silence_from = -1;   // seconds; hits and pad muted in [from, to)
     double silence_to = -1;
     bool hits = true;
@@ -103,6 +105,21 @@ inline void AddSub(std::vector<float>& out, int sr, double t0, double amp) {
         const double t = double(i) / sr;
         const double attack = std::min(1.0, t / 0.01);
         out[std::size_t(k)] += float(amp * attack * std::exp(-t / 0.35) * std::sin(2 * kPi * 45 * t));
+    }
+}
+
+// A tom: a 160 Hz sine falling to 120 Hz with a short attack click.
+inline void AddTom(std::vector<float>& out, int sr, double t0, double amp, Rng& rng) {
+    const auto start = std::int64_t(std::llround(t0 * sr));
+    const int len = int(0.3 * sr);
+    double phase = 0;
+    for (int i = 0; i < len; ++i) {
+        const std::int64_t k = start + i;
+        if (k < 0 || k >= std::int64_t(out.size())) continue;
+        const double t = double(i) / sr;
+        phase += 2 * kPi * (120 + 40 * std::exp(-t / 0.05)) / sr;
+        const double v = std::sin(phase) * std::exp(-t / 0.12) + 0.3 * rng.Gauss() * std::exp(-t / 0.003);
+        out[std::size_t(k)] += float(amp * v);
     }
 }
 
@@ -170,6 +187,15 @@ inline Clip Make(const Spec& s) {
                 }
             }
             t += period;
+        }
+        if (s.layer_ratio > 0) {
+            // Its own grid from the same start, at layer_ratio x the tempo.
+            for (double u = 0.5; u < s.seconds - 0.3; u += 60.0 / (s.bpm * s.layer_ratio)) {
+                const double at = u + s.jitter_ms / 1000.0 * rng.Gauss();
+                if (Muted(s, at)) continue;
+                AddTom(c.samples, sr, at, s.hit * s.layer_level, rng);
+                c.onsets_ms.push_back(at * 1000);
+            }
         }
     }
     if (s.speech) {

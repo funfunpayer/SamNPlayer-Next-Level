@@ -70,8 +70,9 @@ constexpr int kRhythmicFillMinAmplitude = 10;
 // beat, starting away from the direction the script last moved, along the
 // line between the two anchors; never closer than half a half period to the
 // next anchor. Where the script holds (amplitude under
-// kRhythmicFillMinAmplitude) the gap is filled linearly at step_ms as in
-// FillGaps (0 = 100 ms, or half the audio period).
+// kRhythmicFillMinAmplitude), and where a gap is too short for one stroke
+// (2 x 214 ms), the gap gets exactly FillGaps' points at step_ms (0 = 100 ms,
+// or half the audio period); gaps FillGaps would not fill stay as they are.
 std::vector<Action> FillGapsRhythmic(std::vector<Action> actions, int64_t max_gap_ms, int64_t step_ms, double audio_hz,
                                      const BaseRhythm& base, int* gaps_filled = nullptr, int* points_added = nullptr);
 
