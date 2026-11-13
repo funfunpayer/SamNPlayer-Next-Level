@@ -40,7 +40,11 @@ class GeneratorController : public QObject {
     // The tip box in video pixels; the CSRT tracker follows only this box.
     Q_PROPERTY(QRect box READ box WRITE setBox NOTIFY boxChanged)
     Q_PROPERTY(bool hasBox READ hasBox NOTIFY boxChanged)
-    Q_PROPERTY(QString boxLabel READ boxLabel NOTIFY boxChanged)
+    Q_PROPERTY(QString boxLabel READ boxLabel NOTIFY boxLabelChanged)
+    // Preview / last-Create tip path: the overlay centres on tipAt(playheadMs)
+    // when not dragging. revision ticks so QML re-reads tipAt after a replace.
+    Q_PROPERTY(bool hasTipPath READ hasTipPath NOTIFY tipPathChanged)
+    Q_PROPERTY(quint64 tipPathRevision READ tipPathRevision NOTIFY tipPathChanged)
     // Feel: "recommended" (default, D-160) | "standard" (Normal) | "weich" (Soft) | "autotune".
     Q_PROPERTY(QString profile READ profile WRITE setProfile NOTIFY optionsChanged)
     Q_PROPERTY(bool invert READ invert WRITE setInvert NOTIFY optionsChanged)
@@ -189,6 +193,13 @@ public:
     void setBox(const QRect& box);
     bool hasBox() const { return box_.isValid() && !box_.isEmpty(); }
     QString boxLabel() const;
+    bool hasTipPath() const { return !tipPath_.empty(); }
+    quint64 tipPathRevision() const { return tip_path_revision_; }
+    // Tip place at a video time (the playhead) from the preview / last-Create
+    // path ({x, y} in video pixels), empty when no sample is near.
+    Q_INVOKABLE QVariantMap tipAt(double scriptMs) const;
+    // Tests: inject a path without tracking ({at, x, y} in video pixels).
+    void setTipPathForTest(const QVariantList& points);
     QString profile() const { return profile_; }
     void setProfile(const QString& p);
     bool invert() const { return invert_; }
@@ -378,6 +389,8 @@ signals:
     void videoChanged();
     void previewChanged();
     void boxChanged();
+    void boxLabelChanged();
+    void tipPathChanged();
     void optionsChanged();
     void feelChanged();
     void runChanged();
@@ -489,6 +502,19 @@ private:
     std::thread queue_worker_;
     void setQueueItem(int index, const QString& status, const QString& message);
     void finishQueue();
+    void installBox(const QRect& box, double atMs);
+    void scheduleTipPreview();
+    void cancelTipPreview();
+    void startTipPreview(quint64 seq);
+    void applyTipPath(std::vector<samn::TrajectoryPoint> path);
+    void clearTipPath();
+    void loadTipPathFromSamn(const QString& samnPath);
+
+    std::vector<samn::TrajectoryPoint> tipPath_;
+    quint64 tip_path_revision_ = 0;
+    quint64 preview_seq_ = 0;
+    std::shared_ptr<std::atomic<bool>> preview_cancel_;
+    std::thread preview_;
 };
 
 }  // namespace samn::ui

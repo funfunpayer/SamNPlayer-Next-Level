@@ -3,7 +3,17 @@
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
 
-**Last update:** 11 Nov 2026, Claude, branch `claude/samn2-handover-docs`: handover of the review-fix PRs and the Generator layout (docs only). Quality first, then speed.
+**Last update:** 13 Nov 2026, Cursor, branch `cursor/gen-live-tip-635a`: Generator tip overlay follows the playhead. Do not touch feel_heatbands / Speech-Hold / handbook / `.sam`.
+
+## Handover: Generator live tip overlay (13 Nov)
+
+Owner: the teal tip box stayed on the seed (`gen.box`) while the video played or scrubbed. Create/CSRT could already write a path into the script, but the Generator preview never asked it, so the overlay looked frozen. The Player already centres on `tipAt(playheadMs)` when a trajectory exists.
+
+- **Engine:** `CompanionSamn` always stores `trajectory` when tracking produced centres (`BuildTrajectory`), not only when `HasContactAreas`. Tip-only scripts now carry a path so Play's overlay moves too. `BuildTrajectory` is exported from `generate.h`. Funscript metadata still omits the path (Player reads the `.samn`).
+- **App:** `GeneratorController::tipAt` / `hasTipPath` / `tipPathRevision`. After Find tip / paint / Apply AI (`installBox`), a light preview `TrackBox` (8 fps, no camera, cap 400 frames) runs on a worker; Create cancels it and, on success, replaces the path from the new `.samn`. Drag still edits the seed. No 0.7 live steering during Create — last preview path stays until Done.
+- **QML:** `GeneratorPage` `tipBox` centres on `tipAt(playheadMs)` when a path exists and the user is not dragging (same pattern as Player `contactMarksLayer`). `previewCoach` / `boxLabel` say the box follows motion; drag still edits the seed.
+- **Tests:** `generate: without contact vibration the tip box and tip path are stored`; `generate: writes the funscript…` asserts tip-only trajectory; `tipAtFollowsAnInjectedPathAndClearsWithTheBox`; `setBoxBuildsAPreviewPathThatMovesWithTime`; `generator_qml_test` `tipBoxFollowsPlayheadWhenPathExists`; Create already loads the path (`createWritesTheScriptAndHandsItToThePlayer`).
+- **Stay off:** feel_heatbands, Speech-Hold, handbook rewrite, `.sam`.
 
 ## Handover: review fixes, Generator layout, working rules (11 Nov)
 

@@ -55,10 +55,14 @@ std::string FunscriptJson(const GenerateRequest& req, const std::vector<Action>&
     return nlohmann::json{{"actions", acts}, {"metadata", meta}}.dump(2);
 }
 
+}  // namespace
+
 // Tip (+ optional partner / extras) path for spatial contact (0.7
 // buildTrajectoryData): box centres in frame pixels, one point per
 // kTipPathStepMs, 0.1 px.
+namespace {
 constexpr int64_t kTipPathStepMs = 50;
+}  // namespace
 
 TrajectoryData BuildTrajectory(const TrackResult& tr) {
     TrajectoryData t;
@@ -82,6 +86,8 @@ TrajectoryData BuildTrajectory(const TrackResult& tr) {
     // Keep empty slots so extras[i] stays aligned with contactMarks.extras[i].
     return t;
 }
+
+namespace {
 
 // 0.7 writeCompanionSamn for the single-box path.
 Document CompanionSamn(const GenerateRequest& req, const std::vector<Action>& actions, const TrackResult& tr) {
@@ -123,7 +129,13 @@ Document CompanionSamn(const GenerateRequest& req, const std::vector<Action>& ac
         marks.extras = req.extra_areas;
     }
     d.contact_marks = BuildContactMarks(marks);
-    if (d.contact_marks && HasContactAreas(*d.contact_marks)) d.trajectory = BuildTrajectory(tr);
+    // Always store the tip path when tracking produced centres, not only
+    // when a contact area is marked: Play and the Generator overlay follow
+    // it on tip-only scripts too.
+    {
+        TrajectoryData path = BuildTrajectory(tr);
+        if (!path.tip.empty()) d.trajectory = std::move(path);
+    }
     return d;
 }
 

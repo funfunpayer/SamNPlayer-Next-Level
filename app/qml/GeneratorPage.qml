@@ -232,6 +232,8 @@ Item {
             if (r1.width * r1.height < 400) bits.push(qsTr("Tip box is very small — Find tip again or enlarge slightly."))
             if (r1.x < 4 || r1.y < 4) bits.push(qsTr("Tip box is flush with the image edge."))
             bits.push(qsTr("Tip box = CSRT stroke tracker."))
+            if (gen.hasTipPath)
+                bits.push(qsTr("The teal box follows the tip as you scrub; drag still edits the seed."))
         } else {
             bits.push(qsTr("Press Find tip, or drag a tip box if Find missed."))
         }
@@ -533,14 +535,31 @@ Item {
                         // Video pixels <-> item coordinates.
                         readonly property real scaleX: gen.videoSize.width > 0 ? frameView.imageRect.width / gen.videoSize.width : 1
                         readonly property real scaleY: gen.videoSize.height > 0 ? frameView.imageRect.height / gen.videoSize.height : 1
-                        // The tip box: teal, as 0.7 (#3dccc0).
+                        // The tip box: teal, as 0.7 (#3dccc0). After Find / paint /
+                        // Apply AI / Create, centre on the path at the playhead
+                        // (Player contactMarksLayer); drag still edits the seed.
                         Rectangle {
+                            id: tipBox
                             objectName: "tipBox"
                             visible: gen.hasBox || (drag.active && !drag.contact && !drag.ignore)
-                            readonly property rect r: drag.active && !drag.contact && !drag.ignore ? drag.rect : gen.box
-                            x: frameView.imageRect.x + r.x * parent.scaleX
-                            y: frameView.imageRect.y + r.y * parent.scaleY
-                            width: r.width * parent.scaleX; height: r.height * parent.scaleY
+                            readonly property rect mapRect: page.playing ? videoOut.contentRect : frameView.imageRect
+                            readonly property real sx: gen.videoSize.width > 0 ? mapRect.width / gen.videoSize.width : 1
+                            readonly property real sy: gen.videoSize.height > 0 ? mapRect.height / gen.videoSize.height : 1
+                            readonly property var tipNow: {
+                                const _ = gen.tipPathRevision
+                                return (!drag.active && gen.hasTipPath) ? gen.tipAt(page.playheadMs) : ({})
+                            }
+                            readonly property rect seed: gen.box
+                            readonly property rect r: {
+                                if (drag.active && !drag.contact && !drag.ignore) return drag.rect
+                                if (tipNow.x !== undefined && seed.width > 0)
+                                    return Qt.rect(tipNow.x - seed.width / 2, tipNow.y - seed.height / 2,
+                                                   seed.width, seed.height)
+                                return seed
+                            }
+                            x: mapRect.x + r.x * sx
+                            y: mapRect.y + r.y * sy
+                            width: r.width * sx; height: r.height * sy
                             color: Qt.rgba(61 / 255, 204 / 255, 192 / 255, page.selectedMark === -1 ? 0.30 : 0.16)
                             border.color: page.selectedMark === -1 ? "white" : "#3dccc0"; border.width: page.selectedMark === -1 ? 3 : 2
                         }
@@ -814,7 +833,7 @@ Item {
                                     const a = areas[i]
                                     if (p.x >= a.x && p.x <= a.x + a.w && p.y >= a.y && p.y <= a.y + a.h) return i
                                 }
-                                const b = gen.box
+                                const b = tipBox.r
                                 if (gen.hasBox && p.x >= b.x && p.x <= b.x + b.width && p.y >= b.y && p.y <= b.y + b.height) return -1
                                 return -2
                             }

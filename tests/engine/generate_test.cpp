@@ -104,6 +104,11 @@ TEST_CASE("generate: writes the funscript and its .samn as 0.7 did") {
     for (const auto& e : ev) noted = noted || e.message.rfind("O-marker set", 0) == 0;
     CHECK(noted);
     CHECK(d.video_path == (dir / "moving.mp4").u8string());
+    // Tip-only Create still writes the tip path (Play / Generator overlay).
+    REQUIRE(d.trajectory);
+    CHECK(d.trajectory->tip.size() >= 10);
+    CHECK(d.trajectory->partner.empty());
+    CHECK(!fs_json["metadata"].contains("trajectory"));  // .samn only
     fs::remove_all(dir);
 }
 
@@ -470,7 +475,7 @@ TEST_CASE("generate: a followed extra contact moves the Tf/Tj stroke") {
     fs::remove_all(dir);
 }
 
-TEST_CASE("generate: without contact vibration only the tip box is stored") {
+TEST_CASE("generate: without contact vibration the tip box and tip path are stored") {
     const fs::path dir = TempDir("samn_generate_nocontact");
     REQUIRE(clips::WriteMoving(dir / "moving.mp4", 2, 80.0, 1.0));
     GenerateRequest req = Request(dir, "moving.mp4", "standard");
@@ -485,10 +490,12 @@ TEST_CASE("generate: without contact vibration only the tip box is stored") {
     CHECK(d.contact_marks->tip_class == "penis");
     CHECK(d.contact_marks->tip);
     CHECK_FALSE(d.contact_marks->primary);
-    CHECK_FALSE(d.trajectory);
+    REQUIRE(d.trajectory);
+    CHECK(d.trajectory->tip.size() >= 10);
     const auto fs_json = ReadJson(dir / "standard.funscript");
     CHECK(!fs_json["metadata"].contains("device_recipe"));
     CHECK(fs_json["metadata"]["contact_marks"]["tip"]["class"] == "penis");
+    CHECK(!fs_json["metadata"].contains("trajectory"));  // .samn only
     fs::remove_all(dir);
 }
 

@@ -70,6 +70,44 @@ private slots:
         QVERIFY(g.boxLabel().contains("x=100 y=40 w=120 h=160"));
         QCOMPARE(g.step(), 3);
         QVERIFY(box.count() >= 3);
+        QVERIFY(!g.hasTipPath());  // preview is queued, not started on this stack
+        QVERIFY(g.tipAt(0).isEmpty());
+    }
+
+    void tipAtFollowsAnInjectedPathAndClearsWithTheBox() {
+        GeneratorController g;
+        g.setAutoTip(false);
+        QVERIFY(g.openVideo(clip("tip_inject.mp4", 2), false));
+        QVERIFY(!g.hasTipPath());
+        QVERIFY(g.tipAt(0).isEmpty());
+        g.setBox(QRect(100, 40, 120, 160));
+        g.setTipPathForTest({QVariantMap{{"at", 0}, {"x", 40.0}, {"y", 50.0}},
+                             QVariantMap{{"at", 1000}, {"x", 80.0}, {"y", 90.0}}});
+        QVERIFY(g.hasTipPath());
+        QCOMPARE(g.tipAt(0).value("x").toDouble(), 40.0);
+        QCOMPARE(g.tipAt(0).value("y").toDouble(), 50.0);
+        QCOMPARE(g.tipAt(1000).value("x").toDouble(), 80.0);
+        QCOMPARE(g.tipAt(1100).value("y").toDouble(), 90.0);  // nearest
+        QVERIFY(g.tipAt(5000).isEmpty());                    // past the path
+        QVERIFY(g.boxLabel().contains("follows motion"));
+        g.clearBox();
+        QVERIFY(!g.hasTipPath());
+        QVERIFY(g.tipAt(0).isEmpty());
+    }
+
+    void setBoxBuildsAPreviewPathThatMovesWithTime() {
+        GeneratorController g;
+        g.setAutoTip(false);
+        QVERIFY(g.openVideo(clip("tip_preview.mp4", 2), false));
+        const double t0 = g.previewMs();
+        g.setBox(QRect(100, 40, 120, 160));
+        QTRY_VERIFY_WITH_TIMEOUT(g.hasTipPath(), 60000);
+        const QVariantMap a = g.tipAt(t0);
+        const QVariantMap b = g.tipAt(t0 + 800);
+        QVERIFY2(!a.isEmpty(), qPrintable(g.status()));
+        QVERIFY(!b.isEmpty());
+        QVERIFY2(qAbs(a.value("y").toDouble() - b.value("y").toDouble()) > 5.0,
+                 qPrintable(QString("y %1 vs %2").arg(a.value("y").toDouble()).arg(b.value("y").toDouble())));
     }
 
     void createWritesTheScriptAndHandsItToThePlayer() {
@@ -107,6 +145,8 @@ private slots:
         QVERIFY(QFileInfo::exists(own.filePath("b.funscript")));
         const samn::Document d = samn::LoadDocument(std::filesystem::path(samn.toStdU16String()));
         QVERIFY(!d.general.empty());
+        QVERIFY(d.trajectory.has_value() && !d.trajectory->tip.empty());
+        QVERIFY(g.hasTipPath());
         QVERIFY(!d.o_markers.empty());  // auto O-zone on by default
         QVERIFY(g.log().join('\n').contains("O-marker set"));
         QVERIFY(g.scriptExists());

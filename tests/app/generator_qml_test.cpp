@@ -908,6 +908,68 @@ private slots:
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
     }
 
+    void tipBoxFollowsPlayheadWhenPathExists() {
+        g_messages.clear();
+        const QString video = dir_.filePath("live_tip.mp4");
+        QVERIFY(samn::engine::testclips::WriteMoving(std::filesystem::path(video.toStdU16String()), 4, 80.0, 1.0));
+        QQmlEngine engine;
+        engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
+        engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+        engine.addImageProvider(QStringLiteral("frames"), new samn::ui::FrameProvider);
+        QQmlComponent comp(&engine);
+        comp.setData(R"(
+            import QtQuick
+            import SamN
+            Rectangle {
+                width: 1400; height: 820; color: "#021024"
+                property alias page: gp
+                GeneratorPage { id: gp; anchors.fill: parent; anchors.margins: 20 }
+            })",
+                     QUrl("qrc:/test/LiveTip.qml"));
+        QVERIFY2(comp.status() == QQmlComponent::Ready, qPrintable(comp.errorString()));
+        QQuickWindow window;
+        window.resize(1400, 820);
+        std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
+        QVERIFY(root);
+        root->setParentItem(window.contentItem());
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto* page = root->property("page").value<QQuickItem*>();
+        auto* gen = page->property("controller").value<GeneratorController*>();
+        QVERIFY(page && gen);
+        gen->setAutoTip(false);
+        QVERIFY(gen->openVideo(video, false));
+        QTRY_VERIFY(gen->hasVideo());
+        gen->setBox(QRect(100, 40, 120, 160));
+        QTRY_VERIFY(named(root.get(), "tipBox")->isVisible());
+        gen->setTipPathForTest({QVariantMap{{"at", 0}, {"x", 40.0}, {"y", 80.0}},
+                                QVariantMap{{"at", 2000}, {"x", 200.0}, {"y", 160.0}}});
+        QTRY_VERIFY(gen->hasTipPath());
+        auto* frame = named(root.get(), "frameView");
+        QRectF ir;
+        QTRY_VERIFY([&] {
+            const QRectF now = frame->property("imageRect").toRectF();
+            const bool same = now == ir && !now.isEmpty();
+            ir = now;
+            return same;
+        }());
+        auto* tip = named(root.get(), "tipBox");
+        QVERIFY(QMetaObject::invokeMethod(page, "seekTo", Q_ARG(QVariant, 0)));
+        QTRY_VERIFY(qAbs(page->property("playheadMs").toDouble()) < 80);
+        const qreal x0 = tip->x();
+        const qreal y0 = tip->y();
+        const qreal w0 = tip->width();
+        const qreal h0 = tip->height();
+        QVERIFY(QMetaObject::invokeMethod(page, "seekTo", Q_ARG(QVariant, 2000)));
+        QTRY_VERIFY(qAbs(page->property("playheadMs").toDouble() - 2000) < 80);
+        QVERIFY2(qAbs(tip->x() - x0) > 20, qPrintable(QString("x %1 vs %2").arg(x0).arg(tip->x())));
+        QVERIFY2(qAbs(tip->y() - y0) > 10, qPrintable(QString("y %1 vs %2").arg(y0).arg(tip->y())));
+        QCOMPARE(tip->width(), w0);  // seed size kept
+        QCOMPARE(tip->height(), h0);
+        QVERIFY(named(root.get(), "previewCoach")->property("text").toString().contains("follows the tip"));
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
+    }
+
     // The Create side (Video, Feel, Create) is one scroll area: on a short
     // window every control can be brought into view.
     void createSideScrollsOnAShortWindow() {
