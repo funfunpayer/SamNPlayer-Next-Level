@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
+#include <iterator>
 #include <utility>
 
 namespace samn {
@@ -136,6 +138,136 @@ std::vector<PovSegment> ClassifyPov(const PovSignals& signals, const PovOptions&
     }
     MergeAdjacent(segs);
     return segs;
+}
+
+namespace {
+
+double OverlapArea(double ax0, double ay0, double ax1, double ay1, double bx0, double by0, double bx1, double by1) {
+    const double x = std::min(ax1, bx1) - std::max(ax0, bx0);
+    const double y = std::min(ay1, by1) - std::max(ay0, by0);
+    if (!(x > 0) || !(y > 0) || !std::isfinite(x) || !std::isfinite(y)) return 0;
+    return x * y;
+}
+
+const PovTipSample* NearestTip(const std::vector<PovTipSample>& tip, int64_t at_ms, int64_t max_gap) {
+    if (tip.empty()) return nullptr;
+    const auto it = std::lower_bound(tip.begin(), tip.end(), at_ms,
+                                     [](const PovTipSample& p, int64_t v) { return p.at_ms < v; });
+    const PovTipSample* best = nullptr;
+    if (it == tip.end())
+        best = &tip.back();
+    else if (it == tip.begin())
+        best = &*it;
+    else {
+        const auto prev = std::prev(it);
+        best = (at_ms - prev->at_ms) <= (it->at_ms - at_ms) ? &*prev : &*it;
+    }
+    if (std::llabs(best->at_ms - at_ms) > max_gap) return nullptr;
+    return best;
+}
+
+}  // namespace
+
+PovSignals PovSignalsFromTip(const PovTipPath& path, int64_t step_ms) {
+    PovSignals out;
+    if (path.width <= 0 || path.height <= 0 || !(path.box_w > 0) || !(path.box_h > 0) || path.tip.empty())
+        return out;
+    if (!std::isfinite(path.box_w) || !std::isfinite(path.box_h)) return out;
+    const double fw = static_cast<double>(path.width);
+    const double fh = static_cast<double>(path.height);
+    if (!std::isfinite(fw) || !std::isfinite(fh)) return out;
+
+    std::vector<PovTipSample> tip = path.tip;
+    std::stable_sort(tip.begin(), tip.end(),
+                     [](const PovTipSample& a, const PovTipSample& b) { return a.at_ms < b.at_ms; });
+
+    const int64_t step = step_ms > 0 ? step_ms : 500;
+    const int64_t last = tip.back().at_ms;
+    if (last < 0) return out;
+    const size_t n = static_cast<size_t>(last / step) + 1;
+    out.step_ms = step;
+    out.grid.resize(n);
+
+    const double cell_w = fw / 3.0;
+    const double cell_h = fh / 3.0;
+    const double cell_a = cell_w * cell_h;
+    if (!(cell_a > 0)) return {};
+
+    for (size_t i = 0; i < n; ++i) {
+        const int64_t t = static_cast<int64_t>(i) * step;
+        const PovTipSample* s = NearestTip(tip, t, step);
+        std::array<double, 9> g{};
+        if (s && std::isfinite(s->x) && std::isfinite(s->y)) {
+            const double x0 = std::clamp(s->x - path.box_w * 0.5, 0.0, fw);
+            const double y0 = std::clamp(s->y - path.box_h * 0.5, 0.0, fh);
+            const double x1 = std::clamp(s->x + path.box_w * 0.5, 0.0, fw);
+            const double y1 = std::clamp(s->y + path.box_h * 0.5, 0.0, fh);
+            for (int r = 0; r < 3; ++r) {
+                for (int c = 0; c < 3; ++c) {
+                    const double cx0 = static_cast<double>(c) * cell_w;
+                    const double cy0 = static_cast<double>(r) * cell_h;
+                    const double a = OverlapArea(x0, y0, x1, y1, cx0, cy0, cx0 + cell_w, cy0 + cell_h);
+                    g[static_cast<size_t>(r * 3 + c)] = a / cell_a;
+                }
+            }
+        }
+        out.grid[i] = g;
+    }
+    return out;
+}
+
+PovKind PovAt(const std::vector<PovSegment>& segs, int64_t at_ms) {
+    for (const auto& s : segs) {
+        if (at_ms >= s.start_ms && at_ms < s.end_ms) return s.kind;
+    }
+    if (!segs.empty() && at_ms == segs.back().end_ms) return segs.back().kind;
+    return PovKind::Unknown;
+}
+
+PovKind DominantPov(const std::vector<PovSegment>& segs) {
+    PovKind best = PovKind::Unknown;
+    int64_t best_dur = 0;
+    double best_conf = -1;
+    for (const auto& s : segs) {
+        if (s.kind == PovKind::Unknown) continue;
+        const int64_t d = s.end_ms - s.start_ms;
+        if (d > best_dur || (d == best_dur && s.confidence > best_conf)) {
+            best = s.kind;
+            best_dur = d;
+            best_conf = s.confidence;
+        }
+    }
+    return best;
+}
+
+double DominantPovConfidence(const std::vector<PovSegment>& segs) {
+    const PovKind k = DominantPov(segs);
+    if (k == PovKind::Unknown) return 0;
+    int64_t best_dur = 0;
+    double best_conf = 0;
+    for (const auto& s : segs) {
+        if (s.kind != k) continue;
+        const int64_t d = s.end_ms - s.start_ms;
+        if (d > best_dur || (d == best_dur && s.confidence > best_conf)) {
+            best_dur = d;
+            best_conf = s.confidence;
+        }
+    }
+    return Clamp01(best_conf);
+}
+
+PovClassification ClassifyTipPov(const PovTipPath& path, const PovOptions& opt) {
+    PovClassification out;
+    out.segments = ClassifyPov(PovSignalsFromTip(path), opt);
+    out.kind = DominantPov(out.segments);
+    out.confidence = DominantPovConfidence(out.segments);
+    return out;
+}
+
+PovContactAdvice AdvisePovContact(PovKind kind, bool has_contact_area) {
+    if (kind == PovKind::FirstPerson) return has_contact_area ? PovContactAdvice::CloseUp : PovContactAdvice::SuggestContact;
+    if (kind == PovKind::ThirdPerson) return PovContactAdvice::WideView;
+    return PovContactAdvice::None;
 }
 
 }  // namespace samn

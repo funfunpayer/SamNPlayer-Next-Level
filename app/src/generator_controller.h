@@ -45,6 +45,12 @@ class GeneratorController : public QObject {
     // when not dragging. revision ticks so QML re-reads tipAt after a replace.
     Q_PROPERTY(bool hasTipPath READ hasTipPath NOTIFY tipPathChanged)
     Q_PROPERTY(quint64 tipPathRevision READ tipPathRevision NOTIFY tipPathChanged)
+    // Camera POV from the tip path + seed box (ClassifyTipPov). "unknown" |
+    // "first_person" | "third_person". Hint is empty until known — not an
+    // Everyday control. Never a second ROI (D-055).
+    Q_PROPERTY(QString povKind READ povKind NOTIFY povChanged)
+    Q_PROPERTY(double povConfidence READ povConfidence NOTIFY povChanged)
+    Q_PROPERTY(QString povHint READ povHint NOTIFY povChanged)
     // Feel: "recommended" (default, D-160) | "standard" (Normal) | "weich" (Soft) | "autotune".
     Q_PROPERTY(QString profile READ profile WRITE setProfile NOTIFY optionsChanged)
     Q_PROPERTY(bool invert READ invert WRITE setInvert NOTIFY optionsChanged)
@@ -196,6 +202,9 @@ public:
     QString boxLabel() const;
     bool hasTipPath() const { return !tipPath_.empty(); }
     quint64 tipPathRevision() const { return tip_path_revision_; }
+    QString povKind() const { return pov_kind_; }
+    double povConfidence() const { return pov_confidence_; }
+    QString povHint() const;
     // Tip place at a video time (the playhead) from the preview / last-Create
     // path ({x, y} in video pixels), empty when no sample is near.
     Q_INVOKABLE QVariantMap tipAt(double scriptMs) const;
@@ -392,6 +401,7 @@ signals:
     void boxChanged();
     void boxLabelChanged();
     void tipPathChanged();
+    void povChanged();
     void optionsChanged();
     void feelChanged();
     void runChanged();
@@ -510,8 +520,11 @@ private:
     void applyTipPath(std::vector<samn::TrajectoryPoint> path);
     void clearTipPath();
     void loadTipPathFromSamn(const QString& samnPath);
+    void refreshPov();
 
     std::vector<samn::TrajectoryPoint> tipPath_;
+    QString pov_kind_ = QStringLiteral("unknown");
+    double pov_confidence_ = 0;
     quint64 tip_path_revision_ = 0;
     quint64 preview_seq_ = 0;
     std::shared_ptr<std::atomic<bool>> preview_cancel_;

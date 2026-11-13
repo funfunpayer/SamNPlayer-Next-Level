@@ -164,3 +164,87 @@ TEST_CASE("ClassifyPov: options are unchanged") {
     CHECK(opt.split_gate == before.split_gate);
     CHECK(opt.cy_gate == before.cy_gate);
 }
+
+namespace {
+
+samn::PovTipPath HeldTip(int64_t w, int64_t h, double bw, double bh, double x, double y, int64_t last_ms,
+                         int64_t step_ms = 500) {
+    samn::PovTipPath p;
+    p.width = w;
+    p.height = h;
+    p.box_w = bw;
+    p.box_h = bh;
+    for (int64_t t = 0; t <= last_ms; t += step_ms) p.tip.push_back({t, x, y});
+    return p;
+}
+
+}  // namespace
+
+TEST_CASE("PovSignalsFromTip: empty or zero size is empty") {
+    CHECK(samn::PovSignalsFromTip({}).grid.empty());
+    samn::PovTipPath p = HeldTip(320, 240, 0, 40, 160, 120, 3000);
+    CHECK(samn::PovSignalsFromTip(p).grid.empty());
+    p = HeldTip(0, 240, 40, 40, 160, 120, 3000);
+    CHECK(samn::PovSignalsFromTip(p).grid.empty());
+    p = HeldTip(320, 240, 40, 40, 160, 120, 3000);
+    p.tip.clear();
+    CHECK(samn::PovSignalsFromTip(p).grid.empty());
+}
+
+TEST_CASE("ClassifyTipPov: large lower-centre tip is first person") {
+    // 320×240, 200×160 box sitting on the lower half: scale ~3.7, cy ~1.5.
+    const auto view = samn::ClassifyTipPov(HeldTip(320, 240, 200, 160, 160, 160, 3000));
+    CHECK(view.kind == samn::PovKind::FirstPerson);
+    CHECK(In01(view.confidence));
+    CHECK(view.confidence > 0);
+    REQUIRE(!view.segments.empty());
+    CHECK(view.segments.front().kind == samn::PovKind::FirstPerson);
+}
+
+TEST_CASE("ClassifyTipPov: small tip is third person") {
+    const auto view = samn::ClassifyTipPov(HeldTip(320, 240, 24, 24, 160, 120, 3000));
+    CHECK(view.kind == samn::PovKind::ThirdPerson);
+    CHECK(In01(view.confidence));
+    CHECK(view.confidence > 0);
+}
+
+TEST_CASE("ClassifyTipPov: a full-frame box is unknown, not a second person") {
+    // Large and L/R split: the one tip box fills the frame. Fail closed.
+    const auto view = samn::ClassifyTipPov(HeldTip(320, 240, 320, 240, 160, 120, 3000));
+    CHECK(view.kind == samn::PovKind::Unknown);
+}
+
+TEST_CASE("ClassifyTipPov: one blob, never a partner ROI") {
+    const auto sig = samn::PovSignalsFromTip(HeldTip(320, 240, 200, 160, 160, 160, 3000));
+    REQUIRE(!sig.grid.empty());
+    // Occupancy is a single rectangle: cells are zero or the box overlap,
+    // never a second distant peak invented on the other side.
+    for (const auto& g : sig.grid) {
+        int occupied = 0;
+        for (double v : g)
+            if (v > 1e-9) ++occupied;
+        CHECK(occupied >= 1);
+        CHECK(occupied <= 9);
+    }
+    CHECK(samn::AdvisePovContact(samn::PovKind::FirstPerson, false) == samn::PovContactAdvice::SuggestContact);
+    CHECK(samn::AdvisePovContact(samn::PovKind::FirstPerson, true) == samn::PovContactAdvice::CloseUp);
+    CHECK(samn::AdvisePovContact(samn::PovKind::ThirdPerson, false) == samn::PovContactAdvice::WideView);
+    CHECK(samn::AdvisePovContact(samn::PovKind::Unknown, false) == samn::PovContactAdvice::None);
+}
+
+TEST_CASE("PovAt and DominantPov") {
+    CHECK(samn::DominantPov({}) == samn::PovKind::Unknown);
+    CHECK(samn::DominantPovConfidence({}) == 0);
+    CHECK(samn::PovAt({}, 0) == samn::PovKind::Unknown);
+
+    samn::PovSignals s;
+    s.step_ms = 500;
+    s.grid.assign(8, FirstPerson());
+    s.grid.insert(s.grid.end(), 3, SmallThird());  // 1500 ms < min_run → unknown
+    const auto segs = samn::ClassifyPov(s);
+    CHECK(samn::DominantPov(segs) == samn::PovKind::FirstPerson);
+    CHECK(samn::PovAt(segs, 0) == samn::PovKind::FirstPerson);
+    CHECK(samn::PovAt(segs, 3999) == samn::PovKind::FirstPerson);
+    CHECK(samn::PovAt(segs, 4000) == samn::PovKind::Unknown);
+    CHECK(In01(samn::DominantPovConfidence(segs)));
+}

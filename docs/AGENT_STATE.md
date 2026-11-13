@@ -3,7 +3,18 @@
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
 
-**Last update:** 13 Nov 2026, Cursor, branch `cursor/fungen2-everyday-635a`: Everyday Create surface (progressive disclosure).
+**Last update:** 13 Nov 2026, Cursor, branch `cursor/gen-pov-contact-635a`: FunGen2 POV-Contact — ClassifyTipPov on the tip path, Feel/Inspector hint when known. Do not touch feel_heatbands / Speech-Hold / handbook / `.sam`.
+
+## Handover: FunGen2 POV-Contact (13 Nov)
+
+Owner: after Tip + fewer settings, overlay POV on the contact/feel path. Core `ClassifyPov` was unwired. Fold concepts only, no FunGen code. Do not touch feel_heatbands / Speech-Hold / handbook / `.sam`.
+
+- **Core:** `ClassifyTipPov` / `PovSignalsFromTip` splat the seed tip box (constant w/h, centred on each tracked sample) onto the 3×3 occupancy `ClassifyPov` already reads. Cheap: no video, no OpenCV. Fail closed (empty / zero size / full-frame large+split). One blob — never a second ROI (D-055). `AdvisePovContact` is copy only (`SuggestContact` / `CloseUp` / `WideView`).
+- **TrackBox:** still centres only. `TODO(MeasurePovSignals)` on `TrackResult`: per-frame box w/h (CSRT already has the box) or a 3×3 foreground of the whole frame. Until then the seed size is the weak stand-in.
+- **App:** Generator `povKind` / `povConfidence` / `povHint` after Find/Create/injected path (video size + `box_` + tip path). Player same from `.samn` trajectory + `contactMarks.tip`. First person with no contact area: "Close-up — a contact area may help." Known POV never overwrites the tip, never draws a partner box.
+- **QML:** dim `povHint` on the Everyday Feel strip (visible only when the kind is known — not a control) and on the Player View inspector next to contact marks.
+- **Tests:** `pov_test` (ClassifyTipPov first/third/unknown, advice, PovAt); `povKindFromInjectedTipPath`; `povKindFromStoredTipPath`; QML `povHintShowsWhenCloseUp` / `viewPovHintWhenKnown`.
+- **Left open:** `MeasurePovSignals` from video, `.scene.json`, scene_roles, ONNX, storing POV in the document.
 
 ## Handover: Everyday Create surface (13 Nov)
 

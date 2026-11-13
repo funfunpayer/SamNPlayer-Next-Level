@@ -110,6 +110,43 @@ private slots:
         QVERIFY(g.tipAt(0).isEmpty());
     }
 
+    // ClassifyTipPov on the preview path: large lower box → first person,
+    // small box → third. Contact suggestion is copy only (D-055).
+    void povKindFromInjectedTipPath() {
+        GeneratorController g;
+        g.setAutoTip(false);
+        QVERIFY(g.openVideo(clip("pov_tip.mp4", 4), false));
+        QCOMPARE(g.povKind(), QStringLiteral("unknown"));
+        QVERIFY(g.povHint().isEmpty());
+
+        QVariantList lower;
+        for (int t = 0; t <= 3000; t += 500)
+            lower << QVariantMap{{"at", t}, {"x", 160.0}, {"y", 160.0}};
+        g.setBox(QRect(60, 80, 200, 160));
+        g.setTipPathForTest(lower);
+        QCOMPARE(g.povKind(), QStringLiteral("first_person"));
+        QVERIFY(g.povConfidence() > 0);
+        QCOMPARE(g.povHint(), QStringLiteral("Close-up — a contact area may help."));
+        QCOMPARE(g.contactAreas().size(), 0);  // never a silent second ROI
+
+        g.setMarkContact(true);
+        QVERIFY(g.addContactArea(QRect(20, 20, 40, 40)));
+        QCOMPARE(g.povKind(), QStringLiteral("first_person"));
+        QCOMPARE(g.povHint(), QStringLiteral("Close-up."));
+        QCOMPARE(g.contactAreas().size(), 1);  // the user drew it
+
+        g.clearContactAreas();
+        g.setBox(QRect(148, 108, 24, 24));
+        g.setTipPathForTest(lower);
+        QCOMPARE(g.povKind(), QStringLiteral("third_person"));
+        QCOMPARE(g.povHint(), QStringLiteral("Wide view."));
+        QCOMPARE(g.contactAreas().size(), 0);
+
+        g.clearBox();
+        QCOMPARE(g.povKind(), QStringLiteral("unknown"));
+        QVERIFY(g.povHint().isEmpty());
+    }
+
     void setBoxBuildsAPreviewPathThatMovesWithTime() {
         GeneratorController g;
         g.setAutoTip(false);

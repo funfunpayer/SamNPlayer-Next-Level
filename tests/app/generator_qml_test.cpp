@@ -1053,6 +1053,52 @@ private slots:
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
     }
 
+    void povHintShowsWhenCloseUp() {
+        g_messages.clear();
+        const QString video = dir_.filePath("pov_hint.mp4");
+        QVERIFY(samn::engine::testclips::WriteMoving(std::filesystem::path(video.toStdU16String()), 4, 80.0, 1.0));
+        QQmlEngine engine;
+        engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
+        engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+        engine.addImageProvider(QStringLiteral("frames"), new samn::ui::FrameProvider);
+        QQmlComponent comp(&engine);
+        comp.setData(R"(
+            import QtQuick
+            import SamN
+            Rectangle {
+                width: 1400; height: 820; color: "#021024"
+                property alias page: gp
+                GeneratorPage { id: gp; anchors.fill: parent; anchors.margins: 20 }
+            })",
+                     QUrl("qrc:/test/PovHint.qml"));
+        QVERIFY2(comp.status() == QQmlComponent::Ready, qPrintable(comp.errorString()));
+        QQuickWindow window;
+        window.resize(1400, 820);
+        std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
+        QVERIFY(root);
+        root->setParentItem(window.contentItem());
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto* page = root->property("page").value<QQuickItem*>();
+        auto* gen = page->property("controller").value<GeneratorController*>();
+        QVERIFY(page && gen);
+        gen->setAutoTip(false);
+        QVERIFY(gen->openVideo(video, false));
+        QTRY_VERIFY(gen->hasVideo());
+        auto* hint = named(root.get(), "povHint");
+        QVERIFY(hint);
+        QVERIFY(!hint->isVisible());
+        QVariantList lower;
+        for (int t = 0; t <= 3000; t += 500)
+            lower << QVariantMap{{"at", t}, {"x", 160.0}, {"y", 160.0}};
+        gen->setBox(QRect(60, 80, 200, 160));
+        gen->setTipPathForTest(lower);
+        QCOMPARE(gen->povKind(), QStringLiteral("first_person"));
+        QTRY_VERIFY(hint->isVisible());
+        QVERIFY(hint->property("text").toString().contains("Close-up"));
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
+    }
+
     // The Create side (Video, Feel, Create) is one scroll area: on a short
     // window every control can be brought into view.
     void createSideScrollsOnAShortWindow() {

@@ -1752,6 +1752,15 @@ Item {
                         Layout.fillWidth: true; wrapMode: Text.WordWrap
                         text: gen.feelSummary; color: Theme.cyan; font.family: Theme.fontSoft; font.pixelSize: 12
                     }
+                    // POV-Contact: dim label only when ClassifyTipPov knows first/third.
+                    // Not an Everyday control; no second ROI. More feel/contact stays closed.
+                    Text {
+                        objectName: "povHint"
+                        textFormat: Text.PlainText
+                        visible: text !== ""
+                        Layout.fillWidth: true; wrapMode: Text.WordWrap
+                        text: gen.povHint; color: Theme.textMuted; font.family: Theme.fontSoft; font.pixelSize: 12
+                    }
                     FlowButton {
                         objectName: "feelMoreToggle"
                         visible: !page.feelMoreForced

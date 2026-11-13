@@ -117,6 +117,11 @@ struct TrackResult {
     std::vector<double> xs, ys;
     // Box centre in frame pixels, before compensation (tip path).
     std::vector<double> frame_xs, frame_ys;
+    // TODO(MeasurePovSignals): occupancy for ClassifyPov. Today we only store
+    // centres. A cheap next step is per-frame box w/h (CSRT already has the
+    // box each frame) so PovSignalsFromTip can use the live size instead of
+    // the seed. A 3×3 foreground of the whole frame would see two-person
+    // large+split. Do not invent a second ROI (D-055).
     // Partner centres in frame pixels (same length as tip when partner_box set).
     std::vector<double> partner_xs, partner_ys;
     // Extra centres in frame pixels (one series per TrackOptions::extra_boxes;

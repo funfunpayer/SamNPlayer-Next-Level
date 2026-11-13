@@ -9,6 +9,12 @@
 //   6 7 8   bot  L C R
 // scale is total occupancy, split is 2*min(L,R)/total (L/R bimodality),
 // cy is the occupancy centroid (0 = top row, 2 = bottom).
+//
+// Slice 2 (POV-Contact): ClassifyTipPov rasterizes the seed tip box along
+// the tracked centres into those grids. One blob, constant box size. It is
+// not a second ROI (D-055) and cannot see two-person large+split. Full-frame
+// occupancy still wants TrackBox per-frame box w/h or a 3×3 foreground
+// (MeasurePovSignals; see track_box.h).
 
 #include <array>
 #include <cstdint>
@@ -47,6 +53,49 @@ struct PovOptions {
 
 // Empty grid → empty list. step_ms <= 0 is treated as 500. The caller's
 // options are not modified.
-std::vector<PovSegment> ClassifyPov(const PovSignals& signals, const PovOptions& opt = {});
+std::vector<PovSegment> ClassifyPov(const PovSignals& sig, const PovOptions& opt = {});
+
+// Seed tip box (frame pixels) plus tracked centres. One rectangle, no
+// partner/extra path: D-055 stays closed.
+struct PovTipSample {
+    int64_t at_ms = 0;
+    double x = 0;
+    double y = 0;
+};
+
+struct PovTipPath {
+    int64_t width = 0;
+    int64_t height = 0;
+    double box_w = 0;
+    double box_h = 0;
+    std::vector<PovTipSample> tip;
+};
+
+// Splat the seed box, centred on each tip sample, onto a 3×3 occupancy
+// grid every step_ms (default 500; <= 0 → 500). Empty / non-positive size
+// / empty path → empty signals (fail closed). Cheap: no video.
+PovSignals PovSignalsFromTip(const PovTipPath& path, int64_t step_ms = 500);
+
+// Kind covering at_ms (half-open [start, end); the last end is included).
+// No covering segment → Unknown.
+PovKind PovAt(const std::vector<PovSegment>& segs, int64_t at_ms);
+
+// Longest first/third run (confidence breaks a tie). All-unknown / empty →
+// Unknown. confidence of that run, or 0.
+PovKind DominantPov(const std::vector<PovSegment>& segs);
+double DominantPovConfidence(const std::vector<PovSegment>& segs);
+
+struct PovClassification {
+    PovKind kind = PovKind::Unknown;
+    double confidence = 0;
+    std::vector<PovSegment> segments;
+};
+
+// ClassifyPov(PovSignalsFromTip(path)). kind is DominantPov.
+PovClassification ClassifyTipPov(const PovTipPath& path, const PovOptions& opt = {});
+
+// Feel/contact overlay. Never a box: SuggestContact is copy only.
+enum class PovContactAdvice { None, SuggestContact, CloseUp, WideView };
+PovContactAdvice AdvisePovContact(PovKind kind, bool has_contact_area);
 
 }  // namespace samn

@@ -27,6 +27,7 @@
 #include "samn/contact_preview.h"
 #include "samn/ozone.h"
 #include "samn/polarity.h"
+#include "samn/pov.h"
 #include "samn/samn_file.h"
 #include "samn/script_quality.h"
 #include "samn/settings.h"
@@ -767,6 +768,7 @@ void GeneratorController::installBox(const QRect& box, double atMs) {
     emit boxChanged();
     emit boxLabelChanged();
     emit stepChanged();
+    refreshPov();
     scheduleTipPreview();
 }
 
@@ -813,8 +815,15 @@ SAMN_SETTER(setGapHandling, gap_handling_, "generator.gap_handling")
 SAMN_SETTER(setOutlierRejection, outlier_rejection_, "generator.outlier_rejection")
 SAMN_SETTER(setTrackCache, track_cache_, "generator.track_cache")
 SAMN_SETTER(setHybridReacquire, hybrid_reacquire_, "generator.hybrid_reacquire")
-SAMN_SETTER(setContactVibration, contact_vibration_, "generator.contact_vibration")
 #undef SAMN_SETTER
+
+void GeneratorController::setContactVibration(bool v) {
+    if (contact_vibration_ == v) return;
+    contact_vibration_ = v;
+    saveSetting("generator.contact_vibration", v);
+    emit optionsChanged();
+    emit povChanged();  // first-person contact suggestion follows the switch
+}
 
 void GeneratorController::setMaxAnalysisFps(int v) {
     // 0 = every frame; otherwise 5..60 in steps of 5 (FR-7 analysis rate cap).
@@ -1099,6 +1108,21 @@ QString GeneratorController::feelHint() const {
     return {};
 }
 
+QString GeneratorController::povHint() const {
+    const bool has_contact = !contact_areas_.empty();
+    const auto advice = samn::AdvisePovContact(
+        pov_kind_ == QLatin1String("first_person")
+            ? samn::PovKind::FirstPerson
+            : (pov_kind_ == QLatin1String("third_person") ? samn::PovKind::ThirdPerson : samn::PovKind::Unknown),
+        has_contact);
+    if (advice == samn::PovContactAdvice::SuggestContact && contact_vibration_)
+        return tr("Close-up — a contact area may help.");
+    if (advice == samn::PovContactAdvice::SuggestContact || advice == samn::PovContactAdvice::CloseUp)
+        return tr("Close-up.");
+    if (advice == samn::PovContactAdvice::WideView) return tr("Wide view.");
+    return {};
+}
+
 bool GeneratorController::applyFeel(const QString& samnPath) {
     if (feelKind() != QLatin1String("neo2") || samnPath.isEmpty()) return false;
     const QString scene = scene_feel_ == QLatin1String("auto") ? autoScene() : scene_feel_;
@@ -1210,6 +1234,7 @@ bool GeneratorController::addContactArea(const QRect& area) {
                       : tr("Optional contact zone set."));
     }
     emit contactChanged();
+    emit povChanged();
     return true;
 }
 
@@ -1247,6 +1272,7 @@ void GeneratorController::removeContactArea(int index) {
     if (index == 0 && !contact_areas_.empty() && contact_areas_.front().cls.empty())
         contact_areas_.front().cls = contact_class_.toStdString();
     emit contactChanged();
+    emit povChanged();
 }
 
 void GeneratorController::setAreaClass(int index, const QString& cls) {
@@ -1265,6 +1291,7 @@ void GeneratorController::clearContactAreas() {
     contact_areas_.clear();
     mark_contact_ = mark_extra_ = false;
     emit contactChanged();
+    emit povChanged();
 }
 
 void GeneratorController::clearExtras() {
@@ -1543,14 +1570,35 @@ void GeneratorController::applyTipPath(std::vector<samn::TrajectoryPoint> path) 
     ++tip_path_revision_;
     emit tipPathChanged();
     emit boxLabelChanged();
+    refreshPov();
 }
 
 void GeneratorController::clearTipPath() {
-    if (tipPath_.empty()) return;
+    if (tipPath_.empty()) {
+        refreshPov();
+        return;
+    }
     tipPath_.clear();
     ++tip_path_revision_;
     emit tipPathChanged();
     emit boxLabelChanged();
+    refreshPov();
+}
+
+void GeneratorController::refreshPov() {
+    samn::PovTipPath path;
+    if (hasTipPath() && hasBox() && video_size_.width() > 0 && video_size_.height() > 0) {
+        path.width = video_size_.width();
+        path.height = video_size_.height();
+        path.box_w = box_.width();
+        path.box_h = box_.height();
+        path.tip.reserve(tipPath_.size());
+        for (const auto& p : tipPath_) path.tip.push_back({p.at_ms, p.x, p.y});
+    }
+    const auto view = samn::ClassifyTipPov(path);
+    pov_kind_ = QString::fromUtf8(samn::PovKindName(view.kind));
+    pov_confidence_ = view.confidence;
+    emit povChanged();
 }
 
 void GeneratorController::loadTipPathFromSamn(const QString& samnPath) {
