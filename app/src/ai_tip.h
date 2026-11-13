@@ -1,5 +1,5 @@
-// Shared student / NudeNet lookup for Generator AI tip proposals and for
-// hybrid re-acquire (same documented paths). A hit is a proposal only —
+// Shared student / YOLO / NudeNet lookup for Generator AI tip proposals and
+// for hybrid re-acquire (same documented paths). A hit is a proposal only —
 // the tip box is not written until the user Applies (D-057).
 #pragma once
 
@@ -13,10 +13,17 @@
 
 namespace samn::ui {
 
+enum class AiTipKind {
+    kStudent,  // RF-DETR student.onnx + classes.json
+    kYolo,     // user YOLO .onnx (e.g. FunGen Discord weights) + optional classes.json
+    kNudeNet,  // NudeNet teacher export
+};
+
 struct AiTipModel {
     std::filesystem::path path;
-    bool nudenet = false;               // true: NudeNet class map; false: student names
-    std::vector<std::string> names;     // student classes.json; unused for NudeNet
+    AiTipKind kind = AiTipKind::kStudent;
+    bool nudenet = false;               // kind == kNudeNet (kept for call sites)
+    std::vector<std::string> names;     // student / YOLO class names; unused for NudeNet
 };
 
 struct AiTipHit {
@@ -29,14 +36,22 @@ struct AiTipHit {
 enum class AiTipReady {
     kReady,
     kNoOnnx,   // this build has no ONNX Runtime
-    kNoModel,  // neither student.onnx nor nudenet.onnx is on disk
+    kNoModel,  // no student / YOLO / NudeNet model on disk
 };
 
-// Documented paths (hybrid re-acquire / AI Train):
-//   config_dir()/models/student/student.onnx  (preferred)
+// Documented paths (priority: student → YOLO → NudeNet):
+//   config_dir()/models/student/student.onnx
+//   config_dir()/models/yolo.onnx  (+ optional models/yolo/classes.json)
 //   config_dir()/models/nudenet.onnx
+// Optional override: settings key generator.ai_yolo_path (absolute file).
 AiTipReady AiTipModelStatus();
 std::optional<AiTipModel> FindAiTipModel();
+
+// Default YOLO body-part class order (FunGen-compatible CLASS_NAMES_TO_IDS).
+const std::vector<std::string>& YoloBodyClassNames();
+// Map a YOLO body class name onto our tip / contact labels. Empty when unused
+// (anus, navel, hips center, …). face → mouth for oral contact.
+std::string MapYoloBodyLabel(std::string_view yolo_class);
 
 bool LabelsMatchTip(std::string_view label, std::string_view want);
 std::string LabelForDetection(const samn::vision::Detection& d, const AiTipModel& model);

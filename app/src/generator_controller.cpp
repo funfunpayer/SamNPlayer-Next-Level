@@ -117,7 +117,7 @@ struct TipSearchFound {
     bool from_ai = false;
 };
 
-// Hybrid tip proposal: student.onnx preferred, else NudeNet if present.
+// Hybrid tip proposal: student → YOLO → NudeNet when present.
 // Returns empty when ONNX is unavailable or no matching tip-class box.
 std::function<std::optional<cv::Rect>(const cv::Mat&)> MakeHybridPropose(const QString& tipClass) {
     auto model = FindAiTipModel();
@@ -645,11 +645,14 @@ void GeneratorController::refreshAiTipHint() {
             ai_tip_hint_ = tr("This build has no ONNX Runtime — Suggest tip (AI) is off.");
             break;
         case AiTipReady::kNoModel:
-            ai_tip_hint_ = tr("No AI model found (models/student/student.onnx or models/nudenet.onnx). "
-                              "Train the student in AI Train, or download NudeNet.");
+            ai_tip_hint_ = tr("No AI model found (models/student/student.onnx, models/yolo.onnx, or models/nudenet.onnx). "
+                              "Train the student, choose a YOLO .onnx, or download NudeNet in AI Train.");
             break;
         case AiTipReady::kReady:
-            ai_tip_hint_ = tr("Local AI model ready — Suggest tip does not write the box until Apply.");
+            if (const auto m = FindAiTipModel(); m && m->kind == AiTipKind::kYolo)
+                ai_tip_hint_ = tr("YOLO ready — Suggest tip does not write the box until Apply.");
+            else
+                ai_tip_hint_ = tr("Local AI model ready — Suggest tip does not write the box until Apply.");
             break;
     }
 }
@@ -754,7 +757,7 @@ bool GeneratorController::runAiDetect(bool pickExpected) {
                 if (!error.isEmpty() && list.isEmpty()) {
                     self->suggesting_ai_tip_ = false;
                     self->setStatus(error == QLatin1String("no-model")
-                                        ? tr("No AI model found (models/student/student.onnx or models/nudenet.onnx).")
+                                        ? tr("No AI model found (models/student/student.onnx, models/yolo.onnx, or models/nudenet.onnx).")
                                         : tr("AI tip failed: %1.").arg(error));
                     self->refreshAiTipHint();
                     emit self->aiTipChanged();

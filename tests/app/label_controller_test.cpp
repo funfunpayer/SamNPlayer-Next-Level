@@ -18,6 +18,7 @@
 
 #include "label_controller.h"
 #include "model_download.h"
+#include "samn/settings.h"
 #include "samn/vision/onnx_detector.h"
 #include "fake_file_server.h"
 #include "zip_builder.h"
@@ -541,11 +542,48 @@ private slots:
         QCOMPARE(again.nudenetPath(), data + "/tiny_nudenet.onnx");
     }
 
+    void chooseYoloCopiesForGeneratorAndTeacher() {
+        if (!samn::vision::OnnxDetector::Available()) return;
+        const QString data = QStringLiteral(SAMN_VISION_TESTDATA);
+        LabelController c;
+        QVERIFY(c.yoloPath().isEmpty());
+        QVERIFY(!c.chooseYolo(dir_.filePath("weights.pt")));  // PyTorch export required
+        QVERIFY(c.teacherStatus().contains(QLatin1String(".pt")) ||
+                c.teacherStatus().contains(QLatin1String("onnx")));
+        QVERIFY(!c.chooseYolo(data + "/tiny_detr.onnx"));  // student DETR rejected
+        QVERIFY(c.teacherStatus().contains(QLatin1String("student")) ||
+                c.teacherStatus().contains(QLatin1String("DETR")));
+        // Optional classes.json beside the onnx is copied to models/yolo/.
+        const QString work = dir_.filePath("yolo_pick");
+        QVERIFY(QDir().mkpath(work));
+        QVERIFY(QFile::copy(data + "/tiny_yolo.onnx", work + "/body.onnx"));
+        {
+            QFile classes(work + "/classes.json");
+            QVERIFY(classes.open(QIODevice::WriteOnly | QIODevice::Truncate));
+            classes.write(R"({"classes":["face","hand","penis","glans","pussy","butt","anus","breast","navel","foot","hips center"]})");
+        }
+        QVERIFY(c.chooseYolo(work + "/body.onnx"));
+        QVERIFY(c.yoloPath().endsWith(QStringLiteral("yolo.onnx")));
+        QVERIFY(QFileInfo::exists(c.yoloPath()));
+        QCOMPARE(c.teacherKind(), QStringLiteral("yolo"));
+        QCOMPARE(samn::Settings().get("generator.ai_yolo_path").get<std::string>(),
+                 c.yoloPath().toStdString());
+        const QString classDest =
+            QString::fromStdU16String((samn::config_dir() / "models" / "yolo" / "classes.json").u16string());
+        QVERIFY(QFileInfo::exists(classDest));
+        // Drop YOLO so later vote tests stay server+NudeNet(+student) only.
+        QFile::remove(c.yoloPath());
+        QDir(QString::fromStdU16String((samn::config_dir() / "models" / "yolo").u16string())).removeRecursively();
+        samn::Settings().set("generator.ai_yolo_path", "");
+        samn::Settings().set("aitrain.teacher.kind", "server");
+    }
+
     // Votes (D-155 step 4, Owner 20 Oct): what both teachers see is plain, what
     // only one of those that could see it found is kept as uncertain; the
     // same through the clip in one undo step.
     void teachersVoteOnAFrameAndThroughTheClip() {
         if (!samn::vision::OnnxDetector::Available()) return;  // one teacher only: nothing to vote
+        QFile::remove(QString::fromStdU16String((samn::config_dir() / "models" / "yolo.onnx").u16string()));
         FakeModelServer fake;
         const QString path = dir_.filePath("votes.mp4");
         QVERIFY(QFile::copy(clip_, path));
@@ -619,6 +657,8 @@ private slots:
     // its query 0 is class 1, which classes.json names "face".
     void theStudentIsATeacher() {
         if (!samn::vision::OnnxDetector::Available()) return;
+        QFile::remove(QString::fromStdU16String((samn::config_dir() / "models" / "yolo.onnx").u16string()));
+        samn::Settings().set("generator.ai_yolo_path", "");
         const QString models = dir_.filePath("config/models/student");
         QVERIFY(QDir().mkpath(models));
         QFile::remove(models + "/student.onnx");
