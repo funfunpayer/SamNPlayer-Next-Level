@@ -28,6 +28,11 @@ struct TrackOptions {
     // Analysis rate cap: a frame closer than 1 / max_analysis_fps to the last
     // tracked frame is skipped and gives no sample. 0 = every frame (0.7).
     double max_analysis_fps = 0;
+    // FR-8: before analysis, frames may be downscaled so the long side is at
+    // most this many pixels. The ROI (and partner, extras, masks, seed box)
+    // is scaled by the same factor; centres and distance strokes are reported
+    // in original pixels. 0 = every pixel (the old full-resolution path).
+    int analysis_width = 0;
     // Removes the camera's motion at the tip from xs and ys: shift, zoom and
     // rotation of the background estimate, per scene; a frame without a
     // trusted estimate adds nothing (camera_motion.cpp,

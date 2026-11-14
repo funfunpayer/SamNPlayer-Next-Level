@@ -178,10 +178,67 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
 
     vision::VideoFrame frame;
     if (!reader->Read(frame)) return fail("first frame cannot be read");
+
+    // FR-8: work at a long side of at most analysis_width. 0, or a frame
+    // already that small, is the full-resolution path (scale 1).
+    double scale = 1.0;
+    if (opts.analysis_width > 0) {
+        const int long_side = std::max(frame.bgr.cols, frame.bgr.rows);
+        if (long_side > opts.analysis_width)
+            scale = std::min(1.0, double(opts.analysis_width) / double(long_side));
+    }
+    const bool shrunk = scale < 1.0;
+    cv::Mat work_store;
+    cv::Size work_size = frame.bgr.size();
+    bool work_sized = false;
+    // The frame CSRT, scene cuts, appearance memory and camera compensation
+    // see. Full resolution returns the reader's BGR unchanged.
+    const auto prepare = [&]() -> const cv::Mat& {
+        if (!shrunk) return frame.bgr;
+        if (!work_sized) {
+            cv::resize(frame.bgr, work_store, cv::Size(), scale, scale, cv::INTER_AREA);
+            work_size = work_store.size();
+            work_sized = true;
+        } else {
+            cv::resize(frame.bgr, work_store, work_size, 0, 0, cv::INTER_AREA);
+        }
+        return work_store;
+    };
+    const auto to_work = [&](cv::Rect r) {
+        if (!shrunk) return r;
+        r.x = int(std::lround(r.x * scale));
+        r.y = int(std::lround(r.y * scale));
+        r.width = int(std::lround(r.width * scale));
+        r.height = int(std::lround(r.height * scale));
+        return r & cv::Rect(0, 0, work_size.width, work_size.height);
+    };
+    const auto orig_px = [&](double v) { return shrunk ? v / scale : v; };
+    const auto centre_orig = [&](const cv::Rect& r) {
+        const cv::Point2d c = Centre(r);
+        return cv::Point2d(orig_px(c.x), orig_px(c.y));
+    };
+    // CheckRecorder half-scales internally and scores the box against the
+    // original picture, so it keeps the reader's frame and original pixels.
+    const auto to_orig_rect = [&](cv::Rect r) {
+        if (!shrunk) return r;
+        r.x = int(std::lround(r.x / scale));
+        r.y = int(std::lround(r.y / scale));
+        r.width = int(std::lround(r.width / scale));
+        r.height = int(std::lround(r.height / scale));
+        return r;
+    };
+
+    const cv::Mat& bgr0 = prepare();
+    const cv::Rect work_box = to_work(box);
+    if (shrunk && (work_box.width < 2 || work_box.height < 2)) return fail("the box is outside the frame");
+    std::vector<cv::Rect> work_masks;
+    work_masks.reserve(opts.mask_rois.size());
+    for (const cv::Rect& m : opts.mask_rois) work_masks.push_back(to_work(m));
+
     std::string why;
     std::unique_ptr<vision::Tracker> tracker = vision::CreateTracker(vision::TrackerKind::kCsrt, &why);
     if (!tracker) return fail(why);
-    tracker->Init(frame.bgr, box);
+    tracker->Init(bgr0, work_box);
 
     // Optional partner (gold contact): fixed box or a second CSRT. Centres
     // feed .samn trajectory.partner (G2b). With distance_stroke, positions
@@ -191,11 +248,11 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
     std::unique_ptr<vision::Tracker> partner_tracker;
     cv::Rect partner_last;
     if (want_partner) {
-        partner_last = *opts.partner_box;
+        partner_last = to_work(*opts.partner_box);
         if (!opts.partner_fixed) {
             partner_tracker = vision::CreateTracker(vision::TrackerKind::kCsrt, &why);
             if (!partner_tracker) return fail(why);
-            partner_tracker->Init(frame.bgr, partner_last);
+            partner_tracker->Init(bgr0, partner_last);
         }
     }
 
@@ -212,12 +269,12 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
     for (const TrackOptions::ExtraBoxOption& e : opts.extra_boxes) {
         if (e.box.width <= 0 || e.box.height <= 0) continue;
         ExtraState s;
-        s.last = e.box;
+        s.last = to_work(e.box);
         s.fixed = e.fixed;
         if (!e.fixed) {
             s.tracker = vision::CreateTracker(vision::TrackerKind::kCsrt, &why);
             if (!s.tracker) return fail(why);
-            s.tracker->Init(frame.bgr, s.last);
+            s.tracker->Init(bgr0, s.last);
         }
         extras.push_back(std::move(s));
     }
@@ -230,14 +287,23 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
 
     const bool needs_gray = opts.camera_compensation || opts.scene_cuts || opts.appearance_memory;
     cv::Mat prev_gray, gray;
-    if (needs_gray) cv::cvtColor(frame.bgr, prev_gray, cv::COLOR_BGR2GRAY);
+    if (needs_gray) cv::cvtColor(bgr0, prev_gray, cv::COLOR_BGR2GRAY);
 
     std::optional<AppearanceMemory> memory;
     if (opts.appearance_memory) {
         memory.emplace();
-        if (!opts.seed_gray.empty() && opts.seed_box.area() > 0 && opts.seed_gray.size() == prev_gray.size())
-            memory->Remember(opts.seed_gray, opts.seed_box);  // the original look stays template 0
-        memory->Remember(prev_gray, box);  // the user-confirmed start region
+        if (!opts.seed_gray.empty() && opts.seed_box.area() > 0) {
+            cv::Mat seed = opts.seed_gray;
+            cv::Rect seed_box = opts.seed_box;
+            // The seed is the original look in original pixels. Scale it with
+            // the working frame so template 0 still matches.
+            if (shrunk && seed.size() == frame.bgr.size()) {
+                cv::resize(seed, seed, work_size, 0, 0, cv::INTER_AREA);
+                seed_box = to_work(seed_box);
+            }
+            if (seed.size() == prev_gray.size()) memory->Remember(seed, seed_box);
+        }
+        memory->Remember(prev_gray, work_box);  // the user-confirmed start region
     }
 
     TrackResult res;
@@ -245,18 +311,21 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
     res.distance_stroke = distance_stroke;
     res.times_ms.push_back(frame.pts_us / 1000);
     res.lost.push_back(0);
-    res.xs.push_back(Centre(box).x);
-    res.ys.push_back(Centre(box).y);
+    const cv::Point2d tip0 = centre_orig(work_box);
+    res.xs.push_back(tip0.x);
+    res.ys.push_back(tip0.y);
     if (want_partner) {
-        res.partner_xs.push_back(Centre(partner_last).x);
-        res.partner_ys.push_back(Centre(partner_last).y);
+        const cv::Point2d p0 = centre_orig(partner_last);
+        res.partner_xs.push_back(p0.x);
+        res.partner_ys.push_back(p0.y);
     }
     if (!extras.empty()) {
         res.extra_xs.resize(extras.size());
         res.extra_ys.resize(extras.size());
         for (size_t i = 0; i < extras.size(); ++i) {
-            res.extra_xs[i].push_back(Centre(extras[i].last).x);
-            res.extra_ys[i].push_back(Centre(extras[i].last).y);
+            const cv::Point2d e0 = centre_orig(extras[i].last);
+            res.extra_xs[i].push_back(e0.x);
+            res.extra_ys[i].push_back(e0.y);
         }
     }
     std::optional<AdaptiveSceneCut> adaptive_cut;
@@ -265,20 +334,20 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
     std::optional<CheckRecorder> recorder;
     if (opts.record_checks) {
         recorder.emplace(res.size);
-        recorder->Frame(frame.bgr, box, true, kNaN, kNaN);
+        recorder->Frame(frame.bgr, to_orig_rect(work_box), true, kNaN, kNaN);
     }
     std::vector<double> distances;
     double last_good_distance = 0;
     if (distance_stroke) {
-        last_good_distance = FuseTipPartners(box, true, partner_boxes(), {}).value_or(0.0);
+        last_good_distance = orig_px(FuseTipPartners(work_box, true, partner_boxes(), {}).value_or(0.0));
         distances.push_back(last_good_distance);
     }
     // The camera's accumulated motion at the tip since the scene began.
     std::vector<double> camera_dx{0.0}, camera_dy{0.0};
-    cv::Rect last = box;
+    cv::Rect last = work_box;
     bool tip_ok = true;  // last frame had a real tip box (found or coast)
     Coast coast;
-    coast.ObserveOk(box);
+    coast.ObserveOk(work_box);
     DispGuard guard;
 
     const int64_t first_index = frame.index;
@@ -298,17 +367,23 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
     // A fresh CSRT on the found box, as 0.7 did after every reacquire.
     auto reanchor = [&](const cv::Rect& found) {
         tracker = vision::CreateTracker(vision::TrackerKind::kCsrt, &why);
-        if (tracker) tracker->Init(frame.bgr, found);
+        if (tracker) tracker->Init(prepare(), found);
         return tracker != nullptr;
     };
     // Hybrid (opt-in): one AI proposal after CSRT + appearance miss. Fail-closed
-    // against the start look when memory is on (D-139).
+    // against the start look when memory is on (D-139). The proposal sees the
+    // original frame (detector boxes are original pixels) and is then scaled
+    // into the working picture.
     auto try_hybrid = [&]() -> std::optional<cv::Rect> {
         if (!opts.hybrid_reacquire || !opts.ai_propose) return std::nullopt;
         auto r = opts.ai_propose(frame.bgr);
         if (!r || r->width < 8 || r->height < 8) return std::nullopt;
         r->x = std::clamp(r->x, 0, std::max(0, frame.bgr.cols - r->width));
         r->y = std::clamp(r->y, 0, std::max(0, frame.bgr.rows - r->height));
+        if (shrunk) {
+            *r = to_work(*r);
+            if (r->width < 2 || r->height < 2) return std::nullopt;
+        }
         if (memory) {
             const auto score = memory->MatchesOriginal(gray, *r);
             if (!score || *score < AppearanceMemory::kMinScore) return std::nullopt;
@@ -330,11 +405,14 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
             progress.Report(static_cast<int>(frame.index - first_index));
             continue;
         }
-        if (needs_gray) cv::cvtColor(frame.bgr, gray, cv::COLOR_BGR2GRAY);
+        const cv::Mat& bgr = prepare();
+        if (needs_gray) cv::cvtColor(bgr, gray, cv::COLOR_BGR2GRAY);
         const bool cut = opts.scene_cuts && (adaptive_cut ? adaptive_cut->Test(prev_gray, gray) : IsSceneCut(prev_gray, gray));
         // The tip's centre in the previous frame: where the camera's motion
-        // is measured for this frame (frame pixels, not yet compensated).
-        const cv::Point2d prev_tip(res.xs.back(), res.ys.back());
+        // is measured for this frame (working pixels, not yet compensated).
+        // Stored centres are original pixels, so scale them back when shrunk.
+        const cv::Point2d prev_tip = shrunk ? cv::Point2d(res.xs.back() * scale, res.ys.back() * scale)
+                                            : cv::Point2d(res.xs.back(), res.ys.back());
 
         std::optional<cv::Rect> found;
         bool reanchored = false;
@@ -353,7 +431,7 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
                     reanchored = true;
                 }
         } else {
-            found = tracker->Update(frame.bgr);
+            found = tracker->Update(bgr);
             if (found) {
                 // Integer centres as 0.7 (x + w/2 in ints) for the jump test.
                 const double dist = std::hypot(double(found->x + found->width / 2 - last.x - last.width / 2),
@@ -379,8 +457,9 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
         if (!found) {
             ++res.stats.lost_frames;
             if (auto c = coast.OnLost()) {
-                res.xs.push_back(Centre(*c).x);
-                res.ys.push_back(Centre(*c).y);
+                const cv::Point2d p = centre_orig(*c);
+                res.xs.push_back(p.x);
+                res.ys.push_back(p.y);
                 last = *c;
                 tip_ok = true;
             } else {
@@ -401,8 +480,9 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
             else
                 coast.ObserveOk(*found);
             ++valid;
-            res.xs.push_back(Centre(*found).x);
-            res.ys.push_back(Centre(*found).y);
+            const cv::Point2d p = centre_orig(*found);
+            res.xs.push_back(p.x);
+            res.ys.push_back(p.y);
             last = *found;
             tip_ok = true;
             // Only crops that still resemble the start feed the memory, so
@@ -415,28 +495,30 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
         if (want_partner) {
             if (opts.partner_fixed || cut || !partner_tracker) {
                 // Fixed (or after a cut): keep the last known centre.
-            } else if (auto pb = partner_tracker->Update(frame.bgr)) {
+            } else if (auto pb = partner_tracker->Update(bgr)) {
                 partner_last = *pb;
                 partner_ok = true;
             } else {
                 partner_ok = false;  // brief miss: hold last box, gap for distance
             }
-            res.partner_xs.push_back(Centre(partner_last).x);
-            res.partner_ys.push_back(Centre(partner_last).y);
+            const cv::Point2d p = centre_orig(partner_last);
+            res.partner_xs.push_back(p.x);
+            res.partner_ys.push_back(p.y);
         }
 
         for (size_t i = 0; i < extras.size(); ++i) {
             ExtraState& e = extras[i];
             if (e.fixed || cut || !e.tracker) {
                 e.ok = true;  // fixed (or after a cut): keep the last known centre
-            } else if (auto eb = e.tracker->Update(frame.bgr)) {
+            } else if (auto eb = e.tracker->Update(bgr)) {
                 e.last = *eb;
                 e.ok = true;
             } else {
                 e.ok = false;  // brief miss: hold the box, left out of the gap (0.7 F-006)
             }
-            res.extra_xs[i].push_back(Centre(e.last).x);
-            res.extra_ys[i].push_back(Centre(e.last).y);
+            const cv::Point2d p = centre_orig(e.last);
+            res.extra_xs[i].push_back(p.x);
+            res.extra_ys[i].push_back(p.y);
         }
 
         if (distance_stroke) {
@@ -444,7 +526,8 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
             // otherwise the smallest gap to any partner with a box (track_multi).
             std::vector<bool> include{partner_ok};
             for (const ExtraState& e : extras) include.push_back(e.ok);
-            if (const auto d = FuseTipPartners(last, tip_ok, partner_boxes(), include)) last_good_distance = *d;
+            if (const auto d = FuseTipPartners(last, tip_ok, partner_boxes(), include))
+                last_good_distance = orig_px(*d);
             distances.push_back(last_good_distance);
         }
 
@@ -454,7 +537,7 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
             if (!cut) {
                 // Tip box plus soft masks (0.7 punch exclude): keep wrong
                 // latch regions out of the camera estimate.
-                std::vector<cv::Rect> excludes = opts.mask_rois;
+                std::vector<cv::Rect> excludes = work_masks;
                 excludes.push_back(last);
                 if (want_partner) excludes.push_back(partner_last);
                 for (const ExtraState& e : extras) excludes.push_back(e.last);
@@ -473,6 +556,9 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
                 // fixes, docs/benchmarks/DETECTION_CAMERA2D_FIXES_2026-11-10.md).
                 if (fits.fine.Usable()) {
                     shift = fits.fine.Shift(prev_tip);
+                    // The fit is in working pixels; the track is original pixels.
+                    shift.x = orig_px(shift.x);
+                    shift.y = orig_px(shift.y);
                 } else {
                     ++res.stats.camera_frames_lost;
                     if (fits.fine.ok) ++res.stats.camera_frames_gated;
@@ -490,7 +576,7 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
             double appearance = kNaN;
             if (memory)
                 if (const auto score = memory->MatchesOriginal(gray, last)) appearance = *score;
-            recorder->Frame(frame.bgr, last, found.has_value(), inliers, appearance);
+            recorder->Frame(frame.bgr, to_orig_rect(last), found.has_value(), inliers, appearance);
         }
 
         if (needs_gray) std::swap(prev_gray, gray);

@@ -163,6 +163,7 @@ void GenerateUnguarded(const GenerateRequest& req, uint64_t run_id, const std::f
     to.end_ms = req.end_ms;
     to.max_frames = req.max_frames;
     to.max_analysis_fps = req.max_analysis_fps;
+    to.analysis_width = req.analysis_width;
     to.camera_compensation = req.camera_compensation;
     to.scene_cuts = req.scene_cuts;
     to.hybrid_reacquire = req.hybrid_reacquire;

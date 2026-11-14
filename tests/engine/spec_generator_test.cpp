@@ -614,6 +614,11 @@ TEST_CASE("spec FR-11: the cache key covers adaptive cuts and the seed, and neve
     other = to;
     other.seed_box = cv::Rect(5, 6, 30, 30);
     CHECK(TrackCacheKey(video, box, other) != key);
+    other = to;
+    other.analysis_width = 640;
+    CHECK(TrackCacheKey(video, box, other) != key);
+    other.analysis_width = 0;
+    CHECK(TrackCacheKey(video, box, other) == key);
     other.seed_gray = cv::Mat(8, 8, CV_8UC1, cv::Scalar(10));
     const std::string seeded = TrackCacheKey(video, box, other);
     CHECK(seeded != key);
