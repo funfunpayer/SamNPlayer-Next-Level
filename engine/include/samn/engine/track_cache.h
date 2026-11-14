@@ -25,7 +25,8 @@ namespace samn::engine {
 // 7: 2-D camera compensation (xs compensated too, frame_xs, inlier gate).
 // 8: plausibility bounds on the camera estimate, held boxes hold their
 //    compensated position, camera_frames_gated.
-constexpr int kTrackCacheVersion = 8;
+// 9: analysis_width (FR-8 downscale; 0 = full resolution).
+constexpr int kTrackCacheVersion = 9;
 
 // Hex key from the video (size, modification time and the first and last
 // MiB of content), the box and every option that changes the track; empty
