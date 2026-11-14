@@ -267,6 +267,7 @@ private slots:
         QVERIFY(named(root.get(), "expertRdp"));
         QVERIFY(named(root.get(), "expertMaxSpeed"));
         QVERIFY(named(root.get(), "expertAnalysisFps"));
+        QVERIFY(named(root.get(), "expertAnalysisWidth"));
         QVERIFY(named(root.get(), "toggle_impulseMirror")->isVisible());
         gen->setEditorShare(0.52);
         QCOMPARE(gen->editorShare(), 0.52);
@@ -834,6 +835,76 @@ private slots:
         QVERIFY(QMetaObject::invokeMethod(combo, "activated", Q_ARG(int, 2)));
         QCOMPARE(gen->optimizeTarget(), QStringLiteral("neo2"));
         QTRY_COMPARE(combo->property("currentIndex").toInt(), 2);
+        gen->setOptimizeTarget(QString());
+        QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
+    }
+
+    // Optimize Off still fill+heals (Improve, no device bake). Unset still
+    // optimizeFor. The Create status suffix comes from that polish text.
+    void optimizeOffStillImprovesAfterCreate() {
+        g_messages.clear();
+        QTemporaryDir scripts;
+        QVERIFY(scripts.isValid());
+        const QString script = scripts.filePath(QStringLiteral("gap.funscript"));
+        {
+            QFile f(script);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(R"({"version":"1.0","actions":[{"at":0,"pos":0},{"at":2000,"pos":100}]})");
+        }
+        QQmlEngine engine;
+        engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
+        engine.addImageProvider(QStringLiteral("icon"), new samn::ui::IconProvider);
+        engine.addImageProvider(QStringLiteral("frames"), new samn::ui::FrameProvider);
+        QQmlComponent comp(&engine);
+        comp.setData(R"(
+            import QtQuick
+            import SamN
+            Rectangle {
+                width: 1400; height: 820; color: "#021024"
+                property alias page: gp
+                GeneratorPage { id: gp; anchors.fill: parent; anchors.margins: 20 }
+            })",
+                     QUrl("qrc:/test/OptimizeOffImprove.qml"));
+        QVERIFY2(comp.status() == QQmlComponent::Ready, qPrintable(comp.errorString()));
+        QQuickWindow window;
+        window.resize(1400, 820);
+        std::unique_ptr<QQuickItem> root(qobject_cast<QQuickItem*>(comp.create()));
+        QVERIFY(root);
+        root->setParentItem(window.contentItem());
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto* page = root->property("page").value<QQuickItem*>();
+        auto* gen = page->property("controller").value<GeneratorController*>();
+        auto* edit = page->property("editor").value<QObject*>();
+        QVERIFY(page && gen && edit);
+        gen->setOptimizeTarget(QString());
+        bool opened = false;
+        QVERIFY(QMetaObject::invokeMethod(edit, "open", Q_RETURN_ARG(bool, opened), Q_ARG(QString, script)));
+        QVERIFY(opened);
+
+        QVariant unsetPolish;
+        QVERIFY(QMetaObject::invokeMethod(page, "polishCreatedScript", Q_RETURN_ARG(QVariant, unsetPolish)));
+        const QString unsetText = unsetPolish.toString();
+        QVERIFY2(unsetText.contains(QStringLiteral("Neo 2")) || unsetText.contains(QStringLiteral("Ready")),
+                 qPrintable(unsetText));
+        QVERIFY(!unsetText.startsWith(QStringLiteral("Improved:")));
+        QCOMPARE(gen->optimizeTarget(), QStringLiteral("neo2"));  // unset follows Feel
+        bool undone = false;
+        QVERIFY(QMetaObject::invokeMethod(edit, "undo", Q_RETURN_ARG(bool, undone)));
+        QVERIFY(undone);
+
+        gen->setOptimizeTarget(QStringLiteral("off"));
+        QVariant offPolish;
+        QVERIFY(QMetaObject::invokeMethod(page, "polishCreatedScript", Q_RETURN_ARG(QVariant, offPolish)));
+        const QString offText = offPolish.toString();
+        QVERIFY2(offText.startsWith(QStringLiteral("Improved:")), qPrintable(offText));
+        const QString suf = GeneratorController::createPolishSuffix(offText);
+        QVERIFY2(!suf.isEmpty(), qPrintable(offText));
+        gen->showStatus(QStringLiteral("Done — Emotion Script ready in Play."));
+        gen->showStatus(gen->status() + QLatin1Char(' ') + suf);
+        QVERIFY(gen->status().contains(suf));
+        QVERIFY(gen->status().contains(QStringLiteral("gaps ok")) || gen->status().contains(QStringLiteral("healed")) ||
+                gen->status().contains(QStringLiteral("pts")));
         gen->setOptimizeTarget(QString());
         QVERIFY2(g_messages.isEmpty(), qPrintable(g_messages.join('\n')));
     }

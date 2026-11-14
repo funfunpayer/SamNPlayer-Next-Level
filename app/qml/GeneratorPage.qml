@@ -37,14 +37,12 @@ Item {
     GeneratorController {
         id: gen
         // 0.8 "Optimize after Create" (D-156): fill+heal (and Neo 2 bake when chosen).
+        // Optimize Off still fill+heals via Improve, without the device bake.
         // 0.7 post-pass: append "(healed N · +N pts | gaps ok)" on the Create status.
         onCreated: (path) => {
             page.library.noteScriptGenerated(path)
             if (!edit.open(path)) return
-            const t = page.resolvedOptimizeTarget()
-            if (gen.optimizeTarget === "") gen.optimizeTarget = t
-            let polish = ""
-            if (t !== "") polish = edit.optimizeFor(t)
+            const polish = page.polishCreatedScript()
             const suf = gen.createPolishSuffix(polish)
             if (suf !== "") gen.showStatus(gen.status + " " + suf)
             // 0.7 Step 3: a vibrator gets its vibration from the video's sound.
@@ -239,11 +237,21 @@ Item {
             return qsTr("Create finds the tip from this frame first — fast guest path.")
         return qsTr("Create Emotion Script. Advanced stays closed.")
     }
-    // Unset ("") follows Feel; "off" keeps the script as created; else general/neo2.
+    // Unset ("") follows Feel; "off" keeps the device bake off; else general/neo2.
     function resolvedOptimizeTarget() {
         if (gen.optimizeTarget === "off") return ""
         if (gen.optimizeTarget === "general" || gen.optimizeTarget === "neo2") return gen.optimizeTarget
         return gen.feelKind === "neo2" ? "neo2" : "general"
+    }
+    // After Create: unset follows Feel (optimizeFor). Optimize Off still
+    // fill+heals (Improve, no device bake). Returns the status text.
+    function polishCreatedScript() {
+        const t = resolvedOptimizeTarget()
+        const optimizeOff = gen.optimizeTarget === "off"
+        if (gen.optimizeTarget === "") gen.optimizeTarget = t
+        if (t !== "") return edit.optimizeFor(t)
+        if (optimizeOff) return edit.improveScript(0, 0, true, true)
+        return ""
     }
     function everydayOptimizeIndex() {
         if (gen.optimizeTarget === "off") return 0
@@ -2712,6 +2720,14 @@ Item {
                                         valueText: gen.maxAnalysisFps === 0 ? qsTr("every frame") : (gen.maxAnalysisFps + " fps")
                                         slider.from: 0; slider.to: 60; slider.value: gen.maxAnalysisFps
                                         slider.onMoved: (v) => gen.maxAnalysisFps = Math.round(v)
+                                    }
+                                    ExpertRow {
+                                        objectName: "expertAnalysisWidth"
+                                        label: qsTr("Tracking analysis width")
+                                        help: "gen-analysis-width"
+                                        valueText: gen.analysisWidth === 0 ? qsTr("full") : (gen.analysisWidth + " px")
+                                        slider.from: 0; slider.to: 3840; slider.value: gen.analysisWidth
+                                        slider.onMoved: (v) => gen.analysisWidth = Math.round(v)
                                     }
                                     Text {
                                         textFormat: Text.PlainText

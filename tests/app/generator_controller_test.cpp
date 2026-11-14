@@ -600,6 +600,7 @@ private slots:
             QCOMPARE(g.rdpTolerance(), 0.0);
             QCOMPARE(g.maxSpeed(), 0);
             QCOMPARE(g.maxAnalysisFps(), 15);  // Everyday FunGen2-faster Create
+            QCOMPARE(g.analysisWidth(), 640);  // Everyday FR-8 long side
             QCOMPARE(g.editorShare(), 0.40);
             QCOMPARE(g.hybridReacquire(), false);
             g.setSmoothWindow(20);  // even → 19
@@ -615,6 +616,12 @@ private slots:
             QCOMPARE(g.maxSpeed(), 150);
             g.setMaxAnalysisFps(22);  // → 20 (must differ from Everyday 15 so it saves)
             QCOMPARE(g.maxAnalysisFps(), 20);
+            g.setAnalysisWidth(100);  // below 160 → 160
+            QCOMPARE(g.analysisWidth(), 160);
+            g.setAnalysisWidth(5000);
+            QCOMPARE(g.analysisWidth(), 3840);
+            g.setAnalysisWidth(0);  // Expert: full resolution
+            QCOMPARE(g.analysisWidth(), 0);
             g.setEditorShare(0.55);
             QCOMPARE(g.editorShare(), 0.55);
             g.setEditorShare(0.9);  // clamp
@@ -629,6 +636,7 @@ private slots:
         QCOMPARE(s.get("generator.rdp_tolerance").get<double>(), 1.0);
         QCOMPARE(s.get("generator.max_speed").get<int>(), 150);
         QCOMPARE(s.get("generator.max_analysis_fps").get<int>(), 20);
+        QCOMPARE(s.get("generator.analysis_width").get<int>(), 0);
         QCOMPARE(s.get("generator.editor_share").get<double>(), 0.65);
         QCOMPARE(s.get("generator.hybrid_reacquire").get<bool>(), true);
         {
@@ -639,6 +647,7 @@ private slots:
             QCOMPARE(g.rdpTolerance(), 1.0);
             QCOMPARE(g.maxSpeed(), 150);
             QCOMPARE(g.maxAnalysisFps(), 20);
+            QCOMPARE(g.analysisWidth(), 0);
             QCOMPARE(g.editorShare(), 0.65);
             QVERIFY(g.hybridReacquire());
             // Restore Everyday defaults for later tests.
@@ -648,6 +657,7 @@ private slots:
             g.setRdpTolerance(0);
             g.setMaxSpeed(0);
             g.setMaxAnalysisFps(15);
+            g.setAnalysisWidth(640);
             g.setEditorShare(0.40);
             // Unset — do not write false (that means user Off and blocks
             // FunGen2 auto-on in later tip/Apply tests that share settings).

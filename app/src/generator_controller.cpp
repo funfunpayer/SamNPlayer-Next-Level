@@ -194,6 +194,7 @@ void GeneratorController::loadSettings() {
             hybrid_reacquire_ = true;
         }
         if (const auto v = s.get("generator.max_analysis_fps"); v.is_number()) setMaxAnalysisFps(v.get<int>());
+        if (const auto v = s.get("generator.analysis_width"); v.is_number()) setAnalysisWidth(v.get<int>());
         if (const auto v = s.get("generator.editor_share"); v.is_number()) setEditorShare(v.get<double>());
         contact_vibration_ = flag("generator.contact_vibration", contact_vibration_);
         setTipClass(str("generator.tip_class", tip_class_));
@@ -522,6 +523,7 @@ bool GeneratorController::runQueue(bool overwrite) {
     settings.overwrite = overwrite;
     applySwitches(settings.signal, settings.track_cache_dir);
     settings.max_analysis_fps = max_analysis_fps_;
+    settings.analysis_width = analysis_width_;
     settings.hybrid_reacquire = hybrid_reacquire_;
     if (hybrid_reacquire_) settings.ai_propose = MakeHybridPropose(tip_class_);
     settings.contact_vibration = contact_vibration_;
@@ -1060,6 +1062,15 @@ void GeneratorController::setMaxAnalysisFps(int v) {
     if (n == max_analysis_fps_) return;
     max_analysis_fps_ = n;
     saveSetting("generator.max_analysis_fps", n);
+    emit optionsChanged();
+}
+
+void GeneratorController::setAnalysisWidth(int v) {
+    // 0 = full resolution (old path). Otherwise spec §4.3: 160..3840.
+    const int n = v <= 0 ? 0 : std::clamp(v, 160, 3840);
+    if (n == analysis_width_) return;
+    analysis_width_ = n;
+    saveSetting("generator.analysis_width", n);
     emit optionsChanged();
 }
 
@@ -1650,6 +1661,7 @@ bool GeneratorController::create(bool overwrite) {
     req.overwrite = overwrite;
     applySwitches(req.signal, req.track_cache_dir);
     req.max_analysis_fps = max_analysis_fps_;
+    req.analysis_width = analysis_width_;
     req.hybrid_reacquire = hybrid_reacquire_;
     if (hybrid_reacquire_) req.ai_propose = MakeHybridPropose(tip_class_);
     req.auto_ozone = auto_ozone_;

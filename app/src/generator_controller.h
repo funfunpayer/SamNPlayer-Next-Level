@@ -88,6 +88,9 @@ class GeneratorController : public QObject {
     // Cap tracking analysis rate (0 = every frame). Everyday default 15 —
     // FunGen2-snappy Create; Expert can set every frame (GENERATOR_SPEC FR-7).
     Q_PROPERTY(int maxAnalysisFps READ maxAnalysisFps WRITE setMaxAnalysisFps NOTIFY optionsChanged)
+    // FR-8 long side before CSRT (0 = full resolution). Everyday default 640;
+    // Expert 0 is the old full-resolution path (D-158c).
+    Q_PROPERTY(int analysisWidth READ analysisWidth WRITE setAnalysisWidth NOTIFY optionsChanged)
     // Share of the Generator stage height kept for the curve editor (0.18–0.65).
     // Remembered so the video/curves SplitView stays where the user left it.
     Q_PROPERTY(double editorShare READ editorShare WRITE setEditorShare NOTIFY optionsChanged)
@@ -255,6 +258,8 @@ public:
     void setHybridReacquire(bool v);
     int maxAnalysisFps() const { return max_analysis_fps_; }
     void setMaxAnalysisFps(int v);
+    int analysisWidth() const { return analysis_width_; }
+    void setAnalysisWidth(int v);
     double editorShare() const { return editor_share_; }
     void setEditorShare(double v);
     bool contactVibration() const { return contact_vibration_; }
@@ -470,6 +475,7 @@ private:
     bool gap_handling_ = true, outlier_rejection_ = true, track_cache_ = false;
     bool hybrid_reacquire_ = false;
     int max_analysis_fps_ = 15;  // Everyday: FunGen2-faster Create (0 = every frame)
+    int analysis_width_ = 640;   // Everyday: FR-8 long side (0 = full resolution)
     double editor_share_ = 0.40;
     bool auto_tip_ = true;
     bool find_auto_ = false;     // the running search was started by openVideo

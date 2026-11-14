@@ -525,6 +525,79 @@ TEST_CASE("track: hybrid AI propose is unused while off, and called after a miss
     CHECK(calls >= 1);
 }
 
+// FR-8: analysis_width 0 is the full-resolution path. A smaller width scales
+// the ROI for CSRT and still reports centres in original pixels.
+TEST_CASE("spec FR-8: analysis width scales the ROI and reports original coordinates") {
+    TempDir dir;
+    const fs::path clip = dir.path / "moving.mp4";
+    REQUIRE(clips::WriteMoving(clip, 2, 80.0, 1.0));
+
+    const TrackResult full = Track(clip, Plain());
+    TrackOptions zero = Plain();
+    zero.analysis_width = 0;
+    const TrackResult same = Track(clip, zero);
+    CHECK(same.size == cv::Size(clips::kW, clips::kH));
+    CHECK(same.xs == full.xs);
+    CHECK(same.ys == full.ys);
+    CHECK(same.positions == full.positions);
+    CHECK(same.frame_xs == full.frame_xs);
+    CHECK(same.frame_ys == full.frame_ys);
+
+    // Wider than this clip (320 px): no downscale, same path as 0.
+    TrackOptions wide = Plain();
+    wide.analysis_width = 640;
+    const TrackResult wide_r = Track(clip, wide);
+    CHECK(wide_r.xs == full.xs);
+    CHECK(wide_r.positions == full.positions);
+    CHECK(wide_r.size == full.size);
+
+    TrackOptions down = Plain();
+    down.analysis_width = 160;  // long side 320 → scale 0.5
+    const TrackResult scaled = Track(clip, down);
+    CHECK(scaled.size == full.size);
+    CHECK(scaled.times_ms.size() == full.times_ms.size());
+    const double cx = kRoi.x + kRoi.width / 2.0;
+    const double cy = kRoi.y + kRoi.height / 2.0;
+    CHECK(std::abs(scaled.xs.front() - cx) <= 1.0);
+    CHECK(std::abs(scaled.ys.front() - cy) <= 1.0);
+    CHECK(std::abs(scaled.frame_xs.front() - cx) <= 1.0);
+    CHECK(std::abs(scaled.frame_ys.front() - cy) <= 1.0);
+    // A missing ÷scale would sit near half the original centre.
+    CHECK(std::abs(scaled.xs.front() - cx * 0.5) > 20.0);
+    CHECK(std::abs(Ptp(scaled.positions) - Ptp(full.positions)) <= 25.0);
+    CHECK(Ptp(scaled.positions) >= 40.0);
+
+    // Fixed partner, extra and the distance stroke stay in original pixels.
+    // Even edges so scale 0.5 lands on whole pixels.
+    TrackOptions dist = Plain();
+    dist.analysis_width = 160;
+    dist.partner_box = cv::Rect(164, 144, 70, 70);
+    dist.partner_fixed = true;
+    dist.extra_boxes = {{cv::Rect(244, 84, 70, 70), true}};
+    dist.distance_stroke = true;
+    std::string error;
+    const cv::Rect tip(64, 84, 70, 70);
+    const auto partners = TrackBox(clip, tip, dist, &error);
+    REQUIRE_MESSAGE(partners, error);
+    CHECK(partners->size == cv::Size(clips::kW, clips::kH));
+    CHECK(partners->distance_stroke);
+    CHECK(std::abs(partners->xs.front() - 99.0) <= 1.0);
+    CHECK(std::abs(partners->ys.front() - 119.0) <= 1.0);
+    CHECK(std::abs(partners->partner_xs.front() - 199.0) <= 1.0);
+    CHECK(std::abs(partners->partner_ys.front() - 179.0) <= 1.0);
+    REQUIRE(partners->extra_xs.size() == 1);
+    CHECK(std::abs(partners->extra_xs[0].front() - 279.0) <= 1.0);
+    CHECK(std::abs(partners->extra_ys[0].front() - 119.0) <= 1.0);
+    // Same gap as the full-resolution path (nearest tip edge → partner centre,
+    // original pixels). A missing ÷scale would be about half.
+    TrackOptions dist_full = dist;
+    dist_full.analysis_width = 0;
+    const auto partners_full = TrackBox(clip, tip, dist_full, &error);
+    REQUIRE_MESSAGE(partners_full, error);
+    CHECK(std::abs(partners->positions.front() - partners_full->positions.front()) <= 1.5);
+    CHECK(partners->positions.front() > partners_full->positions.front() * 0.5 + 20.0);
+}
+
 TEST_CASE("parts: the adaptive cut test ignores steady fast motion, finds the real cut") {
     // A small, high-contrast picture panning fast: every frame differs a lot,
     // so 0.7's fixed threshold calls each one a cut (the Owner clip at

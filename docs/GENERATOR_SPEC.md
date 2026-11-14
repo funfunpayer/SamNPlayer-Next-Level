@@ -281,13 +281,14 @@ The Generator already did most of this before the spec existed; what was missing
 |---|---|---|
 | FR-6 end time | `GenerateRequest.end_ms`, `TrackOptions.end_ms` | `track_box.cpp` |
 | FR-7 analysis rate cap | `max_analysis_fps` | `track_box.cpp` |
+| FR-8 analysis width | `analysis_width` (Everyday 640; 0 = full resolution) | `track_box.cpp` |
 | FR-10 lost samples | `TrackResult::lost` (always filled) | `track_box.cpp` |
 | FR-12 gaps | *Bridge short tracking gaps* → `max_gap_ms` 500, on by default since D-161; from the tracker's own loss, the look check only with `gaps_from_look` | `PlanGaps` |
 | FR-13 outliers | *Ignore single-frame jumps* → `outlier_mad_factor` 5 | `FindOutliers` |
 | FR-11 cache | *Reuse the tracking* → `config_dir()/cache/track` | `track_cache.cpp` |
 | E8 aliasing | always on (a note only) | `AliasingWarning` |
 
-End time has no control on the Generator page yet (comparison manifest: `end_ms`). Analysis rate is the Expert slider *Tracking analysis rate* (`generator.max_analysis_fps`, 0 = every frame); the comparison manifest still reaches it too.
+End time has no control on the Generator page yet (comparison manifest: `end_ms`). Analysis rate is the Expert slider *Tracking analysis rate* (`generator.max_analysis_fps`, 0 = every frame); the comparison manifest still reaches it too. Analysis width is the Expert slider *Tracking analysis width* (`generator.analysis_width`, 0 = full resolution, Everyday 640, D-158c).
 
 **Default recipe "Recommended" (D-160, 27 Oct)**
 

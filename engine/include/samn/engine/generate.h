@@ -30,6 +30,7 @@ struct GenerateRequest {
     int64_t end_ms = 0;            // 0 = to the end
     int max_frames = 0;
     double max_analysis_fps = 0;   // 0 = every frame
+    int analysis_width = 0;        // 0 = every pixel (FR-8); else long side at most this
     // Raw tracks are cached here (spec FR-11); empty = no cache.
     std::filesystem::path track_cache_dir;
     bool camera_compensation = true;

@@ -79,6 +79,7 @@ QueueItemOutcome GenerateQueueItem(const std::filesystem::path& video, const Que
     req.overwrite = settings.overwrite;
     req.track_cache_dir = settings.track_cache_dir;
     req.max_analysis_fps = settings.max_analysis_fps;
+    req.analysis_width = settings.analysis_width;
     req.hybrid_reacquire = settings.hybrid_reacquire;
     req.ai_propose = settings.ai_propose;
     req.contact_vibration = settings.contact_vibration;

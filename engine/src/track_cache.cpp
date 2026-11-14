@@ -64,6 +64,7 @@ std::string TrackCacheKey(const std::filesystem::path& video, const cv::Rect& bo
                         {"end_ms", o.end_ms},
                         {"max_frames", o.max_frames},
                         {"max_analysis_fps", o.max_analysis_fps},
+                        {"analysis_width", o.analysis_width},
                         {"camera_compensation", o.camera_compensation},
                         {"scene_cuts", o.scene_cuts},
                         {"appearance_memory", o.appearance_memory},

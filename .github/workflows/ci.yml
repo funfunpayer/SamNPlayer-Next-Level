@@ -289,7 +289,9 @@ jobs:
   sanitizers:
     name: Sanitizers (core, ASan + UBSan)
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # 45 min timed out twice on #263 once FR-8 track tests joined engine_tests
+    # (build + ASan engine suite ~40–50 min when apt is cold).
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
 
