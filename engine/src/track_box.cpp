@@ -358,6 +358,7 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
         total = total > 0 ? std::min(total, span) : span;
     }
     // A skipped frame counts as done, so progress follows the video, not the samples.
+    // With a cap, that frame is grabbed for its time and not converted (D-158d).
     const bool rate_cap = opts.max_analysis_fps > 0;
     // 1 ms of slack: millisecond times of a 60 fps clip are 16/17 ms apart.
     const double min_step_ms = rate_cap ? 1000.0 / opts.max_analysis_fps - 1.0 : 0;
@@ -393,18 +394,43 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
     };
 
     int idx = 1, valid = 1;
-    while (reader->Read(frame)) {
+    // The first frame was Read (Grab + Retrieve). Later frames follow.
+    res.stats.pictures = 1;
+    res.stats.frames_advanced = 1;
+    int64_t cursor = first_index;  // index of the last frame Grab advanced to
+    while (true) {
+        // Rate cap: Grab for the time (POS_MSEC, the same clock Read uses)
+        // and Retrieve only when the frame is analysed. A skip does not
+        // update gray, the tracker or the samples. No cap: Read, as before.
+        int64_t probe_ms = 0;
+        if (rate_cap) {
+            int64_t pts_us = 0;
+            if (!reader->Grab(&pts_us)) break;
+            ++cursor;
+            ++res.stats.frames_advanced;
+            probe_ms = pts_us / 1000;
+        } else {
+            if (!reader->Read(frame)) break;
+            ++cursor;
+            ++res.stats.frames_advanced;
+            ++res.stats.pictures;
+            probe_ms = frame.pts_us / 1000;
+        }
         if (opts.cancel && opts.cancel()) {
             TrackResult canceled;
             canceled.canceled = true;
             return canceled;
         }
-        const int64_t frame_ms = frame.pts_us / 1000;
-        if (opts.end_ms > 0 && frame_ms > opts.end_ms) break;
-        if (rate_cap && frame_ms - res.times_ms.back() < min_step_ms) {
-            progress.Report(static_cast<int>(frame.index - first_index));
+        if (opts.end_ms > 0 && probe_ms > opts.end_ms) break;
+        if (rate_cap && probe_ms - res.times_ms.back() < min_step_ms) {
+            progress.Report(static_cast<int>(cursor - first_index));
             continue;
         }
+        if (rate_cap) {
+            if (!reader->Retrieve(frame)) break;
+            ++res.stats.pictures;
+        }
+        const int64_t frame_ms = frame.pts_us / 1000;
         const cv::Mat& bgr = prepare();
         if (needs_gray) cv::cvtColor(bgr, gray, cv::COLOR_BGR2GRAY);
         const bool cut = opts.scene_cuts && (adaptive_cut ? adaptive_cut->Test(prev_gray, gray) : IsSceneCut(prev_gray, gray));
@@ -581,7 +607,7 @@ std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv
 
         if (needs_gray) std::swap(prev_gray, gray);
         res.times_ms.push_back(frame_ms);
-        progress.Report(rate_cap ? static_cast<int>(frame.index - first_index) : idx);
+        progress.Report(rate_cap ? static_cast<int>(cursor - first_index) : idx);
         ++idx;
         if (opts.max_frames > 0 && idx >= opts.max_frames) break;
     }

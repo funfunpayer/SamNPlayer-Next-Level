@@ -27,6 +27,9 @@ struct TrackOptions {
     int max_frames = 0;          // 0 = to the end
     // Analysis rate cap: a frame closer than 1 / max_analysis_fps to the last
     // tracked frame is skipped and gives no sample. 0 = every frame (0.7).
+    // A skipped frame is only grabbed (its time is the decoder's, the same
+    // clock as Read). It is not converted to a picture and does not move
+    // the tracker.
     double max_analysis_fps = 0;
     // FR-8: before analysis, frames may be downscaled so the long side is at
     // most this many pixels. The ROI (and partner, extras, masks, seed box)
@@ -104,6 +107,13 @@ struct TrackStats {
     double horizontal_range = 0;
     double confidence = 0;       // valid / total
     std::string reason;          // "", "tracker_lost_elevated", "tracker_lost_heavy"
+    // Live decode accounting only — not stored in the track cache, so a
+    // cache hit leaves both at 0. pictures is Retrieve calls (frames
+    // converted to BGR), including the first. frames_advanced is Grab calls,
+    // including frames the rate cap skipped. They are equal when every
+    // frame is analysed.
+    int pictures = 0;
+    int frames_advanced = 0;
 };
 
 struct TrackResult {
