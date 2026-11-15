@@ -2,7 +2,15 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 14 Nov 2026, Cursor, branch `cursor/gen-create-scale-635a`: FR-8 analysis width 640 and Improve when Optimize is Off.
+**Last update:** 15 Nov 2026, Cursor, branch `cursor/gen-create-grab-635a`: rate-capped Create grabs skipped frames (no BGR).
+
+## Handover: Create rate cap grabs skipped frames (15 Nov)
+
+- **TrackBox:** when `max_analysis_fps` > 0, a too-soon frame is `Grab` only (POS_MSEC, the same clock as `Read`). Progress still reports it. No Retrieve, no gray / tracker / sample update. `max_analysis_fps` 0 still `Read`s every frame. `analysis_width` 0 unchanged.
+- **Live stats:** `TrackStats::pictures` (Retrieve) and `frames_advanced` (Grab). Not stored in the track cache.
+- **Tests:** `spec FR-7: the analysis rate cap…` (pictures == samples, more frames advanced); `spec FR-7: skipped frames are grabbed, not retrieved` (Grab schedule, centres match a Read-every-frame CSRT on the kept frames, cap 0 converts every frame).
+- **Defaults:** Everyday stays 15 fps and 640 px (D-158b, D-158c). Not this change.
+- **Left:** audio check, rhythm bridge.
 
 ## Handover: Everyday Create scale + Improve when Optimize Off (14 Nov)
 
@@ -508,7 +516,7 @@ Owner: the Generator's video detection must become cinema-grade accurate and lea
 - **Metrics:** 10 s windowed r (median, min, spread over runs) on the script and on the raw track (`track_r_*`), peak timing error (median, p95), extrema-count error, amplitude ratio, scene cuts found and false, lost share and loss precision / recall against the occlusion mask, jumps over 60 px, ms/frame (median of 5 after 3 warm-ups), RSS. Cuts, lost flags and jumps come from one extra untimed `TrackBox` run with the options `Generate` uses (`Generate` itself exposes none of them).
 - **Acceptance rule** (also in `--help` and the baseline doc): no scene's r drops by more than max(0.01, its 5-run spread); median r rises or median peak error falls by 2 ms or more; ms/frame up by at most 10 %, RSS by at most 10 %; before a default changes, the Owner gate through `samn_compare` on his private clips (numbers only).
 - **Baseline:** `docs/benchmarks/DETECTION_BASELINE_2026-11-06.md` + `.csv`; load averages and three timing repeats in it. Full run about 33 min. Findings: **pan X raw track r 0.797** (pan Y and clean 0.999): the 0.81 reproduces on the track, but the script r is 0.989 because the default detrend removes this slow pan; occlusion 2 s / 4 s r 0.77 / 0.72 with the lost flag exact; 30 % dropped frames give 4 false cuts; the lighting cut with a jump leaves the tracker lost for the whole second half (r 0.66); fast_small has half its frames flagged lost. ms/frame is about 22 to 37 here (unoptimised build) with up to 25 % spread between runs: time on a quiet machine, median of 3 or more.
-- **Next slices (each judged by this bench):** PR-2 full 2-D camera compensation (done: `claude/samn2-camera-2d`) (`camera_motion.cpp` returns only `t(1,2)`, `track_box.cpp` about line 456 shifts only ys; measured: pan clip Y stroke 0.888 -> 1.000 with compensation, X stroke 0.812 -> 0.812; the Owner's clip uses X; judge on `pan_x` track r); PR-3 forward-backward LK loss flag + confirmed scene cuts (drop30, light_cut_jump); PR-4 phase-locked periodic bridge (occlusion scenes); PR-5 sub-sample peaks (peak error vs the 40 ms frame); PR-6 FR-8 640 px downscale (done: `analysis_width`, Everyday 640, Expert 0 = full; ~90→35 ms/frame still to measure on the bench). CPU / RAM: chunked label-tracking decode, `grab()` for skipped frames.
+- **Next slices (each judged by this bench):** PR-2 full 2-D camera compensation (done: `claude/samn2-camera-2d`) (`camera_motion.cpp` returns only `t(1,2)`, `track_box.cpp` about line 456 shifts only ys; measured: pan clip Y stroke 0.888 -> 1.000 with compensation, X stroke 0.812 -> 0.812; the Owner's clip uses X; judge on `pan_x` track r); PR-3 forward-backward LK loss flag + confirmed scene cuts (drop30, light_cut_jump); PR-4 phase-locked periodic bridge (occlusion scenes); PR-5 sub-sample peaks (peak error vs the 40 ms frame); PR-6 FR-8 640 px downscale (done: `analysis_width`, Everyday 640, Expert 0 = full; ~90→35 ms/frame still to measure on the bench). CPU / RAM: chunked label-tracking decode; `grab()` for rate-capped skipped frames (done: TrackBox Grab, no Retrieve, D-158d).
 - **Not done:** an automatic baseline-vs-candidate comparison of two CSVs (the rule is applied by hand); Windows (RSS 0 there, not built); real clips (Owner gate).
 
 

@@ -27,6 +27,8 @@
 #include "samn/engine/signal_chain.h"
 #include "samn/engine/track_box.h"
 #include "samn/engine/track_cache.h"
+#include "samn/vision/frame_reader.h"
+#include "samn/vision/tracker.h"
 #include "synthetic_clips.h"
 
 using namespace samn::engine;
@@ -597,6 +599,92 @@ TEST_CASE("spec FR-7: the analysis rate cap tracks fewer frames over the same sp
     for (size_t i = 1; i < tr->times_ms.size(); ++i) CHECK(tr->times_ms[i] - tr->times_ms[i - 1] >= 32);
     CHECK(tr->times_ms.back() >= 3900);
     CHECK(last_done >= last_total - 2);  // progress follows the video, not the samples
+    // Skipped frames are grabbed, not converted: one picture per sample.
+    CHECK(tr->stats.pictures == int(tr->times_ms.size()));
+    CHECK(tr->stats.frames_advanced > tr->stats.pictures);
+    fs::remove_all(dir);
+}
+
+TEST_CASE("spec FR-7: skipped frames are grabbed, not retrieved") {
+    const fs::path dir = TempDir("samn_spec_grab");
+    const fs::path clip = dir / "sine.mp4";
+    REQUIRE(WriteClip(clip, 60, 2, [](cv::Mat& f, double t) { clips::Disc(f, 160, int(DiscY(t, 80, 1))); }));
+    const cv::Rect box(100, 40, 120, 160);
+    constexpr double kCap = 30;
+    const double min_step_ms = 1000.0 / kCap - 1.0;
+
+    // Camera, cuts and appearance off: the stored centre is the CSRT box, so
+    // it can be compared to a Read-every-frame tracker on the same frames.
+    TrackOptions to;
+    to.max_analysis_fps = kCap;
+    to.analysis_width = 0;
+    to.camera_compensation = false;
+    to.scene_cuts = false;
+    to.appearance_memory = false;
+    std::string error;
+    const auto tr = TrackBox(clip, box, to, &error);
+    REQUIRE_MESSAGE(tr, error);
+    REQUIRE(tr->stats.lost_frames == 0);
+
+    std::vector<int64_t> grabbed;
+    int advanced = 0;
+    {
+        auto reader = samn::vision::FrameReader::Open(clip, &error);
+        REQUIRE_MESSAGE(reader, error);
+        samn::vision::VideoFrame frame;
+        REQUIRE(reader->Read(frame));
+        advanced = 1;
+        grabbed.push_back(frame.pts_us / 1000);
+        for (int64_t pts_us = 0; reader->Grab(&pts_us);) {
+            ++advanced;
+            const int64_t ms = pts_us / 1000;
+            if (ms - grabbed.back() < min_step_ms) continue;
+            grabbed.push_back(ms);
+        }
+    }
+    CHECK(tr->times_ms == grabbed);
+    CHECK(tr->stats.pictures == int(tr->times_ms.size()));
+    CHECK(tr->stats.frames_advanced == advanced);
+    CHECK(tr->stats.frames_advanced > tr->stats.pictures);
+
+    // The old path: Read (decode) every frame, update CSRT only on the frames
+    // the cap keeps. Analysed centres must match byte for byte.
+    std::vector<int64_t> read_times;
+    std::vector<double> xs, ys;
+    {
+        auto reader = samn::vision::FrameReader::Open(clip, &error);
+        REQUIRE_MESSAGE(reader, error);
+        samn::vision::VideoFrame frame;
+        REQUIRE(reader->Read(frame));
+        auto tracker = samn::vision::CreateTracker(samn::vision::TrackerKind::kCsrt, &error);
+        REQUIRE_MESSAGE(tracker, error);
+        tracker->Init(frame.bgr, box);
+        read_times.push_back(frame.pts_us / 1000);
+        xs.push_back(box.x + box.width / 2.0);
+        ys.push_back(box.y + box.height / 2.0);
+        while (reader->Read(frame)) {
+            const int64_t ms = frame.pts_us / 1000;
+            if (ms - read_times.back() < min_step_ms) continue;
+            const auto found = tracker->Update(frame.bgr);
+            REQUIRE(found);
+            read_times.push_back(ms);
+            xs.push_back(found->x + found->width / 2.0);
+            ys.push_back(found->y + found->height / 2.0);
+        }
+    }
+    CHECK(read_times == tr->times_ms);
+    CHECK(xs == tr->xs);
+    CHECK(ys == tr->ys);
+
+    // Every frame (cap 0, full width) still converts each one.
+    TrackOptions all = to;
+    all.max_analysis_fps = 0;
+    const auto full = TrackBox(clip, box, all, &error);
+    REQUIRE_MESSAGE(full, error);
+    CHECK(full->stats.pictures == full->stats.frames_advanced);
+    CHECK(full->stats.pictures == int(full->times_ms.size()));
+    CHECK(full->stats.frames_advanced == advanced);
+    CHECK(full->times_ms.size() > tr->times_ms.size());
     fs::remove_all(dir);
 }
 
