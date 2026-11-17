@@ -166,6 +166,17 @@ int ProgressTotal(int64_t frame_count, int64_t first_index, int max_frames) {
     return static_cast<int>(total);
 }
 
+TrackOptions PreviewTrackOptions() {
+    TrackOptions to;
+    to.max_analysis_fps = 15;
+    to.analysis_width = 640;
+    to.camera_compensation = false;
+    to.scene_cuts = true;
+    to.adaptive_cuts = true;
+    to.appearance_memory = true;
+    return to;
+}
+
 std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv::Rect& box,
                                     const TrackOptions& opts, std::string* error) {
     auto fail = [&](const std::string& why) {

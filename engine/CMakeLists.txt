@@ -27,6 +27,13 @@ add_executable(samn_bench tools/samn_bench.cpp)
 target_include_directories(samn_bench PRIVATE ${PROJECT_SOURCE_DIR}/tests/engine)
 target_link_libraries(samn_bench PRIVATE samn_engine)
 
+# The automatic tip box on POV-like synthetic scenes (tests/engine/tip_scenes.h):
+# where FindTip puts the box and how TrackBox follows from it
+# (docs/benchmarks/TIP_AUTO_BOX_2026-11-16.md). By hand, not in ctest.
+add_executable(samn_tip_bench tools/samn_tip_bench.cpp)
+target_include_directories(samn_tip_bench PRIVATE ${PROJECT_SOURCE_DIR}/tests/engine)
+target_link_libraries(samn_tip_bench PRIVATE samn_engine)
+
 # Peak memory and speed of label tracking between two keys on a synthetic clip
 # (docs/benchmarks/LABEL_MEMORY_2026-11-08.md). By hand, not in ctest.
 add_executable(samn_label_mem EXCLUDE_FROM_ALL tools/samn_label_mem.cpp)

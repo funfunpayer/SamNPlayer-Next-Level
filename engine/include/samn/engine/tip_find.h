@@ -27,12 +27,25 @@ struct TipCandidate {
 struct TipFindResult {
     cv::Rect box;                          // the proposal (slightly inset)
     std::vector<TipCandidate> candidates;  // strongest first
+    // The whole mover around the proposal, as a box at the search's first
+    // frame ("one big tip over everything that moves together"): what the
+    // motion left after the camera's covers, less the stroke itself. Empty
+    // when most of the picture moves, or with TipAxis::kVertical.
+    cv::Rect region;
+    // The proposal's main direction of motion in the picture (unit, y >= 0).
+    cv::Point2d axis{0, 1};
 };
+
+// What a cell's motion is scored on. kVertical is 0.7's (the y part only: a
+// sideways stroke scores next to nothing); kPrincipal scores the motion
+// along each cell's own main direction, so a stroke in any direction counts.
+enum class TipAxis { kPrincipal, kVertical };
 
 struct TipFindOptions {
     double max_seconds = 45;  // 0.7 max_seconds
     int sample_every = 2;     // 0.7 sample_every
     int64_t start_ms = 0;     // look from here (a scene after a cut)
+    TipAxis axis = TipAxis::kPrincipal;
     std::function<bool()> cancel;
     std::function<void(int percent)> progress;
 };

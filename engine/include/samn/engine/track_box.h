@@ -154,6 +154,14 @@ struct TrackResult {
     bool canceled = false;
 };
 
+// The settings of the Generator's live tip overlay: a light track of the
+// box in frame pixels that only has to stay on the tip (no script comes from
+// it). Create's analysis rate and width, the scene-cut test that adapts to
+// the clip and the appearance memory, so that a large mover is not taken
+// for a cut on every stroke and a real cut finds the tip again; no camera
+// compensation (the overlay is drawn in the frame).
+TrackOptions PreviewTrackOptions();
+
 // nullopt with *error set when the video cannot be read.
 std::optional<TrackResult> TrackBox(const std::filesystem::path& video, const cv::Rect& box,
                                     const TrackOptions& options, std::string* error);
