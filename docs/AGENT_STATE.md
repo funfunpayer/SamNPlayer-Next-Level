@@ -2,7 +2,15 @@
 
 **Read this first** (new session, new agent, after a context loss), then [`MODULES.md`](MODULES.md), [`PLAN.md`](PLAN.md) and [`DECISIONS.md`](DECISIONS.md). Update this file in **every PR**, finished or not. **Push often:** the repo is always the current state.
 
-**Last update:** 15 Nov 2026, Cursor, branch `cursor/gen-create-grab-635a`: rate-capped Create grabs skipped frames (no BGR).
+**Last update:** 17 Nov 2026, Claude: handover of the Generator detection plan (see below).
+
+## Handover: Generator detection plan and account switch (17 Nov)
+
+- **Read first:** [`GENERATOR_DETECTION_PLAN_2026-11-17.md`](GENERATOR_DETECTION_PLAN_2026-11-17.md): findings of the read-only analysis (false scene cuts are the main cause of the weak parallax / foreground rows; stereo is detected nowhere; the bench does not use the app's defaults), the Owner's priorities (POV first, four choices + Doctor, automatic tip box like FunGen 2, golden clips) and the ranked work packages 1-8.
+- **Nobody has measured** what 15 fps (#262), 640 px (#263) and Grab-only (#264) do to quality. Package 1 (bench truthfulness) is the first step; every later package needs it as the yardstick.
+- **Work in progress, pushed, no PR, unreviewed:** `claude/samn2-auto-tip-box` (package 2), `claude/samn2-bench-truth` (package 1). First drafts that did not finish building and testing.
+- **Owner on 17 Nov:** stop using the Fable model for this work (use Opus); he is switching the Claude account. Golden clips still missing: cut with the golden-clip tool once it exists, scripts as truth, videos never enter the repo.
+- **Merged by Claude in this stretch (11-13 Nov):** #239 (Generator reachable), #240 (frame reader), #241 (camera guards, rule 2 not met, said so), #243 (help chips), #244 (Create side overflow, with `generator_qml_wide_fonts`), #245 (audio follow-up), #246 (`.sam` read-only import, D-170).
 
 ## Handover: Create rate cap grabs skipped frames (15 Nov)
 
